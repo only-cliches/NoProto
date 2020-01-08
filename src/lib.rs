@@ -1,4 +1,6 @@
 use json::*;
+use byteorder::{LittleEndian, WriteBytesExt, ReadBytesExt};
+use std::iter::FromIterator;
 
 #[cfg(test)]
 mod tests {
@@ -8,39 +10,56 @@ mod tests {
     }
 }
 
-
+#[derive(Clone)]
 pub struct NoProtoDataModel {
-    key: String,
+    colKey: String,
     colType: String,
     options: JsonValue,
-    columns: Box<Vec<NoProtoDataModel>>, // nested table
-    arrayType: Box<Option<NoProtoDataModel>> // nested array
+    table: Option<Box<Vec<NoProtoDataModel>>>, // nested type (table)
+    list: Option<Box<NoProtoDataModel>>, // nested type (list)
 }
 
 pub struct NoProtoFactory {
+    loaded: bool,
     dataModel: Box<NoProtoDataModel>
-}
-
-pub struct NoProtoBuffer<'a> {
-    factory: &'a NoProtoFactory,
-    bytes: Box<Vec<u8>>,
-    ptr: usize
 }
 
 impl NoProtoFactory {
 
-    pub fn load_model_from_object(&mut self, model: JsonValue) {
-
-        self.dataModel = Box::new(NoProtoDataModel {
-            key: "root".to_string(),
-            colType: "root".to_string(),
-            options: object!{},
-            columns: self.load_data_columns(model.clone()),
-            arrayType: Box::new(None)
-        });
+    pub fn new() -> Self {
+        NoProtoFactory {
+            loaded: false,
+            dataModel: Box::new(NoProtoDataModel {
+                colKey: "".to_string(),
+                colType: "".to_string(),
+                options: object!{},
+                table: None,
+                list: None,
+            })
+        }
     }
 
-    fn load_data_columns(&self, model: JsonValue) -> Box<Vec<NoProtoDataModel>> {
+    pub fn from_object(&self, model: JsonValue) -> Result<Self> {
+        Ok(NoProtoFactory {
+            loaded: true,
+            dataModel: Box::new(NoProtoDataModel {
+                colKey: "root".to_string(),
+                colType: "root".to_string(),
+                options: object!{},
+                table: self.load_model_table(model),
+                list: None,
+            })
+        })
+    }
+
+    pub fn from_string(&self, model: &str) -> Result<Self> {
+        match json::parse(model) {
+            Ok(x) => self.from_object(x),
+            Err(e) => Err(e) 
+        }
+    }
+
+    fn load_model_table(&self, model: JsonValue) -> Option<Box<Vec<NoProtoDataModel>>> {
 
         let mut i: usize = 0;
 
@@ -57,21 +76,7 @@ impl NoProtoFactory {
                 let row_type = &model_row[1].as_str().unwrap_or("").to_owned();
                 let row_options = if model_row[2].is_null() { object!{} } else { model_row[2].clone() };
 
-                match row_type.rfind("[]") {
-                    Some(x) => {
-                        let this_type = &row_type[0..x];
-                        columns.push(self.load_data_array(this_type.to_owned()));
-                    },
-                    None => {
-                        columns.push(NoProtoDataModel {
-                            key: row_key.to_string(),
-                            colType: row_type.to_owned(),
-                            columns: if row_options["model"].is_null() { Box::new(vec![]) } else { self.load_data_columns(row_options["model"].clone()) },
-                            options: row_options,
-                            arrayType: Box::new(None)
-                        });
-                    }
-                }
+                columns.push(self.load_model_single(row_key.clone(), row_type.clone(), row_options));
 
                 i += 1;
             } else {
@@ -79,43 +84,188 @@ impl NoProtoFactory {
             }
         }
 
-        return Box::new(columns);
+        return Some(Box::new(columns));
     }
 
-    fn load_data_array(&self, col_type: String) -> NoProtoDataModel {
+    fn load_model_single(&self, row_key: String, row_type: String, options: JsonValue) -> NoProtoDataModel {
 
-        NoProtoDataModel {
-            key: "".to_string(),
-            colType: "List".to_string(),
-            columns: Box::new(vec![]),
-            options: object!{},
-            arrayType: match col_type.rfind("[]") {
-                Some(x) => {
-                    let this_type = &col_type[0..x];
-                    Box::new(Some(self.load_data_array(this_type.to_owned())))
-                },
-                None => Box::new(None)
+        let isList = row_type.rfind("[]").unwrap_or(0);
+        let isTable = row_type.eq("table");
+
+        if isList != 0 { // list type
+            let listType = &row_type[0..isList];
+
+            NoProtoDataModel {
+                colKey: row_key,
+                colType: "list".to_owned(),
+                options: options.clone(),
+                table: None,
+                list: Some(Box::new(self.load_model_single("*".to_string(), listType.to_owned() , options.clone())))
+            }
+
+        } else if isTable == true { // table type
+
+            NoProtoDataModel {
+                colKey: row_key,
+                colType: row_type,
+                options: options.clone(),
+                table: if options["model"].is_null() { None } else { self.load_model_table(options["model"].clone()) },
+                list: None,
+            }
+
+        } else {
+
+            NoProtoDataModel { // scalar type
+                colKey: row_key,
+                colType: row_type,
+                options: options.clone(),
+                table: None,
+                list: None,
+            }
+
+        }
+    }
+
+    pub fn new_buffer(&self, length: Option<usize>) -> Option<NoProtoBuffer> {
+
+        if self.loaded == false {
+            None
+        } else {
+            Some(NoProtoBuffer::new(self.dataModel.as_ref(), length, None))
+        }
+    }
+
+    pub fn parse_buffer(&self, in_buffer: Vec<u8>) -> Option<NoProtoBuffer> {
+ 
+        if self.loaded == false {
+            None
+        } else {
+            Some(NoProtoBuffer::new(self.dataModel.as_ref(), None, Some(in_buffer)))
+        }
+    }
+}
+
+// signed int: -2^(n - 1) to 2^(n - 1)
+// unsigned int: (2^n) - 1
+enum NoProtoBufferScalar {
+    table {head: u32},
+    tableItem {next: u32},
+    list {head: u32, tail: u32, length: u16},
+    listItem {prev: u32, next: u32},
+    utf8_string {length: u32, value: Vec<u8>},
+    int1 {value: i64}, // int
+    int8 {value: i8},
+    int16 {value: i16},
+    int32 {value: i32},
+    int64 {value: i64},
+    uint8 {value: u8},
+    uint16 {value: u16},
+    uint32 {value: u32},
+    uint64 {value: u64},
+    float {value: f32},
+    double {value: f64},
+    float32 {value: f32}, // -3.4E+38 to +3.4E+38
+    float64 {value: f64}, // -1.7E+308 to +1.7E+308
+    enum1 {value: u8}, // enum
+    boolean {value: bool},
+    geo {lat: i32, lon: i32},
+    geo0 {lat: f64, lon: f64}, // (3.5nm resolution): two 64 bit float (16 bytes)
+    geo1 {lat: i32, lon: i32}, // (16mm resolution): two 32 bit integers (8 bytes) Deg*10000000
+    geo2 {lat: i16, lon: i16}, // (1.5km resolution): two 16 bit integers (4 bytes) Deg*100
+    uuid {value: Vec<u8>}, // 32 bytes
+    time_id {id: Vec<u8>, time: u64}, // 24 + 8 bytes
+    date {value: u64}, // 8 bytes
+    map {head: u32},
+    mapItem {next: u32},
+    bytes {value: Vec<u8>}
+}
+
+pub struct NoProtoBufferItem<'a> {
+    i: u8,
+    address: u32,
+    item_ref: Box<&'a NoProtoDataModel>,
+    table: Option<Box<Vec<NoProtoBufferItem<'a>>>>, // nested type (table)
+    list: Option<Box<NoProtoBufferItem<'a>>>, // nested type (list)
+    data: NoProtoBufferScalar
+}
+
+pub struct NoProtoBuffer<'a> {
+    bytes: Box<Vec<u8>>,
+    ptr: usize,
+    parsed: NoProtoBufferItem<'a>
+}
+
+impl<'a> NoProtoBuffer<'a> {
+
+    pub fn new(baseModel: &'a NoProtoDataModel, length: Option<usize>, in_buffer: Option<Vec<u8>>) -> Self {
+
+        match in_buffer { // parse existing buffer
+            Some(x) => {
+                NoProtoBuffer {
+                    ptr: x.len(),
+                    bytes: Box::new(x),
+                    parsed: NoProtoBufferItem {
+                        i: 0,
+                        item_ref: Box::new(baseModel),
+                        address: 0,
+                        table: Some(Box::new(vec![])),
+                        list: None,
+                        data: NoProtoBufferScalar::table { head: 0}
+                    }
+                }
+            },
+            None => { // make a new one
+                let len = length.unwrap_or(1024); // 512 bytes default starting size
+
+                let mut thisBuffer = NoProtoBuffer {
+                    ptr: 0,
+                    bytes: Box::new(Vec::with_capacity(1024)),
+                    parsed: NoProtoBufferItem {
+                        i: 0,
+                        item_ref: Box::new(baseModel),
+                        address: 0,
+                        table: Some(Box::new(vec![])),
+                        list: None,
+                        data: NoProtoBufferScalar::table { head: 0 }
+                    }
+                };
+
+                /*let mut testVector: Vec<u8> = vec![0; 4];
+                testVector.write_i32::<LittleEndian>(432);
+                &thisBuffer.bytes[0..4].copy_from_slice(&testVector);*/
+
+                return thisBuffer;
             }
         }
     }
 
-    pub fn load_model_from_string(&mut self, model: &str) {
-        self.load_model_from_object(json::parse(model).unwrap());
+    pub fn root(&self) {
+
     }
 
-    pub fn new_buffer(&self) -> NoProtoBuffer {
-        NoProtoBuffer {
-            factory: self,
-            bytes: Box::new(vec![]),
-            ptr: 0
+    pub fn get_bytes(&self)->&Vec<u8> {
+        self.bytes.as_ref()
+    }
+
+    pub fn compact(&self) {
+
+    }
+
+    pub fn getWastedBytes(&self) -> i32 {
+        return 0;
+    }
+
+    pub fn maybeCompact<F>(&self, mut callback: F) -> bool 
+        where F: FnMut(i32) -> bool 
+    {
+        let doCompaction = callback(self.getWastedBytes());
+
+        if doCompaction {
+            self.compact();
+            true
+        } else {
+            false
         }
     }
 
-    pub fn parse_buffer(&self, in_buffer: Vec<u8>) -> NoProtoBuffer {
-        NoProtoBuffer {
-            factory: self,
-            ptr: in_buffer.len(),
-            bytes: Box::new(in_buffer),
-        }
-    }
 }
