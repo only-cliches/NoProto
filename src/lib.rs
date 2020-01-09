@@ -1,6 +1,5 @@
 use json::*;
-use byteorder::{LittleEndian, WriteBytesExt, ReadBytesExt};
-use std::iter::FromIterator;
+
 
 #[cfg(test)]
 mod tests {
@@ -148,8 +147,8 @@ impl NoProtoFactory {
 // signed int: -2^(n - 1) to 2^(n - 1)
 // unsigned int: (2^n) - 1
 enum NoProtoBufferScalar {
-    table {head: u32},
-    tableItem {next: u32},
+    table {head: u32}, // points to first tableItem
+    tableItem {next: u32}, // points to next tableItem
     list {head: u32, tail: u32, length: u16},
     listItem {prev: u32, next: u32},
     utf8_string {length: u32, value: Vec<u8>},
@@ -184,8 +183,6 @@ pub struct NoProtoBufferItem<'a> {
     i: u8,
     address: u32,
     item_ref: Box<&'a NoProtoDataModel>,
-    table: Option<Box<Vec<NoProtoBufferItem<'a>>>>, // nested type (table)
-    list: Option<Box<NoProtoBufferItem<'a>>>, // nested type (list)
     data: NoProtoBufferScalar
 }
 
@@ -201,6 +198,9 @@ impl<'a> NoProtoBuffer<'a> {
 
         match in_buffer { // parse existing buffer
             Some(x) => {
+                let mut head: [u8; 4] = [0; 4];
+                head.copy_from_slice(&x[0..4]);
+
                 NoProtoBuffer {
                     ptr: x.len(),
                     bytes: Box::new(x),
@@ -208,33 +208,23 @@ impl<'a> NoProtoBuffer<'a> {
                         i: 0,
                         item_ref: Box::new(baseModel),
                         address: 0,
-                        table: Some(Box::new(vec![])),
-                        list: None,
-                        data: NoProtoBufferScalar::table { head: 0}
+                        data: NoProtoBufferScalar::table { head: u32::from_le_bytes(head) }
                     }
                 }
             },
             None => { // make a new one
-                let len = length.unwrap_or(1024); // 512 bytes default starting size
+                let len = length.unwrap_or(1024); // 1kb default starting size
 
-                let mut thisBuffer = NoProtoBuffer {
+                NoProtoBuffer {
                     ptr: 0,
                     bytes: Box::new(Vec::with_capacity(1024)),
                     parsed: NoProtoBufferItem {
                         i: 0,
                         item_ref: Box::new(baseModel),
                         address: 0,
-                        table: Some(Box::new(vec![])),
-                        list: None,
                         data: NoProtoBufferScalar::table { head: 0 }
                     }
-                };
-
-                /*let mut testVector: Vec<u8> = vec![0; 4];
-                testVector.write_i32::<LittleEndian>(432);
-                &thisBuffer.bytes[0..4].copy_from_slice(&testVector);*/
-
-                return thisBuffer;
+                }
             }
         }
     }
