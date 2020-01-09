@@ -143,7 +143,7 @@ console.log(importedAddress.get("street")) // "221B Baker St"
         ["state",    "string"],
         ["zip",      "string"]
     ]}],
-    ["meta",     "map<string, any>"]
+    ["meta",     "map<string, string>"]
 ]
 
 // example buffer (Uint8Array)
