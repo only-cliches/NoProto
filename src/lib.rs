@@ -1,5 +1,6 @@
 use json::*;
-
+use fnv::FnvHasher;
+use std::hash::Hasher;
 
 #[cfg(test)]
 mod tests {
@@ -147,11 +148,36 @@ impl NoProtoFactory {
 // signed int: -2^(n - 1) to 2^(n - 1)
 // unsigned int: (2^n) - 1
 enum NoProtoBufferScalar {
-    table {head: u32}, // points to first tableItem
-    tableItem {next: u32}, // points to next tableItem
-    list {head: u32, tail: u32, length: u16},
-    listItem {prev: u32, next: u32},
-    utf8_string {length: u32, value: Vec<u8>},
+    table {
+        head: u32 // points to first tableItem
+    }, 
+    tableItem {
+        index: u8, // which index this value is at in the table
+        value: u32, // points to value of this item
+        next: u32 // points to next tableItem
+    }, 
+    list {
+        head: u32,  // first listItem on list (0 if empty)
+        tail: u32, // last listItem on list (0 if empty)
+        length: u16 // number of elements in list
+    },
+    listItem {
+        value: u32, // points to value of this item
+        prev: u32, // previouse listItem (0 if beginning)
+        next: u32 // next listItem (0 if end)
+    },
+    map {
+        head: u32 // points to first map item
+    },
+    mapItem {
+        key: u64, // hash
+        value: u32, // pointer to value
+        next: u32 // pointer to next mapItem
+    },
+    utf8_string {
+        length: u32, // length of string
+        value: Vec<u8> // sting encoded into bytes
+    },
     int1 {value: i64}, // int
     int8 {value: i8},
     int16 {value: i16},
@@ -171,12 +197,10 @@ enum NoProtoBufferScalar {
     geo0 {lat: f64, lon: f64}, // (3.5nm resolution): two 64 bit float (16 bytes)
     geo1 {lat: i32, lon: i32}, // (16mm resolution): two 32 bit integers (8 bytes) Deg*10000000
     geo2 {lat: i16, lon: i16}, // (1.5km resolution): two 16 bit integers (4 bytes) Deg*100
-    uuid {value: Vec<u8>}, // 32 bytes
-    time_id {id: Vec<u8>, time: u64}, // 24 + 8 bytes
+    uuid {value: [u8; 32]}, // 32 bytes
+    time_id {id: [u8; 24], time: u64}, // 24 + 8 bytes
     date {value: u64}, // 8 bytes
-    map {head: u32},
-    mapItem {next: u32},
-    bytes {value: Vec<u8>}
+    bytes {length: u32, value: Vec<u8>}
 }
 
 pub struct NoProtoBufferItem<'a> {
@@ -249,6 +273,11 @@ impl<'a> NoProtoBuffer<'a> {
         where F: FnMut(i32) -> bool 
     {
         let doCompaction = callback(self.getWastedBytes());
+
+        /*let mut hasher = FnvHasher::default();
+        let bytes: [u8; 4] = [0, 0, 0, 0];
+        hasher.write(&bytes);
+        let hash: u64 = hasher.finish();*/
 
         if doCompaction {
             self.compact();
