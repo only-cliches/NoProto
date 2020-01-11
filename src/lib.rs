@@ -191,12 +191,13 @@ impl NoProtoFactory {
     }
 }
 
+
 // signed int: -2^(n - 1) to 2^(n - 1)
 // unsigned int: (2^n) - 1
-enum NoProtoBufferScalar {
+enum NoProtoBufferTypes {
     table {
         headPtr: u32 // points to first tableItem
-    }, 
+    },
     tableItem {
         index: u8, // which index this value is at in the table
         valuePtr: u32, // points to value of this item
@@ -252,62 +253,115 @@ enum NoProtoBufferScalar {
     date { value: u64 } // 8 bytes
 }
 
-pub struct NoProtoBufferItem<'a> {
-    address: u32,
-    item_ref: Box<&'a NoProtoDataModel>,
-    data: NoProtoBufferScalar
+pub struct NoProtoItem<'a> {
+    addr: u32,
+    model: Box<&'a NoProtoDataModel>,
+    // data: NoProtoBufferScalar
 }
 
+pub trait NoProtoSize {
+    fn getSize(&self) -> u32;
+}
+
+pub struct NoProtoTable<'a> {
+    head: u32,
+    item_data: Box<NoProtoItem<'a>>
+}
+
+impl<'a> NoProtoTable<'a> {
+
+    fn new(address: u32, model: Box<&'a NoProtoDataModel>, bytes: &Vec<u8>) -> Self {
+        
+        let addr = address as usize;
+        let mut head: [u8; 4] = [0; 4];
+        head.copy_from_slice(&bytes[addr..(addr+4)]);
+
+        NoProtoTable {
+            head: u32::from_le_bytes(head),
+            item_data: Box::new(NoProtoItem {
+                addr: address,
+                model: model
+            })
+        }
+    }
+
+    fn set(&self, key: String, value: u32) {
+
+    }
+
+    fn get(&self, key: String) -> Option<u32> {
+        None
+    }
+
+    fn delete(&self, key: String) -> bool {
+        false
+    }
+
+    fn clear(&self) {
+
+    }
+
+    fn has(&self, key: String) {
+
+    }
+
+}
+
+impl<'a> NoProtoSize for NoProtoTable<'a> {
+    fn getSize(&self) -> u32 {
+        64
+    }
+}
+
+
 pub struct NoProtoBuffer<'a> {
+    version: u8,
     bytes: Box<Vec<u8>>,
     ptr: u32,
-    parsed: NoProtoBufferItem<'a>
+    root: Box<NoProtoTable<'a>>
 }
 
 impl<'a> NoProtoBuffer<'a> {
 
+     
     pub fn new(baseModel: &'a NoProtoDataModel, length: Option<usize>, in_buffer: Option<Vec<u8>>) -> Self {
 
         match in_buffer { // parse existing buffer
             Some(x) => {
-                let mut head: [u8; 4] = [0; 4];
-                head.copy_from_slice(&x[0..4]);
 
                 NoProtoBuffer {
+                    version: *x.first().unwrap_or(&0),
                     ptr: x.len() as u32,
-                    bytes: Box::new(x),
-                    parsed: NoProtoBufferItem {
-                        item_ref: Box::new(baseModel),
-                        address: 0,
-                        data: NoProtoBufferScalar::table { headPtr: u32::from_le_bytes(head) }
-                    }
+                    root: Box::new(NoProtoTable::new(1, Box::new(baseModel), &x)),
+                    bytes: Box::new(x)
                 }
             },
             None => { // make a new one
                 let len = length.unwrap_or(1024); // 1kb default starting size
+                let mut x = Vec::with_capacity(len);
 
                 NoProtoBuffer {
+                    version: 0,
                     ptr: 0,
-                    bytes: Box::new(Vec::with_capacity(len)),
-                    parsed: NoProtoBufferItem {
-                        item_ref: Box::new(baseModel),
-                        address: 0,
-                        data: NoProtoBufferScalar::table { headPtr: 0 }
-                    }
+                    root: Box::new(NoProtoTable::new(1, Box::new(baseModel), &x)),
+                    bytes: Box::new(x)
                 }
             }
         }
     }
 
-    pub fn malloc(&mut self, memory: Vec<u8>) -> u32 {
+    pub fn alloc<NoProtoSize>(&mut self) -> NoProtoSize {
+
+        return 0;
+        /*
         let location: u32 = self.ptr;
         self.ptr += memory.len() as u32;
         self.bytes.extend(memory);
-        return location;
+        return location;*/
     }
 
-    pub fn root(&self) {
-
+    pub fn root(&self) -> &Box<NoProtoTable> {
+       &self.root
     }
 
     pub fn get_bytes(&self)->&Vec<u8> {
@@ -340,4 +394,11 @@ impl<'a> NoProtoBuffer<'a> {
         }
     }
 
+}
+
+fn main() {
+    let fact = NoProtoFactory::new();
+
+    let buf = fact.new_buffer(None).unwrap();
+    buf.alloc(NoProtoTable);
 }
