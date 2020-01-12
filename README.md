@@ -20,12 +20,14 @@ High Performance Zero-Copy Serialization Library
 
 NoProto allows you to store and mutate structured data with very little overhead.  It's like JSON but faster, type safe and more space efficient.
 
+NoProto moves the cost of deserialization to the access methods instead of deserializing the entire object ahead of time.
+
 #### Compared to FlatBuffers & Cap'n Proto:
 - Types are dynamic at run time, no special compilation step.
 - Easily mutate (add/delete/update) existing/imported buffers.
 - Supports custom data types & behaviors.
 
-Serializing a NoProto buffer is almost a free/instant operation.  It's done in a zero copy manner, meaning the parser just creates pointers to the data in the buffer instead of needing to move data around.  Deserilizing is free, exporting just gives you the buffers created by the library.
+Serializing a NoProto buffer is almost a free/instant operation.  The serialization process reads a few bytes and leaves the rest to access methods.  Deserilizing is free, exporting just gives you the buffers created by the library.
 
 Also unlike JSON, keys are not stored in the buffer saving a significant amount of space. 
 

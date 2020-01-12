@@ -1,3 +1,4 @@
+use std::result;
 use json::*;
 use fnv::FnvHasher;
 use std::hash::Hasher;
@@ -191,7 +192,7 @@ impl NoProtoFactory {
     }
 }
 
-
+/*
 // signed int: -2^(n - 1) to 2^(n - 1)
 // unsigned int: (2^n) - 1
 enum NoProtoBufferTypes {
@@ -252,20 +253,50 @@ enum NoProtoBufferTypes {
     time_id { id: [u8; 24], time: u64 }, // 24 + 8 bytes
     date { value: u64 } // 8 bytes
 }
+*/
 
-pub struct NoProtoItem<'a> {
-    addr: u32,
-    model: Box<&'a NoProtoDataModel>,
-    // data: NoProtoBufferScalar
+enum NoProtoPointerTypes {
+    table = 0,
+    tableItem = 1, 
+    list = 2,
+    listItem = 3,
+    map = 4,
+    mapItem = 5,
+    utf8_string = 6,
+    bytes = 7,
+    int1 = 8, // int
+    int8 = 9,
+    int16 = 10,
+    int32 = 11,
+    int64 = 12,
+    uint8 = 13,
+    uint16 = 14,
+    uint32 = 15,
+    uint64 = 16,
+    float = 17,
+    double = 18,
+    float32 = 19, // -3.4E+38 to +3.4E+38
+    float64 = 20, // -1.7E+308 to +1.7E+308
+    enum1 = 21, // enum
+    boolean = 22,
+    geo = 23,
+    geo0 = 24, // (3.5nm resolution): two 64 bit float (16 bytes)
+    geo1 = 25, // (16mm resolution): two 32 bit integers (8 bytes) Deg*10000000
+    geo2 = 26, // (1.5km resolution): two 16 bit integers (4 bytes) Deg*100
+    uuid = 27, // 32 bytes
+    time_id = 28, // 24 + 8 bytes
+    date = 29 // 8 bytes
 }
 
-pub trait NoProtoSize {
-    fn getSize(&self) -> u32;
+pub struct NoProtoPointer {
+    address: u32,
+    pointerType: NoProtoPointerTypes
 }
 
 pub struct NoProtoTable<'a> {
+    pointer: NoProtoPointer,
     head: u32,
-    item_data: Box<NoProtoItem<'a>>
+    model: Box<&'a NoProtoDataModel>
 }
 
 impl<'a> NoProtoTable<'a> {
@@ -277,19 +308,20 @@ impl<'a> NoProtoTable<'a> {
         head.copy_from_slice(&bytes[addr..(addr+4)]);
 
         NoProtoTable {
+            pointer: NoProtoPointer {
+                address: address,
+                pointerType: NoProtoPointerTypes::table
+            },
             head: u32::from_le_bytes(head),
-            item_data: Box::new(NoProtoItem {
-                addr: address,
-                model: model
-            })
+            model: model
         }
     }
 
-    fn set(&self, key: String, value: u32) {
-
+    fn set(&self, key: String, value: NoProtoPointer) -> std::result::Result<bool, &'static str> {
+        Ok(true)
     }
 
-    fn get(&self, key: String) -> Option<u32> {
+    fn get(&self, key: String) -> Option<NoProtoPointer> {
         None
     }
 
@@ -307,15 +339,9 @@ impl<'a> NoProtoTable<'a> {
 
 }
 
-impl<'a> NoProtoSize for NoProtoTable<'a> {
-    fn getSize(&self) -> u32 {
-        64
-    }
-}
-
 
 pub struct NoProtoBuffer<'a> {
-    version: u8,
+    version: u8, // no proto buffer version (incase of bugs in specific version)
     bytes: Box<Vec<u8>>,
     ptr: u32,
     root: Box<NoProtoTable<'a>>
@@ -330,10 +356,10 @@ impl<'a> NoProtoBuffer<'a> {
             Some(x) => {
 
                 NoProtoBuffer {
-                    version: *x.first().unwrap_or(&0),
-                    ptr: x.len() as u32,
-                    root: Box::new(NoProtoTable::new(1, Box::new(baseModel), &x)),
-                    bytes: Box::new(x)
+                    version: *x.first().unwrap_or(&0), // get version number of buffer 
+                    ptr: x.len() as u32, // get length of buffer
+                    root: Box::new(NoProtoTable::new(1, Box::new(baseModel), &x)), // parse root
+                    bytes: Box::new(x) // store bytes
                 }
             },
             None => { // make a new one
@@ -341,8 +367,8 @@ impl<'a> NoProtoBuffer<'a> {
                 let mut x = Vec::with_capacity(len);
 
                 NoProtoBuffer {
-                    version: 0,
-                    ptr: 0,
+                    version: 0, // current NoProto protocol version
+                    ptr: 5, // [version (u8) 1 byte, tableHead (u32) 4 bytes]
                     root: Box::new(NoProtoTable::new(1, Box::new(baseModel), &x)),
                     bytes: Box::new(x)
                 }
@@ -350,14 +376,129 @@ impl<'a> NoProtoBuffer<'a> {
         }
     }
 
-    pub fn alloc<NoProtoSize>(&mut self) -> NoProtoSize {
+    fn alloc(&mut self, bytes: Vec<u8>) -> u32 {
 
-        return 0;
-        /*
         let location: u32 = self.ptr;
-        self.ptr += memory.len() as u32;
-        self.bytes.extend(memory);
-        return location;*/
+        self.ptr += bytes.len() as u32;
+        self.bytes.extend(bytes);
+        return location;
+    }
+
+    fn maybeIterType(&self, ptr: NoProtoPointer) -> NoProtoPointer {
+        match ptr.pointerType {
+            NoProtoPointerTypes::tableItem => {
+                ptr
+            },
+            NoProtoPointerTypes::mapItem => {
+                ptr
+            },
+            NoProtoPointerTypes::listItem => {
+                ptr
+            },
+            _ => {
+                ptr
+            }
+        }
+    }
+
+    // [1 byte type (u8), 4 byte length (u32), string bytes...]
+    pub fn mallocString(&mut self, value: String) -> NoProtoPointer {
+        let strBytes = value.as_bytes();
+
+        let length: u32 = strBytes.len() as u32;
+
+        // write type to buffer and get address of this value
+        let address = self.alloc(vec![NoProtoPointerTypes::utf8_string as u8]);
+
+        // write string length to buffer
+        self.alloc(length.to_le_bytes().to_vec());
+        
+        // write string to buffer
+        self.alloc(strBytes.to_vec());
+
+        NoProtoPointer {
+            address: address,
+            pointerType: NoProtoPointerTypes::utf8_string
+        }
+    }
+
+    pub fn parseString(&self, pointer: NoProtoPointer) -> std::result::Result<String, &'static str> {
+        
+        let resolvedPtr = self.maybeIterType(pointer);
+        
+        match resolvedPtr.pointerType {
+            NoProtoPointerTypes::utf8_string => {
+                let addr = resolvedPtr.address as usize;
+                let thisType = self.bytes[addr];
+
+                if thisType != (NoProtoPointerTypes::utf8_string as u8) {
+                    return Err("Attempted to parse string on non string value!");
+                }
+
+                let mut size: [u8; 4] = [0; 4];
+                size.copy_from_slice(&self.bytes[(addr+1)..(addr+5)]);
+                let length = u32::from_le_bytes(size) as usize;
+
+                let mut strBytes: Vec<u8> = Vec::with_capacity(length);
+                strBytes.copy_from_slice(&self.bytes[(addr+5)..(addr+length)]);
+
+                match String::from_utf8(strBytes) {
+                    Ok(x) => {
+                        Ok(x)
+                    },
+                    Err(x) => {
+                        Err("Error parsing utf-8 string!")
+                    }
+                }
+            },
+            _ => {
+                Err("Can't parse non string!")
+            }
+        }
+    }
+
+    // [1 byte type, (u8), 8 byte value (i64)]
+    pub fn mallocInt(&mut self, value: i64) -> NoProtoPointer {
+
+        let address = self.alloc(vec![NoProtoPointerTypes::int1 as u8]);
+
+        self.alloc(value.to_le_bytes().to_vec());
+
+        NoProtoPointer {
+            address: address,
+            pointerType: NoProtoPointerTypes::int1
+        }
+    }
+
+    pub fn mallocInt64(&mut self, value: i64) -> NoProtoPointer {
+        self.mallocInt(value)
+    }
+
+    pub fn parseInt(&self, pointer: NoProtoPointer) -> std::result::Result<i64, &'static str> {
+        let resolvedPtr = self.maybeIterType(pointer);
+
+        let isInt64 = match resolvedPtr.pointerType {
+            NoProtoPointerTypes::int1 => { true },
+            NoProtoPointerTypes::int64 => { true },
+            _ => { false }
+        };
+
+        if isInt64 {
+            let addr = resolvedPtr.address as usize;
+            let thisType = self.bytes[addr];
+
+            if thisType != (NoProtoPointerTypes::int1 as u8) && thisType != (NoProtoPointerTypes::int64 as u8) {
+                return Err("Attempted to parse int on non int value!");
+            }
+
+            let mut vBytes: [u8; 8] = [0; 8];
+            vBytes.copy_from_slice(&self.bytes[(addr+1)..(addr+5)]);
+            let value = i64::from_le_bytes(vBytes);
+
+            Ok(value)
+        } else {
+            Err("Can't parse non int value!")
+        }
     }
 
     pub fn root(&self) -> &Box<NoProtoTable> {
@@ -400,5 +541,10 @@ fn main() {
     let fact = NoProtoFactory::new();
 
     let buf = fact.new_buffer(None).unwrap();
-    buf.alloc(NoProtoTable);
+    let root = &buf.root();
+    
+    let tableItem = root.get("hello".to_owned()).unwrap();
+    // let string = buf.parseString(tableItem.pointer);
+
+    // buf.alloc(NoProtoTable);
 }
