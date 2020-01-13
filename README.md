@@ -20,12 +20,11 @@ High Performance Zero-Copy Serialization Library
 
 NoProto allows you to store and mutate structured data with very little overhead.  It's like JSON but faster, type safe and more space efficient.
 
-NoProto moves the cost of deserialization to the access methods instead of deserializing the entire object ahead of time.
+NoProto moves the cost of deserialization to the access methods instead of deserializing the entire object ahead of time. 
 
 #### Compared to FlatBuffers & Cap'n Proto:
 - Types are dynamic at run time, no special compilation step.
 - Easily mutate (add/delete/update) existing/imported buffers.
-- Supports custom data types & behaviors.
 
 Serializing a NoProto buffer is almost a free/instant operation.  The serialization process reads a few bytes and leaves the rest to access methods.  Deserilizing is free, exporting just gives you the buffers created by the library.
 
@@ -41,7 +40,7 @@ To keep performance optimal many mutations/updates/deletes will lead to the buff
 
 For example, if you set a key `baz` to `"bar"`, the value will just be appended to the buffer (no compaction needed).  If you then update the key `baz` to `"hello"`, the `"hello"` string will be appended to the buffer and `baz` will point to the new value.  The old value, `"bar"` is still in the buffer and taking up space but has been dereferenced.
 
-Fixed size values (geo, integer, float, boolean, enum, and uuid) are an exception to this rule, they can always be updated in place and never take up more space following an update.
+Fixed size values (geo, integer, float, boolean, option, and uuid) are an exception to this rule, they can always be updated in place and never take up more space following an update.
 
 Deletes are always done by simply dereferencing data, so deleting a value will always lead to wasted space.
 
@@ -57,29 +56,19 @@ In a server/client setup compaction can be performed in batches on the server du
 import * as noProto from "noproto";
 
 const dataModels = {
-    address: [
-        ["street",   "string"],
-        ["street2",  "string"],
-        ["city",     "string"],
-        ["state",    "string"],
-        ["zip",      "string"]
-    ],
     user: [
         ["id",        "uuid", {i: 0}],
         ["first",   "string", {i: 1}],
         ["last",    "string", {i: 2}],
         ["email",    "email", {i: 3}],
         ["age",        "int", {i: 4, default: 13}],
-        ["address",  "table", {i: 5, model: "address"}],
-        /* Also valid:
         ["address",  "table", {i: 5, model: [
-            ["street",   "string"],
-            ["street2",  "string"],
-            ["city",     "string"],
-            ["state",    "string"],
-            ["zip",      "string"]
+            ["street",   "string", {i: 0}],
+            ["street2",  "string", {i: 1}],
+            ["city",     "string", {i: 2}],
+            ["state",    "string", {i: 3}],
+            ["zip",      "string", {i: 4}]
         ]}],
-        */
         ["tags",  "string[]", {i: 6}]
     ]
     post: [
