@@ -1,5 +1,7 @@
-use crate::pointer::{ NoProtoPointer }
-use crate::buffer::{ NoProtoBuffer }
+mod pointer;
+mod buffer;
+
+pub use self::buffer::NoProtoBuffer;
 
 pub struct NoProtoTable {
     ptr: NoProtoPointer,
@@ -13,7 +15,7 @@ impl NoProtoTable {
     }
 
     pub fn set(&self, column: &str, data: NoProtoPointer) {
-
+        self.buffer.
     }
 
     pub fn get(&self, column: &str) -> Option<NoProtoPointer> {
