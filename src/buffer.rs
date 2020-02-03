@@ -1,6 +1,9 @@
+mod pointer;
+pub use self::pointer::{*};
 
 
 
+/*
 pub struct NoProtoDataModel {
     colKey: String,
     colType: String,
@@ -16,3 +19,4 @@ pub struct NoProtoBuffer {
     rootModel: NoProtoDataModel
 }
 
+*/

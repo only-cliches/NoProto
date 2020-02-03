@@ -15,6 +15,25 @@ https://docs.rs/byteorder/1.3.2/byteorder/
 https://docs.rs/json/0.12.0/json/
 ```
 
+```ts
+const model = {
+    type: "table",
+    columns: [
+        ["name", {type: "string"}],
+        ["favs", {type: "list", of: {
+            type: "table",
+            columns: [
+                ...
+            ]
+        }}],
+        ["meta", {type: "map", key: {type: "string"}, value: {type: "string"}}],
+        ["colors", {type: "option", options: ["red", "blue", "green"]}]
+    ]
+}
+
+
+```
+
 # NoProto
 High Performance Zero-Copy Serialization Library
 
@@ -23,7 +42,7 @@ NoProto allows you to store and mutate structured data with very little overhead
 NoProto moves the cost of deserialization to the access methods instead of deserializing the entire object ahead of time. 
 
 #### Compared to FlatBuffers & Cap'n Proto:
-- Types are dynamic at run time, no special compilation step.
+- Types are dynamic at run time, no compilation step.
 - Easily mutate (add/delete/update) existing/imported buffers.
 
 Serializing a NoProto buffer is almost a free/instant operation.  The serialization process reads a few bytes and leaves the rest to access methods.  Deserilizing is free, exporting just gives you the buffers created by the library.
