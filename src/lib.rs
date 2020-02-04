@@ -6,7 +6,7 @@ use std::ops::{ Index, IndexMut, Deref };
 
 mod collection;
 mod pointer;
-
+mod buffer;
 
 
 

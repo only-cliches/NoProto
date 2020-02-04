@@ -1,3 +1,7 @@
+use std::cell::RefMut;
+use core::cell::Ref;
+use std::rc::Rc;
+use crate::buffer::NoProtoBuffer;
 use crate::collection::table::NoProtoTable;
 use std::cell::RefCell;
 use std::result;
@@ -47,35 +51,42 @@ pub enum NoProtoValue {
 
 
 pub struct NoProtoPointer<'a> {
-    self_address: u32,
-    value_address: u32,
+    address: u32,
+    value: u32,
     cached_value: NoProtoValue,
     type_string: String,
     value_is_cached: bool,
-    model: JsonValue,
-    bytes: &'a mut Vec<u8>
+    model: &'a Rc<RefCell<JsonValue>>,
+    bytes: &'a Rc<RefCell<Vec<u8>>>,
 }
 
 impl<'a> NoProtoPointer<'a> {
 
-    pub fn new(offset: u32, bytes: &'a mut Vec<u8>, model: JsonValue) -> Self {
 
-        let addr = offset as usize;
+    pub fn new(address: u32, model: &'a Rc<RefCell<JsonValue>>, bytes: &'a Rc<RefCell<Vec<u8>>>) -> Self {
+        
+        let addr = address as usize;
         let mut head: [u8; 4] = [0; 4];
-        head.copy_from_slice(&bytes[addr..(addr+4)]);
 
-        let this_type: &str = model["type"].as_str().unwrap_or("");
+        let b_bytes = bytes.borrow();
+        
+        head.copy_from_slice(&b_bytes[addr..(addr+4)]);
 
+        let b_model = model.borrow();
+
+        let this_type: &str = b_model["type"].as_str().unwrap_or("");
+ 
         NoProtoPointer {
-            self_address: offset,
-            value_address: u32::from_le_bytes(head), // address of value
-            cached_value: NoProtoPointer::str_type_to_enum(this_type),
+            address: address, // the location of this pointer
+            value: u32::from_le_bytes(head), // points to value in buffer
             type_string: this_type.to_owned(),
+            cached_value: NoProtoValue::none,
             value_is_cached: false,
             model: model,
             bytes: bytes
         }
     }
+
 
     fn str_type_to_enum(str_type: &str) -> NoProtoValue {
         match str_type {
@@ -106,6 +117,20 @@ impl<'a> NoProtoPointer<'a> {
         }
     }
 
+    fn malloc(&mut self, bytes: Vec<u8>) -> std::result::Result<u32, &'static str> {
+
+        match self.bytes.try_borrow_mut() {
+            Ok(mut buffer) => {
+                let location: u32 = bytes.len() as u32;
+                buffer.extend(bytes);
+                Ok(location)
+            },
+            Err(err) => {
+                Err("Failed to mutate buffer bytes!")
+            }
+        }
+    }
+
     pub fn set_string(&mut self, value: &str) -> std::result::Result<bool, &'static str> {
 
         let type_str: &str = self.type_string.as_str();
@@ -113,24 +138,25 @@ impl<'a> NoProtoPointer<'a> {
         match type_str {
             "string" => {
                 let bytes = value.as_bytes();
-                let addr = self.bytes.len() as u32; // get pointer value
-        
                 let str_size = bytes.len() as u32;
 
                 if str_size >= (2 as u32).pow(32) - 1 { 
                     Err("String too large!")
                 } else {
-                    let size_bytes = str_size.to_le_bytes();
 
-                    // add string to buffer
-                    self.bytes.extend(size_bytes.to_vec()); // first 4 bytes is string length
-                    self.bytes.extend(bytes); // remaining bytes are string value
+                    // first 4 bytes are string length
+                    let addr = self.malloc(str_size.to_le_bytes().to_vec())?;
+                    // then string content
+                    self.malloc(bytes.to_vec())?;
                     
                     // set new address value to the string we just saved
-                    self.value_address = addr;
+                    self.value = addr;
                     let addr_bytes = addr.to_le_bytes();
+
+                    let mut buffer_bytes = self.bytes.borrow_mut();
+
                     for x in 0..4 {
-                        self.bytes[(self.self_address + x) as usize] = addr_bytes[x as usize];
+                        buffer_bytes[(self.address + x) as usize] = addr_bytes[x as usize];
                     }
             
                     Ok(true)
@@ -148,14 +174,18 @@ impl<'a> NoProtoPointer<'a> {
 
         match type_str {
             "string" => {
-                let addr = self.value_address as usize;
-                let mut size: [u8; 4] = [0; 4];
-                size.copy_from_slice(&self.bytes[addr..(addr+4)]);
 
+                // get size of string
+                let addr = self.value as usize;
+                let mut size: [u8; 4] = [0; 4];
+                let buffer_bytes = self.bytes.borrow();
+                size.copy_from_slice(&buffer_bytes[addr..(addr+4)]);
                 let str_size = u32::from_le_bytes(size) as usize;
 
-                let arrayBytes = &self.bytes[(addr+4)..(addr+4+str_size)];
+                // get string bytes
+                let arrayBytes = &buffer_bytes[(addr+4)..(addr+4+str_size)];
 
+                // convert to string
                 let string = String::from_utf8(arrayBytes.to_vec());
 
                 match string {
@@ -173,16 +203,13 @@ impl<'a> NoProtoPointer<'a> {
         }
     }
 
-    pub fn export_bytes(&mut self) -> &mut Vec<u8> {
-        self.bytes
-    }
-
+    /*
     pub fn into_table(&mut self) -> std::result::Result<NoProtoTable, &'static str> {
 
         Ok(NoProtoTable {
 
         })
-    }
+    }*/
 /*
     pub fn into_list(&self) -> std::result::Result<NoProtoList, &'static str> {
 

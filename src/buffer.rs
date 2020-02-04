@@ -1,22 +1,21 @@
-mod pointer;
-pub use self::pointer::{*};
-
-
-
-/*
-pub struct NoProtoDataModel {
-    colKey: String,
-    colType: String,
-    options: JsonValue,
-    table: Option<HashMap<String, NoProtoDataModel>>, // nested type (table)
-    list: Option<Box<NoProtoDataModel>>, // nested type (list)
-    map: Option<Box<NoProtoDataModel>> // nested map type
-}
+use std::cell::Cell;
+use std::cell::RefMut;
+use std::cell::Ref;
+use json::*;
+use std::rc::Rc;
+use std::cell::RefCell;
+use crate::pointer::{NoProtoPointer, NoProtoValue};
+use std::result;
 
 pub struct NoProtoBuffer {
-    ptr: u32,
-    buffer: Vec<u8>,
-    rootModel: NoProtoDataModel
+    bytes: Rc<RefCell<Vec<u8>>>,
+    rootModel: Rc<RefCell<JsonValue>>
 }
 
-*/
+impl NoProtoBuffer {
+
+
+    pub fn root(&self) -> NoProtoPointer {
+        NoProtoPointer::new(0, &self.rootModel, &self.bytes)
+    }
+}
