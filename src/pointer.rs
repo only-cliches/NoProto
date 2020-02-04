@@ -117,7 +117,7 @@ impl<'a> NoProtoPointer<'a> {
         }
     }
 
-    fn malloc(&mut self, bytes: Vec<u8>) -> std::result::Result<u32, &'static str> {
+    pub fn malloc(&mut self, bytes: Vec<u8>) -> std::result::Result<u32, &'static str> {
 
         match self.bytes.try_borrow_mut() {
             Ok(mut buffer) => {
@@ -203,13 +203,21 @@ impl<'a> NoProtoPointer<'a> {
         }
     }
 
-    /*
-    pub fn into_table(&mut self) -> std::result::Result<NoProtoTable, &'static str> {
+    
+    pub fn into_table(&self) -> std::result::Result<NoProtoTable, &'static str> {
+        let type_str: &str = self.type_string.as_str();
 
-        Ok(NoProtoTable {
+        match type_str {
+            "table" => {
+                Ok(NoProtoTable::new(Rc::new(RefCell::new(self))))
+            },
+            _ => {
+                Err("Not a table type!")
+            }
+        }
+    }
 
-        })
-    }*/
+
 /*
     pub fn into_list(&self) -> std::result::Result<NoProtoList, &'static str> {
 
