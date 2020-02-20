@@ -8,15 +8,15 @@ use std::result;
 use json::*;
 use std::ops::{ Index, IndexMut, Deref };
 
-pub enum NoProtoValue {
+pub enum NoProtoScalar {
     none,
-    table, // address is head
-    map, // address is head
-    list { // address is head
+    /*table,
+    map,
+    list {
         tail: u32,
         size: u16
     },
-    /*map_item {
+    map_item {
         key_address: u32,
         next_item: u32
     },
@@ -50,37 +50,33 @@ pub enum NoProtoValue {
 }
 
 
-pub struct NoProtoPointer<'a> {
-    address: u32,
-    value: u32,
-    cached_value: NoProtoValue,
+pub struct NoProtoValue<'a> {
+    cached_value: NoProtoScalar,
     type_string: String,
     value_is_cached: bool,
     model: &'a Rc<RefCell<JsonValue>>,
     bytes: &'a Rc<RefCell<Vec<u8>>>,
 }
 
-impl<'a> NoProtoPointer<'a> {
+impl<'a> NoProtoValue<'a> {
 
 
     pub fn new(address: u32, model: &'a Rc<RefCell<JsonValue>>, bytes: &'a Rc<RefCell<Vec<u8>>>) -> Self {
-        
+        /*
         let addr = address as usize;
         let mut head: [u8; 4] = [0; 4];
 
         let b_bytes = bytes.borrow();
         
-        head.copy_from_slice(&b_bytes[addr..(addr+4)]);
+        head.copy_from_slice(&b_bytes[addr..(addr+4)]);*/
 
         let b_model = model.borrow();
 
         let this_type: &str = b_model["type"].as_str().unwrap_or("");
  
-        NoProtoPointer {
-            address: address, // the location of this pointer
-            value: u32::from_le_bytes(head), // points to value in buffer
+        NoProtoValue {
             type_string: this_type.to_owned(),
-            cached_value: NoProtoValue::none,
+            cached_value: NoProtoScalar::none,
             value_is_cached: false,
             model: model,
             bytes: bytes
@@ -88,46 +84,32 @@ impl<'a> NoProtoPointer<'a> {
     }
 
 
-    fn str_type_to_enum(str_type: &str) -> NoProtoValue {
+    fn str_type_to_enum(str_type: &str) -> NoProtoScalar {
         match str_type {
-            "list" => NoProtoValue::list {tail: 0, size: 0},
-            "table" => NoProtoValue::table,
-            "map" => NoProtoValue::map,
-            "string" => NoProtoValue::utf8_string { size: 0, value: "".to_owned() },
-            "bytes" => NoProtoValue::bytes { size: 0, value: vec![] },
-            "int8" => NoProtoValue::int8 { value: 0 },
-            "int32" => NoProtoValue::int32 { value: 0 },
-            "int64" => NoProtoValue::int64 { value: 0 }, 
-            "uint8" => NoProtoValue::uint8 { value: 0 },
-            "uint16" => NoProtoValue::uint16 { value: 0 },
-            "uint32" => NoProtoValue::uint32 { value: 0 },
-            "uint64" => NoProtoValue::uint64 { value: 0 },
-            "float" => NoProtoValue::float { value: 0.0 }, 
-            "double" => NoProtoValue::double { value: 0.0 }, 
-            "option" => NoProtoValue::option { value: 0 }, 
-            "bool" => NoProtoValue::boolean { value: false },
-            "boolean" => NoProtoValue::boolean { value: false },
-            "geo_16" => NoProtoValue::geo_64 { lat: 0.0, lon: 0.0 },
-            "geo_8" => NoProtoValue::geo_32 { lat: 0, lon: 0 }, 
-            "geo_4" => NoProtoValue::geo_16 { lat: 0, lon: 0 },
-            "uuid" => NoProtoValue::uuid { value: "".to_owned() }, 
-            "time_id" => NoProtoValue::time_id { id: "".to_owned(), time: 0 }, 
-            "date" => NoProtoValue::date { value: 0 }, 
-            _ => NoProtoValue::none
-        }
-    }
-
-    pub fn malloc(&mut self, bytes: Vec<u8>) -> std::result::Result<u32, &'static str> {
-
-        match self.bytes.try_borrow_mut() {
-            Ok(mut buffer) => {
-                let location: u32 = bytes.len() as u32;
-                buffer.extend(bytes);
-                Ok(location)
-            },
-            Err(err) => {
-                Err("Failed to mutate buffer bytes!")
-            }
+            // "list" => NoProtoScalar::list {tail: 0, size: 0},
+            // "table" => NoProtoScalar::table,
+            // "map" => NoProtoScalar::map,
+            "string" => NoProtoScalar::utf8_string { size: 0, value: "".to_owned() },
+            "bytes" => NoProtoScalar::bytes { size: 0, value: vec![] },
+            "int8" => NoProtoScalar::int8 { value: 0 },
+            "int32" => NoProtoScalar::int32 { value: 0 },
+            "int64" => NoProtoScalar::int64 { value: 0 }, 
+            "uint8" => NoProtoScalar::uint8 { value: 0 },
+            "uint16" => NoProtoScalar::uint16 { value: 0 },
+            "uint32" => NoProtoScalar::uint32 { value: 0 },
+            "uint64" => NoProtoScalar::uint64 { value: 0 },
+            "float" => NoProtoScalar::float { value: 0.0 }, 
+            "double" => NoProtoScalar::double { value: 0.0 }, 
+            "option" => NoProtoScalar::option { value: 0 }, 
+            "bool" => NoProtoScalar::boolean { value: false },
+            "boolean" => NoProtoScalar::boolean { value: false },
+            "geo_16" => NoProtoScalar::geo_64 { lat: 0.0, lon: 0.0 },
+            "geo_8" => NoProtoScalar::geo_32 { lat: 0, lon: 0 }, 
+            "geo_4" => NoProtoScalar::geo_16 { lat: 0, lon: 0 },
+            "uuid" => NoProtoScalar::uuid { value: "".to_owned() }, 
+            "time_id" => NoProtoScalar::time_id { id: "".to_owned(), time: 0 }, 
+            "date" => NoProtoScalar::date { value: 0 }, 
+            _ => NoProtoScalar::none
         }
     }
 
@@ -143,7 +125,7 @@ impl<'a> NoProtoPointer<'a> {
                 if str_size >= (2 as u32).pow(32) - 1 { 
                     Err("String too large!")
                 } else {
-
+                    /*
                     // first 4 bytes are string length
                     let addr = self.malloc(str_size.to_le_bytes().to_vec())?;
                     // then string content
@@ -157,7 +139,7 @@ impl<'a> NoProtoPointer<'a> {
 
                     for x in 0..4 {
                         buffer_bytes[(self.address + x) as usize] = addr_bytes[x as usize];
-                    }
+                    }*/
             
                     Ok(true)
                 }
@@ -174,7 +156,7 @@ impl<'a> NoProtoPointer<'a> {
 
         match type_str {
             "string" => {
-
+                /*
                 // get size of string
                 let addr = self.value as usize;
                 let mut size: [u8; 4] = [0; 4];
@@ -195,7 +177,8 @@ impl<'a> NoProtoPointer<'a> {
                     Err(_e) => {
                         Err("Error parsing string!")
                     }
-                }
+                }*/
+                Ok("".to_owned())
             }
             _ => {
                 Err("Not a string type!")
@@ -231,9 +214,9 @@ impl<'a> NoProtoPointer<'a> {
 
 /*
 // cast i64 => Pointer
-impl From<i64> for NoProtoPointer {
+impl From<i64> for NoProtoValue {
     fn from(num: i64) -> Self {
-        NoProtoPointer {
+        NoProtoValue {
             loaded: false,
             address: 0,
             value: NoProtoValue::int64 { value: num },
@@ -243,8 +226,8 @@ impl From<i64> for NoProtoPointer {
 }
 
 // cast Pointer => Option<i64>
-impl From<&NoProtoPointer> for Option<i64> {
-    fn from(ptr: &NoProtoPointer) -> Option<i64> {
+impl From<&NoProtoValue> for Option<i64> {
+    fn from(ptr: &NoProtoValue) -> Option<i64> {
         match ptr.value {
             NoProtoValue::int64 { value } => {
                 Some(value)
