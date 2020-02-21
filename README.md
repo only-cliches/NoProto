@@ -37,9 +37,9 @@ const model = {
 # NoProto
 High Performance Zero-Copy Serialization Library
 
-NoProto allows you to store and mutate structured data with very little overhead.  It's like JSON but faster, type safe and more space efficient.
+NoProto allows you to store and mutate structured data with near zero overhead.  It's like JSON but faster, type safe and more space efficient.
 
-NoProto moves the cost of deserialization to the access methods instead of deserializing the entire object ahead of time. 
+NoProto moves the cost of deserialization to the access methods instead of deserializing the entire object. This makes it a perfect use case for things like database storage or file storage of structured data.
 
 #### Compared to FlatBuffers & Cap'n Proto:
 - Types are dynamic at run time, no compilation step.

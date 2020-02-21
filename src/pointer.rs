@@ -1,3 +1,4 @@
+use crate::buffer::NoProtoMemory;
 use std::cell::RefMut;
 use core::cell::Ref;
 use std::rc::Rc;
@@ -8,15 +9,20 @@ use std::result;
 use json::*;
 use std::ops::{ Index, IndexMut, Deref };
 
-pub enum NoProtoScalar {
+pub enum NoProtoDataTypes {
     none,
-    /*table,
-    map,
+    table {
+        head: u32
+    },
+    map {
+        head: u32
+    },
     list {
+        head: u32,
         tail: u32,
         size: u16
     },
-    map_item {
+    /*map_item {
         key_address: u32,
         next_item: u32
     },
@@ -49,19 +55,37 @@ pub enum NoProtoScalar {
     date { value: u64 } // 8 bytes
 }
 
-
-pub struct NoProtoValue<'a> {
-    cached_value: NoProtoScalar,
-    type_string: String,
-    value_is_cached: bool,
-    model: &'a Rc<RefCell<JsonValue>>,
-    bytes: &'a Rc<RefCell<Vec<u8>>>,
+pub enum NoProtoPointerKind {
+    standard,
+    map_item {next: u32},
+    table_item {next: u32},
+    list_item {next: u32, prev: u32}
 }
 
-impl<'a> NoProtoValue<'a> {
+pub struct NoProtoPointer {
+    address: u32, // pointer location
+    value: u32, // pointer value
+    kind: NoProtoPointerKind,
+    memory: Rc<RefCell<NoProtoMemory>>
+}
+
+impl NoProtoPointer {
+
+}
+
+pub struct NoProtoGeneric {
+    address: u32,
+    cached_value: NoProtoDataTypes,
+    type_string: String,
+    value_is_cached: bool,
+    model: Rc<RefCell<JsonValue>>,
+    memory: Rc<RefCell<NoProtoMemory>>,
+}
+
+impl NoProtoGeneric {
 
 
-    pub fn new(address: u32, model: &'a Rc<RefCell<JsonValue>>, bytes: &'a Rc<RefCell<Vec<u8>>>) -> Self {
+    pub fn new(address: u32, model: Rc<RefCell<JsonValue>>, memory: Rc<RefCell<NoProtoMemory>>) -> Self {
         /*
         let addr = address as usize;
         let mut head: [u8; 4] = [0; 4];
@@ -74,42 +98,92 @@ impl<'a> NoProtoValue<'a> {
 
         let this_type: &str = b_model["type"].as_str().unwrap_or("");
  
-        NoProtoValue {
+        NoProtoGeneric {
+            address: address,
             type_string: this_type.to_owned(),
-            cached_value: NoProtoScalar::none,
+            cached_value: NoProtoDataTypes::none,
             value_is_cached: false,
             model: model,
-            bytes: bytes
+            memory: memory
+        }
+    }
+
+    pub fn to_string(&self) -> std::result::Result<String, &'static str> {
+        let type_str: &str = self.type_string.as_str();
+
+        match type_str {
+            "string" => {
+                
+                // get size of string
+                let addr = self.address as usize;
+                let mut size: [u8; 4] = [0; 4];
+                let memory = self.memory.borrow();
+                size.copy_from_slice(&memory.bytes[addr..(addr+4)]);
+                let str_size = u32::from_le_bytes(size) as usize;
+
+                // get string bytes
+                let arrayBytes = &memory.bytes[(addr+4)..(addr+4+str_size)];
+
+                // convert to string
+                let string = String::from_utf8(arrayBytes.to_vec());
+
+                match string {
+                    Ok(x) => {
+                        Ok(x)
+                    },
+                    Err(_e) => {
+                        Err("Error parsing string!")
+                    }
+                }
+            }
+            _ => {
+                Err("Not a string type!")
+            }
+        }
+    }
+
+    
+    pub fn to_table(&self) -> std::result::Result<NoProtoTable, &'static str> {
+        let type_str: &str = self.type_string.as_str();
+
+        match type_str {
+            "table" => {
+                Ok(NoProtoTable::new(Rc::new(RefCell::new(self))))
+            },
+            _ => {
+                Err("Not a table type!")
+            }
         }
     }
 
 
-    fn str_type_to_enum(str_type: &str) -> NoProtoScalar {
+    /*
+    fn str_type_to_enum(str_type: &str) -> NoProtoDataTypes {
         match str_type {
-            // "list" => NoProtoScalar::list {tail: 0, size: 0},
-            // "table" => NoProtoScalar::table,
-            // "map" => NoProtoScalar::map,
-            "string" => NoProtoScalar::utf8_string { size: 0, value: "".to_owned() },
-            "bytes" => NoProtoScalar::bytes { size: 0, value: vec![] },
-            "int8" => NoProtoScalar::int8 { value: 0 },
-            "int32" => NoProtoScalar::int32 { value: 0 },
-            "int64" => NoProtoScalar::int64 { value: 0 }, 
-            "uint8" => NoProtoScalar::uint8 { value: 0 },
-            "uint16" => NoProtoScalar::uint16 { value: 0 },
-            "uint32" => NoProtoScalar::uint32 { value: 0 },
-            "uint64" => NoProtoScalar::uint64 { value: 0 },
-            "float" => NoProtoScalar::float { value: 0.0 }, 
-            "double" => NoProtoScalar::double { value: 0.0 }, 
-            "option" => NoProtoScalar::option { value: 0 }, 
-            "bool" => NoProtoScalar::boolean { value: false },
-            "boolean" => NoProtoScalar::boolean { value: false },
-            "geo_16" => NoProtoScalar::geo_64 { lat: 0.0, lon: 0.0 },
-            "geo_8" => NoProtoScalar::geo_32 { lat: 0, lon: 0 }, 
-            "geo_4" => NoProtoScalar::geo_16 { lat: 0, lon: 0 },
-            "uuid" => NoProtoScalar::uuid { value: "".to_owned() }, 
-            "time_id" => NoProtoScalar::time_id { id: "".to_owned(), time: 0 }, 
-            "date" => NoProtoScalar::date { value: 0 }, 
-            _ => NoProtoScalar::none
+            // "list" => NoProtoDataTypes::list {tail: 0, size: 0},
+            // "table" => NoProtoDataTypes::table,
+            // "map" => NoProtoDataTypes::map,
+            "string" => NoProtoDataTypes::utf8_string { size: 0, value: "".to_owned() },
+            "bytes" => NoProtoDataTypes::bytes { size: 0, value: vec![] },
+            "int8" => NoProtoDataTypes::int8 { value: 0 },
+            "int32" => NoProtoDataTypes::int32 { value: 0 },
+            "int64" => NoProtoDataTypes::int64 { value: 0 }, 
+            "uint8" => NoProtoDataTypes::uint8 { value: 0 },
+            "uint16" => NoProtoDataTypes::uint16 { value: 0 },
+            "uint32" => NoProtoDataTypes::uint32 { value: 0 },
+            "uint64" => NoProtoDataTypes::uint64 { value: 0 },
+            "float" => NoProtoDataTypes::float { value: 0.0 }, 
+            "double" => NoProtoDataTypes::double { value: 0.0 }, 
+            "option" => NoProtoDataTypes::option { value: 0 }, 
+            "bool" => NoProtoDataTypes::boolean { value: false },
+            "boolean" => NoProtoDataTypes::boolean { value: false },
+            "geo_16" => NoProtoDataTypes::geo_64 { lat: 0.0, lon: 0.0 },
+            "geo_8" => NoProtoDataTypes::geo_32 { lat: 0, lon: 0 }, 
+            "geo_4" => NoProtoDataTypes::geo_16 { lat: 0, lon: 0 },
+            "uuid" => NoProtoDataTypes::uuid { value: "".to_owned() }, 
+            "time_id" => NoProtoDataTypes::time_id { id: "".to_owned(), time: 0 }, 
+            "date" => NoProtoDataTypes::date { value: 0 }, 
+            _ => NoProtoDataTypes::none
         }
     }
 
@@ -125,7 +199,7 @@ impl<'a> NoProtoValue<'a> {
                 if str_size >= (2 as u32).pow(32) - 1 { 
                     Err("String too large!")
                 } else {
-                    /*
+                  
                     // first 4 bytes are string length
                     let addr = self.malloc(str_size.to_le_bytes().to_vec())?;
                     // then string content
@@ -139,7 +213,7 @@ impl<'a> NoProtoValue<'a> {
 
                     for x in 0..4 {
                         buffer_bytes[(self.address + x) as usize] = addr_bytes[x as usize];
-                    }*/
+                    }
             
                     Ok(true)
                 }
@@ -149,56 +223,7 @@ impl<'a> NoProtoValue<'a> {
                 Err("Not a string type!")
             }
         }
-    }
-
-    pub fn get_string(&self) -> std::result::Result<String, &'static str> {
-        let type_str: &str = self.type_string.as_str();
-
-        match type_str {
-            "string" => {
-                /*
-                // get size of string
-                let addr = self.value as usize;
-                let mut size: [u8; 4] = [0; 4];
-                let buffer_bytes = self.bytes.borrow();
-                size.copy_from_slice(&buffer_bytes[addr..(addr+4)]);
-                let str_size = u32::from_le_bytes(size) as usize;
-
-                // get string bytes
-                let arrayBytes = &buffer_bytes[(addr+4)..(addr+4+str_size)];
-
-                // convert to string
-                let string = String::from_utf8(arrayBytes.to_vec());
-
-                match string {
-                    Ok(x) => {
-                        Ok(x)
-                    },
-                    Err(_e) => {
-                        Err("Error parsing string!")
-                    }
-                }*/
-                Ok("".to_owned())
-            }
-            _ => {
-                Err("Not a string type!")
-            }
-        }
-    }
-
-    
-    pub fn into_table(&self) -> std::result::Result<NoProtoTable, &'static str> {
-        let type_str: &str = self.type_string.as_str();
-
-        match type_str {
-            "table" => {
-                Ok(NoProtoTable::new(Rc::new(RefCell::new(self))))
-            },
-            _ => {
-                Err("Not a table type!")
-            }
-        }
-    }
+    }*/
 
 
 /*
@@ -214,22 +239,22 @@ impl<'a> NoProtoValue<'a> {
 
 /*
 // cast i64 => Pointer
-impl From<i64> for NoProtoValue {
+impl From<i64> for NoProtoGeneric {
     fn from(num: i64) -> Self {
-        NoProtoValue {
+        NoProtoGeneric {
             loaded: false,
             address: 0,
-            value: NoProtoValue::int64 { value: num },
+            value: NoProtoGeneric::int64 { value: num },
             // model: None
         }
     }
 }
 
 // cast Pointer => Option<i64>
-impl From<&NoProtoValue> for Option<i64> {
-    fn from(ptr: &NoProtoValue) -> Option<i64> {
+impl From<&NoProtoGeneric> for Option<i64> {
+    fn from(ptr: &NoProtoGeneric) -> Option<i64> {
         match ptr.value {
-            NoProtoValue::int64 { value } => {
+            NoProtoGeneric::int64 { value } => {
                 Some(value)
             }
             _ => None
