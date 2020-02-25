@@ -1,3 +1,4 @@
+use crate::pointer::NoProtoPointer;
 use std::cell::BorrowMutError;
 use std::cell::Cell;
 use std::cell::RefMut;
@@ -5,7 +6,6 @@ use std::cell::Ref;
 use json::*;
 use std::rc::Rc;
 use std::cell::RefCell;
-use crate::pointer::{NoProtoDataTypes, NoProtoGeneric};
 use std::result;
 
 
@@ -38,24 +38,20 @@ impl NoProtoBuffer {
     
     */
 
-    pub fn get_root(&self) -> NoProtoGeneric {
-        NoProtoGeneric::new(0, self.rootModel, self.memory)
+    pub fn get_root(&self) -> NoProtoPointer {
+
+        {
+            let mut memory = self.memory.borrow_mut();
+            if memory.bytes.len() == 0 {
+                memory.malloc(vec![0,0,0,0]);
+            }
+        }
+        
+        NoProtoPointer::new_standard(0, self.rootModel, self.memory)
     }
 
     pub fn set_root(&self, address: u32) {
 
-    }
-
-    pub fn new_string(&self, value: String) -> std::result::Result<u32, BorrowMutError> {
-
-        let mut bytes = self.memory.try_borrow_mut()?;
-
-        // first 4 bytes are string length
-        let addr = bytes.malloc(value.len().to_le_bytes().to_vec());
-        // then string content
-        bytes.malloc(value.as_bytes().to_vec());
-
-        Ok(addr)
     }
 
 }

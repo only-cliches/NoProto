@@ -9,6 +9,7 @@ use std::result;
 use json::*;
 use std::ops::{ Index, IndexMut, Deref };
 
+
 pub enum NoProtoDataTypes {
     none,
     table {
@@ -22,20 +23,8 @@ pub enum NoProtoDataTypes {
         tail: u32,
         size: u16
     },
-    /*map_item {
-        key_address: u32,
-        next_item: u32
-    },
-    list_item {
-        next_item: u32,
-        prev_item: u32
-    },
-    table_column {
-        next_item: u32,
-        item_index: i16
-    },*/
-    utf8_string { size: i32, value: String },
-    bytes { size: i32, value: Vec<u8> },
+    utf8_string { size: u32, value: String },
+    bytes { size: u32, value: Vec<u8> },
     int8 { value: i8 },
     int32 { value: i32 },
     int64 { value: i64 }, 
@@ -55,50 +44,210 @@ pub enum NoProtoDataTypes {
     date { value: u64 } // 8 bytes
 }
 
-pub enum NoProtoPointerKind {
-    standard,
-    map_item {next: u32},
-    table_item {next: u32},
-    list_item {next: u32, prev: u32}
+pub enum NoProtoPointerKinds {
+    // scalar / collection
+    standard {value: u32},
+
+    // collection items
+    map_item {value: u32, key: u32, next: u32},
+    table_item {value: u32, i: u32, next: u32},
+    list_item {value: u32, i: u32, next: u32, prev: u32}
 }
 
 pub struct NoProtoPointer {
     address: u32, // pointer location
-    value: u32, // pointer value
-    kind: NoProtoPointerKind,
-    memory: Rc<RefCell<NoProtoMemory>>
+    kind: NoProtoPointerKinds,
+    memory: Rc<RefCell<NoProtoMemory>>,
+    model: Rc<RefCell<JsonValue>>,
+    value: Option<NoProtoDataTypes>,
+    type_string: String
 }
 
 impl NoProtoPointer {
 
+    pub fn new_standard(address: u32, model: Rc<RefCell<JsonValue>>, memory: Rc<RefCell<NoProtoMemory>>) -> Self {
+
+        let addr = address as usize;
+        let mut head: [u8; 4] = [0; 4];
+        let mut this_type: &str;
+
+        {
+            let b_bytes = memory.borrow().bytes;
+            head.copy_from_slice(&b_bytes[addr..(addr+4)]);
+
+            let b_model = model.borrow();
+            this_type = b_model["type"].as_str().unwrap_or("");
+        }
+
+
+        NoProtoPointer {
+            address: address,
+            kind: NoProtoPointerKinds::standard { value: u32::from_le_bytes(head) },
+            memory: memory,
+            model: model,
+            value: None,
+            type_string: this_type.to_owned()
+        }
+    }
+
+    pub fn clear(&mut self) {
+
+        let mut memory = self.memory.borrow_mut();
+
+        for x in 0..4 {
+            memory.bytes[(self.address + x) as usize] = 0;
+        }
+
+        self.value = None;
+
+        match self.kind {
+            NoProtoPointerKinds::standard { value } => {
+                value = 0;
+            },
+            NoProtoPointerKinds::map_item { value, key,  next } => {
+                value = 0;
+            },
+            NoProtoPointerKinds::table_item { value, i, next } => {
+                value = 0;
+            },
+            NoProtoPointerKinds::list_item { value, i, next, prev } => {
+                value = 0;
+            }
+        }
+
+    }
+
+    pub fn to_string(&mut self) -> Option<String> {
+
+        let type_str: &str = self.type_string.as_str(); 
+
+        match type_str {
+            "string" => {
+
+                match self.value { // check cache
+                    Some(x) => {
+                        match x {
+                            NoProtoDataTypes::utf8_string {size, value} => {
+                                Some(value)
+                            },
+                            _=> {
+                                None
+                            }
+                        }
+                    },
+                    None => { // no cache, get value
+                        match self.kind {
+                            NoProtoPointerKinds::standard {value} => {
+        
+                                // empty value
+                                if value == 0 {
+                                    return None;
+                                }
+                                
+                                // get size of string
+                                let addr = value as usize;
+                                let mut size: [u8; 4] = [0; 4];
+                                let memory = self.memory.borrow();
+                                size.copy_from_slice(&memory.bytes[addr..(addr+4)]);
+                                let str_size = u32::from_le_bytes(size) as usize;
+        
+                                // get string bytes
+                                let arrayBytes = &memory.bytes[(addr+4)..(addr+4+str_size)];
+        
+                                // convert to string
+                                let string = String::from_utf8(arrayBytes.to_vec());
+        
+                                match string {
+                                    Ok(x) => {
+                                        Some(x)
+                                    },
+                                    Err(_e) => {
+                                        // Err("Error parsing string!")
+                                        None
+                                    }
+                                }
+                            },
+                            _ => {
+                                // NoProtoResult::Err("Wrong pointer type!")
+                                None
+                            }
+                        }
+                    }
+                }
+
+
+            }
+            _ => {
+                // NoProtoResult::Err("Not a string type in data model!")
+                None
+            }
+        }
+    }
+
+    pub fn set_string(&mut self, value: &str) -> std::result::Result<bool, &'static str> {
+
+        let type_str: &str = self.type_string.as_str();
+
+        match type_str {
+            "string" => {
+                let bytes = value.as_bytes();
+                let str_size = bytes.len() as u32;
+
+                if str_size >= (2 as u32).pow(32) - 1 { 
+                    Err("String too large!")
+                } else {
+
+                    let mut memory = self.memory.borrow_mut();
+                  
+                    // first 4 bytes are string length
+                    let addr = memory.malloc(str_size.to_le_bytes().to_vec());
+                    // then string content
+                    memory.malloc(bytes.to_vec());
+                    
+                    // set pointer value to new address
+                    self.kind = NoProtoPointerKinds::standard { value: addr };
+                    let addr_bytes = addr.to_le_bytes();
+
+                    for x in 0..4 {
+                        memory.bytes[(self.address + x) as usize] = addr_bytes[x as usize];
+                    }
+
+                    // set cache
+                    self.value = Some(NoProtoDataTypes::utf8_string { size: str_size, value: value.to_string()});
+            
+                    Ok(true)
+                }
+
+            }
+            _ => {
+                Err("Not a string type!")
+            }
+        }
+    }
 }
 
-pub struct NoProtoGeneric {
-    address: u32,
-    cached_value: NoProtoDataTypes,
+pub struct NoProtoValue {
+    value: NoProtoDataTypes,
     type_string: String,
-    value_is_cached: bool,
-    model: Rc<RefCell<JsonValue>>,
-    memory: Rc<RefCell<NoProtoMemory>>,
 }
 
-impl NoProtoGeneric {
-
-
+impl NoProtoValue {
+ 
+/*
     pub fn new(address: u32, model: Rc<RefCell<JsonValue>>, memory: Rc<RefCell<NoProtoMemory>>) -> Self {
-        /*
+        
         let addr = address as usize;
         let mut head: [u8; 4] = [0; 4];
 
         let b_bytes = bytes.borrow();
         
-        head.copy_from_slice(&b_bytes[addr..(addr+4)]);*/
+        head.copy_from_slice(&b_bytes[addr..(addr+4)]);
 
         let b_model = model.borrow();
 
         let this_type: &str = b_model["type"].as_str().unwrap_or("");
  
-        NoProtoGeneric {
+        NoProtoValue {
             address: address,
             type_string: this_type.to_owned(),
             cached_value: NoProtoDataTypes::none,
@@ -155,7 +304,7 @@ impl NoProtoGeneric {
             }
         }
     }
-
+*/
 
     /*
     fn str_type_to_enum(str_type: &str) -> NoProtoDataTypes {
@@ -239,22 +388,22 @@ impl NoProtoGeneric {
 
 /*
 // cast i64 => Pointer
-impl From<i64> for NoProtoGeneric {
+impl From<i64> for NoProtoValue {
     fn from(num: i64) -> Self {
-        NoProtoGeneric {
+        NoProtoValue {
             loaded: false,
             address: 0,
-            value: NoProtoGeneric::int64 { value: num },
+            value: NoProtoValue::int64 { value: num },
             // model: None
         }
     }
 }
 
 // cast Pointer => Option<i64>
-impl From<&NoProtoGeneric> for Option<i64> {
-    fn from(ptr: &NoProtoGeneric) -> Option<i64> {
+impl From<&NoProtoValue> for Option<i64> {
+    fn from(ptr: &NoProtoValue) -> Option<i64> {
         match ptr.value {
-            NoProtoGeneric::int64 { value } => {
+            NoProtoValue::int64 { value } => {
                 Some(value)
             }
             _ => None
