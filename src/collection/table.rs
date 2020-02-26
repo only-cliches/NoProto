@@ -1,31 +1,30 @@
 
 
+use json::JsonValue;
+use crate::buffer::NoProtoMemory;
 use std::rc::Rc;
 use std::cell::RefCell;
-use crate::pointer::NoProtoValue;
 
-pub struct NoProtoTable<'a> {
-    pointer: Rc<RefCell<&'a NoProtoValue<'a>>>
+pub struct NoProtoTable {
+    address: u32, // pointer location
+    memory: Rc<RefCell<NoProtoMemory>>,
+    model: Rc<RefCell<JsonValue>>,
 }
 
 
-impl<'a> NoProtoTable<'a> {
+impl NoProtoTable {
 
-    pub fn new(pointer: Rc<RefCell<&'a NoProtoValue<'a>>>) -> Self {
+    pub fn new(address: u32, memory: Rc<RefCell<NoProtoMemory>>, model: Rc<RefCell<JsonValue>>) -> Self {
         NoProtoTable {
-            pointer: pointer
+            address: address,
+            memory: memory,
+            model: model
         }
     }
 
-    pub fn set(&self, column: &str, data: NoProtoValue) {
-        let mut ptr = self.pointer.borrow_mut();
-        let bytes: Vec<u8> = Vec::new();
-        // ptr.malloc(bytes);
+    pub fn select(&self, column: String) {
+
     }
-
-    //pub fn get(&self, column: &str) -> Option<NoProtoValue> {
-
-    //}
 
     fn delete(&self, key: String) -> bool {
         false

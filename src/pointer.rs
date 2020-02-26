@@ -7,9 +7,10 @@ use crate::collection::table::NoProtoTable;
 use std::cell::RefCell;
 use std::result;
 use json::*;
-use std::ops::{ Index, IndexMut, Deref };
+use std::{slice, ops::{ Index, IndexMut, Deref }};
 
-
+// unsigned integer size: 0 to 2^i -1
+//   signed integer size: -2^(i-1) to 2^(i-1) 
 pub enum NoProtoDataTypes {
     none,
     table {
@@ -50,8 +51,8 @@ pub enum NoProtoPointerKinds {
 
     // collection items
     map_item {value: u32, key: u32, next: u32},
-    table_item {value: u32, i: u32, next: u32},
-    list_item {value: u32, i: u32, next: u32, prev: u32}
+    table_item {value: u32, i: u8, next: u32},
+    list_item {value: u32, i: u16, next: u32}
 }
 
 pub struct NoProtoPointer {
@@ -69,25 +70,24 @@ impl NoProtoPointer {
 
         let addr = address as usize;
         let mut head: [u8; 4] = [0; 4];
-        let mut this_type: &str;
 
         {
-            let b_bytes = memory.borrow().bytes;
+            let b_bytes = &memory.borrow().bytes;
             head.copy_from_slice(&b_bytes[addr..(addr+4)]);
-
-            let b_model = model.borrow();
-            this_type = b_model["type"].as_str().unwrap_or("");
         }
 
-
-        NoProtoPointer {
+        let mut pointer = NoProtoPointer {
             address: address,
             kind: NoProtoPointerKinds::standard { value: u32::from_le_bytes(head) },
             memory: memory,
             model: model,
             value: None,
-            type_string: this_type.to_owned()
-        }
+            type_string: "".to_owned()
+        };
+
+        pointer.type_string = pointer.model.borrow()["type"].as_str().unwrap_or("").to_owned();
+
+        pointer
     }
 
     pub fn clear(&mut self) {
@@ -101,82 +101,86 @@ impl NoProtoPointer {
         self.value = None;
 
         match self.kind {
-            NoProtoPointerKinds::standard { value } => {
+            NoProtoPointerKinds::standard { mut value } => {
                 value = 0;
             },
-            NoProtoPointerKinds::map_item { value, key,  next } => {
+            NoProtoPointerKinds::map_item { mut value, key,  next } => {
                 value = 0;
             },
-            NoProtoPointerKinds::table_item { value, i, next } => {
+            NoProtoPointerKinds::table_item { mut value, i, next } => {
                 value = 0;
             },
-            NoProtoPointerKinds::list_item { value, i, next, prev } => {
+            NoProtoPointerKinds::list_item { mut value, i, next } => {
                 value = 0;
             }
         }
-
     }
 
-    pub fn to_string(&mut self) -> Option<String> {
+    fn get_value(&self) -> u32 {
+        match self.kind {
+            NoProtoPointerKinds::standard { value } => {                         value },
+            NoProtoPointerKinds::map_item { value, key,  next } => {   value },
+            NoProtoPointerKinds::table_item { value, i, next } => {     value },
+            NoProtoPointerKinds::list_item { value, i, next } => {     value }
+        }
+    }
+
+    pub fn as_table(&self) -> Option<NoProtoTable> {
+
+        let type_str: &str = self.type_string.as_str(); 
+
+        match type_str {
+            "table" => {
+                Some(NoProtoTable::new(self.address, Rc::clone(&self.memory), Rc::clone(&self.model)))
+            },
+            _ => {
+                None
+            }
+        }
+    }
+ 
+    pub fn as_string(&mut self) -> Option<String> {
 
         let type_str: &str = self.type_string.as_str(); 
 
         match type_str {
             "string" => {
 
-                match self.value { // check cache
-                    Some(x) => {
-                        match x {
-                            NoProtoDataTypes::utf8_string {size, value} => {
-                                Some(value)
-                            },
-                            _=> {
-                                None
-                            }
-                        }
+                let value = self.get_value();
+
+                // empty value
+                if value == 0 {
+                    return None;
+                }
+                
+                // get size of string
+                let addr = value as usize;
+                let mut size: [u8; 4] = [0; 4];
+                let memory = self.memory.borrow();
+                size.copy_from_slice(&memory.bytes[addr..(addr+4)]);
+                let str_size = u32::from_le_bytes(size) as usize;
+
+                // get string bytes
+                let arrayBytes = &memory.bytes[(addr+4)..(addr+4+str_size)];
+
+                // convert to string
+                let string = String::from_utf8(arrayBytes.to_vec());
+
+                match string {
+                    Ok(x) => {
+                        // set cache 
+                        // self.value = Some(NoProtoDataTypes::utf8_string { size: str_size as u32, value: x.as_str()});
+
+                        // return string
+                        Some(x)
                     },
-                    None => { // no cache, get value
-                        match self.kind {
-                            NoProtoPointerKinds::standard {value} => {
-        
-                                // empty value
-                                if value == 0 {
-                                    return None;
-                                }
-                                
-                                // get size of string
-                                let addr = value as usize;
-                                let mut size: [u8; 4] = [0; 4];
-                                let memory = self.memory.borrow();
-                                size.copy_from_slice(&memory.bytes[addr..(addr+4)]);
-                                let str_size = u32::from_le_bytes(size) as usize;
-        
-                                // get string bytes
-                                let arrayBytes = &memory.bytes[(addr+4)..(addr+4+str_size)];
-        
-                                // convert to string
-                                let string = String::from_utf8(arrayBytes.to_vec());
-        
-                                match string {
-                                    Ok(x) => {
-                                        Some(x)
-                                    },
-                                    Err(_e) => {
-                                        // Err("Error parsing string!")
-                                        None
-                                    }
-                                }
-                            },
-                            _ => {
-                                // NoProtoResult::Err("Wrong pointer type!")
-                                None
-                            }
-                        }
+                    Err(_e) => {
+                        // Err("Error parsing string!")
+                        None
                     }
                 }
-
-
-            }
+                
+            },
             _ => {
                 // NoProtoResult::Err("Not a string type in data model!")
                 None
@@ -184,7 +188,7 @@ impl NoProtoPointer {
         }
     }
 
-    pub fn set_string(&mut self, value: &str) -> std::result::Result<bool, &'static str> {
+    pub fn set_string(&mut self, value: &'static str) -> std::result::Result<bool, &'static str> {
 
         let type_str: &str = self.type_string.as_str();
 
@@ -213,7 +217,7 @@ impl NoProtoPointer {
                     }
 
                     // set cache
-                    self.value = Some(NoProtoDataTypes::utf8_string { size: str_size, value: value.to_string()});
+                    // self.value = Some(NoProtoDataTypes::utf8_string { size: str_size, value: value});
             
                     Ok(true)
                 }

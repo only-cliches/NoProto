@@ -47,7 +47,7 @@ impl NoProtoBuffer {
             }
         }
         
-        NoProtoPointer::new_standard(0, self.rootModel, self.memory)
+        NoProtoPointer::new_standard(0, Rc::clone(&self.rootModel), Rc::clone(&self.memory))
     }
 
     pub fn set_root(&self, address: u32) {
