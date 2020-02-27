@@ -28,15 +28,25 @@ pub struct NoProtoBuffer {
 
 impl NoProtoBuffer {
 
-    /*pub fn new() -> Self { // make new buffer
+    pub fn new(model: Rc<RefCell<JsonValue>>, size: Option<usize>) -> Self { // make new buffer
 
-    }
-    
-    pub fn load() -> Self { // load existing buffer
+        let capacity = match size {
+            Some(x) => x,
+            None => 1024
+        };
 
+        NoProtoBuffer {
+            memory: Rc::new(RefCell::new(NoProtoMemory { bytes: Vec::with_capacity(capacity) })),
+            rootModel: model
+        }
     }
-    
-    */
+
+    pub fn load(model: Rc<RefCell<JsonValue>>, bytes: Vec<u8>) -> Self { // load existing buffer
+        NoProtoBuffer {
+            memory: Rc::new(RefCell::new(NoProtoMemory { bytes: bytes})),
+            rootModel: model
+        }
+    }
 
     pub fn get_root(&self) -> NoProtoPointer {
 
@@ -48,10 +58,6 @@ impl NoProtoBuffer {
         }
         
         NoProtoPointer::new_standard(0, Rc::clone(&self.rootModel), Rc::clone(&self.memory))
-    }
-
-    pub fn set_root(&self, address: u32) {
-
     }
 
 }

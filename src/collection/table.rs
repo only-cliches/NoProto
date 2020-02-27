@@ -1,5 +1,6 @@
 
 
+use crate::pointer::NoProtoPointer;
 use json::JsonValue;
 use crate::buffer::NoProtoMemory;
 use std::rc::Rc;
@@ -11,6 +12,24 @@ pub struct NoProtoTable {
     model: Rc<RefCell<JsonValue>>,
 }
 
+pub struct NoProtoTableColumn {
+    i: u8,
+    column: String,
+    ptr: NoProtoPointer
+}
+
+// iterator / looping feature for Table
+impl Iterator for NoProtoTable {
+    type Item = NoProtoTableColumn;
+    
+    // Here, we define the sequence using `.curr` and `.next`.
+    // The return type is `Option<T>`:
+    //     * When the `Iterator` is finished, `None` is returned.
+    //     * Otherwise, the next value is wrapped in `Some` and returned.
+    fn next(&mut self) -> Option<NoProtoTableColumn> {
+
+    }
+}
 
 impl NoProtoTable {
 
@@ -22,19 +41,19 @@ impl NoProtoTable {
         }
     }
 
-    pub fn select(&self, column: String) {
+    pub fn select(&self, column: &str) -> NoProtoPointer {
 
     }
 
-    fn delete(&self, key: String) -> bool {
+    pub fn delete(&self, column: &str) -> bool {
         false
     }
 
-    fn clear(&self) {
+    pub fn clear(&self) {
 
     }
 
-    fn has(&self, key: String) {
+    pub fn has(&self, column: &str) {
 
     }
 

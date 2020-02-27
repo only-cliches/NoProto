@@ -9,8 +9,8 @@ use std::result;
 use json::*;
 use std::{slice, ops::{ Index, IndexMut, Deref }};
 
-// unsigned integer size: 0 to 2^i -1
-//   signed integer size: -2^(i-1) to 2^(i-1) 
+// unsigned integer size:        0 to (2^i) -1
+//   signed integer size: -2^(i-1) to  2^(i-1) 
 pub enum NoProtoDataTypes {
     none,
     table {
@@ -70,24 +70,24 @@ impl NoProtoPointer {
 
         let addr = address as usize;
         let mut head: [u8; 4] = [0; 4];
+        let type_string;
 
         {
             let b_bytes = &memory.borrow().bytes;
             head.copy_from_slice(&b_bytes[addr..(addr+4)]);
+
+            let b_model = model.borrow();
+            type_string = b_model["type"].as_str().unwrap_or("").to_owned();
         }
 
-        let mut pointer = NoProtoPointer {
+        NoProtoPointer {
             address: address,
             kind: NoProtoPointerKinds::standard { value: u32::from_le_bytes(head) },
             memory: memory,
             model: model,
             value: None,
-            type_string: "".to_owned()
-        };
-
-        pointer.type_string = pointer.model.borrow()["type"].as_str().unwrap_or("").to_owned();
-
-        pointer
+            type_string: type_string
+        }
     }
 
     pub fn clear(&mut self) {
@@ -118,10 +118,10 @@ impl NoProtoPointer {
 
     fn get_value(&self) -> u32 {
         match self.kind {
-            NoProtoPointerKinds::standard { value } => {                         value },
-            NoProtoPointerKinds::map_item { value, key,  next } => {   value },
-            NoProtoPointerKinds::table_item { value, i, next } => {     value },
-            NoProtoPointerKinds::list_item { value, i, next } => {     value }
+            NoProtoPointerKinds::standard { value } =>                          { value },
+            NoProtoPointerKinds::map_item { value, key,  next } =>    { value },
+            NoProtoPointerKinds::table_item { value, i, next } =>      { value },
+            NoProtoPointerKinds::list_item { value, i, next } =>      { value }
         }
     }
 
