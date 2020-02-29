@@ -6,6 +6,7 @@ use std::cell::RefCell;
 
 pub struct NoProtoTable {
     address: u32, // pointer location
+    head: u32,
     memory: Rc<RefCell<NoProtoMemory>>,
     model: Rc<RefCell<JsonValue>>,
 }
@@ -14,6 +15,7 @@ impl NoProtoTable {
 
     pub fn new(address: u32, memory: Rc<RefCell<NoProtoMemory>>, model: Rc<RefCell<JsonValue>>) -> Self {
         NoProtoTable {
+            head: 0,
             address: address,
             memory: memory,
             model: model
