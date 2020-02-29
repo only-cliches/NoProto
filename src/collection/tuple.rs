@@ -4,10 +4,8 @@ use json::JsonValue;
 use std::rc::Rc;
 use std::cell::RefCell;
 
-
-pub struct NoProtoList {
+pub struct NoProtoTuple {
     address: u32, // pointer location
-    size: u16,
     memory: Rc<RefCell<NoProtoMemory>>,
     model: Rc<RefCell<JsonValue>>,
 }

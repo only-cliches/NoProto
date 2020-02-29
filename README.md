@@ -15,11 +15,18 @@ https://docs.rs/byteorder/1.3.2/byteorder/
 https://docs.rs/json/0.12.0/json/
 ```
 
+Limitations:
+- Buffer and it's contents cannot be larger than 2^32 bytes (~4GB).
+- Tables & Lists cannot have more than 2^16 items (~16k).
+- Enum/Option types are limited to 256 choices.
+
+
 ```ts
 const model = {
     type: "table",
     columns: [
         ["name", {type: "string"}],
+        ["scores", {type: "tuple", size: 3, values: {type: "u64"}}]
         ["favs", {type: "list", of: {
             type: "table",
             columns: [
@@ -30,24 +37,30 @@ const model = {
         ["colors", {type: "option", options: ["red", "blue", "green"]}]
     ]
 }
-
-
 ```
 
 # NoProto
-High Performance Zero-Copy Serialization Library
+High Performance Serialization Library
 
 NoProto allows you to store and mutate structured data with near zero overhead.  It's like JSON but faster, type safe and more space efficient.
 
-NoProto moves the cost of deserialization to the access methods instead of deserializing the entire object. This makes it a perfect use case for things like database storage or file storage of structured data.
+NoProto moves the cost of deserialization to the access methods instead of deserializing the entire object. This makes it a perfect use case for things like database storage or file storage of structured data.  Deserilizing is free, exporting just gives you the buffer created by the library.
 
-#### Compared to FlatBuffers & Cap'n Proto:
-- Types are dynamic at run time, no compilation step.
-- Easily mutate (add/delete/update) existing/imported buffers.
+#### Compared to FlatBuffers & Cap'N Proto:
+- Objects are dynamic at run time, no compilation step
+- Supports more types and better nested type support
+- Mutate (add/delete/update) existing/imported buffers
 
-Serializing a NoProto buffer is almost a free/instant operation.  The serialization process reads a few bytes and leaves the rest to access methods.  Deserilizing is free, exporting just gives you the buffers created by the library.
+#### Compared to JSON
+- More space efficient
+- Faster serialization & deserialization
+- Supports raw bytes & other native types
 
-Also unlike JSON, keys are not stored in the buffer saving a significant amount of space. 
+#### Compared to BSON
+- Faster serialization & deserialization
+- Typically (but not always) more space efficient
+- Supports much larger documents (4GB vs 16MB)
+- Better collection support & more supported types
 
 #### Good Use Cases For NoProto
 - Database object storage.
@@ -59,7 +72,7 @@ To keep performance optimal many mutations/updates/deletes will lead to the buff
 
 For example, if you set a key `baz` to `"bar"`, the value will just be appended to the buffer (no compaction needed).  If you then update the key `baz` to `"hello"`, the `"hello"` string will be appended to the buffer and `baz` will point to the new value.  The old value, `"bar"` is still in the buffer and taking up space but has been dereferenced.
 
-Fixed size values (geo, integer, float, boolean, option, and uuid) are an exception to this rule, they can always be updated in place and never take up more space following an update.
+Fixed size scalar values are an exception to this rule, they can always be updated in place and never take up more space following an update.
 
 Deletes are always done by simply dereferencing data, so deleting a value will always lead to wasted space.
 
