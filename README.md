@@ -23,18 +23,18 @@ Limitations:
 
 ```ts
 const model = {
-    type: "table",
+    kind: "table",
     columns: [
-        ["name", {type: "string"}],
-        ["scores", {type: "tuple", size: 3, values: {type: "u64"}}]
-        ["favs", {type: "list", of: {
-            type: "table",
+        ["name", {kind: "string"}],
+        ["scores", {kind: "tuple", size: 3, values: {kind: "u64"}}]
+        ["favs", {kind: "list", of: {
+            kind: "table",
             columns: [
                 ...
             ]
         }}],
-        ["meta", {type: "map", key: {type: "string"}, value: {type: "string"}}],
-        ["colors", {type: "option", options: ["red", "blue", "green"]}]
+        ["meta", {kind: "map", key: {kind: "string"}, value: {kind: "string"}}],
+        ["colors", {kind: "option", options: ["red", "blue", "green"]}]
     ]
 }
 ```
@@ -42,27 +42,37 @@ const model = {
 # NoProto
 High Performance Serialization Library
 
+## Features
+- Nearly instant deserilization & serialization
+- Schemas are dynamic/flexible at runtime
+- Extremely space efficient
+- Mutate/Update/Delete values in existing buffers
+- Supports native data types
+- Supports collection types (list, map, & table)
+
 NoProto allows you to store and mutate structured data with near zero overhead.  It's like JSON but faster, type safe and more space efficient.
 
-NoProto moves the cost of deserialization to the access methods instead of deserializing the entire object. This makes it a perfect use case for things like database storage or file storage of structured data.  Deserilizing is free, exporting just gives you the buffer created by the library.
+NoProto moves the cost of deserialization to the access methods instead of deserializing the entire object ahead of time. This makes it a perfect use case for things like database storage or file storage of structured data.  Deserilizing is free, exporting just gives you the buffer created by the library.
 
 #### Compared to FlatBuffers & Cap'N Proto:
-- Objects are dynamic at run time, no compilation step
+- Schemas are dynamic at runtime, no compilation step
 - Supports more types and better nested type support
 - Mutate (add/delete/update) existing/imported buffers
 
 #### Compared to JSON
 - More space efficient
+- Has schemas
 - Faster serialization & deserialization
 - Supports raw bytes & other native types
 
 #### Compared to BSON
 - Faster serialization & deserialization
+- Has schemas
 - Typically (but not always) more space efficient
 - Supports much larger documents (4GB vs 16MB)
 - Better collection support & more supported types
 
-#### Good Use Cases For NoProto
+### Good Use Cases For NoProto
 - Database object storage.
 - File object storage.
 - Sending/Receiving objects over a network.
@@ -76,7 +86,7 @@ Fixed size scalar values are an exception to this rule, they can always be updat
 
 Deletes are always done by simply dereferencing data, so deleting a value will always lead to wasted space.
 
-The library can inexpensively calculate how much space is wasted with the `.getWastedBytes()` method, and compactions can be performed with `.compact()` and `.maybeCompact(callback: (wastedBytes) => boolean)`.  Compaction creates a new buffer and copies over all data from the old buffer skipping any dereferenced data and updating pointers.
+The library can inexpensively calculate how much space is wasted with the `.getWastedBytes()` method, and compactions can be performed with `.compact()` and `.maybeCompact(callback: (wastedBytes) => boolean)`.  Compaction creates a new buffer and copies over all data from the old buffer skipping any dereferenced data.
 
 In a server/client setup compaction can be performed in batches on the server during non peak times.  Compaction can also be handled by the client before sending the updated buffer to the server.
 

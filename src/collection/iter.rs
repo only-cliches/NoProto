@@ -10,12 +10,12 @@ pub enum NoProtoPointerItemKind {
 }
 
 pub struct NoProtoIteratorItem {
-    i: u16,
-    column: String,
-    empty: bool,
+    pub i: u16,
+    pub column: String,
+    pub empty: bool,
     kind: NoProtoPointerItemKind
 }
-
+/*
 impl NoProtoIteratorItem {
     
     pub fn select(&self) -> NoProtoPointer {
@@ -44,4 +44,4 @@ impl Iterator for NoProtoTable {
     fn next(&mut self) -> Option<NoProtoIteratorItem> {
 
     }
-}
+}*/
