@@ -149,12 +149,12 @@ impl fmt::Debug for NoProtoUUID {
 
 pub enum NoProtoPointerKinds {
     // scalar / collection
-    Standard {value: u32}, // 4 bytes [4]
+    Standard  { value: u32 }, // 4 bytes [4]
 
     // collection items
-    MapItem {value: u32, key: u32, next: u32, prev: u32}, // 16 bytes [4, 4, 4, 4]
-    TableItem {value: u32, i: u8, next: u32, prev: u32}, // 13 bytes [4, 1, 4, 4]
-    ListItem {value: u32, i: u16, next: u32, prev: u32} // 14 bytes [4, 2, 4, 4]
+    MapItem   { value: u32, next: u32, key: u32 }, // 12 bytes [4, 4, 4]
+    TableItem { value: u32, next: u32, i: u8    }, // 9  bytes [4, 4, 1]
+    ListItem  { value: u32, next: u32, i: u16   }  // 10 bytes [4, 4, 2]
 }
 
 pub struct NoProtoPointer<'a> {
@@ -189,24 +189,21 @@ impl<'a> NoProtoPointer<'a> {
         let addr = address as usize;
         let mut value: [u8; 4] = [0; 4];
         let mut next: [u8; 4] = [0; 4];
-        let mut prev: [u8; 4] = [0; 4];
-        let mut index: u8 = 0;
+        let index: u8;
 
         {
             let b_bytes = &memory.borrow().bytes;
             value.copy_from_slice(&b_bytes[addr..(addr + 4)]);
-            index = b_bytes[addr + 4];
-            next.copy_from_slice(&b_bytes[(addr + 5)..(addr + 9)]);
-            prev.copy_from_slice(&b_bytes[(addr + 9)..(addr + 13)]);
+            next.copy_from_slice(&b_bytes[(addr + 4)..(addr + 8)]);
+            index = b_bytes[addr + 8];
         }
 
         NoProtoPointer {
             address: address,
             kind: NoProtoPointerKinds::TableItem { 
                 value: u32::from_le_bytes(value),
-                i: index,
                 next: u32::from_le_bytes(next),
-                prev: u32::from_le_bytes(prev)
+                i: index
             },
             memory: memory,
             schema: schema
@@ -219,10 +216,10 @@ impl<'a> NoProtoPointer<'a> {
 
     fn get_value_address(&self) -> u32 {
         match self.kind {
-            NoProtoPointerKinds::Standard  { value } =>                               { value },
-            NoProtoPointerKinds::MapItem   { value, key: _,  next: _, prev: _ } =>    { value },
-            NoProtoPointerKinds::TableItem { value, i: _,    next: _, prev: _ } =>    { value },
-            NoProtoPointerKinds::ListItem  { value, i:_ ,    next: _, prev: _ } =>    { value }
+            NoProtoPointerKinds::Standard  { value } =>                      { value },
+            NoProtoPointerKinds::MapItem   { value, key: _,  next: _ } =>    { value },
+            NoProtoPointerKinds::TableItem { value, i: _,    next: _ } =>    { value },
+            NoProtoPointerKinds::ListItem  { value, i:_ ,    next: _ } =>    { value }
         }
     }
 
@@ -240,14 +237,14 @@ impl<'a> NoProtoPointer<'a> {
             NoProtoPointerKinds::Standard { value: _ } => {
                 self.kind = NoProtoPointerKinds::Standard { value: val}
             },
-            NoProtoPointerKinds::MapItem { value: _, key,  next, prev } => {
-                self.kind = NoProtoPointerKinds::MapItem { value: val, key: key, next: next, prev: prev}
+            NoProtoPointerKinds::MapItem { value: _, key,  next  } => {
+                self.kind = NoProtoPointerKinds::MapItem { value: val, key: key, next: next }
             },
-            NoProtoPointerKinds::TableItem { value: _, i, next, prev } => {
-                self.kind = NoProtoPointerKinds::TableItem { value: val, i: i, next: next, prev: prev}
+            NoProtoPointerKinds::TableItem { value: _, i, next  } => {
+                self.kind = NoProtoPointerKinds::TableItem { value: val, i: i, next: next }
             },
-            NoProtoPointerKinds::ListItem { value: _, i, next, prev } => {
-                self.kind = NoProtoPointerKinds::ListItem { value: val, i: i, next: next, prev: prev}
+            NoProtoPointerKinds::ListItem { value: _, i, next  } => {
+                self.kind = NoProtoPointerKinds::ListItem { value: val, i: i, next: next }
             }
         }
     }

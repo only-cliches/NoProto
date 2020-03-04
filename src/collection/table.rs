@@ -51,17 +51,10 @@ impl<'a> NoProtoTable<'a> {
                     {
                         let mut memory = self.memory.borrow_mut();
         
-                        let mut ptr_bytes: [u8; 13] = [0; 13];
+                        let mut ptr_bytes: [u8; 9] = [0; 9];
         
                         // set column index in pointer
-                        ptr_bytes[4] = *column_index;
-        
-                        // set prev to table head address
-                        let head_bytes = self.address.to_le_bytes();
-                        for i in 0..4 {
-                            let prev_addr = 4 + 1 + 4 + i;
-                            ptr_bytes[prev_addr] = head_bytes[i];
-                        }
+                        ptr_bytes[8] = *column_index;
         
                         addr = memory.malloc(ptr_bytes.to_vec()).unwrap_or(0);
             
@@ -84,7 +77,7 @@ impl<'a> NoProtoTable<'a> {
 
                     while has_next {
 
-                        let index = memory.bytes[(next_addr + 4)];
+                        let index = memory.bytes[(next_addr + 12)];
                         
                         // found our value!
                         if index == *column_index {
@@ -93,7 +86,7 @@ impl<'a> NoProtoTable<'a> {
 
                         // not found yet, get next address
                         let mut next: [u8; 4] = [0; 4];
-                        next.copy_from_slice(&memory.bytes[(next_addr + 5)..(next_addr + 9)]);
+                        next.copy_from_slice(&memory.bytes[(next_addr + 4)..(next_addr + 8)]);
                         let next_ptr = u32::from_le_bytes(next) as usize;
                         if next_ptr == 0 {
                             has_next = false;
@@ -104,19 +97,41 @@ impl<'a> NoProtoTable<'a> {
 
                     // ran out of pointers to check, make one!
 
-                }
+                    let mut addr = 0;
 
-                return None;
+                    {
+                        let mut memory = self.memory.borrow_mut();
+        
+                        let mut ptr_bytes: [u8; 9] = [0; 9];
+        
+                        // set column index in pointer
+                        ptr_bytes[8] = *column_index;
+                
+                        addr = memory.malloc(ptr_bytes.to_vec()).unwrap_or(0);
+            
+                        // out of memory
+                        if addr == 0 { return None; }
+
+                        // set previouse pointer's next value to this new pointer
+                        let addr_bytes = addr.to_le_bytes();
+                        for x in 0..addr_bytes.len() {
+                            memory.bytes[(next_addr + 4 + x)] = addr_bytes[x];
+                        }
+
+                    }
+                    
+                    // provide 
+                    return Some(NoProtoPointer::new_table_item(addr, some_column_schema, Rc::clone(&self.memory)));
+
+                }
             },
             None => {
                 return None;
             }
         }
-
-        None
     }
 
-    pub fn set_head(&mut self, addr: u32) {
+    fn set_head(&mut self, addr: u32) {
         let mut memory = self.memory.borrow_mut();
 
         let addr_bytes = addr.to_le_bytes();
@@ -124,10 +139,6 @@ impl<'a> NoProtoTable<'a> {
         for x in 0..addr_bytes.len() {
             memory.bytes[(self.address + x as u32) as usize] = addr_bytes[x as usize];
         }
-    }
-
-    pub fn delete(&mut self, column: &str) -> bool {
-        false
     }
 
     pub fn clear(&mut self) {

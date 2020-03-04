@@ -45,7 +45,6 @@ High Performance Serialization Library
 ## Features
 - Nearly instant deserilization & serialization
 - Schemas are dynamic/flexible at runtime
-- Extremely space efficient
 - Mutate/Update/Delete values in existing buffers
 - Supports native data types
 - Supports collection types (list, map, & table)
