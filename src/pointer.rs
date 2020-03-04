@@ -2,7 +2,9 @@ extern crate rand;
 
 // use crate::collection::map::NoProtoMap;
 // use crate::collection::list::NoProtoList;
+use crate::NoProtoSchema;
 use crate::collection::table::NoProtoTable;
+use crate::NoProtoSchemaKinds;
 use crate::NoProtoMemory;
 use std::cell::RefMut;
 use core::cell::Ref;
@@ -31,6 +33,7 @@ fn to_hex(num: u64, length: i32) -> String {
 
     result
 }
+
 #[derive(Debug)]
 pub struct NoProtoGeo {
     pub lat: f64,
@@ -146,46 +149,67 @@ impl fmt::Debug for NoProtoUUID {
 
 pub enum NoProtoPointerKinds {
     // scalar / collection
-    Standard {value: u32},
+    Standard {value: u32}, // 4 bytes [4]
 
     // collection items
-    MapItem {value: u32, key: u32, next: u32},
-    TableItem {value: u32, i: u16, next: u32},
-    ListItem {value: u32, i: u16, next: u32}
+    MapItem {value: u32, key: u32, next: u32, prev: u32}, // 16 bytes [4, 4, 4, 4]
+    TableItem {value: u32, i: u8, next: u32, prev: u32}, // 13 bytes [4, 1, 4, 4]
+    ListItem {value: u32, i: u16, next: u32, prev: u32} // 14 bytes [4, 2, 4, 4]
 }
 
-pub struct NoProtoPointer {
+pub struct NoProtoPointer<'a> {
     address: u32, // pointer location
     kind: NoProtoPointerKinds,
     memory: Rc<RefCell<NoProtoMemory>>,
-    model: Rc<RefCell<JsonValue>>,
-    // value: Option<NoProtoDataTypes>,
-    pub type_string: String
+    schema: &'a NoProtoSchema
 }
 
-impl NoProtoPointer {
+impl<'a> NoProtoPointer<'a> {
 
-    pub fn new_standard(address: u32, model: Rc<RefCell<JsonValue>>, memory: Rc<RefCell<NoProtoMemory>>) -> Self {
+    pub fn new_standard(address: u32, schema: &'a NoProtoSchema, memory: Rc<RefCell<NoProtoMemory>>) -> Self {
 
         let addr = address as usize;
-        let mut head: [u8; 4] = [0; 4];
-        let type_string;
-
+        let mut value: [u8; 4] = [0; 4];
         {
             let b_bytes = &memory.borrow().bytes;
-            head.copy_from_slice(&b_bytes[addr..(addr+4)]);
-
-            let b_model = model.borrow();
-            type_string = b_model["type"].as_str().unwrap_or("").to_owned();
+            value.copy_from_slice(&b_bytes[addr..(addr+4)]);
         }
 
         NoProtoPointer {
             address: address,
-            kind: NoProtoPointerKinds::Standard { value: u32::from_le_bytes(head) },
+            kind: NoProtoPointerKinds::Standard { value: u32::from_le_bytes(value) },
             memory: memory,
-            model: model,
-            // value: None,
-            type_string: type_string
+            schema: schema
+        }
+    }
+
+
+    pub fn new_table_item(address: u32, schema: &'a NoProtoSchema, memory: Rc<RefCell<NoProtoMemory>>) -> Self {
+
+        let addr = address as usize;
+        let mut value: [u8; 4] = [0; 4];
+        let mut next: [u8; 4] = [0; 4];
+        let mut prev: [u8; 4] = [0; 4];
+        let mut index: u8 = 0;
+
+        {
+            let b_bytes = &memory.borrow().bytes;
+            value.copy_from_slice(&b_bytes[addr..(addr + 4)]);
+            index = b_bytes[addr + 4];
+            next.copy_from_slice(&b_bytes[(addr + 5)..(addr + 9)]);
+            prev.copy_from_slice(&b_bytes[(addr + 9)..(addr + 13)]);
+        }
+
+        NoProtoPointer {
+            address: address,
+            kind: NoProtoPointerKinds::TableItem { 
+                value: u32::from_le_bytes(value),
+                i: index,
+                next: u32::from_le_bytes(next),
+                prev: u32::from_le_bytes(prev)
+            },
+            memory: memory,
+            schema: schema
         }
     }
 
@@ -195,10 +219,10 @@ impl NoProtoPointer {
 
     fn get_value_address(&self) -> u32 {
         match self.kind {
-            NoProtoPointerKinds::Standard { value } =>                { value },
-            NoProtoPointerKinds::MapItem { value, key: _,  next: _ } =>    { value },
-            NoProtoPointerKinds::TableItem { value, i: _, next: _ } =>     { value },
-            NoProtoPointerKinds::ListItem { value, i:_ , next: _ } =>      { value }
+            NoProtoPointerKinds::Standard  { value } =>                               { value },
+            NoProtoPointerKinds::MapItem   { value, key: _,  next: _, prev: _ } =>    { value },
+            NoProtoPointerKinds::TableItem { value, i: _,    next: _, prev: _ } =>    { value },
+            NoProtoPointerKinds::ListItem  { value, i:_ ,    next: _, prev: _ } =>    { value }
         }
     }
 
@@ -216,27 +240,29 @@ impl NoProtoPointer {
             NoProtoPointerKinds::Standard { value: _ } => {
                 self.kind = NoProtoPointerKinds::Standard { value: val}
             },
-            NoProtoPointerKinds::MapItem { value: _, key,  next } => {
-                self.kind = NoProtoPointerKinds::MapItem { value: val, key: key, next: next}
+            NoProtoPointerKinds::MapItem { value: _, key,  next, prev } => {
+                self.kind = NoProtoPointerKinds::MapItem { value: val, key: key, next: next, prev: prev}
             },
-            NoProtoPointerKinds::TableItem { value: _, i, next } => {
-                self.kind = NoProtoPointerKinds::TableItem { value: val, i: i, next: next}
+            NoProtoPointerKinds::TableItem { value: _, i, next, prev } => {
+                self.kind = NoProtoPointerKinds::TableItem { value: val, i: i, next: next, prev: prev}
             },
-            NoProtoPointerKinds::ListItem { value: _, i, next } => {
-                self.kind = NoProtoPointerKinds::ListItem { value: val, i: i, next: next}
+            NoProtoPointerKinds::ListItem { value: _, i, next, prev } => {
+                self.kind = NoProtoPointerKinds::ListItem { value: val, i: i, next: next, prev: prev}
             }
         }
     }
 
     pub fn as_table(&mut self) -> Option<NoProtoTable> {
 
-        let type_str: &str = self.type_string.as_str(); 
+        let model = self.schema;
 
-        match type_str {
-            "table" => {
+        match &*model.kind {
+            NoProtoSchemaKinds::Table { columns } => {
 
                 let mut addr = self.get_value_address();
                 let mut set_addr = false;
+
+                let mut head: [u8; 4] = [0; 4];
 
                 // no table here, make one
                 if addr == 0 {
@@ -245,14 +271,26 @@ impl NoProtoPointer {
                     addr = memory.malloc([0 as u8; 4].to_vec()).unwrap_or(0); // stores HEAD for table
                     set_addr = true;
 
+                    // out of memory
                     if addr == 0 {
                         return None;
                     }
                 }
 
-                if set_addr { self.set_value_address(addr) };
+                if set_addr { // new head, empty value
+                    self.set_value_address(addr);
+                } else { // existing head, read value
+                    let b_bytes = &self.memory.borrow().bytes;
+                    let a = addr as usize;
+                    head.copy_from_slice(&b_bytes[a..(a+4)]);
+                }
 
-                Some(NoProtoTable::new(addr, Rc::clone(&self.memory), Rc::clone(&self.model)))
+                Some(NoProtoTable {
+                    head: u32::from_le_bytes(head),
+                    address: addr,
+                    memory: Rc::clone(&self.memory),
+                    columns: &columns
+                })
             },
             _ => {
                 None
@@ -275,9 +313,10 @@ impl NoProtoPointer {
  */
     pub fn to_string(&self) -> Option<String> {
 
+        let model = self.schema;
 
-        match self.type_string.as_str() {
-            "string" => {
+        match *model.kind {
+            NoProtoSchemaKinds::Utf8String => {
 
                 let mut addr = self.get_value_address() as usize;
                 let mut set_addr = false;
@@ -320,14 +359,14 @@ impl NoProtoPointer {
 
     pub fn set_string(&mut self, value: &str) -> std::result::Result<bool, &'static str> {
 
-        let type_str: &str = self.type_string.as_str();
+        let model = self.schema;
 
-        match type_str {
-            "string" => {
+        match *model.kind {
+            NoProtoSchemaKinds::Utf8String => {
                 let bytes = value.as_bytes();
                 let str_size = bytes.len() as u64;
 
-                if str_size >= 4294967296u64 { 
+                if str_size >= std::u32::MAX as u64 { 
                     Err("String too large!")
                 } else {
 
@@ -388,8 +427,10 @@ impl NoProtoPointer {
     }
 
     pub fn to_bytes(&self) -> Option<Vec<u8>> {
-        match self.type_string.as_str() {
-            "bytes" => {
+        let model = self.schema;
+
+        match *model.kind {
+            NoProtoSchemaKinds::Bytes => {
                 let value = self.get_value_address();
 
                 // empty value
@@ -416,12 +457,14 @@ impl NoProtoPointer {
     }
 
     pub fn set_bytes(&mut self, bytes: Vec<u8>) -> std::result::Result<bool, &'static str> {
-        match self.type_string.as_str() {
-            "bytes" => {
+        let model = self.schema;
+
+        match *model.kind {
+            NoProtoSchemaKinds::Bytes => {
 
                 let size = bytes.len() as u64;
 
-                if size >= 4294967296u64 { 
+                if size >= std::u32::MAX as u64 { 
                     Err("Bytes too large!")
                 } else {
 
@@ -554,10 +597,12 @@ impl NoProtoPointer {
 
         Some(bytes)
     }
-
+/*
     pub fn to_dec8(&self) -> Option<(i8, u8)> {
-        match self.type_string.as_str() {
-            "dec8" => {
+        let model = self.model;
+
+        match *model.kind {
+            NoProtoSchemaKinds::Utf8String => {
                 match self.get_2_bytes() {
                     Some(x) => {
                         Some((i8::from_le_bytes([x[0]]), u8::from_le_bytes([x[1]])))
@@ -572,7 +617,7 @@ impl NoProtoPointer {
     }
 
     pub fn set_dec8(&mut self, dec8: i8, raise: u8) -> std::result::Result<bool, &'static str> {
-        match self.type_string.as_str() {
+        match self.model.kind.as_str() {
             "dec8" => {
                 
                 let mut addr = self.get_value_address();
@@ -621,10 +666,12 @@ impl NoProtoPointer {
             }
         }
     }
-
+*/
     pub fn to_int8(&self) -> Option<i8> {
-        match self.type_string.as_str() {
-            "int8" => {
+        let model = self.schema;
+
+        match *model.kind {
+            NoProtoSchemaKinds::Int8 => {
                 match self.get_1_byte() {
                     Some(x) => {
                         Some(i8::from_le_bytes(x))
@@ -639,10 +686,11 @@ impl NoProtoPointer {
     }
 
     pub fn set_int8(&mut self, int8: i8) -> std::result::Result<bool, &'static str> {
-        match self.type_string.as_str() {
-            "int8" => {
-                
+        let model = self.schema;
 
+        match *model.kind {
+            NoProtoSchemaKinds::Int8 => {
+                
                 let mut addr = self.get_value_address();
                 let mut set_addr = false;
 
@@ -680,8 +728,10 @@ impl NoProtoPointer {
     }
 
     pub fn to_int16(&self) -> Option<i16> {
-        match self.type_string.as_str() {
-            "int16" => {
+        let model = self.schema;
+
+        match *model.kind {
+            NoProtoSchemaKinds::Int16 => {
                 match self.get_2_bytes() {
                     Some(x) => {
                         Some(i16::from_le_bytes(x))
@@ -696,8 +746,10 @@ impl NoProtoPointer {
     }
 
     pub fn set_int16(&mut self, int16: i16) -> std::result::Result<bool, &'static str> {
-        match self.type_string.as_str() {
-            "int16" => {
+        let model = self.schema;
+
+        match *model.kind {
+            NoProtoSchemaKinds::Int16 => {
                 
 
                 let mut addr = self.get_value_address();
@@ -737,8 +789,10 @@ impl NoProtoPointer {
     }
 
     pub fn to_int32(&self) -> Option<i32> {
-        match self.type_string.as_str() {
-            "int32" => {
+        let model = self.schema;
+
+        match *model.kind {
+            NoProtoSchemaKinds::Int32 => {
                 match self.get_4_bytes() {
                     Some(x) => {
                         Some(i32::from_le_bytes(x))
@@ -753,8 +807,10 @@ impl NoProtoPointer {
     }
 
     pub fn set_int32(&mut self, int32: i32) -> std::result::Result<bool, &'static str> {
-        match self.type_string.as_str() {
-            "int32" => {
+        let model = self.schema;
+
+        match *model.kind {
+            NoProtoSchemaKinds::Int32 => {
 
                 let mut addr = self.get_value_address();
                 let mut set_addr = false;
@@ -794,8 +850,10 @@ impl NoProtoPointer {
     }
 
     pub fn to_int64(&self) -> Option<i64> {
-        match self.type_string.as_str() {
-            "int64" => {
+        let model = self.schema;
+
+        match *model.kind {
+            NoProtoSchemaKinds::Int64 => {
                 match self.get_8_bytes() {
                     Some(x) => {
                         Some(i64::from_le_bytes(x))
@@ -810,10 +868,11 @@ impl NoProtoPointer {
     }
 
     pub fn set_int64(&mut self, int64: i64) -> std::result::Result<bool, &'static str> {
-        match self.type_string.as_str() {
-            "int64" => {
-                
+        let model = self.schema;
 
+        match *model.kind {
+            NoProtoSchemaKinds::Int64 => {
+                
                 let mut addr = self.get_value_address();
                 let mut set_addr = false;
 
@@ -852,8 +911,10 @@ impl NoProtoPointer {
     }
 
     pub fn to_uint8(&self) -> Option<u8> {
-        match self.type_string.as_str() {
-            "uint8" => {
+        let model = self.schema;
+
+        match *model.kind {
+            NoProtoSchemaKinds::Uint8 => {
                 match self.get_1_byte() {
                     Some(x) => {
                         Some(u8::from_le_bytes(x))
@@ -868,8 +929,10 @@ impl NoProtoPointer {
     }
 
     pub fn set_uint8(&mut self, uint8: u8) -> std::result::Result<bool, &'static str> {
-        match self.type_string.as_str() {
-            "uint8" => {
+        let model = self.schema;
+
+        match *model.kind {
+            NoProtoSchemaKinds::Uint8 => {
                 
 
                 let mut addr = self.get_value_address();
@@ -909,8 +972,10 @@ impl NoProtoPointer {
     }
 
     pub fn to_uint16(&self) -> Option<u16> {
-        match self.type_string.as_str() {
-            "uint16" => {
+        let model = self.schema;
+
+        match *model.kind {
+            NoProtoSchemaKinds::Uint16 => {
                 match self.get_2_bytes() {
                     Some(x) => {
                         Some(u16::from_le_bytes(x))
@@ -925,8 +990,10 @@ impl NoProtoPointer {
     }
 
     pub fn set_uint16(&mut self, uint16: u16) -> std::result::Result<bool, &'static str> {
-        match self.type_string.as_str() {
-            "uint16" => {
+        let model = self.schema;
+
+        match *model.kind {
+            NoProtoSchemaKinds::Uint16 => {
                 
 
                 let mut addr = self.get_value_address();
@@ -966,8 +1033,10 @@ impl NoProtoPointer {
     }
 
     pub fn to_uint32(&self) -> Option<u32> {
-        match self.type_string.as_str() {
-            "uint32" => {
+        let model = self.schema;
+
+        match *model.kind {
+            NoProtoSchemaKinds::Uint32 => {
                 match self.get_4_bytes() {
                     Some(x) => {
                         Some(u32::from_le_bytes(x))
@@ -982,10 +1051,11 @@ impl NoProtoPointer {
     }
 
     pub fn set_uint32(&mut self, uint32: u32) -> std::result::Result<bool, &'static str> {
-        match self.type_string.as_str() {
-            "uint32" => {
-                
+        let model = self.schema;
 
+        match *model.kind {
+            NoProtoSchemaKinds::Uint32 => {
+                
                 let mut addr = self.get_value_address();
                 let mut set_addr = false;
 
@@ -1023,8 +1093,10 @@ impl NoProtoPointer {
     }
 
     pub fn to_uint64(&self) -> Option<u64> {
-        match self.type_string.as_str() {
-            "uint64" => {
+        let model = self.schema;
+
+        match *model.kind {
+            NoProtoSchemaKinds::Uint64 => {
                 match self.get_8_bytes() {
                     Some(x) => {
                         Some(u64::from_le_bytes(x))
@@ -1039,8 +1111,10 @@ impl NoProtoPointer {
     }
 
     pub fn set_uint64(&mut self, uint64: u64) -> std::result::Result<bool, &'static str> {
-        match self.type_string.as_str() {
-            "uint64" => {
+        let model = self.schema;
+
+        match *model.kind {
+            NoProtoSchemaKinds::Uint64 => {
 
                 let mut addr = self.get_value_address();
                 let mut set_addr = false;
@@ -1079,8 +1153,10 @@ impl NoProtoPointer {
     }
 
     pub fn to_float(&self) -> Option<f32> {
-        match self.type_string.as_str() {
-            "float" => {
+        let model = self.schema;
+
+        match *model.kind {
+            NoProtoSchemaKinds::Float => {
                 match self.get_4_bytes() {
                     Some(x) => {
                         Some(f32::from_le_bytes(x))
@@ -1095,10 +1171,11 @@ impl NoProtoPointer {
     }
 
     pub fn set_float(&mut self, float: f32) -> std::result::Result<bool, &'static str> {
-        match self.type_string.as_str() {
-            "float" => {
-                
+        let model = self.schema;
 
+        match *model.kind {
+            NoProtoSchemaKinds::Float => {
+                
                 let mut addr = self.get_value_address();
                 let mut set_addr = false;
 
@@ -1136,8 +1213,10 @@ impl NoProtoPointer {
     }
 
     pub fn to_double(&self) -> Option<f64> {
-        match self.type_string.as_str() {
-            "double" => {
+        let model = self.schema;
+
+        match *model.kind {
+            NoProtoSchemaKinds::Double => {
                 match self.get_8_bytes() {
                     Some(x) => {
                         Some(f64::from_le_bytes(x))
@@ -1152,8 +1231,10 @@ impl NoProtoPointer {
     }
 
     pub fn set_double(&mut self, double: f64) -> std::result::Result<bool, &'static str> {
-        match self.type_string.as_str() {
-            "double" => {
+        let model = self.schema;
+
+        match *model.kind {
+            NoProtoSchemaKinds::Double => {
                 
 
                 let mut addr = self.get_value_address();
@@ -1193,31 +1274,21 @@ impl NoProtoPointer {
     }
 
     pub fn to_option(&self) -> Option<String> {
-        match self.type_string.as_str() {
-            "option" => {
+
+        let model = self.schema;
+
+        match &*model.kind {
+            NoProtoSchemaKinds::Enum { choices } => {
                 match self.get_1_byte() {
                     Some(x) => {
-                        let json = self.model.borrow();
 
-                        let options = &json["options"];
-                        if options.is_null() || options.is_array() == false {
+                        let value_num = u8::from_le_bytes(x) as usize;
+
+                        if value_num > choices.len() {
                             return None;
                         }
 
-                        let value_num = u8::from_le_bytes(x) as u16;
-
-                        let mut ct: u16 = 0;
-
-                        for opt in options.members() {
-                            if ct < 256 {
-                                if ct == value_num {
-                                    return Some(opt.to_string())
-                                }
-                                ct += 1;
-                            }
-                        }
-                        
-                        None
+                        Some(choices[value_num].clone())
                     },
                     None => None
                 }
@@ -1229,28 +1300,21 @@ impl NoProtoPointer {
     }
 
     pub fn set_option(&mut self, option: String) -> std::result::Result<bool, &'static str> {
-        match self.type_string.as_str() {
-            "option" => {
+        let model = self.schema;
+
+        match &*model.kind {
+            NoProtoSchemaKinds::Enum { choices } => {
 
                 let mut value_num: i32 = -1;
 
                 {
-                    let json = self.model.borrow();
-
-                    let options = &json["options"];
-                    if options.is_null() || options.is_array() == false {
-                        return Err("No optoins set for option type!");
-                    }
-
                     let mut ct: u16 = 0;
 
-                    for opt in options.members() {
-                        if ct < 256 && value_num == -1 {
-                            if option == opt.to_string() {
-                                value_num = ct as i32;
-                            }
-                            ct += 1;
+                    for opt in choices {
+                        if option == opt.to_string() {
+                            value_num = ct as i32;
                         }
+                        ct += 1;
                     };
 
                     if value_num == -1 {
@@ -1296,8 +1360,10 @@ impl NoProtoPointer {
     }
 
     pub fn to_boolean(&self) -> Option<bool> {
-        match self.type_string.as_str() {
-            "boolean" => {
+        let model = self.schema;
+
+        match *model.kind {
+            NoProtoSchemaKinds::Boolean => {
                 match self.get_1_byte() {
                     Some(x) => {
                         Some(if x[0] == 1 { true } else { false })
@@ -1312,8 +1378,10 @@ impl NoProtoPointer {
     }
 
     pub fn set_boolean(&mut self, boolean: bool) -> std::result::Result<bool, &'static str> {
-        match self.type_string.as_str() {
-            "boolean" => {
+        let model = self.schema;
+
+        match *model.kind {
+            NoProtoSchemaKinds::Boolean => {
                 
                 let mut addr = self.get_value_address();
                 let mut set_addr = false;
@@ -1359,8 +1427,10 @@ impl NoProtoPointer {
     }
 
     pub fn to_geo(&self) -> Option<NoProtoGeo> {
-        match self.type_string.as_str() {
-            "geo16" => {
+        let model = self.schema;
+
+        match *model.kind {
+            NoProtoSchemaKinds::Geo16 => {
                 match self.get_16_bytes() {
                     Some(x) => {
                         let mut bytes_lat: [u8; 8] = [0; 8];
@@ -1379,7 +1449,7 @@ impl NoProtoPointer {
                     None => None
                 }
             },
-            "geo8" => {
+            NoProtoSchemaKinds::Geo8 => {
                 match self.get_8_bytes() {
                     Some(x) => {
                         let mut bytes_lat: [u8; 4] = [0; 4];
@@ -1403,7 +1473,7 @@ impl NoProtoPointer {
                     None => None
                 }
             },
-            "geo4" => {
+            NoProtoSchemaKinds::Geo4 => {
                 match self.get_4_bytes() {
                     Some(x) => {
                         let mut bytes_lat: [u8; 2] = [0; 2];
@@ -1442,10 +1512,12 @@ impl NoProtoPointer {
 
             let mut memory = self.memory.borrow_mut();
 
-            let value_bytes_size = match self.type_string.as_str() {
-                "geo16" => { 16 },
-                "geo8" => { 8 },
-                "geo4" => { 4 },
+            let model = self.schema;
+
+            let value_bytes_size = match *model.kind {
+                NoProtoSchemaKinds::Geo16 => { 16 },
+                NoProtoSchemaKinds::Geo8 => { 8 },
+                NoProtoSchemaKinds::Geo4 => { 4 },
                 _ => { 0 }
             };
 
@@ -1456,8 +1528,8 @@ impl NoProtoPointer {
             let half_value_bytes = value_bytes_size / 2;
 
             // convert input values into bytes
-            let value_bytes = match self.type_string.as_str() {
-                "geo16" => {
+            let value_bytes = match *model.kind {
+                NoProtoSchemaKinds::Geo16 => {
                     let mut v_bytes: [u8; 16] = [0; 16];
                     let lat_bytes = geo.lat.to_le_bytes();
                     let lon_bytes = geo.lon.to_le_bytes();
@@ -1471,7 +1543,7 @@ impl NoProtoPointer {
                     }
                     v_bytes
                 },
-                "geo8" => {
+                NoProtoSchemaKinds::Geo8 => {
                     let dev = 10000000f64;
 
                     let mut v_bytes: [u8; 16] = [0; 16];
@@ -1487,7 +1559,7 @@ impl NoProtoPointer {
                     }
                     v_bytes
                 },
-                "geo4" => {
+                NoProtoSchemaKinds::Geo4 => {
                     let dev = 100f64;
 
                     let mut v_bytes: [u8; 16] = [0; 16];
@@ -1519,10 +1591,10 @@ impl NoProtoPointer {
 
             } else { // new value
 
-                addr = match self.type_string.as_str() {
-                    "geo16" => { memory.malloc([0; 16].to_vec()).unwrap_or(0) },
-                    "geo8" => { memory.malloc([0; 8].to_vec()).unwrap_or(0) },
-                    "geo4" => { memory.malloc([0; 4].to_vec()).unwrap_or(0) },
+                addr = match *model.kind {
+                    NoProtoSchemaKinds::Geo16 => { memory.malloc([0; 16].to_vec()).unwrap_or(0) },
+                    NoProtoSchemaKinds::Geo8 => { memory.malloc([0; 8].to_vec()).unwrap_or(0) },
+                    NoProtoSchemaKinds::Geo4 => { memory.malloc([0; 4].to_vec()).unwrap_or(0) },
                     _ => { 0 }
                 };
                 set_addr = true;
@@ -1546,8 +1618,10 @@ impl NoProtoPointer {
     }
 
     pub fn to_uuid(&self) -> Option<NoProtoUUID> {
-        match self.type_string.as_str() {
-            "uuid" => {
+        let model = self.schema;
+
+        match *model.kind {
+            NoProtoSchemaKinds::Uuid => {
                 match self.get_16_bytes() {
                     Some(x) => {
                         Some(NoProtoUUID { value: x})
@@ -1562,9 +1636,10 @@ impl NoProtoPointer {
     }
 
     pub fn set_uuid(&mut self, uuid: NoProtoUUID) -> std::result::Result<bool, &'static str> {
-        match self.type_string.as_str() {
-            "uuid" => {
-                
+        let model = self.schema;
+
+        match *model.kind {
+            NoProtoSchemaKinds::Uuid => {
 
                 let mut addr = self.get_value_address();
                 let mut set_addr = false;
@@ -1603,8 +1678,10 @@ impl NoProtoPointer {
     }
 
     pub fn to_time_id(&self) -> Option<NoProtoTimeID> {
-        match self.type_string.as_str() {
-            "tid" => {
+        let model = self.schema;
+
+        match *model.kind {
+            NoProtoSchemaKinds::Tid => {
                 match self.get_16_bytes() {
                     Some(x) => {
                         let mut id_bytes: [u8; 8] = [0; 8];
@@ -1628,9 +1705,10 @@ impl NoProtoPointer {
     }
 
     pub fn set_time_id(&mut self, time_id: NoProtoTimeID) -> std::result::Result<bool, &'static str> {
-        match self.type_string.as_str() {
-            "tid" => {
-                
+        let model = self.schema;
+
+        match *model.kind {
+            NoProtoSchemaKinds::Tid => {
 
                 let mut addr = self.get_value_address();
                 let mut set_addr = false;
@@ -1684,8 +1762,10 @@ impl NoProtoPointer {
     }
 
     pub fn to_date(&self) -> Option<u64> {
-        match self.type_string.as_str() {
-            "date" => {
+        let model = self.schema;
+
+        match *model.kind {
+            NoProtoSchemaKinds::Date => {
                 match self.get_8_bytes() {
                     Some(x) => {
                         Some(u64::from_le_bytes(x))
@@ -1700,9 +1780,10 @@ impl NoProtoPointer {
     }
 
     pub fn set_date(&mut self, date: u64) -> std::result::Result<bool, &'static str> {
-        match self.type_string.as_str() {
-            "date" => {
-                
+        let model = self.schema;
+
+        match *model.kind {
+            NoProtoSchemaKinds::Date => {
 
                 let mut addr = self.get_value_address();
                 let mut set_addr = false;
@@ -1786,11 +1867,11 @@ pub enum NoProtoDataType {
 }*/
 
 // Pointer -> String
-impl From<&NoProtoPointer> for Option<String> {
+/*impl From<&NoProtoPointer> for Option<String> {
     fn from(ptr: &NoProtoPointer) -> Option<String> {
         ptr.to_string()
     }
-}
+}*/
 
 /*
 // cast i64 => Pointer
