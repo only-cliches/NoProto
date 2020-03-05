@@ -27,17 +27,17 @@ impl NoProtoFactory {
             schema: valid_schema
         })
     }
-    /*
-    pub fn creat_buffer() -> NoProtoBuffer {
 
+    pub fn create_buffer(&self, capacity: Option<u32>) -> NoProtoBuffer {
+        NoProtoBuffer::new(&self.schema, capacity)
     }
-
+    /*
     pub fn parse_buffer() -> NoProtoBuffer {
 
     }
     */
 }
-
+#[derive(Debug)]
 pub enum NoProtoSchemaKinds {
     None,
     Utf8String,
@@ -100,6 +100,7 @@ const VALID_KINDS_SCALAR: [&str; 22] = [
     "date"
 ];
 
+#[derive(Debug)]
 pub struct NoProtoSchema {
     kind: Box<NoProtoSchemaKinds>
 }
@@ -119,6 +120,10 @@ impl NoProtoSchema {
     pub fn validate_model(&self, json_schema: &JsonValue) -> std::result::Result<NoProtoSchema, &'static str> {
 
         let kind_string = json_schema["type"].as_str().unwrap_or("");
+
+        if kind_string.len() == 0 {
+            return Err("Must declare type!");
+        }
 
 
         // validate required properties are in place for each kind
@@ -361,7 +366,7 @@ impl NoProtoSchema {
                 Ok(NoProtoSchema { kind: Box::new(NoProtoSchemaKinds::Date) })
             },
             _ => {
-                Err("Not a valid kind!")
+                Err("Not a valid type!")
             }
         }
     }
@@ -385,21 +390,21 @@ impl NoProtoMemory {
     }
 }
 
-struct NoProtoBuffer<'a> {
+pub struct NoProtoBuffer<'a> {
     pub memory: Rc<RefCell<NoProtoMemory>>,
     rootModel: &'a NoProtoSchema
 }
 
 impl<'a> NoProtoBuffer<'a> {
 
-    pub fn new(model: &'a NoProtoSchema, capcity: Option<usize>) -> Self { // make new buffer
+    pub fn new(model: &'a NoProtoSchema, capcity: Option<u32>) -> Self { // make new buffer
 
         let capacity = match capcity {
             Some(x) => x,
             None => 1024
         };
 
-        let mut new_bytes: Vec<u8> = Vec::with_capacity(capacity);
+        let mut new_bytes: Vec<u8> = Vec::with_capacity(capacity as usize);
 
         new_bytes.extend(vec![
             PROTOCOL_VERSION, // Protocol version (for breaking changes if needed later)
@@ -455,26 +460,70 @@ impl<'a> NoProtoBuffer<'a> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{pointer::NoProtoGeo, NoProtoBuffer, pointer::NoProtoUUID};
+    use crate::{pointer::NoProtoGeo, NoProtoBuffer, pointer::NoProtoUUID, NoProtoFactory};
     use json::*;
     use std::{rc::Rc, cell::RefCell};
 
     #[test]
     fn it_works() {
-        /*let buffer = NoProtoBuffer::new(Rc::new(RefCell::new(json::parse(r#"
-            {
-                "type": "uuid"
-            }
-        "#).unwrap())), None);
+
+        let factory = NoProtoFactory::new(object!{
+            "type" => "table",
+            "columns" => array![
+                array!["userID", object!{"type" => "string"}],
+                array!["pass", object!{"type" => "string"}]
+            ]
+        }).unwrap();
+
+        let buffer = factory.create_buffer(None);
 
         let mut root = buffer.get_root();
+        
+        let mut table = root.as_table().unwrap();
 
-     
-        root.set_uuid(NoProtoUUID::generate());
+        match table.select("userID") {
+            Some (mut x) => {
+                // println!("ADDRESS: {:?}", x.address);
+                x.set_string("some ID");
+            },
+            None => {}
+        };
 
-        println!("VALUE: {:?}", root.to_uuid().unwrap());
+        match table.select("pass") {
+            Some (mut x) => {
+                println!("ADDRESS 2: {:?}", x.address);
+                x.set_string("password123");
+            },
+            None => {}
+        };
+
+        match table.select("pass") {
+            Some (mut x) => {
+                println!("ADDRESS 3: {:?}", x.address);
+                x.set_string("password892");
+            },
+            None => {}
+        };
+
+        match table.select("userID") {
+            Some (mut x) => {
+                println!("VALUE: {:?}", x.to_string());
+            },
+            None => {}
+        };
+
+        match table.select("pass") {
+            Some (mut x) => {
+                println!("VALUE 2: {:?}", x.to_string());
+            },
+            None => {}
+        };
+
+        // root.set_uuid(NoProtoUUID::generate());
+
+        // println!("VALUE: {:?}", root.to_uuid().unwrap());
         println!("BYTES: {:?}", buffer.memory.borrow().bytes);
 
-        assert_eq!(2 + 2, 4);*/
+        assert_eq!(2 + 2, 4);
     }
 }

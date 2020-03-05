@@ -26,6 +26,8 @@ impl<'a> NoProtoTable<'a> {
 
         let mut column_schema: Option<&NoProtoSchema> = None;
 
+        
+
         let column_index = &self.columns.iter().fold(0, |prev, cur| {
             match cur {
                 Some(x) => {
@@ -39,7 +41,7 @@ impl<'a> NoProtoTable<'a> {
                     prev
                 }
             }
-        });
+        }) as &u8;
 
         match column_schema {
             Some(some_column_schema) => {
@@ -73,20 +75,32 @@ impl<'a> NoProtoTable<'a> {
 
                     let mut has_next = true;
 
-                    let memory = self.memory.borrow();
-
                     while has_next {
 
-                        let index = memory.bytes[(next_addr + 12)];
-                        
+                        let mut index = 0;
+
+                        {
+                            let memory = self.memory.borrow();
+                            index = memory.bytes[(next_addr + 8)];
+
+                            println!("FIND COLUMN {} {} {}", *column_index, index, next_addr);
+                        }
+
                         // found our value!
                         if index == *column_index {
                             return Some(NoProtoPointer::new_table_item(next_addr as u32, some_column_schema, Rc::clone(&self.memory)))
                         }
 
+                        
                         // not found yet, get next address
                         let mut next: [u8; 4] = [0; 4];
-                        next.copy_from_slice(&memory.bytes[(next_addr + 4)..(next_addr + 8)]);
+                        {
+                            let memory = self.memory.borrow();
+                            next.copy_from_slice(&memory.bytes[(next_addr + 4)..(next_addr + 8)]);
+                        }
+
+                        println!("LOOPIN {}, {:?}, {}", next_addr, next, u32::from_le_bytes(next));
+                        
                         let next_ptr = u32::from_le_bytes(next) as usize;
                         if next_ptr == 0 {
                             has_next = false;
@@ -132,6 +146,9 @@ impl<'a> NoProtoTable<'a> {
     }
 
     fn set_head(&mut self, addr: u32) {
+
+        self.head = addr;
+
         let mut memory = self.memory.borrow_mut();
 
         let addr_bytes = addr.to_le_bytes();
@@ -141,12 +158,8 @@ impl<'a> NoProtoTable<'a> {
         }
     }
 
-    pub fn clear(&mut self) {
-        self.set_head(0);
-    }
-
-    pub fn has(&self, column: &str) {
-
+    pub fn has(&self, column: &str) -> bool {
+        false
     }
 
 }

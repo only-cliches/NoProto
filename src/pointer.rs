@@ -158,7 +158,7 @@ pub enum NoProtoPointerKinds {
 }
 
 pub struct NoProtoPointer<'a> {
-    address: u32, // pointer location
+    pub address: u32, // pointer location
     kind: NoProtoPointerKinds,
     memory: Rc<RefCell<NoProtoMemory>>,
     schema: &'a NoProtoSchema
@@ -197,6 +197,8 @@ impl<'a> NoProtoPointer<'a> {
             next.copy_from_slice(&b_bytes[(addr + 4)..(addr + 8)]);
             index = b_bytes[addr + 8];
         }
+
+        println!("NEW TABLE ITEM {} {} {}", u32::from_le_bytes(value), u32::from_le_bytes(next), index);
 
         NoProtoPointer {
             address: address,
@@ -315,8 +317,7 @@ impl<'a> NoProtoPointer<'a> {
         match *model.kind {
             NoProtoSchemaKinds::Utf8String => {
 
-                let mut addr = self.get_value_address() as usize;
-                let mut set_addr = false;
+                let addr = self.get_value_address() as usize;
 
                 // empty value
                 if addr == 0 {
@@ -383,7 +384,7 @@ impl<'a> NoProtoPointer<'a> {
     
                         if prev_size >= str_size as usize { // previous string is larger than this one, use existing memory
                     
-                            let size_bytes = str_size.to_le_bytes();
+                            let size_bytes = (str_size as u32).to_le_bytes();
                             // set string size
                             for x in 0..size_bytes.len() {
                                 memory.bytes[(self.address + x as u32) as usize] = size_bytes[x as usize];
@@ -410,6 +411,8 @@ impl<'a> NoProtoPointer<'a> {
                             }
                         }
                     }
+
+                    println!("SET NEW ADDRESS FOR STR {}, {:?}", addr, set_addr);
 
                     if set_addr { self.set_value_address(addr as u32) };
             
