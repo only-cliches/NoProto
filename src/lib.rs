@@ -52,7 +52,6 @@ pub enum NoProtoSchemaKinds {
     Uint64,
     Float,
     Double,
-    Dec32,
     Dec64,
     Boolean,
     Geo4,
@@ -75,7 +74,7 @@ const VALID_KINDS_COLLECTIONS: [&str; 4] = [
     "tuple",
 ];
 
-const VALID_KINDS_SCALAR: [&str; 22] = [
+const VALID_KINDS_SCALAR: [&str; 21] = [
     "string",
     "bytes",
     "int8",
@@ -89,7 +88,6 @@ const VALID_KINDS_SCALAR: [&str; 22] = [
     "float",
     "double",
     "option",
-    "dec32",
     "dec64",
     "boolean",
     "geo4",
@@ -335,9 +333,6 @@ impl NoProtoSchema {
             "f64" => {
                 Ok(NoProtoSchema { kind: Box::new(NoProtoSchemaKinds::Double) })
             },
-            "dec32" => {
-                Ok(NoProtoSchema { kind: Box::new(NoProtoSchemaKinds::Dec32) })
-            },
             "dec64" => {
                 Ok(NoProtoSchema { kind: Box::new(NoProtoSchemaKinds::Dec64) })
             },
@@ -491,7 +486,6 @@ mod tests {
 
         match table.select("pass") {
             Some (mut x) => {
-                println!("ADDRESS 2: {:?}", x.address);
                 x.set_string("password123");
             },
             None => {}
@@ -499,21 +493,20 @@ mod tests {
 
         match table.select("pass") {
             Some (mut x) => {
-                println!("ADDRESS 3: {:?}", x.address);
-                x.set_string("password892");
+                x.set_string("password.");
             },
             None => {}
         };
 
         match table.select("userID") {
-            Some (mut x) => {
+            Some (x) => {
                 println!("VALUE: {:?}", x.to_string());
             },
             None => {}
         };
 
         match table.select("pass") {
-            Some (mut x) => {
+            Some (x) => {
                 println!("VALUE 2: {:?}", x.to_string());
             },
             None => {}

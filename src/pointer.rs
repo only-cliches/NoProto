@@ -34,6 +34,29 @@ fn to_hex(num: u64, length: i32) -> String {
     result
 }
 
+pub struct NoProtoDec {
+    num: i64,
+    scale: u8
+}
+
+impl NoProtoDec {
+    pub fn to_float(&self) -> f64 {
+        let bottom = 10u32.pow(self.scale as u32)  as f64;
+
+        let m = self.num as f64;
+
+        m / bottom
+    }
+
+    pub fn new(num: i64, scale: u8) -> Self {
+        NoProtoDec { num, scale }
+    }
+
+    pub fn export(&self) -> (i64, u8) {
+        (self.num, self.scale)
+    }
+}
+
 #[derive(Debug)]
 pub struct NoProtoGeo {
     pub lat: f64,
@@ -73,15 +96,41 @@ impl NoProtoTimeID {
         }
     }
 
-    pub fn to_string(&self) -> String {
+    pub fn to_string(&self, time_padding: Option<u8>) -> String {
         let mut result: String = "".to_owned();
 
         // u64 can hold up to 20 digits or 584,942,417,355 years of seconds since unix epoch
         // 14 digits gets us 3,170,979 years of seconds after Unix epoch.  
-        result.push_str(format!("{:0>14}", self.time).as_str()); // time first
+        let mut padding = time_padding.unwrap_or(14);
+
+        if padding < 10 {
+            padding = 10;
+        }
+
+        if padding > 20 {
+            padding = 20;
+        }
+
+        // time first
+        let formatted_string = match padding {
+            10 => { format!("{:0>10}", self.time) },
+            11 => { format!("{:0>11}", self.time) },
+            12 => { format!("{:0>12}", self.time) },
+            13 => { format!("{:0>13}", self.time) }
+            14 => { format!("{:0>14}", self.time) },
+            15 => { format!("{:0>15}", self.time) },
+            16 => { format!("{:0>16}", self.time) },
+            17 => { format!("{:0>17}", self.time) },
+            18 => { format!("{:0>18}", self.time) },
+            19 => { format!("{:0>19}", self.time) },
+            20 => { format!("{:0>20}", self.time) },
+            _ => { "".to_owned() }
+        };
+
+        result.push_str(formatted_string.as_str());
         result.push_str("-"); // dash
 
-        // id
+        // then id
         for x in 0..self.id.len() {
             let value = self.id[x] as u64;
             if x == 4 {
@@ -96,7 +145,7 @@ impl NoProtoTimeID {
 
 impl fmt::Debug for NoProtoTimeID {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.to_string())
+        write!(f, "{}", self.to_string(Some(20)))
     }
 }
 
@@ -197,8 +246,6 @@ impl<'a> NoProtoPointer<'a> {
             next.copy_from_slice(&b_bytes[(addr + 4)..(addr + 8)]);
             index = b_bytes[addr + 8];
         }
-
-        println!("NEW TABLE ITEM {} {} {}", u32::from_le_bytes(value), u32::from_le_bytes(next), index);
 
         NoProtoPointer {
             address: address,
@@ -387,12 +434,12 @@ impl<'a> NoProtoPointer<'a> {
                             let size_bytes = (str_size as u32).to_le_bytes();
                             // set string size
                             for x in 0..size_bytes.len() {
-                                memory.bytes[(self.address + x as u32) as usize] = size_bytes[x as usize];
+                                memory.bytes[(addr + x) as usize] = size_bytes[x as usize];
                             }
     
                             // set bytes
                             for x in 0..bytes.len() {
-                                memory.bytes[(self.address + x as u32 + 4) as usize] = bytes[x as usize];
+                                memory.bytes[(addr + x + 4) as usize] = bytes[x as usize];
                             }
     
                         } else { // not enough space or space has not been allocted yet
@@ -411,8 +458,6 @@ impl<'a> NoProtoPointer<'a> {
                             }
                         }
                     }
-
-                    println!("SET NEW ADDRESS FOR STR {}, {:?}", addr, set_addr);
 
                     if set_addr { self.set_value_address(addr as u32) };
             
@@ -487,23 +532,23 @@ impl<'a> NoProtoPointer<'a> {
                             let size_bytes = size.to_le_bytes();
                             // set string size
                             for x in 0..size_bytes.len() {
-                                memory.bytes[(self.address + x as u32) as usize] = size_bytes[x as usize];
+                                memory.bytes[(addr + x) as usize] = size_bytes[x as usize];
                             }
     
                             // set bytes
                             for x in 0..bytes.len() {
-                                memory.bytes[(self.address + x as u32 + 4) as usize] = bytes[x as usize];
+                                memory.bytes[(addr + x + 4) as usize] = bytes[x as usize];
                             }
     
                         } else { // not enough space or space has not been allocted yet
                             
 
-                            // first 4 bytes are bytes length
+                            // first 4 bytes are length
                             addr = memory.malloc((size as u32).to_le_bytes().to_vec()).unwrap_or(0) as usize;
 
                             set_addr = true;
 
-                            // then string content
+                            // then bytes content
                             let addr2 = memory.malloc(bytes.to_vec()).unwrap_or(0);
 
                             if addr == 0 || addr2 == 0 {
@@ -597,15 +642,17 @@ impl<'a> NoProtoPointer<'a> {
 
         Some(bytes)
     }
-/*
-    pub fn to_dec8(&self) -> Option<(i8, u8)> {
-        let model = self.model;
+
+    pub fn to_dec64(&self) -> Option<NoProtoDec> {
+        let model = self.schema;
 
         match *model.kind {
-            NoProtoSchemaKinds::Utf8String => {
-                match self.get_2_bytes() {
+            NoProtoSchemaKinds::Dec64 => {
+                match self.get_8_bytes() {
                     Some(x) => {
-                        Some((i8::from_le_bytes([x[0]]), u8::from_le_bytes([x[1]])))
+                        let addr = self.get_value_address();
+                        let mem = self.memory.borrow();
+                        Some(NoProtoDec::new(i64::from_le_bytes(x), u8::from_le_bytes([mem.bytes[(addr + 8) as usize]])))
                     },
                     None => None
                 }
@@ -616,10 +663,12 @@ impl<'a> NoProtoPointer<'a> {
         }
     }
 
-    pub fn set_dec8(&mut self, dec8: i8, raise: u8) -> std::result::Result<bool, &'static str> {
-        match self.model.kind.as_str() {
-            "dec8" => {
-                
+    pub fn set_dec64(&mut self, Dec64: NoProtoDec) -> std::result::Result<bool, &'static str> {
+        let model = self.schema;
+
+        match *model.kind {
+            NoProtoSchemaKinds::Dec64 => {
+
                 let mut addr = self.get_value_address();
                 let mut set_addr = false;
 
@@ -627,30 +676,25 @@ impl<'a> NoProtoPointer<'a> {
                     let mut memory = self.memory.borrow_mut();
 
                     if addr != 0 { // existing value, replace
-                        let bytes = dec8.to_le_bytes();
-    
+                        let bytes = Dec64.num.to_le_bytes();
+
                         // overwrite existing values in buffer
                         for x in 0..bytes.len() {
                             memory.bytes[(addr + x as u32) as usize] = bytes[x as usize];
                         }
-    
-                        let raise_bytes = raise.to_le_bytes();
-    
-                        for x in 0..raise_bytes.len() {
-                            memory.bytes[(addr + x as u32 + bytes.len() as u32) as usize] = raise_bytes[x as usize];
-                        }
-    
+
+                        let bytes2 = Dec64.scale.to_le_bytes();
+                        memory.bytes[(addr + 8) as usize] = bytes2[0];
+
                     } else { // new value
-       
-                        let bytes = dec8.to_le_bytes();
-                        addr = memory.malloc(bytes.to_vec()).unwrap_or(0) as u32;
+
+                        let bytes = Dec64.num.to_le_bytes();
+                        addr = memory.malloc(bytes.to_vec()).unwrap_or(0);
                         set_addr = true;
-    
-                        let raise_bytes = raise.to_le_bytes();
-    
-                        let new_addr2 = memory.malloc(raise_bytes.to_vec()).unwrap_or(0);
-    
-                        if addr == 0 || new_addr2 == 0 {
+
+                        let addr2 = memory.malloc(Dec64.scale.to_le_bytes().to_vec()).unwrap_or(0);
+
+                        if addr == 0 || addr2 == 0 {
                             return Err("Not enough memory!");
                         }
                     }
@@ -658,15 +702,14 @@ impl<'a> NoProtoPointer<'a> {
 
                 if set_addr { self.set_value_address(addr) };
 
-
                 Ok(true)
             },
             _ => {
-                Err("Not a dec8 type!")
+                Err("Not a Dec64 type!")
             }
         }
     }
-*/
+
     pub fn to_int8(&self) -> Option<i8> {
         let model = self.schema;
 
