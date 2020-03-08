@@ -4,18 +4,14 @@ extern crate rand;
 // use crate::collection::list::NoProtoList;
 use crate::NoProtoSchema;
 use crate::collection::table::NoProtoTable;
+use crate::collection::list::NoProtoList;
 use crate::NoProtoSchemaKinds;
 use crate::NoProtoMemory;
-use std::cell::RefMut;
-use core::cell::Ref;
 use std::rc::Rc;
 use std::cell::RefCell;
-use std::result;
-use json::*;
-use std::{slice, ops::{ Index, IndexMut, Deref }};
 use rand::Rng;
 use std::fmt;
-use std::time::{Duration, SystemTime};
+use std::time::{SystemTime};
 
 
 fn to_hex(num: u64, length: i32) -> String {
@@ -41,7 +37,7 @@ pub struct NoProtoDec {
 
 impl NoProtoDec {
     pub fn to_float(&self) -> f64 {
-        let bottom = 10u32.pow(self.scale as u32)  as f64;
+        let bottom = 10i32.pow(self.scale as u32)  as f64;
 
         let m = self.num as f64;
 
@@ -128,13 +124,13 @@ impl NoProtoTimeID {
         };
 
         result.push_str(formatted_string.as_str());
-        result.push_str("-"); // dash
+        result.push_str("-");
 
         // then id
         for x in 0..self.id.len() {
             let value = self.id[x] as u64;
             if x == 4 {
-                result.push_str("-"); // dash
+                result.push_str("-");
             }
             result.push_str(to_hex(value, 2).as_str());
         }
@@ -207,7 +203,7 @@ pub enum NoProtoPointerKinds {
 }
 
 pub struct NoProtoPointer<'a> {
-    pub address: u32, // pointer location
+    address: u32, // pointer location
     kind: NoProtoPointerKinds,
     memory: Rc<RefCell<NoProtoMemory>>,
     schema: &'a NoProtoSchema
@@ -215,7 +211,7 @@ pub struct NoProtoPointer<'a> {
 
 impl<'a> NoProtoPointer<'a> {
 
-    pub fn new_standard(address: u32, schema: &'a NoProtoSchema, memory: Rc<RefCell<NoProtoMemory>>) -> Self {
+    pub fn new_standard_ptr(address: u32, schema: &'a NoProtoSchema, memory: Rc<RefCell<NoProtoMemory>>) -> Self {
 
         let addr = address as usize;
         let mut value: [u8; 4] = [0; 4];
@@ -233,7 +229,7 @@ impl<'a> NoProtoPointer<'a> {
     }
 
 
-    pub fn new_table_item(address: u32, schema: &'a NoProtoSchema, memory: Rc<RefCell<NoProtoMemory>>) -> Self {
+    pub fn new_table_item_ptr(address: u32, schema: &'a NoProtoSchema, memory: Rc<RefCell<NoProtoMemory>>) -> Self {
 
         let addr = address as usize;
         let mut value: [u8; 4] = [0; 4];
@@ -257,6 +253,62 @@ impl<'a> NoProtoPointer<'a> {
             memory: memory,
             schema: schema
         }
+    }
+
+    pub fn new_map_item_ptr(address: u32, schema: &'a NoProtoSchema, memory: Rc<RefCell<NoProtoMemory>>) -> Self {
+
+        let addr = address as usize;
+        let mut value: [u8; 4] = [0; 4];
+        let mut next: [u8; 4] = [0; 4];
+        let mut key: [u8; 4] = [0; 4];
+
+        {
+            let b_bytes = &memory.borrow().bytes;
+            value.copy_from_slice(&b_bytes[addr..(addr + 4)]);
+            next.copy_from_slice(&b_bytes[(addr + 4)..(addr + 8)]);
+            key.copy_from_slice(&b_bytes[(addr + 8)..(addr + 12)]);
+        }
+
+        NoProtoPointer {
+            address: address,
+            kind: NoProtoPointerKinds::MapItem { 
+                value: u32::from_le_bytes(value),
+                next: u32::from_le_bytes(next),
+                key: u32::from_le_bytes(key)
+            },
+            memory: memory,
+            schema: schema
+        }
+    }
+
+    pub fn new_list_item_ptr(address: u32, schema: &'a NoProtoSchema, memory: Rc<RefCell<NoProtoMemory>>) -> Self {
+
+        let addr = address as usize;
+        let mut value: [u8; 4] = [0; 4];
+        let mut next: [u8; 4] = [0; 4];
+        let mut index: [u8; 2] = [0; 2];
+
+        {
+            let b_bytes = &memory.borrow().bytes;
+            value.copy_from_slice(&b_bytes[addr..(addr + 4)]);
+            next.copy_from_slice(&b_bytes[(addr + 4)..(addr + 8)]);
+            index.copy_from_slice(&b_bytes[(addr + 8)..(addr + 10)]);
+        }
+
+        NoProtoPointer {
+            address: address,
+            kind: NoProtoPointerKinds::ListItem { 
+                value: u32::from_le_bytes(value),
+                next: u32::from_le_bytes(next),
+                i: u16::from_le_bytes(index)
+            },
+            memory: memory,
+            schema: schema
+        }
+    }
+
+    pub fn has_value(self) -> bool {
+        if self.address == 0 { return false; } else { return true; }
     }
 
     pub fn clear(&mut self) {
@@ -331,12 +383,7 @@ impl<'a> NoProtoPointer<'a> {
                     head.copy_from_slice(&b_bytes[a..(a+4)]);
                 }
 
-                Some(NoProtoTable {
-                    head: u32::from_le_bytes(head),
-                    address: addr,
-                    memory: Rc::clone(&self.memory),
-                    columns: &columns
-                })
+                Some(NoProtoTable::new(addr, u32::from_le_bytes(head), Rc::clone(&self.memory), &columns))
             },
             _ => {
                 None
@@ -344,11 +391,46 @@ impl<'a> NoProtoPointer<'a> {
         }
     }
 
-/*
-    pub fn as_list(&self) -> Option<NoProtoList> {
 
+    pub fn as_list(&mut self) -> Option<NoProtoList> {
+        let model = self.schema;
+
+        match &*model.kind {
+            NoProtoSchemaKinds::List { of } => {
+                let mut addr = self.get_value_address();
+                let mut set_addr = false;
+
+                let mut head: [u8; 4] = [0; 4];
+
+                // no list here, make one
+                if addr == 0 {
+                    let mut memory = self.memory.borrow_mut();
+
+                    addr = memory.malloc([0 as u8; 4].to_vec()).unwrap_or(0); // stores HEAD for list
+                    set_addr = true;
+
+                    // out of memory
+                    if addr == 0 {
+                        return None;
+                    }
+                }
+
+                if set_addr { // new head, empty value
+                    self.set_value_address(addr);
+                } else { // existing head, read value
+                    let b_bytes = &self.memory.borrow().bytes;
+                    let a = addr as usize;
+                    head.copy_from_slice(&b_bytes[a..(a+4)]);
+                }
+
+                Some(NoProtoList::new(addr, u32::from_le_bytes(head), Rc::clone(&self.memory), &of))
+            }
+            _ => {
+                None
+            }
+        }
     }
-
+/*
     pub fn as_map(&self) -> Option<NoProtoMap> {
 
     }
@@ -378,10 +460,10 @@ impl<'a> NoProtoPointer<'a> {
                 let str_size = u32::from_le_bytes(size) as usize;
 
                 // get string bytes
-                let arrayBytes = &memory.bytes[(addr+4)..(addr+4+str_size)];
+                let array_bytes = &memory.bytes[(addr+4)..(addr+4+str_size)];
 
                 // convert to string
-                let string = String::from_utf8(arrayBytes.to_vec());
+                let string = String::from_utf8(array_bytes.to_vec());
 
                 match string {
                     Ok(x) => {
@@ -663,7 +745,7 @@ impl<'a> NoProtoPointer<'a> {
         }
     }
 
-    pub fn set_dec64(&mut self, Dec64: NoProtoDec) -> std::result::Result<bool, &'static str> {
+    pub fn set_dec64(&mut self, dec64: NoProtoDec) -> std::result::Result<bool, &'static str> {
         let model = self.schema;
 
         match *model.kind {
@@ -676,23 +758,23 @@ impl<'a> NoProtoPointer<'a> {
                     let mut memory = self.memory.borrow_mut();
 
                     if addr != 0 { // existing value, replace
-                        let bytes = Dec64.num.to_le_bytes();
+                        let bytes = dec64.num.to_le_bytes();
 
                         // overwrite existing values in buffer
                         for x in 0..bytes.len() {
                             memory.bytes[(addr + x as u32) as usize] = bytes[x as usize];
                         }
 
-                        let bytes2 = Dec64.scale.to_le_bytes();
+                        let bytes2 = dec64.scale.to_le_bytes();
                         memory.bytes[(addr + 8) as usize] = bytes2[0];
 
                     } else { // new value
 
-                        let bytes = Dec64.num.to_le_bytes();
+                        let bytes = dec64.num.to_le_bytes();
                         addr = memory.malloc(bytes.to_vec()).unwrap_or(0);
                         set_addr = true;
 
-                        let addr2 = memory.malloc(Dec64.scale.to_le_bytes().to_vec()).unwrap_or(0);
+                        let addr2 = memory.malloc(dec64.scale.to_le_bytes().to_vec()).unwrap_or(0);
 
                         if addr == 0 || addr2 == 0 {
                             return Err("Not enough memory!");

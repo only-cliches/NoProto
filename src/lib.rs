@@ -1,12 +1,7 @@
 use crate::pointer::NoProtoPointer;
-use std::cell::BorrowMutError;
-use std::cell::Cell;
-use std::cell::RefMut;
-use std::cell::Ref;
 use json::*;
 use std::rc::Rc;
 use std::cell::RefCell;
-use std::result;
 
 const PROTOCOL_VERSION: u8 = 0;
 
@@ -67,12 +62,14 @@ pub enum NoProtoSchemaKinds {
     Tuple { size: u8, values: Vec<NoProtoSchema>}
 }
 
+/*
 const VALID_KINDS_COLLECTIONS: [&str; 4] = [
     "table",
     "map",
     "list",
     "tuple",
 ];
+*/
 
 const VALID_KINDS_SCALAR: [&str; 21] = [
     "string",
@@ -160,12 +157,12 @@ impl NoProtoSchema {
                             this_index.as_usize().unwrap_or(index)
                         };
 
-                        if (use_index > 255) {
+                        if use_index > 255 {
                             return Err("Table cannot have column index above 255!");
                         }
 
                         match &columns[use_index] {
-                            Some(x) => {
+                            Some(_x) => {
                                 return Err("Table column index numbering conflict!");
                             },
                             None => {
@@ -237,7 +234,7 @@ impl NoProtoSchema {
             "tuple" => {
 
                 let mut schemas: Vec<NoProtoSchema> = vec![];
-                let mut size = 0;
+                let size;
 
                 {
                     let borrowed_schema = json_schema;
@@ -387,7 +384,7 @@ impl NoProtoMemory {
 
 pub struct NoProtoBuffer<'a> {
     pub memory: Rc<RefCell<NoProtoMemory>>,
-    rootModel: &'a NoProtoSchema
+    root_model: &'a NoProtoSchema
 }
 
 impl<'a> NoProtoBuffer<'a> {
@@ -408,19 +405,19 @@ impl<'a> NoProtoBuffer<'a> {
 
         NoProtoBuffer {
             memory: Rc::new(RefCell::new(NoProtoMemory { bytes: new_bytes })),
-            rootModel: model
+            root_model: model
         }
     }
 
     pub fn load(model: &'a NoProtoSchema, bytes: Vec<u8>) -> Self { // load existing buffer
         NoProtoBuffer {
             memory: Rc::new(RefCell::new(NoProtoMemory { bytes: bytes})),
-            rootModel: model
+            root_model: model
         }
     }
 
     pub fn get_root(&self) -> NoProtoPointer {        
-        NoProtoPointer::new_standard(1, self.rootModel, Rc::clone(&self.memory))
+        NoProtoPointer::new_standard_ptr(1, self.root_model, Rc::clone(&self.memory))
     }
 
     pub fn compact(&self)  {
