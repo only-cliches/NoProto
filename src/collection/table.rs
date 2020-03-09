@@ -1,6 +1,4 @@
-use crate::NoProtoSchema;
-use crate::NoProtoMemory;
-use crate::pointer::NoProtoPointer;
+use crate::{memory::NoProtoMemory, pointer::NoProtoPointer, error::NoProtoError, schema::NoProtoSchema};
 use std::rc::Rc;
 use std::cell::RefCell;
 
@@ -22,11 +20,11 @@ impl<'a> NoProtoTable<'a> {
         }
     }
 
-    pub fn select(&mut self, column: &str) -> Option<NoProtoPointer> {
+    pub fn select(&mut self, column: &str) -> std::result::Result<NoProtoPointer, NoProtoError> {
 
         let mut column_schema: Option<&NoProtoSchema> = None;
 
-        let column_index = &self.columns.iter().fold(0, |prev, cur| {
+        let column_index = &self.columns.iter().fold(0u8, |prev, cur| {
             match cur {
                 Some(x) => {
                     if x.1.as_str() == column { 
@@ -49,24 +47,21 @@ impl<'a> NoProtoTable<'a> {
                     let addr;
         
                     {
-                        let mut memory = self.memory.borrow_mut();
+                        let mut memory = self.memory.try_borrow_mut()?;
         
                         let mut ptr_bytes: [u8; 9] = [0; 9];
         
                         // set column index in pointer
                         ptr_bytes[8] = *column_index;
         
-                        addr = memory.malloc(ptr_bytes.to_vec()).unwrap_or(0);
-            
-                        // out of memory
-                        if addr == 0 { return None; }
+                        addr = memory.malloc(ptr_bytes.to_vec())?;
                     }
                     
                     // update head to point to newly created TableItem pointer
                     self.set_head(addr);
                     
                     // provide 
-                    return Some(NoProtoPointer::new_table_item_ptr(self.head, some_column_schema, Rc::clone(&self.memory)));
+                    return Ok(NoProtoPointer::new_table_item_ptr(self.head, some_column_schema, Rc::clone(&self.memory))?);
                 } else { // values exist, loop through them to see if we have an existing pointer for this column
 
                     let mut next_addr = self.head as usize;
@@ -78,20 +73,20 @@ impl<'a> NoProtoTable<'a> {
                         let index;
 
                         {
-                            let memory = self.memory.borrow();
+                            let memory = self.memory.try_borrow()?;
                             index = memory.bytes[(next_addr + 8)];
                         }
 
                         // found our value!
                         if index == *column_index {
-                            return Some(NoProtoPointer::new_table_item_ptr(next_addr as u32, some_column_schema, Rc::clone(&self.memory)))
+                            return Ok(NoProtoPointer::new_table_item_ptr(next_addr as u32, some_column_schema, Rc::clone(&self.memory))?)
                         }
 
                         
                         // not found yet, get next address
                         let mut next: [u8; 4] = [0; 4];
                         {
-                            let memory = self.memory.borrow();
+                            let memory = self.memory.try_borrow()?;
                             next.copy_from_slice(&memory.bytes[(next_addr + 4)..(next_addr + 8)]);
                         }
                         
@@ -108,17 +103,14 @@ impl<'a> NoProtoTable<'a> {
                     let addr;
 
                     {
-                        let mut memory = self.memory.borrow_mut();
+                        let mut memory = self.memory.try_borrow_mut()?;
         
                         let mut ptr_bytes: [u8; 9] = [0; 9];
         
                         // set column index in pointer
                         ptr_bytes[8] = *column_index;
                 
-                        addr = memory.malloc(ptr_bytes.to_vec()).unwrap_or(0);
-            
-                        // out of memory
-                        if addr == 0 { return None; }
+                        addr = memory.malloc(ptr_bytes.to_vec())?;
 
                         // set previouse pointer's "next" value to this new pointer
                         let addr_bytes = addr.to_le_bytes();
@@ -129,12 +121,12 @@ impl<'a> NoProtoTable<'a> {
                     }
                     
                     // provide 
-                    return Some(NoProtoPointer::new_table_item_ptr(addr, some_column_schema, Rc::clone(&self.memory)));
+                    return Ok(NoProtoPointer::new_table_item_ptr(addr, some_column_schema, Rc::clone(&self.memory))?);
 
                 }
             },
             None => {
-                return None;
+                return Err(NoProtoError::new("Column not found, unable to select!"));
             }
         }
     }
@@ -152,11 +144,11 @@ impl<'a> NoProtoTable<'a> {
         }
     }
 
-    pub fn has(&self, column: &str) -> bool {
+    pub fn has(&self, column: &str) -> std::result::Result<bool, NoProtoError> {
         let mut found = false;
 
         if self.head == 0 { // no values in this table
-           return false;
+           return Ok(false);
         }
 
         let column_index = &self.columns.iter().fold(0, |prev, cur| {
@@ -175,7 +167,7 @@ impl<'a> NoProtoTable<'a> {
         }) as &u8;
 
         // no column with this name
-        if found == false { return false; };
+        if found == false { return Ok(false); };
 
         // values exist, loop through values to see if we have a matching column
 
@@ -188,20 +180,20 @@ impl<'a> NoProtoTable<'a> {
             let index;
 
             {
-                let memory = self.memory.borrow();
+                let memory = self.memory.try_borrow()?;
                 index = memory.bytes[(next_addr + 8)];
             }
 
             // found our value!
             if index == *column_index {
-                return true
+                return Ok(true);
             }
 
             
             // not found yet, get next address
             let mut next: [u8; 4] = [0; 4];
             {
-                let memory = self.memory.borrow();
+                let memory = self.memory.try_borrow()?;
                 next.copy_from_slice(&memory.bytes[(next_addr + 4)..(next_addr + 8)]);
             }
             
@@ -212,10 +204,7 @@ impl<'a> NoProtoTable<'a> {
         }
 
         // ran out of pointers, value doesn't exist!
-
-        return false;
-        
-
+        return Ok(false);
     }
 
 }

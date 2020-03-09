@@ -1,18 +1,14 @@
 extern crate rand;
 
-// use crate::collection::map::NoProtoMap;
-// use crate::collection::list::NoProtoList;
-use crate::NoProtoSchema;
-use crate::collection::table::NoProtoTable;
-use crate::collection::list::NoProtoList;
-use crate::NoProtoSchemaKinds;
-use crate::NoProtoMemory;
+use crate::memory::NoProtoMemory;
+use crate::NoProtoError;
+use crate::{schema::NoProtoSchemaKinds, schema::NoProtoSchema, collection::{map::NoProtoMap, list::NoProtoList, table::NoProtoTable, tuple::NoProtoTuple}};
 use std::rc::Rc;
 use std::cell::RefCell;
 use rand::Rng;
 use std::fmt;
 use std::time::{SystemTime};
-
+use json::*;
 
 fn to_hex(num: u64, length: i32) -> String {
     let mut result: String = "".to_owned();
@@ -30,6 +26,13 @@ fn to_hex(num: u64, length: i32) -> String {
     result
 }
 
+/// Represents a Big Integer Decimal
+/// 
+/// Allows floating point values to be stored without rounding errors, useful for storing financial data.
+/// 
+/// NoProto does not implement arithamtic between Big Integer Deciamls, it's recommended you use a crate like `rust_decimal` to perform calculations.  
+/// 
+/// Do NOT use the conversion to floating point to perform calculations, it'll kind of make the use of this data type moot.
 pub struct NoProtoDec {
     num: i64,
     scale: u8
@@ -53,12 +56,37 @@ impl NoProtoDec {
     }
 }
 
+#[doc(hidden)]
+pub enum TypeReq {
+    Read, Write, Collection
+}
+
+fn type_error(req: TypeReq, kind: &str, schema: &NoProtoSchema) -> NoProtoError {
+    match req {
+        TypeReq::Collection => {
+            return NoProtoError::new(format!("TypeError: Attempted to get collection of type ({}) from pointer of type ({})!", kind, &schema.get_type_str()).as_str());
+        },
+        TypeReq::Read => {
+            return NoProtoError::new(format!("TypeError: Attempted to read value of type ({}) from pointer of type ({})!", kind, &schema.get_type_str()).as_str());
+        },
+        TypeReq::Write => {
+            return NoProtoError::new(format!("TypeError: Attempted to write value of type ({}) to pointer of type ({})!", kind, &schema.get_type_str()).as_str());
+        }
+    }
+}
+
+/// Represents a Geographic Coordinate (lat / lon)
+/// 
+/// When `geo4`, `geo8`, or `geo16` types are used the data is saved and retrieved with this struct.
 #[derive(Debug)]
 pub struct NoProtoGeo {
     pub lat: f64,
     pub lon: f64
 }
 
+/// Represents a Time ID type which has a 64 bit timestamp and 64 random bits.
+/// 
+/// Useful for storing time stamp data that can't have collisions.
 pub struct NoProtoTimeID {
     pub id: [u8; 8],
     pub time: u64
@@ -144,7 +172,9 @@ impl fmt::Debug for NoProtoTimeID {
         write!(f, "{}", self.to_string(Some(20)))
     }
 }
-
+/// Represents a V4 UUID, good for globally unique identifiers
+/// 
+/// `uuid` types are always represented with this struct.
 pub struct NoProtoUUID {
     pub value: [u8; 16]
 }
@@ -192,6 +222,7 @@ impl fmt::Debug for NoProtoUUID {
     }
 }
 
+#[doc(hidden)]
 pub enum NoProtoPointerKinds {
     // scalar / collection
     Standard  { value: u32 }, // 4 bytes [4]
@@ -202,6 +233,9 @@ pub enum NoProtoPointerKinds {
     ListItem  { value: u32, next: u32, i: u16   }  // 10 bytes [4, 4, 2]
 }
 
+/// The base data type, all information is stored/retrieved against pointers
+/// 
+/// Each pointer represents at least a 32 bit unsigned integer that is either zero for no value or points to an offset in the buffer.  All pointer addresses are zero based against the buffer.
 pub struct NoProtoPointer<'a> {
     address: u32, // pointer location
     kind: NoProtoPointerKinds,
@@ -211,25 +245,37 @@ pub struct NoProtoPointer<'a> {
 
 impl<'a> NoProtoPointer<'a> {
 
-    pub fn new_standard_ptr(address: u32, schema: &'a NoProtoSchema, memory: Rc<RefCell<NoProtoMemory>>) -> Self {
-
-        let addr = address as usize;
-        let mut value: [u8; 4] = [0; 4];
-        {
-            let b_bytes = &memory.borrow().bytes;
-            value.copy_from_slice(&b_bytes[addr..(addr+4)]);
-        }
+    #[doc(hidden)]
+    pub fn new_example_ptr(schema: &'a NoProtoSchema) -> Self {
 
         NoProtoPointer {
-            address: address,
-            kind: NoProtoPointerKinds::Standard { value: u32::from_le_bytes(value) },
-            memory: memory,
+            address: 0,
+            kind: NoProtoPointerKinds::Standard { value: 0 },
+            memory: Rc::new(RefCell::new(NoProtoMemory { bytes: vec![0, 0, 0, 0] })),
             schema: schema
         }
     }
 
+    #[doc(hidden)]
+    pub fn new_standard_ptr(address: u32, schema: &'a NoProtoSchema, memory: Rc<RefCell<NoProtoMemory>>) -> std::result::Result<Self, NoProtoError> {
 
-    pub fn new_table_item_ptr(address: u32, schema: &'a NoProtoSchema, memory: Rc<RefCell<NoProtoMemory>>) -> Self {
+        let addr = address as usize;
+        let mut value: [u8; 4] = [0; 4];
+        {
+            let b_bytes = &memory.try_borrow()?.bytes;
+            value.copy_from_slice(&b_bytes[addr..(addr+4)]);
+        }
+
+        Ok(NoProtoPointer {
+            address: address,
+            kind: NoProtoPointerKinds::Standard { value: u32::from_le_bytes(value) },
+            memory: memory,
+            schema: schema
+        })
+    }
+
+    #[doc(hidden)]
+    pub fn new_table_item_ptr(address: u32, schema: &'a NoProtoSchema, memory: Rc<RefCell<NoProtoMemory>>) -> std::result::Result<Self, NoProtoError> {
 
         let addr = address as usize;
         let mut value: [u8; 4] = [0; 4];
@@ -237,13 +283,13 @@ impl<'a> NoProtoPointer<'a> {
         let index: u8;
 
         {
-            let b_bytes = &memory.borrow().bytes;
+            let b_bytes = &memory.try_borrow()?.bytes;
             value.copy_from_slice(&b_bytes[addr..(addr + 4)]);
             next.copy_from_slice(&b_bytes[(addr + 4)..(addr + 8)]);
             index = b_bytes[addr + 8];
         }
 
-        NoProtoPointer {
+        Ok(NoProtoPointer {
             address: address,
             kind: NoProtoPointerKinds::TableItem { 
                 value: u32::from_le_bytes(value),
@@ -252,10 +298,11 @@ impl<'a> NoProtoPointer<'a> {
             },
             memory: memory,
             schema: schema
-        }
+        })
     }
 
-    pub fn new_map_item_ptr(address: u32, schema: &'a NoProtoSchema, memory: Rc<RefCell<NoProtoMemory>>) -> Self {
+    #[doc(hidden)]
+    pub fn new_map_item_ptr(address: u32, schema: &'a NoProtoSchema, memory: Rc<RefCell<NoProtoMemory>>) -> std::result::Result<Self, NoProtoError> {
 
         let addr = address as usize;
         let mut value: [u8; 4] = [0; 4];
@@ -263,13 +310,13 @@ impl<'a> NoProtoPointer<'a> {
         let mut key: [u8; 4] = [0; 4];
 
         {
-            let b_bytes = &memory.borrow().bytes;
+            let b_bytes = &memory.try_borrow()?.bytes;
             value.copy_from_slice(&b_bytes[addr..(addr + 4)]);
             next.copy_from_slice(&b_bytes[(addr + 4)..(addr + 8)]);
             key.copy_from_slice(&b_bytes[(addr + 8)..(addr + 12)]);
         }
 
-        NoProtoPointer {
+        Ok(NoProtoPointer {
             address: address,
             kind: NoProtoPointerKinds::MapItem { 
                 value: u32::from_le_bytes(value),
@@ -278,10 +325,11 @@ impl<'a> NoProtoPointer<'a> {
             },
             memory: memory,
             schema: schema
-        }
+        })
     }
 
-    pub fn new_list_item_ptr(address: u32, schema: &'a NoProtoSchema, memory: Rc<RefCell<NoProtoMemory>>) -> Self {
+    #[doc(hidden)]
+    pub fn new_list_item_ptr(address: u32, schema: &'a NoProtoSchema, memory: Rc<RefCell<NoProtoMemory>>) -> std::result::Result<Self, NoProtoError> {
 
         let addr = address as usize;
         let mut value: [u8; 4] = [0; 4];
@@ -289,13 +337,13 @@ impl<'a> NoProtoPointer<'a> {
         let mut index: [u8; 2] = [0; 2];
 
         {
-            let b_bytes = &memory.borrow().bytes;
+            let b_bytes = &memory.try_borrow()?.bytes;
             value.copy_from_slice(&b_bytes[addr..(addr + 4)]);
             next.copy_from_slice(&b_bytes[(addr + 4)..(addr + 8)]);
             index.copy_from_slice(&b_bytes[(addr + 8)..(addr + 10)]);
         }
 
-        NoProtoPointer {
+        Ok(NoProtoPointer {
             address: address,
             kind: NoProtoPointerKinds::ListItem { 
                 value: u32::from_le_bytes(value),
@@ -304,15 +352,16 @@ impl<'a> NoProtoPointer<'a> {
             },
             memory: memory,
             schema: schema
-        }
+        })
     }
 
     pub fn has_value(self) -> bool {
         if self.address == 0 { return false; } else { return true; }
     }
 
-    pub fn clear(&mut self) {
-        self.set_value_address(0);
+    pub fn clear(&mut self) -> std::result::Result<(), NoProtoError> {
+        self.set_value_address(0)?;
+        Ok(())
     }
 
     fn get_value_address(&self) -> u32 {
@@ -324,9 +373,9 @@ impl<'a> NoProtoPointer<'a> {
         }
     }
 
-    fn set_value_address(&mut self, val: u32) {
+    fn set_value_address(&mut self, val: u32) -> std::result::Result<(), NoProtoError> {
 
-        let mut memory = self.memory.borrow_mut();
+        let mut memory = self.memory.try_borrow_mut()?;
 
         let addr_bytes = val.to_le_bytes();
     
@@ -347,10 +396,12 @@ impl<'a> NoProtoPointer<'a> {
             NoProtoPointerKinds::ListItem { value: _, i, next  } => {
                 self.kind = NoProtoPointerKinds::ListItem { value: val, i: i, next: next }
             }
-        }
+        };
+
+        Ok(())
     }
 
-    pub fn as_table(&mut self) -> Option<NoProtoTable> {
+    pub fn as_table(&mut self) -> std::result::Result<NoProtoTable, NoProtoError> {
 
         let model = self.schema;
 
@@ -364,35 +415,29 @@ impl<'a> NoProtoPointer<'a> {
 
                 // no table here, make one
                 if addr == 0 {
-                    let mut memory = self.memory.borrow_mut();
-
-                    addr = memory.malloc([0 as u8; 4].to_vec()).unwrap_or(0); // stores HEAD for table
+                    let mut memory = self.memory.try_borrow_mut()?;
+                    addr = memory.malloc([0 as u8; 4].to_vec())?; // stores HEAD for table
                     set_addr = true;
-
-                    // out of memory
-                    if addr == 0 {
-                        return None;
-                    }
                 }
 
                 if set_addr { // new head, empty value
-                    self.set_value_address(addr);
+                    self.set_value_address(addr)?;
                 } else { // existing head, read value
-                    let b_bytes = &self.memory.borrow().bytes;
+                    let b_bytes = &self.memory.try_borrow()?.bytes;
                     let a = addr as usize;
                     head.copy_from_slice(&b_bytes[a..(a+4)]);
                 }
 
-                Some(NoProtoTable::new(addr, u32::from_le_bytes(head), Rc::clone(&self.memory), &columns))
+                Ok(NoProtoTable::new(addr, u32::from_le_bytes(head), Rc::clone(&self.memory), &columns))
             },
             _ => {
-                None
+                Err(type_error(TypeReq::Collection, "table", &model))
             }
         }
     }
 
 
-    pub fn as_list(&mut self) -> Option<NoProtoList> {
+    pub fn as_list(&mut self) -> std::result::Result<NoProtoList, NoProtoError> {
         let model = self.schema;
 
         match &*model.kind {
@@ -404,42 +449,109 @@ impl<'a> NoProtoPointer<'a> {
 
                 // no list here, make one
                 if addr == 0 {
-                    let mut memory = self.memory.borrow_mut();
+                    let mut memory = self.memory.try_borrow_mut()?;
 
-                    addr = memory.malloc([0 as u8; 4].to_vec()).unwrap_or(0); // stores HEAD for list
+                    addr = memory.malloc([0 as u8; 4].to_vec())?; // stores HEAD for list
                     set_addr = true;
-
-                    // out of memory
-                    if addr == 0 {
-                        return None;
-                    }
                 }
 
                 if set_addr { // new head, empty value
-                    self.set_value_address(addr);
+                    self.set_value_address(addr)?;
                 } else { // existing head, read value
-                    let b_bytes = &self.memory.borrow().bytes;
+                    let b_bytes = &self.memory.try_borrow()?.bytes;
                     let a = addr as usize;
                     head.copy_from_slice(&b_bytes[a..(a+4)]);
                 }
 
-                Some(NoProtoList::new(addr, u32::from_le_bytes(head), Rc::clone(&self.memory), &of))
+                Ok(NoProtoList::new(addr, u32::from_le_bytes(head), Rc::clone(&self.memory), &of))
             }
             _ => {
-                None
+                Err(type_error(TypeReq::Collection, "list", &model))
             }
         }
     }
-/*
-    pub fn as_map(&self) -> Option<NoProtoMap> {
 
+    pub fn as_tuple(&mut self) -> std::result::Result<NoProtoTuple, NoProtoError> {
+
+        let model = self.schema;
+
+        match &*model.kind {
+            NoProtoSchemaKinds::Tuple { values } => {
+                let mut addr = self.get_value_address();
+                let mut set_addr = false;
+
+                let mut head: [u8; 4] = [0; 4];
+
+                // no tuple here, make one
+                if addr == 0 {
+                    let mut memory = self.memory.try_borrow_mut()?;
+
+                    let value_num = values.len();
+
+                    let mut value_bytes: Vec<u8> = Vec::new();
+
+                    // there is one u32 address for each value
+                    for _x in 0..(value_num * 4) {
+                        value_bytes.push(0);
+                    }
+
+                    addr = memory.malloc(value_bytes)?; // stores HEAD for tuple
+                    set_addr = true;
+                }
+
+                if set_addr { // new head, empty value
+                    self.set_value_address(addr)?;
+                } else { // existing head, read value
+                    let b_bytes = &self.memory.try_borrow()?.bytes;
+                    let a = addr as usize;
+                    head.copy_from_slice(&b_bytes[a..(a+4)]);
+                }
+
+                Ok(NoProtoTuple::new(addr, u32::from_le_bytes(head), Rc::clone(&self.memory), &values))
+            }
+            _ => {
+                Err(type_error(TypeReq::Collection, "tuple", &model))
+            }
+        }
     }
 
-    pub fn as_tuple(&self) -> Option<NoProtoTuple> {
 
+    pub fn as_map(&mut self) -> std::result::Result<NoProtoMap, NoProtoError> {
+        let model = self.schema;
+
+        match &*model.kind {
+            NoProtoSchemaKinds::Map { key, value } => {
+                let mut addr = self.get_value_address();
+                let mut set_addr = false;
+
+                let mut head: [u8; 4] = [0; 4];
+
+                // no list here, make one
+                if addr == 0 {
+                    let mut memory = self.memory.try_borrow_mut()?;
+
+                    addr = memory.malloc([0 as u8; 4].to_vec())?; // stores HEAD for list
+                    set_addr = true;
+                }
+
+                if set_addr { // new head, empty value
+                    self.set_value_address(addr)?;
+                } else { // existing head, read value
+                    let b_bytes = &self.memory.try_borrow()?.bytes;
+                    let a = addr as usize;
+                    head.copy_from_slice(&b_bytes[a..(a+4)]);
+                }
+
+                Ok(NoProtoMap::new(addr, u32::from_le_bytes(head), Rc::clone(&self.memory), key, value))
+            }
+            _ => {
+                Err(type_error(TypeReq::Collection, "map", &model))
+            }
+        }
     }
- */
-    pub fn to_string(&self) -> Option<String> {
+ 
+
+    pub fn to_string(&self) -> std::result::Result<Option<String>, NoProtoError> {
 
         let model = self.schema;
 
@@ -450,12 +562,12 @@ impl<'a> NoProtoPointer<'a> {
 
                 // empty value
                 if addr == 0 {
-                    return None;
+                    return Ok(None);
                 }
                 
                 // get size of string
                 let mut size: [u8; 4] = [0; 4];
-                let memory = self.memory.borrow();
+                let memory = self.memory.try_borrow()?;
                 size.copy_from_slice(&memory.bytes[addr..(addr+4)]);
                 let str_size = u32::from_le_bytes(size) as usize;
 
@@ -463,28 +575,17 @@ impl<'a> NoProtoPointer<'a> {
                 let array_bytes = &memory.bytes[(addr+4)..(addr+4+str_size)];
 
                 // convert to string
-                let string = String::from_utf8(array_bytes.to_vec());
+                let string = String::from_utf8(array_bytes.to_vec())?;
 
-                match string {
-                    Ok(x) => {
-                        // return string
-                        Some(x)
-                    },
-                    Err(_e) => {
-                        // Err("Error parsing string!")
-                        None
-                    }
-                }
-                
+                Ok(Some(string))
             },
             _ => {
-                // NoProtoResult::Err("Not a string type in data model!")
-                None
+                Err(type_error(TypeReq::Read, "string", &model))
             }
         }
     }
 
-    pub fn set_string(&mut self, value: &str) -> std::result::Result<bool, &'static str> {
+    pub fn set_string(&mut self, value: &str) -> std::result::Result<(), NoProtoError> {
 
         let model = self.schema;
 
@@ -494,14 +595,14 @@ impl<'a> NoProtoPointer<'a> {
                 let str_size = bytes.len() as u64;
 
                 if str_size >= std::u32::MAX as u64 { 
-                    Err("String too large!")
+                    Err(NoProtoError::new("String too large!"))
                 } else {
 
                     let mut addr = self.get_value_address() as usize;
                     let mut set_addr = false;
 
                     {
-                        let mut memory = self.memory.borrow_mut();
+                        let mut memory = self.memory.try_borrow_mut()?;
 
                         let prev_size: usize = if addr != 0 {
                             let mut size_bytes: [u8; 4] = [0; 4];
@@ -528,32 +629,28 @@ impl<'a> NoProtoPointer<'a> {
                             
 
                             // first 4 bytes are string length
-                            addr = memory.malloc((str_size as u32).to_le_bytes().to_vec()).unwrap_or(0) as usize;
+                            addr = memory.malloc((str_size as u32).to_le_bytes().to_vec())? as usize;
 
                             set_addr = true;
 
                             // then string content
-                            let addr2 = memory.malloc(bytes.to_vec()).unwrap_or(0);
-
-                            if addr == 0 || addr2 == 0 {
-                                return Err("Not enough memory!");
-                            }
+                            memory.malloc(bytes.to_vec())?;
                         }
                     }
 
-                    if set_addr { self.set_value_address(addr as u32) };
+                    if set_addr { self.set_value_address(addr as u32)?; };
             
-                    Ok(true)
+                    Ok(())
                 }
 
             }
             _ => {
-                Err("Not a string type!")
+                Err(type_error(TypeReq::Write, "string", &model))
             }
         }
     }
 
-    pub fn to_bytes(&self) -> Option<Vec<u8>> {
+    pub fn to_bytes(&self) -> std::result::Result<Vec<u8>, NoProtoError> {
         let model = self.schema;
 
         match *model.kind {
@@ -562,28 +659,28 @@ impl<'a> NoProtoPointer<'a> {
 
                 // empty value
                 if value == 0 {
-                    return None;
+                    return Err(NoProtoError::new("NULL"));
                 }
                 
                 // get size of bytes
                 let addr = value as usize;
                 let mut size: [u8; 4] = [0; 4];
-                let memory = self.memory.borrow();
+                let memory = self.memory.try_borrow()?;
                 size.copy_from_slice(&memory.bytes[addr..(addr+4)]);
                 let bytes_size = u32::from_le_bytes(size) as usize;
 
                 // get string bytes
                 let bytes = &memory.bytes[(addr+4)..(addr+4+bytes_size)];
 
-                Some(bytes.to_vec())
+                Ok(bytes.to_vec())
             },
             _ => {
-                None
+                Err(type_error(TypeReq::Read, "bytes", &model))
             }
         }
     }
 
-    pub fn set_bytes(&mut self, bytes: Vec<u8>) -> std::result::Result<bool, &'static str> {
+    pub fn set_bytes(&mut self, bytes: Vec<u8>) -> std::result::Result<(), NoProtoError> {
         let model = self.schema;
 
         match *model.kind {
@@ -592,14 +689,14 @@ impl<'a> NoProtoPointer<'a> {
                 let size = bytes.len() as u64;
 
                 if size >= std::u32::MAX as u64 { 
-                    Err("Bytes too large!")
+                    Err(NoProtoError::new("Bytes too large!"))
                 } else {
 
                     let mut addr = self.get_value_address() as usize;
                     let mut set_addr = false;
 
                     {
-                        let mut memory = self.memory.borrow_mut();
+                        let mut memory = self.memory.try_borrow_mut()?;
 
                         let prev_size: usize = if addr != 0 {
                             let mut size_bytes: [u8; 4] = [0; 4];
@@ -626,126 +723,125 @@ impl<'a> NoProtoPointer<'a> {
                             
 
                             // first 4 bytes are length
-                            addr = memory.malloc((size as u32).to_le_bytes().to_vec()).unwrap_or(0) as usize;
+                            addr = memory.malloc((size as u32).to_le_bytes().to_vec())? as usize;
 
                             set_addr = true;
 
                             // then bytes content
-                            let addr2 = memory.malloc(bytes.to_vec()).unwrap_or(0);
-
-                            if addr == 0 || addr2 == 0 {
-                                return Err("Not enough memory!");
-                            }
+                            memory.malloc(bytes.to_vec())?;
                         }
                     }
 
-                    if set_addr { self.set_value_address(addr as u32) } ;
+                    if set_addr { self.set_value_address(addr as u32)?; } ;
             
-                    Ok(true)
+                    Ok(())
                 }
             },
             _ => {
-                Err("Not a bytes type!")
+                Err(type_error(TypeReq::Write, "bytes", &model))
             }
         }
     }
 
-    pub fn get_1_byte(&self) -> Option<[u8; 1]> {
+    #[doc(hidden)]
+    pub fn get_1_byte(&self) -> std::result::Result<Option<[u8; 1]>, NoProtoError> {
         let value = self.get_value_address() as usize;
 
         // empty value
         if value == 0 {
-            return None;
+            return Ok(None);
         }
 
-        let mut bytes: [u8; 1] = [0; 1];
-        let memory = self.memory.borrow();
-        bytes.copy_from_slice(&memory.bytes[value..(value + 1)]);
+        let memory = self.memory.try_borrow()?;
 
-        Some(bytes)
+        Ok(Some([memory.bytes[value]]))
     }
 
-    pub fn get_2_bytes(&self) -> Option<[u8; 2]> {
+    #[doc(hidden)]
+    pub fn get_2_bytes(&self) -> std::result::Result<Option<[u8; 2]>, NoProtoError> {
         let value = self.get_value_address() as usize;
 
         // empty value
         if value == 0 {
-            return None;
+            return Ok(None);
         }
 
         let mut bytes: [u8; 2] = [0; 2];
-        let memory = self.memory.borrow();
+        let memory = self.memory.try_borrow()?;
         bytes.copy_from_slice(&memory.bytes[value..(value + 2)]);
 
-        Some(bytes)
+        Ok(Some(bytes))
     }
 
-    pub fn get_4_bytes(&self) -> Option<[u8; 4]> {
+    #[doc(hidden)]
+    pub fn get_4_bytes(&self) -> std::result::Result<Option<[u8; 4]>, NoProtoError> {
         let value = self.get_value_address() as usize;
 
         // empty value
         if value == 0 {
-            return None;
+            return Ok(None);
         }
 
         let mut bytes: [u8; 4] = [0; 4];
-        let memory = self.memory.borrow();
+        let memory = self.memory.try_borrow()?;
         bytes.copy_from_slice(&memory.bytes[value..(value + 4)]);
 
-        Some(bytes)
+        Ok(Some(bytes))
     }
 
-    pub fn get_8_bytes(&self) -> Option<[u8; 8]> {
+    #[doc(hidden)]
+    pub fn get_8_bytes(&self) -> std::result::Result<Option<[u8; 8]>, NoProtoError> {
         let value = self.get_value_address() as usize;
 
         // empty value
         if value == 0 {
-            return None;
+            return Ok(None);
         }
 
         let mut bytes: [u8; 8] = [0; 8];
-        let memory = self.memory.borrow();
+        let memory = self.memory.try_borrow()?;
         bytes.copy_from_slice(&memory.bytes[value..(value + 8)]);
 
-        Some(bytes)
+        Ok(Some(bytes))
     }
 
-    pub fn get_16_bytes(&self) -> Option<[u8; 16]> {
+    #[doc(hidden)]
+    pub fn get_16_bytes(&self) -> std::result::Result<Option<[u8; 16]>, NoProtoError> {
         let value = self.get_value_address() as usize;
 
         // empty value
         if value == 0 {
-            return None;
+            return Ok(None);
         }
 
         let mut bytes: [u8; 16] = [0; 16];
-        let memory = self.memory.borrow();
+        let memory = self.memory.try_borrow()?;
         bytes.copy_from_slice(&memory.bytes[value..(value + 16)]);
 
-        Some(bytes)
+        Ok(Some(bytes))
     }
 
-    pub fn to_dec64(&self) -> Option<NoProtoDec> {
+    pub fn to_dec64(&self) -> std::result::Result<Option<NoProtoDec>, NoProtoError> {
         let model = self.schema;
 
         match *model.kind {
             NoProtoSchemaKinds::Dec64 => {
-                match self.get_8_bytes() {
+                Ok(match self.get_8_bytes()? {
                     Some(x) => {
+                        let mem = self.memory.try_borrow()?;
                         let addr = self.get_value_address();
-                        let mem = self.memory.borrow();
                         Some(NoProtoDec::new(i64::from_le_bytes(x), u8::from_le_bytes([mem.bytes[(addr + 8) as usize]])))
                     },
                     None => None
-                }
+                })
             },
             _ => {
-                None
+                Err(type_error(TypeReq::Read, "dec64", &model))
             }
         }
     }
 
-    pub fn set_dec64(&mut self, dec64: NoProtoDec) -> std::result::Result<bool, &'static str> {
+    pub fn set_dec64(&mut self, dec64: NoProtoDec) -> std::result::Result<(), NoProtoError> {
         let model = self.schema;
 
         match *model.kind {
@@ -755,7 +851,7 @@ impl<'a> NoProtoPointer<'a> {
                 let mut set_addr = false;
 
                 {
-                    let mut memory = self.memory.borrow_mut();
+                    let mut memory = self.memory.try_borrow_mut()?;
 
                     if addr != 0 { // existing value, replace
                         let bytes = dec64.num.to_le_bytes();
@@ -771,46 +867,194 @@ impl<'a> NoProtoPointer<'a> {
                     } else { // new value
 
                         let bytes = dec64.num.to_le_bytes();
-                        addr = memory.malloc(bytes.to_vec()).unwrap_or(0);
+                        addr = memory.malloc(bytes.to_vec())?;
                         set_addr = true;
-
-                        let addr2 = memory.malloc(dec64.scale.to_le_bytes().to_vec()).unwrap_or(0);
-
-                        if addr == 0 || addr2 == 0 {
-                            return Err("Not enough memory!");
-                        }
+                        memory.malloc(dec64.scale.to_le_bytes().to_vec())?;
                     }
                 }
 
-                if set_addr { self.set_value_address(addr) };
+                if set_addr { self.set_value_address(addr)?; };
 
-                Ok(true)
+                Ok(())
             },
             _ => {
-                Err("Not a Dec64 type!")
+                Err(type_error(TypeReq::Write, "dec64", &model))
             }
         }
     }
 
-    pub fn to_int8(&self) -> Option<i8> {
+    /// Allows you to get the allowed range for the given pointer.  This will work as long as the pointer is one of the integer (intX) or unsigned integer (uintX) types.
+    /// 
+    /// If the pointer is not an integer (intX) or unsigned integer (uintX) type, this returns two zeros (0,0).
+    /// 
+    /// # Example: 
+    /// Assuming `uint8_ptr` is a `NoProtoPointer` of type `uint8`.
+    /// ```
+    /// # use json::*;
+    /// # use no_proto::error::NoProtoError;
+    /// # use no_proto::schema::NoProtoSchema;
+    /// # use no_proto::pointer::NoProtoPointer;
+    /// # let schema = NoProtoSchema::init().from_json(object!{"type" => "uint8"}).unwrap();
+    /// # let mut uint8_ptr = NoProtoPointer::new_example_ptr(&schema);
+    /// assert_eq!(uint8_ptr.get_integer_range(), (0, 255));
+    /// # Ok::<(), NoProtoError>(())
+    /// ```
+    pub fn get_integer_range(&self) -> (i128, i128) {
+        let model = self.schema;
+        match *model.kind {
+            NoProtoSchemaKinds::Int8 => { ((2i128.pow(7) * -1), 2i128.pow(7)) },
+            NoProtoSchemaKinds::Int16 => { ((2i128.pow(15) * -1), 2i128.pow(15)) },
+            NoProtoSchemaKinds::Int32 => { ((2i128.pow(31) * -1), 2i128.pow(31)) },
+            NoProtoSchemaKinds::Int64 => { ((2i128.pow(63) * -1), 2i128.pow(63)) },
+            NoProtoSchemaKinds::Uint8 => { (0, 2i128.pow(8) - 1) },
+            NoProtoSchemaKinds::Uint16 => { (0, 2i128.pow(16) - 1) },
+            NoProtoSchemaKinds::Uint32 => { (0, 2i128.pow(32) - 1) },
+            NoProtoSchemaKinds::Uint64 => { (0, 2i128.pow(64) - 1) }
+            _ => { (0, 0)}
+        }
+    }
+    
+    /// Takes an integer and reduces it to be within the range allowed for the pointer's intenger type.
+    /// 
+    /// If the integer is already within the allowed range, this does nothing.
+    /// 
+    /// If the pointer is not an integer type, this returns zero.
+    /// 
+    /// # Example: 
+    /// Assuming `uint8_ptr` is a `NoProtoPointer` of type `uint8`.
+    /// ```
+    /// # use json::*;
+    /// # use no_proto::error::NoProtoError;
+    /// # use no_proto::schema::NoProtoSchema;
+    /// # use no_proto::pointer::NoProtoPointer;
+    /// # let schema = NoProtoSchema::init().from_json(object!{"type" => "uint8"}).unwrap();
+    /// # let mut uint8_ptr = NoProtoPointer::new_example_ptr(&schema);
+    /// assert_eq!(uint8_ptr.integer_truncate(2938), 255);
+    /// assert_eq!(uint8_ptr.integer_truncate(-20329383), 0);
+    /// assert_eq!(uint8_ptr.integer_truncate(155), 155);
+    /// # Ok::<(), NoProtoError>(())
+    /// ```
+    pub fn integer_truncate(&self, value: i128) -> i128 {
+        let ranges = self.get_integer_range();
+
+        if ranges.0 > value {
+            return ranges.0;
+        } else if ranges.1 < value {
+            return ranges.1;
+        }
+
+        value
+    }
+
+    /// Allows you to set an arbitrary integer value against the pointer.  This will work as long as the pointer is one of the integer (intX) or unsigned integer (uintX) types.
+    /// 
+    /// If the pointer is not an integer (intX) or unsigned integer (intX) type, this will fail with a type error.
+    /// If the value provided is outside of the range of numbers that can safely be held by the pointer's type, this will fail.
+    /// Can be used with `integer_truncate` to garuantee value being passed in is safe to store.
+    /// 
+    /// # Example: 
+    /// Assuming `uint8_ptr` is a `NoProtoPointer` of type `uint8`.
+    /// ```
+    /// # use json::*;
+    /// # use no_proto::error::NoProtoError;
+    /// # use no_proto::schema::NoProtoSchema;
+    /// # use no_proto::pointer::NoProtoPointer;
+    /// # let schema = NoProtoSchema::init().from_json(object!{"type" => "uint8"})?;
+    /// # let mut uint8_ptr = NoProtoPointer::new_example_ptr(&schema);
+    /// uint8_ptr.set_generic_integer(120);
+    /// 
+    /// assert_eq!(uint8_ptr.to_generic_integer()?, Some(120));
+    /// assert_eq!(uint8_ptr.to_uint8()?, Some(120));
+    /// # Ok::<(), NoProtoError>(())
+    /// ```
+    pub fn set_generic_integer(&mut self, value: i128) -> std::result::Result<(), NoProtoError> {
+        let model = self.schema;
+
+        let ranges = self.get_integer_range();
+
+        if ranges.0 > value {
+            return Err(NoProtoError::new(format!("Integer value {} is too low for type ({}), minimum allowed value is {}!", value, model.get_type_str(), ranges.0).as_str()));
+        } else if ranges.1 < value {
+            return Err(NoProtoError::new(format!("Integer value {} is too high for type ({}), maximum allowed value is {}!", value, model.get_type_str(), ranges.1).as_str()));
+        }
+
+        match *model.kind {
+            NoProtoSchemaKinds::Int8 => { self.set_int8(value as i8) },
+            NoProtoSchemaKinds::Int16 => { self.set_int16(value as i16) },
+            NoProtoSchemaKinds::Int32 => { self.set_int32(value as i32) },
+            NoProtoSchemaKinds::Int64 => { self.set_int64(value as i64) },
+            NoProtoSchemaKinds::Uint8 => { self.set_uint8(value as u8) },
+            NoProtoSchemaKinds::Uint16 => { self.set_uint16(value as u16) },
+            NoProtoSchemaKinds::Uint32 => { self.set_uint32(value as u32) },
+            NoProtoSchemaKinds::Uint64 => { self.set_uint64(value as u64) }
+            _ => {
+                Err(type_error(TypeReq::Write, "int8, int16, int32, int64, uint8, uint16, uint32, or uint64", &model))
+            }
+        }
+    }
+
+    /// Allows you to get an arbitrary integer value from the pointer.  This will work as long as the pointer is one of the integer (intX) or unsigned integer (uintX) types.
+    /// 
+    /// If the pointer is not an integer (intX) or unsigned integer (intX) type, this will fail with a type error.
+    /// 
+    /// This is identical to calling the specific integer methods but a little slower.
+    /// 
+    /// # Example: 
+    /// Assuming `my_ptr` is a `NoProtoPointer` of type `uint8`.
+    /// ```
+    /// # use json::*;
+    /// # use no_proto::schema::NoProtoSchema;
+    /// # use no_proto::pointer::NoProtoPointer;
+    /// # use no_proto::error::NoProtoError;
+    /// # let schema = NoProtoSchema::init().from_json(object!{"type" => "uint8"})?;
+    /// # let mut my_ptr = NoProtoPointer::new_example_ptr(&schema);
+    /// my_ptr.set_uint8(120);
+    /// 
+    /// assert_eq!(my_ptr.to_generic_integer()?, Some(120));
+    /// assert_eq!(my_ptr.to_uint8()?, Some(120));
+    /// # Ok::<(), NoProtoError>(())
+    /// ```
+    pub fn to_generic_integer(&self) -> std::result::Result<Option<i128>, NoProtoError> {
+        let model = self.schema;
+
+        if self.get_value_address() == 0 {
+            return Ok(None);
+        };
+
+        match *model.kind {
+            NoProtoSchemaKinds::Int8 => { Ok(Some(self.to_int8()?.unwrap_or(0) as i128)) },
+            NoProtoSchemaKinds::Int16 => { Ok(Some(self.to_int16()?.unwrap_or(0) as i128)) },
+            NoProtoSchemaKinds::Int32 => { Ok(Some(self.to_int32()?.unwrap_or(0) as i128)) },
+            NoProtoSchemaKinds::Int64 => { Ok(Some(self.to_int64()?.unwrap_or(0) as i128)) },
+            NoProtoSchemaKinds::Uint8 => { Ok(Some(self.to_uint8()?.unwrap_or(0) as i128)) },
+            NoProtoSchemaKinds::Uint16 => { Ok(Some(self.to_uint16()?.unwrap_or(0) as i128)) },
+            NoProtoSchemaKinds::Uint32 => { Ok(Some(self.to_uint32()?.unwrap_or(0) as i128)) },
+            NoProtoSchemaKinds::Uint64 => { Ok(Some(self.to_uint64()?.unwrap_or(0) as i128)) },
+            _ => {
+                Err(type_error(TypeReq::Write, "int8, int16, int32, int64, uint8, uint16, uint32, or uint64", &model))
+            }
+        }
+    }
+
+    pub fn to_int8(&self) -> std::result::Result<Option<i8>, NoProtoError> {
         let model = self.schema;
 
         match *model.kind {
             NoProtoSchemaKinds::Int8 => {
-                match self.get_1_byte() {
+                Ok(match self.get_1_byte()? {
                     Some(x) => {
                         Some(i8::from_le_bytes(x))
                     },
                     None => None
-                }
+                })
             },
             _ => {
-                None
+                Err(type_error(TypeReq::Read, "int8", &model))
             }
         }
     }
 
-    pub fn set_int8(&mut self, int8: i8) -> std::result::Result<bool, &'static str> {
+    pub fn set_int8(&mut self, int8: i8) -> std::result::Result<(), NoProtoError> {
         let model = self.schema;
 
         match *model.kind {
@@ -820,7 +1064,7 @@ impl<'a> NoProtoPointer<'a> {
                 let mut set_addr = false;
 
                 {
-                    let mut memory = self.memory.borrow_mut();
+                    let mut memory = self.memory.try_borrow_mut()?;
 
                     if addr != 0 { // existing value, replace
                         let bytes = int8.to_le_bytes();
@@ -833,44 +1077,41 @@ impl<'a> NoProtoPointer<'a> {
                     } else { // new value
        
                         let bytes = int8.to_le_bytes();
-                        addr = memory.malloc(bytes.to_vec()).unwrap_or(0);
+                        addr = memory.malloc(bytes.to_vec())?;
                         set_addr = true;
-    
-                        if addr == 0 {
-                            return Err("Not enough memory!");
-                        }
                     }
                 }
 
-                if set_addr { self.set_value_address(addr) };
+                if set_addr { self.set_value_address(addr)?; };
 
-                Ok(true)
+                Ok(())
             },
             _ => {
-                Err("Not a int8 type!")
+                Err(type_error(TypeReq::Write, "int8", &model))
             }
         }
     }
 
-    pub fn to_int16(&self) -> Option<i16> {
+    pub fn to_int16(&self) -> std::result::Result<Option<i16>, NoProtoError> {
         let model = self.schema;
 
         match *model.kind {
             NoProtoSchemaKinds::Int16 => {
-                match self.get_2_bytes() {
+                Ok(match self.get_2_bytes()? {
                     Some(x) => {
                         Some(i16::from_le_bytes(x))
                     },
                     None => None
-                }
+                })
             },
             _ => {
-                None
+                Err(type_error(TypeReq::Read, "int16", &model))
             }
         }
+        
     }
 
-    pub fn set_int16(&mut self, int16: i16) -> std::result::Result<bool, &'static str> {
+    pub fn set_int16(&mut self, int16: i16) -> std::result::Result<(), NoProtoError> {
         let model = self.schema;
 
         match *model.kind {
@@ -881,7 +1122,7 @@ impl<'a> NoProtoPointer<'a> {
                 let mut set_addr = false;
 
                 {
-                    let mut memory = self.memory.borrow_mut();
+                    let mut memory = self.memory.try_borrow_mut()?;
 
                     if addr != 0 { // existing value, replace
                         let bytes = int16.to_le_bytes();
@@ -894,44 +1135,40 @@ impl<'a> NoProtoPointer<'a> {
                     } else { // new value
 
                         let bytes = int16.to_le_bytes();
-                        addr = memory.malloc(bytes.to_vec()).unwrap_or(0);
+                        addr = memory.malloc(bytes.to_vec())?;
                         set_addr = true;
-
-                        if addr == 0 {
-                            return Err("Not enough memory!");
-                        }
                     }
                 }
 
-                if set_addr { self.set_value_address(addr) };
+                if set_addr { self.set_value_address(addr)?; };
 
-                Ok(true)
+                Ok(())
             },
             _ => {
-                Err("Not a int16 type!")
+                Err(type_error(TypeReq::Write, "int16", &model))
             }
         }
     }
 
-    pub fn to_int32(&self) -> Option<i32> {
+    pub fn to_int32(&self) -> std::result::Result<Option<i32>, NoProtoError> {
         let model = self.schema;
 
         match *model.kind {
             NoProtoSchemaKinds::Int32 => {
-                match self.get_4_bytes() {
+                Ok(match self.get_4_bytes()? {
                     Some(x) => {
                         Some(i32::from_le_bytes(x))
                     },
                     None => None
-                }
+                })
             },
             _ => {
-                None
+                Err(type_error(TypeReq::Read, "int32", &model))
             }
         }
     }
 
-    pub fn set_int32(&mut self, int32: i32) -> std::result::Result<bool, &'static str> {
+    pub fn set_int32(&mut self, int32: i32) -> std::result::Result<(), NoProtoError> {
         let model = self.schema;
 
         match *model.kind {
@@ -941,7 +1178,7 @@ impl<'a> NoProtoPointer<'a> {
                 let mut set_addr = false;
 
                 {
-                    let mut memory = self.memory.borrow_mut();
+                    let mut memory = self.memory.try_borrow_mut()?;
 
                     if addr != 0 { // existing value, replace
                         let bytes = int32.to_le_bytes();
@@ -954,45 +1191,40 @@ impl<'a> NoProtoPointer<'a> {
                     } else { // new value
     
                         let bytes = int32.to_le_bytes();
-                        addr = memory.malloc(bytes.to_vec()).unwrap_or(0);
+                        addr = memory.malloc(bytes.to_vec())?;
                         set_addr = true;
-
-                        if addr == 0 {
-                            return Err("Not enough memory!");
-                        }
-
                     }                    
                 }
 
-                if set_addr { self.set_value_address(addr) };
+                if set_addr { self.set_value_address(addr)?; };
 
-                Ok(true)
+                Ok(())
             },
             _ => {
-                Err("Not a int32 type!")
+                Err(type_error(TypeReq::Write, "int32", &model))
             }
         }
     }
 
-    pub fn to_int64(&self) -> Option<i64> {
+    pub fn to_int64(&self) -> std::result::Result<Option<i64>, NoProtoError> {
         let model = self.schema;
 
         match *model.kind {
             NoProtoSchemaKinds::Int64 => {
-                match self.get_8_bytes() {
+                Ok(match self.get_8_bytes()? {
                     Some(x) => {
                         Some(i64::from_le_bytes(x))
                     },
                     None => None
-                }
+                })
             },
             _ => {
-                None
+                Err(type_error(TypeReq::Read, "int64", &model))
             }
         }
     }
 
-    pub fn set_int64(&mut self, int64: i64) -> std::result::Result<bool, &'static str> {
+    pub fn set_int64(&mut self, int64: i64) -> std::result::Result<(), NoProtoError> {
         let model = self.schema;
 
         match *model.kind {
@@ -1002,7 +1234,7 @@ impl<'a> NoProtoPointer<'a> {
                 let mut set_addr = false;
 
                 {
-                    let mut memory = self.memory.borrow_mut();
+                    let mut memory = self.memory.try_borrow_mut()?;
 
                     if addr != 0 { // existing value, replace
                         let bytes = int64.to_le_bytes();
@@ -1015,45 +1247,40 @@ impl<'a> NoProtoPointer<'a> {
                     } else { // new value
     
                         let bytes = int64.to_le_bytes();
-                        addr = memory.malloc(bytes.to_vec()).unwrap_or(0);
+                        addr = memory.malloc(bytes.to_vec())?;
                         set_addr = true;
-
-                        if addr == 0 {
-                            return Err("Not enough memory!");
-                        }
-
                     }                    
                 }
 
-                if set_addr { self.set_value_address(addr) };
+                if set_addr { self.set_value_address(addr)?; };
 
-                Ok(true)
+                Ok(())
             },
             _ => {
-                Err("Not a int64 type!")
+                Err(type_error(TypeReq::Write, "int64", &model))
             }
         }
     }
 
-    pub fn to_uint8(&self) -> Option<u8> {
+    pub fn to_uint8(&self) -> std::result::Result<Option<u8>, NoProtoError> {
         let model = self.schema;
 
         match *model.kind {
             NoProtoSchemaKinds::Uint8 => {
-                match self.get_1_byte() {
+                Ok(match self.get_1_byte()? {
                     Some(x) => {
                         Some(u8::from_le_bytes(x))
                     },
                     None => None
-                }
+                })
             },
             _ => {
-                None
+                Err(type_error(TypeReq::Read, "uint8", &model))
             }
         }
     }
 
-    pub fn set_uint8(&mut self, uint8: u8) -> std::result::Result<bool, &'static str> {
+    pub fn set_uint8(&mut self, uint8: u8) -> std::result::Result<(), NoProtoError> {
         let model = self.schema;
 
         match *model.kind {
@@ -1064,7 +1291,7 @@ impl<'a> NoProtoPointer<'a> {
                 let mut set_addr = false;
 
                 {
-                    let mut memory = self.memory.borrow_mut();
+                    let mut memory = self.memory.try_borrow_mut()?;
 
                     if addr != 0 { // existing value, replace
                         let bytes = uint8.to_le_bytes();
@@ -1077,44 +1304,40 @@ impl<'a> NoProtoPointer<'a> {
                     } else { // new value
     
                         let bytes = uint8.to_le_bytes();
-                        addr = memory.malloc(bytes.to_vec()).unwrap_or(0);
+                        addr = memory.malloc(bytes.to_vec())?;
                         set_addr = true;
-
-                        if addr == 0 {
-                            return Err("Not enough memory!");
-                        }
                     }                    
                 }
 
-                if set_addr { self.set_value_address(addr) };
+                if set_addr { self.set_value_address(addr)?; };
 
-                Ok(true)
+                Ok(())
             },
             _ => {
-                Err("Not a uint8 type!")
+                Err(type_error(TypeReq::Write, "uint8", &model))
             }
         }
     }
 
-    pub fn to_uint16(&self) -> Option<u16> {
+    pub fn to_uint16(&self) -> std::result::Result<Option<u16>, NoProtoError> {
         let model = self.schema;
 
         match *model.kind {
             NoProtoSchemaKinds::Uint16 => {
-                match self.get_2_bytes() {
+                Ok(match self.get_2_bytes()? {
                     Some(x) => {
                         Some(u16::from_le_bytes(x))
                     },
                     None => None
-                }
+                })
             },
             _ => {
-                None
+                Err(type_error(TypeReq::Read, "uint16", &model))
             }
         }
     }
 
-    pub fn set_uint16(&mut self, uint16: u16) -> std::result::Result<bool, &'static str> {
+    pub fn set_uint16(&mut self, uint16: u16) -> std::result::Result<(), NoProtoError> {
         let model = self.schema;
 
         match *model.kind {
@@ -1125,7 +1348,7 @@ impl<'a> NoProtoPointer<'a> {
                 let mut set_addr = false;
 
                 {
-                    let mut memory = self.memory.borrow_mut();
+                    let mut memory = self.memory.try_borrow_mut()?;
 
                     if addr != 0 { // existing value, replace
                         let bytes = uint16.to_le_bytes();
@@ -1138,44 +1361,40 @@ impl<'a> NoProtoPointer<'a> {
                     } else { // new value
     
                         let bytes = uint16.to_le_bytes();
-                        addr = memory.malloc(bytes.to_vec()).unwrap_or(0);
+                        addr = memory.malloc(bytes.to_vec())?;
                         set_addr = true;
-
-                        if addr == 0 {
-                            return Err("Not enough memory!");
-                        }
                     }                    
                 }
 
-                if set_addr { self.set_value_address(addr) };
+                if set_addr { self.set_value_address(addr)?; };
 
-                Ok(true)
+                Ok(())
             },
             _ => {
-                Err("Not a uint16 type!")
+                Err(type_error(TypeReq::Write, "uint16", &model))
             }
         }
     }
 
-    pub fn to_uint32(&self) -> Option<u32> {
+    pub fn to_uint32(&self) -> std::result::Result<Option<u32>, NoProtoError> {
         let model = self.schema;
 
         match *model.kind {
             NoProtoSchemaKinds::Uint32 => {
-                match self.get_4_bytes() {
+                Ok(match self.get_4_bytes()? {
                     Some(x) => {
                         Some(u32::from_le_bytes(x))
                     },
                     None => None
-                }
+                })
             },
             _ => {
-                None
+                Err(type_error(TypeReq::Read, "uint32", &model))
             }
         }
     }
 
-    pub fn set_uint32(&mut self, uint32: u32) -> std::result::Result<bool, &'static str> {
+    pub fn set_uint32(&mut self, uint32: u32) -> std::result::Result<(), NoProtoError> {
         let model = self.schema;
 
         match *model.kind {
@@ -1185,7 +1404,7 @@ impl<'a> NoProtoPointer<'a> {
                 let mut set_addr = false;
 
                 {
-                    let mut memory = self.memory.borrow_mut();
+                    let mut memory = self.memory.try_borrow_mut()?;
 
                     if addr != 0 { // existing value, replace
                         let bytes = uint32.to_le_bytes();
@@ -1198,44 +1417,40 @@ impl<'a> NoProtoPointer<'a> {
                     } else { // new value
        
                         let bytes = uint32.to_le_bytes();
-                        addr = memory.malloc(bytes.to_vec()).unwrap_or(0);
+                        addr = memory.malloc(bytes.to_vec())?;
                         set_addr = true;
-    
-                        if addr == 0 {
-                            return Err("Not enough memory!");
-                        }
                     }
                 }
 
-                if set_addr { self.set_value_address(addr) };
+                if set_addr { self.set_value_address(addr)?; };
 
-                Ok(true)
+                Ok(())
             },
             _ => {
-                Err("Not a uint32 type!")
+                Err(type_error(TypeReq::Write, "uint32", &model))
             }
         }
     }
 
-    pub fn to_uint64(&self) -> Option<u64> {
+    pub fn to_uint64(&self) -> std::result::Result<Option<u64>, NoProtoError> {
         let model = self.schema;
 
         match *model.kind {
             NoProtoSchemaKinds::Uint64 => {
-                match self.get_8_bytes() {
+                Ok(match self.get_8_bytes()? {
                     Some(x) => {
                         Some(u64::from_le_bytes(x))
                     },
                     None => None
-                }
+                })
             },
             _ => {
-                None
+                Err(type_error(TypeReq::Read, "uint64", &model))
             }
         }
     }
 
-    pub fn set_uint64(&mut self, uint64: u64) -> std::result::Result<bool, &'static str> {
+    pub fn set_uint64(&mut self, uint64: u64) -> std::result::Result<(), NoProtoError> {
         let model = self.schema;
 
         match *model.kind {
@@ -1245,7 +1460,7 @@ impl<'a> NoProtoPointer<'a> {
                 let mut set_addr = false;
 
                 {
-                    let mut memory = self.memory.borrow_mut();
+                    let mut memory = self.memory.try_borrow_mut()?;
                     
                     if addr != 0 { // existing value, replace
                         let bytes = uint64.to_le_bytes();
@@ -1258,44 +1473,40 @@ impl<'a> NoProtoPointer<'a> {
                     } else { // new value
     
                         let bytes = uint64.to_le_bytes();
-                        addr = memory.malloc(bytes.to_vec()).unwrap_or(0);
+                        addr = memory.malloc(bytes.to_vec())?;
                         set_addr = true;
-
-                        if addr == 0 {
-                            return Err("Not enough memory!");
-                        }
                     }
                 }
 
-                if set_addr { self.set_value_address(addr) };
+                if set_addr { self.set_value_address(addr)?; };
 
-                Ok(true)
+                Ok(())
             },
             _ => {
-                Err("Not a uint64 type!")
+                Err(type_error(TypeReq::Write, "uint64", &model))
             }
         }
     }
 
-    pub fn to_float(&self) -> Option<f32> {
+    pub fn to_float(&self) -> std::result::Result<Option<f32>, NoProtoError> {
         let model = self.schema;
 
         match *model.kind {
             NoProtoSchemaKinds::Float => {
-                match self.get_4_bytes() {
+                Ok(match self.get_4_bytes()? {
                     Some(x) => {
                         Some(f32::from_le_bytes(x))
                     },
                     None => None
-                }
+                })
             },
             _ => {
-                None
+                Err(type_error(TypeReq::Read, "float", &model))
             }
         }
     }
 
-    pub fn set_float(&mut self, float: f32) -> std::result::Result<bool, &'static str> {
+    pub fn set_float(&mut self, float: f32) -> std::result::Result<(), NoProtoError> {
         let model = self.schema;
 
         match *model.kind {
@@ -1305,7 +1516,7 @@ impl<'a> NoProtoPointer<'a> {
                 let mut set_addr = false;
 
                 {
-                    let mut memory = self.memory.borrow_mut();
+                    let mut memory = self.memory.try_borrow_mut()?;
 
                     if addr != 0 { // existing value, replace
                         let bytes = float.to_le_bytes();
@@ -1318,44 +1529,40 @@ impl<'a> NoProtoPointer<'a> {
                     } else { // new value
     
                         let bytes = float.to_le_bytes();
-                        addr = memory.malloc(bytes.to_vec()).unwrap_or(0);
+                        addr = memory.malloc(bytes.to_vec())?;
                         set_addr = true;
-
-                        if addr == 0 {
-                            return Err("Not enough memory!");
-                        }
                     }
                 }   
 
-                if set_addr { self.set_value_address(addr) };
+                if set_addr { self.set_value_address(addr)?; };
 
-                Ok(true)
+                Ok(())
             },
             _ => {
-                Err("Not a float type!")
+                Err(type_error(TypeReq::Write, "float", &model))
             }
         }
     }
 
-    pub fn to_double(&self) -> Option<f64> {
+    pub fn to_double(&self) -> std::result::Result<Option<f64>, NoProtoError> {
         let model = self.schema;
 
         match *model.kind {
             NoProtoSchemaKinds::Double => {
-                match self.get_8_bytes() {
+                Ok(match self.get_8_bytes()? {
                     Some(x) => {
                         Some(f64::from_le_bytes(x))
                     },
                     None => None
-                }
+                })
             },
             _ => {
-                None
+                Err(type_error(TypeReq::Read, "double", &model))
             }
         }
     }
 
-    pub fn set_double(&mut self, double: f64) -> std::result::Result<bool, &'static str> {
+    pub fn set_double(&mut self, double: f64) -> std::result::Result<(), NoProtoError> {
         let model = self.schema;
 
         match *model.kind {
@@ -1366,7 +1573,7 @@ impl<'a> NoProtoPointer<'a> {
                 let mut set_addr = false;
 
                 {
-                    let mut memory = self.memory.borrow_mut();
+                    let mut memory = self.memory.try_borrow_mut()?;
 
                     if addr != 0 { // existing value, replace
                         let bytes = double.to_le_bytes();
@@ -1379,52 +1586,48 @@ impl<'a> NoProtoPointer<'a> {
                     } else { // new value
     
                         let bytes = double.to_le_bytes();
-                        addr = memory.malloc(bytes.to_vec()).unwrap_or(0);
+                        addr = memory.malloc(bytes.to_vec())?;
                         set_addr = true;
-
-                        if addr == 0 {
-                            return Err("Not enough memory!");
-                        }
                     }                    
                 }
 
-                if set_addr { self.set_value_address(addr) };
+                if set_addr { self.set_value_address(addr)?; };
 
-                Ok(true)
+                Ok(())
             },
             _ => {
-                Err("Not a double type!")
+                Err(type_error(TypeReq::Write, "double", &model))
             }
         }
     }
 
-    pub fn to_option(&self) -> Option<String> {
+    pub fn to_option(&self) -> std::result::Result<Option<String>, NoProtoError> {
 
         let model = self.schema;
 
         match &*model.kind {
             NoProtoSchemaKinds::Enum { choices } => {
-                match self.get_1_byte() {
-                    Some(x) => {
 
+                Ok(match self.get_1_byte()? {
+                    Some(x) => {
                         let value_num = u8::from_le_bytes(x) as usize;
 
                         if value_num > choices.len() {
-                            return None;
+                            None
+                        } else {
+                            Some(choices[value_num].clone())
                         }
-
-                        Some(choices[value_num].clone())
                     },
                     None => None
-                }
+                })
             },
             _ => {
-                None
+                Err(type_error(TypeReq::Read, "option", &model))
             }
         }
     }
 
-    pub fn set_option(&mut self, option: String) -> std::result::Result<bool, &'static str> {
+    pub fn set_option(&mut self, option: String) -> std::result::Result<(), NoProtoError> {
         let model = self.schema;
 
         match &*model.kind {
@@ -1443,7 +1646,7 @@ impl<'a> NoProtoPointer<'a> {
                     };
 
                     if value_num == -1 {
-                        return Err("Option not found, cannot set uknown option!");
+                        return Err(NoProtoError::new("Option not found, cannot set uknown option!"));
                     }
                 }
 
@@ -1451,7 +1654,7 @@ impl<'a> NoProtoPointer<'a> {
                 let mut set_addr = false;
 
                 {
-                    let mut memory = self.memory.borrow_mut();
+                    let mut memory = self.memory.try_borrow_mut()?;
 
                     let bytes = (value_num as u8).to_le_bytes();
 
@@ -1464,45 +1667,41 @@ impl<'a> NoProtoPointer<'a> {
 
                     } else { // new value
     
-                        addr = memory.malloc(bytes.to_vec()).unwrap_or(0);
+                        addr = memory.malloc(bytes.to_vec())?;
                         set_addr = true;
-
-                        if addr == 0 {
-                            return Err("Not enough memory!");
-                        }
                     }                    
                 }
 
-                if set_addr { self.set_value_address(addr) };
+                if set_addr { self.set_value_address(addr)?; };
 
-                Ok(true)
+                Ok(())
                 
             },
             _ => {
-                Err("Not a option type!")
+                Err(type_error(TypeReq::Write, "option", &model))
             }
         }
     }
 
-    pub fn to_boolean(&self) -> Option<bool> {
+    pub fn to_boolean(&self) -> std::result::Result<Option<bool>, NoProtoError> {
         let model = self.schema;
 
         match *model.kind {
             NoProtoSchemaKinds::Boolean => {
-                match self.get_1_byte() {
+                Ok(match self.get_1_byte()? {
                     Some(x) => {
                         Some(if x[0] == 1 { true } else { false })
                     },
                     None => None
-                }
+                })
             },
             _ => {
-                None
+                Err(type_error(TypeReq::Read, "bool", &model))
             }
         }
     }
 
-    pub fn set_boolean(&mut self, boolean: bool) -> std::result::Result<bool, &'static str> {
+    pub fn set_boolean(&mut self, boolean: bool) -> std::result::Result<(), NoProtoError> {
         let model = self.schema;
 
         match *model.kind {
@@ -1512,7 +1711,7 @@ impl<'a> NoProtoPointer<'a> {
                 let mut set_addr = false;
 
                 {
-                    let mut memory = self.memory.borrow_mut();
+                    let mut memory = self.memory.try_borrow_mut()?;
 
                     if addr != 0 { // existing value, replace
                         let bytes = if boolean == true {
@@ -1532,35 +1731,31 @@ impl<'a> NoProtoPointer<'a> {
                             [0] as [u8; 1]
                         };
 
-                        addr = memory.malloc(bytes.to_vec()).unwrap_or(0);
+                        addr = memory.malloc(bytes.to_vec())?;
                         set_addr = true;
-
-                        if addr == 0 {
-                            return Err("Not enough memory!");
-                        }
                     }
                 }
 
-                if set_addr { self.set_value_address(addr) };
+                if set_addr { self.set_value_address(addr)?; };
 
-                Ok(true)
+                Ok(())
             },
             _ => {
-                Err("Not a boolean type!")
+                Err(type_error(TypeReq::Write, "bool", &model))
             }
         }
     }
 
-    pub fn to_geo(&self) -> Option<NoProtoGeo> {
+    pub fn to_geo(&self) -> std::result::Result<Option<NoProtoGeo>, NoProtoError> {
         let model = self.schema;
 
         match *model.kind {
             NoProtoSchemaKinds::Geo16 => {
-                match self.get_16_bytes() {
+                Ok(match self.get_16_bytes()? {
                     Some(x) => {
                         let mut bytes_lat: [u8; 8] = [0; 8];
                         let mut bytes_lon: [u8; 8] = [0; 8];
-    
+        
                         for i in 0..x.len() {
                             if i < 8 {
                                 bytes_lat[i as usize] = x[i as usize];
@@ -1568,14 +1763,14 @@ impl<'a> NoProtoPointer<'a> {
                                 bytes_lon[i as usize - 8] = x[i as usize];
                             }
                         }
-
+        
                         Some(NoProtoGeo { lat: f64::from_le_bytes(bytes_lat), lon: f64::from_le_bytes(bytes_lon)})
                     },
                     None => None
-                }
+                })              
             },
             NoProtoSchemaKinds::Geo8 => {
-                match self.get_8_bytes() {
+                Ok(match self.get_8_bytes()? {
                     Some(x) => {
                         let mut bytes_lat: [u8; 4] = [0; 4];
                         let mut bytes_lon: [u8; 4] = [0; 4];
@@ -1587,23 +1782,25 @@ impl<'a> NoProtoPointer<'a> {
                                 bytes_lon[i as usize - 4] = x[i as usize];
                             }
                         }
-
+    
                         let lat = i32::from_le_bytes(bytes_lat) as f64;
                         let lon = i32::from_le_bytes(bytes_lon) as f64;
-
+    
                         let dev = 10000000f64;
-
+    
                         Some(NoProtoGeo { lat: lat / dev, lon: lon / dev})
                     },
                     None => None
-                }
+                })
+
+                 
             },
             NoProtoSchemaKinds::Geo4 => {
-                match self.get_4_bytes() {
+                Ok(match self.get_4_bytes()? {
                     Some(x) => {
                         let mut bytes_lat: [u8; 2] = [0; 2];
                         let mut bytes_lon: [u8; 2] = [0; 2];
-    
+
                         for i in 0..x.len() {
                             if i < 2 {
                                 bytes_lat[i as usize] = x[i as usize];
@@ -1620,22 +1817,22 @@ impl<'a> NoProtoPointer<'a> {
                         Some(NoProtoGeo { lat: lat / dev, lon: lon / dev})
                     },
                     None => None
-                }
+                })             
             },
             _ => {
-                None
+                Err(type_error(TypeReq::Read, "geo4, geo8 or geo16", &model))
             }
         }
     }
 
-    pub fn set_geo(&mut self, geo: NoProtoGeo) -> std::result::Result<bool, &'static str> {
+    pub fn set_geo(&mut self, geo: NoProtoGeo) -> std::result::Result<(), NoProtoError> {
 
         let mut addr = self.get_value_address();
         let mut set_addr = false;
 
         {
 
-            let mut memory = self.memory.borrow_mut();
+            let mut memory = self.memory.try_borrow_mut()?;
 
             let model = self.schema;
 
@@ -1647,7 +1844,7 @@ impl<'a> NoProtoPointer<'a> {
             };
 
             if value_bytes_size == 0 {
-                return Err("Not a geo type!");
+                return Err(type_error(TypeReq::Write, "geo4, geo8 or geo16", &model));
             }
 
             let half_value_bytes = value_bytes_size / 2;
@@ -1717,16 +1914,13 @@ impl<'a> NoProtoPointer<'a> {
             } else { // new value
 
                 addr = match *model.kind {
-                    NoProtoSchemaKinds::Geo16 => { memory.malloc([0; 16].to_vec()).unwrap_or(0) },
-                    NoProtoSchemaKinds::Geo8 => { memory.malloc([0; 8].to_vec()).unwrap_or(0) },
-                    NoProtoSchemaKinds::Geo4 => { memory.malloc([0; 4].to_vec()).unwrap_or(0) },
+                    NoProtoSchemaKinds::Geo16 => { memory.malloc([0; 16].to_vec())? },
+                    NoProtoSchemaKinds::Geo8 => { memory.malloc([0; 8].to_vec())? },
+                    NoProtoSchemaKinds::Geo4 => { memory.malloc([0; 4].to_vec())? },
                     _ => { 0 }
                 };
-                set_addr = true;
 
-                if addr == 0 {
-                    return Err("Not enough memory!");
-                }
+                set_addr = true;
 
                 // set values in buffer
                 for x in 0..value_bytes.len() {
@@ -1737,30 +1931,30 @@ impl<'a> NoProtoPointer<'a> {
             }
         }
 
-        if set_addr { self.set_value_address(addr) };
+        if set_addr { self.set_value_address(addr)?; };
 
-        Ok(true)
+        Ok(())
     }
 
-    pub fn to_uuid(&self) -> Option<NoProtoUUID> {
+    pub fn to_uuid(&self) -> std::result::Result<Option<NoProtoUUID>, NoProtoError> {
         let model = self.schema;
 
         match *model.kind {
             NoProtoSchemaKinds::Uuid => {
-                match self.get_16_bytes() {
+                Ok(match self.get_16_bytes()? {
                     Some(x) => {
                         Some(NoProtoUUID { value: x})
                     },
                     None => None
-                }
+                })
             },
             _ => {
-                None
+                Err(type_error(TypeReq::Read, "uuid", &model))
             }
         }
     }
 
-    pub fn set_uuid(&mut self, uuid: NoProtoUUID) -> std::result::Result<bool, &'static str> {
+    pub fn set_uuid(&mut self, uuid: NoProtoUUID) -> std::result::Result<(), NoProtoError> {
         let model = self.schema;
 
         match *model.kind {
@@ -1770,7 +1964,7 @@ impl<'a> NoProtoPointer<'a> {
                 let mut set_addr = false;
 
                 {
-                    let mut memory = self.memory.borrow_mut();
+                    let mut memory = self.memory.try_borrow_mut()?;
 
                     if addr != 0 { // existing value, replace
                         let bytes = uuid.value;
@@ -1783,31 +1977,27 @@ impl<'a> NoProtoPointer<'a> {
                     } else { // new value
     
                         let bytes = uuid.value;
-                        addr = memory.malloc(bytes.to_vec()).unwrap_or(0);
+                        addr = memory.malloc(bytes.to_vec())?;
                         set_addr = true;
-
-                        if addr == 0 {
-                            return Err("Not enough memory!");
-                        }
                     }                    
                 }
 
-                if set_addr { self.set_value_address(addr) };
+                if set_addr { self.set_value_address(addr)?; };
 
-                Ok(true)
+                Ok(())
             },
             _ => {
-                Err("Not a uuid type!")
+                Err(type_error(TypeReq::Write, "uuid", &model))
             }
         }
     }
 
-    pub fn to_time_id(&self) -> Option<NoProtoTimeID> {
+    pub fn to_time_id(&self) -> std::result::Result<Option<NoProtoTimeID>, NoProtoError> {
         let model = self.schema;
 
         match *model.kind {
             NoProtoSchemaKinds::Tid => {
-                match self.get_16_bytes() {
+                Ok(match self.get_16_bytes()? {
                     Some(x) => {
                         let mut id_bytes: [u8; 8] = [0; 8];
                         id_bytes.copy_from_slice(&x[0..8]);
@@ -1821,15 +2011,15 @@ impl<'a> NoProtoPointer<'a> {
                         })
                     },
                     None => None
-                }
+                })
             },
             _ => {
-                None
+                Err(type_error(TypeReq::Read, "tid", &model))
             }
         }
     }
 
-    pub fn set_time_id(&mut self, time_id: NoProtoTimeID) -> std::result::Result<bool, &'static str> {
+    pub fn set_time_id(&mut self, time_id: NoProtoTimeID) -> std::result::Result<(), NoProtoError> {
         let model = self.schema;
 
         match *model.kind {
@@ -1839,7 +2029,7 @@ impl<'a> NoProtoPointer<'a> {
                 let mut set_addr = false;
 
                 {
-                    let mut memory = self.memory.borrow_mut();
+                    let mut memory = self.memory.try_borrow_mut()?;
 
                     if addr != 0 { // existing value, replace
 
@@ -1867,44 +2057,40 @@ impl<'a> NoProtoPointer<'a> {
                             }
                         }
 
-                        addr = memory.malloc(bytes.to_vec()).unwrap_or(0);
+                        addr = memory.malloc(bytes.to_vec())?;
                         set_addr = true;
-
-                        if addr == 0 {
-                            return Err("Not enough memory!");
-                        }
                     }                    
                 }
 
-                if set_addr { self.set_value_address(addr) };
+                if set_addr { self.set_value_address(addr)?; };
 
-                Ok(true)
+                Ok(())
             },
             _ => {
-                Err("Not a time_id type!")
+                Err(type_error(TypeReq::Write, "tid", &model))
             }
         }
     }
 
-    pub fn to_date(&self) -> Option<u64> {
+    pub fn to_date(&self) -> std::result::Result<Option<u64>, NoProtoError> {
         let model = self.schema;
 
         match *model.kind {
             NoProtoSchemaKinds::Date => {
-                match self.get_8_bytes() {
+                Ok(match self.get_8_bytes()? {
                     Some(x) => {
                         Some(u64::from_le_bytes(x))
                     },
                     None => None
-                }
+                })
             },
             _ => {
-                None
+                Err(type_error(TypeReq::Read, "date", &model))
             }
         }
     }
 
-    pub fn set_date(&mut self, date: u64) -> std::result::Result<bool, &'static str> {
+    pub fn set_date(&mut self, date: u64) -> std::result::Result<(), NoProtoError> {
         let model = self.schema;
 
         match *model.kind {
@@ -1914,7 +2100,7 @@ impl<'a> NoProtoPointer<'a> {
                 let mut set_addr = false;
 
                 {
-                    let mut memory = self.memory.borrow_mut();
+                    let mut memory = self.memory.try_borrow_mut()?;
 
                     if addr != 0 { // existing value, replace
                         let bytes = date.to_le_bytes();
@@ -1927,25 +2113,30 @@ impl<'a> NoProtoPointer<'a> {
                     } else { // new value
     
                         let bytes = date.to_le_bytes();
-                        addr = memory.malloc(bytes.to_vec()).unwrap_or(0);
+                        addr = memory.malloc(bytes.to_vec())?;
                         set_addr = true;
-
-                        if addr == 0 {
-                            return Err("Not enough memory!");
-                        }
                     }                    
                 }
 
-                if set_addr { self.set_value_address(addr) };
+                if set_addr { self.set_value_address(addr)?; };
 
-                Ok(true)
+                Ok(())
             },
             _ => {
-                Err("Not a date type!")
+                Err(type_error(TypeReq::Write, "date", &model))
             }
         }
     }
+}
 
+// Pointer -> String
+impl<'a> From<NoProtoPointer<'a>> for String {
+    fn from(ptr: NoProtoPointer) -> String {
+        match ptr.to_string() {
+            Ok(x) => x.unwrap(),
+            Err(e) => panic!(e)
+        }
+    }
 }
 
 /*
@@ -1992,8 +2183,8 @@ pub enum NoProtoDataType {
 }*/
 
 // Pointer -> String
-/*impl From<&NoProtoPointer> for Option<String> {
-    fn from(ptr: &NoProtoPointer) -> Option<String> {
+/*impl From<&NoProtoPointer> for std::result::Result<String> {
+    fn from(ptr: &NoProtoPointer) -> std::result::Result<String> {
         ptr.to_string()
     }
 }*/
@@ -2011,9 +2202,9 @@ impl From<i64> for NoProtoValue {
     }
 }
 
-// cast Pointer => Option<i64>
-impl From<&NoProtoValue> for Option<i64> {
-    fn from(ptr: &NoProtoValue) -> Option<i64> {
+// cast Pointer => std::result::Result<i64>
+impl From<&NoProtoValue> for std::result::Result<i64> {
+    fn from(ptr: &NoProtoValue) -> std::result::Result<i64> {
         match ptr.value {
             NoProtoValue::int64 { value } => {
                 Some(value)

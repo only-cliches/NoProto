@@ -1,7 +1,4 @@
-use crate::NoProtoSchema;
-use crate::NoProtoMemory;
-use crate::pointer::NoProtoPointer;
-use json::JsonValue;
+use crate::{memory::NoProtoMemory, pointer::NoProtoPointer, error::NoProtoError, schema::NoProtoSchema};
 use std::rc::Rc;
 use std::cell::RefCell;
 
@@ -24,7 +21,7 @@ impl<'a> NoProtoList<'a> {
         }
     }
 
-    pub fn select(&mut self, index: u16) -> NoProtoPointer {
+    pub fn select(&mut self, index: u16) -> std::result::Result<NoProtoPointer, NoProtoError> {
 
 
         if self.head == 0 { // no values, create one
@@ -32,42 +29,44 @@ impl<'a> NoProtoList<'a> {
             let addr;
 
             {
-                let mut memory = self.memory.borrow_mut();
+                let mut memory = self.memory.try_borrow_mut()?;
 
-                let mut ptr_bytes: [u8; 9] = [0; 9];
+                let mut ptr_bytes: [u8; 10] = [0; 10];
 
-                // set column index in pointer
-                ptr_bytes[8] = *column_index;
+                // set index in pointer
+                let index_bytes = index.to_le_bytes();
 
-                addr = memory.malloc(ptr_bytes.to_vec()).unwrap_or(0);
-    
-                // out of memory
-                if addr == 0 { return None; }
+                for x in 0..index_bytes.len() {
+                    ptr_bytes[x + 8] = index_bytes[x];
+                }
+
+                addr = memory.malloc(ptr_bytes.to_vec())?;
+
             }
             
-            // update head to point to newly created TableItem pointer
+            // update head to point to newly created ListItem pointer
             self.set_head(addr);
             
             // provide 
-            return Some(NoProtoPointer::new_table_item_ptr(self.head, some_column_schema, Rc::clone(&self.memory)));
+            return NoProtoPointer::new_list_item_ptr(self.head, &self.of, Rc::clone(&self.memory));
         } else { // values exist, loop through them to see if we have an existing pointer for this column
 
-            let mut next_addr = self.head as usize;
+            /*let mut prev_addr = self.head as usize;
 
-            let mut has_next = true;
+            let mut do_continue = true;
 
-            while has_next {
+            while do_continue {
 
                 let index;
 
                 {
                     let memory = self.memory.borrow();
-                    index = memory.bytes[(next_addr + 8)];
+                    index = memory.bytes[(prev_addr + 8)];
                 }
 
                 // found our value!
                 if index == *column_index {
-                    return Some(NoProtoPointer::new_table_item_ptr(next_addr as u32, some_column_schema, Rc::clone(&self.memory)))
+                    return Some(NoProtoPointer::new_table_item_ptr(prev_addr as u32, some_column_schema, Rc::clone(&self.memory)))
                 }
 
                 
@@ -75,14 +74,14 @@ impl<'a> NoProtoList<'a> {
                 let mut next: [u8; 4] = [0; 4];
                 {
                     let memory = self.memory.borrow();
-                    next.copy_from_slice(&memory.bytes[(next_addr + 4)..(next_addr + 8)]);
+                    next.copy_from_slice(&memory.bytes[(prev_addr + 4)..(prev_addr + 8)]);
                 }
                 
                 let next_ptr = u32::from_le_bytes(next) as usize;
                 if next_ptr == 0 {
-                    has_next = false;
+                    do_continue = false;
                 } else {
-                    next_addr = next_ptr;
+                    prev_addr = next_ptr;
                 }
             }
 
@@ -93,7 +92,7 @@ impl<'a> NoProtoList<'a> {
             {
                 let mut memory = self.memory.borrow_mut();
 
-                let mut ptr_bytes: [u8; 9] = [0; 9];
+                let mut ptr_bytes: [u8; 10] = [0; 10];
 
                 // set column index in pointer
                 ptr_bytes[8] = *column_index;
@@ -106,14 +105,16 @@ impl<'a> NoProtoList<'a> {
                 // set previouse pointer's "next" value to this new pointer
                 let addr_bytes = addr.to_le_bytes();
                 for x in 0..addr_bytes.len() {
-                    memory.bytes[(next_addr + 4 + x)] = addr_bytes[x];
+                    memory.bytes[(prev_addr + 4 + x)] = addr_bytes[x];
                 }
 
             }
             
             // provide 
             return Some(NoProtoPointer::new_table_item_ptr(addr, some_column_schema, Rc::clone(&self.memory)));
+            */
         }
+        Err(NoProtoError::new(""))
     }
 
     pub fn delete(&self, index: u16) -> bool {

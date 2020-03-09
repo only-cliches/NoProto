@@ -1,32 +1,30 @@
-use crate::NoProtoMemory;
-use crate::pointer::NoProtoPointer;
-use json::JsonValue;
+use crate::{memory::NoProtoMemory, pointer::NoProtoPointer, error::NoProtoError, schema::NoProtoSchema};
 use std::rc::Rc;
 use std::cell::RefCell;
 
-pub struct NoProtoTuple {
+pub struct NoProtoTuple<'a> {
     address: u32, // pointer location
     head: u32,
     memory: Rc<RefCell<NoProtoMemory>>,
-    model: Rc<RefCell<JsonValue>>,
+    values: &'a Vec<NoProtoSchema>
 }
 
-/*
-impl NoProtoTuple {
 
-    pub fn new(address: u32, memory: Rc<RefCell<NoProtoMemory>>, model: Rc<RefCell<JsonValue>>) -> Self {
+impl<'a> NoProtoTuple<'a> {
+
+    pub fn new(address: u32, head: u32, memory: Rc<RefCell<NoProtoMemory>>, values: &'a Vec<NoProtoSchema>) -> Self {
         NoProtoTuple {
-            head: 0,
-            address: address,
-            memory: memory,
-            model: model
+            address,
+            head,
+            memory,
+            values
         }
     }
-
-    pub fn select(&self, index: u16) -> NoProtoPointer {
+/*
+    pub fn select(&self, index: u16) -> Option<NoProtoPointer> {
 
     }
-
+*/
     pub fn delete(&self, index: u16) -> bool {
         false
     }
@@ -35,4 +33,4 @@ impl NoProtoTuple {
 
     }
 
-}*/
+}

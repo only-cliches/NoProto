@@ -1,519 +1,178 @@
-use crate::pointer::NoProtoPointer;
+//! # High Performance Serialization Library
+//! ### Features
+//! - Nearly instant deserilization & serialization
+//! - Schemas are dynamic/flexible at runtime
+//! - Mutate/Update/Delete values in existing buffers
+//! - Supports native data types
+//! - Supports collection types (list, map, table & tuple)
+//! - Supports deep nesting of any type
+//! 
+//! NoProto allows you to store and mutate structured data with near zero overhead.  It's like JSON but faster, type safe and allows native types.
+//! 
+//! NoProto moves the cost of deserialization to the access methods instead of deserializing the entire object ahead of time. This makes it a perfect use case for things like database storage or file storage of structured data.  Deserilizing is free, exporting just gives you the buffer created by the library.
+//! 
+//! #### Compared to FlatBuffers & Cap'N Proto:
+//! - Schemas are dynamic at runtime, no compilation step
+//! - Supports more types and better nested type support
+//! - Mutate (add/delete/update) existing/imported buffers
+//! 
+//! #### Compared to JSON
+//! - More space efficient
+//! - Has schemas
+//! - Faster serialization & deserialization
+//! - Supports raw bytes & other native types
+//! 
+//! #### Compared to BSON
+//! - Faster serialization & deserialization
+//! - Has schemas
+//! - Typically (but not always) more space efficient
+//! - Supports much larger documents (4GB vs 16MB)
+//! - Better collection support & more supported types
+//! 
+//! # 5 minute example
+
+pub mod pointer;
+pub mod collection;
+pub mod buffer;
+pub mod schema;
+pub mod error;
+mod memory;
+
+use crate::error::NoProtoError;
+use crate::schema::NoProtoSchema;
 use json::*;
-use std::rc::Rc;
-use std::cell::RefCell;
+use buffer::NoProtoBuffer;
 
 const PROTOCOL_VERSION: u8 = 0;
 
-mod pointer;
-mod collection;
 
+/// Factories allow you to serialize and deserialize buffers.
+/// 
+/// Each factory should represent one schema, each factory can be reused for any number of buffers based on the factorie's schema.
+/// 
+/// # Example
+/// ```
+/// 
+/// 
+/// ```
 pub struct NoProtoFactory {
     schema: NoProtoSchema
 }
 
 impl NoProtoFactory {
-    pub fn new(json_schema: JsonValue) -> std::result::Result<NoProtoFactory, &'static str> {
-        let mut new_schema = NoProtoSchema::init();
+    pub fn new(json_schema: &str) -> std::result::Result<NoProtoFactory, NoProtoError> {
 
-        let valid_schema = new_schema.from_json(json_schema)?;
+        match json::parse(json_schema) {
+            Ok(x) => {
+                let mut new_schema = NoProtoSchema::init();
 
-        Ok(NoProtoFactory {
-            schema: valid_schema
-        })
+                let valid_schema = new_schema.from_json(x)?;
+        
+                Ok(NoProtoFactory {
+                    schema: valid_schema
+                })
+            },
+            Err(e) => {
+                Err(NoProtoError::new(format!("Error Parsing JSON Schema: {}", e.to_string()).as_str()))
+            }
+        }
     }
 
-    pub fn create_buffer(&self, capacity: Option<u32>) -> NoProtoBuffer {
-        NoProtoBuffer::new(&self.schema, capacity)
+    pub fn new_buffer<F>(&self, capacity: Option<u32>, mut callback: F) -> std::result::Result<Vec<u8>, NoProtoError>
+        where F: FnMut(NoProtoBuffer) -> std::result::Result<Vec<u8>, NoProtoError>
+    {   
+        callback(NoProtoBuffer::new(&self.schema, capacity))
     }
+
+    pub fn load_buffer<F>(&self, buffer: Vec<u8>, mut callback: F) -> std::result::Result<Vec<u8>, NoProtoError>
+        where F: FnMut(NoProtoBuffer) -> std::result::Result<Vec<u8>, NoProtoError>
+    {   
+        callback(NoProtoBuffer::load(&self.schema, buffer))
+    }
+
+    pub fn empty<T>() -> Option<T> {
+        None
+    }
+
     /*
     pub fn parse_buffer() -> NoProtoBuffer {
 
     }
     */
 }
-#[derive(Debug)]
-pub enum NoProtoSchemaKinds {
-    None,
-    Utf8String,
-    Bytes,
-    Int8,
-    Int16,
-    Int32,
-    Int64,
-    Uint8,
-    Uint16,
-    Uint32,
-    Uint64,
-    Float,
-    Double,
-    Dec64,
-    Boolean,
-    Geo4,
-    Geo8,
-    Geo16,
-    Uuid,
-    Tid,
-    Date,
-    Table { columns: Vec<Option<(u8, String, NoProtoSchema)>> },
-    List { of: NoProtoSchema },
-    Map { key: NoProtoSchema, value: NoProtoSchema },
-    Enum { choices: Vec<String> },
-    Tuple { size: u8, values: Vec<NoProtoSchema>}
-}
 
-/*
-const VALID_KINDS_COLLECTIONS: [&str; 4] = [
-    "table",
-    "map",
-    "list",
-    "tuple",
-];
-*/
-
-const VALID_KINDS_SCALAR: [&str; 21] = [
-    "string",
-    "bytes",
-    "int8",
-    "int16",
-    "int32",
-    "int64",
-    "uint8",
-    "uint16",
-    "uint32",
-    "uint64",
-    "float",
-    "double",
-    "option",
-    "dec64",
-    "boolean",
-    "geo4",
-    "geo8",
-    "geo16",
-    "uuid",
-    "tid",
-    "date"
-];
-
-#[derive(Debug)]
-pub struct NoProtoSchema {
-    kind: Box<NoProtoSchemaKinds>
-}
-
-impl NoProtoSchema {
-
-    pub fn init() -> NoProtoSchema {
-        NoProtoSchema {
-            kind: Box::new(NoProtoSchemaKinds::None)
-        }
-    }
-
-    pub fn from_json(&mut self, json: JsonValue) -> std::result::Result<NoProtoSchema, &'static str> {
-        self.validate_model(&json)
-    }
-
-    pub fn validate_model(&self, json_schema: &JsonValue) -> std::result::Result<NoProtoSchema, &'static str> {
-
-        let kind_string = json_schema["type"].as_str().unwrap_or("");
-
-        if kind_string.len() == 0 {
-            return Err("Must declare type!");
-        }
-
-
-        // validate required properties are in place for each kind
-        match kind_string {
-            "table" => {
-                
-                let mut columns: Vec<Option<(u8, String, NoProtoSchema)>> = vec![];
-
-                for _x in 0..255 {
-                    columns.push(None);
-                }
-
-                {
-                    let borrowed_schema = json_schema;
-
-                    if borrowed_schema["columns"].is_null() || borrowed_schema["columns"].is_array() == false {
-                        return Err("Table kind requires 'columns' property as array!");
-                    }
-
-                    let mut index = 0;
-                    for column in borrowed_schema["columns"].members() {
-
-                        let column_name = &column[0].to_string();
-
-                        if column_name.len() == 0 {
-                            return Err("Table kind requires all columns have a name!");
-                        }
-
-                        let good_schema = self.validate_model(&column[1])?;
-
-                        let this_index = &column[1]["i"];
-
-                        let use_index = if this_index.is_null() || this_index.is_number() == false {
-                            index
-                        } else {
-                            this_index.as_usize().unwrap_or(index)
-                        };
-
-                        if use_index > 255 {
-                            return Err("Table cannot have column index above 255!");
-                        }
-
-                        match &columns[use_index] {
-                            Some(_x) => {
-                                return Err("Table column index numbering conflict!");
-                            },
-                            None => {
-                                columns[use_index] = Some((use_index as u8, column_name.to_string(), good_schema));
-                            }
-                        };
-
-                        index += 1;
-                    }
-                }
- 
-                Ok(NoProtoSchema { 
-                    kind: Box::new(NoProtoSchemaKinds::Table { 
-                        columns: columns 
-                    })
-                })
-            },
-            "list" => {
-
-                {
-                    let borrowed_schema = json_schema;
-                    if borrowed_schema["of"].is_null() || borrowed_schema["of"].is_object() == false {
-                        return Err("List kind requires 'of' property as schema object!");
-                    }
-                }
-
-
-                Ok(NoProtoSchema { 
-                    kind: Box::new(NoProtoSchemaKinds::List { 
-                        of: self.validate_model(&json_schema["of"])? 
-                    })
-                })
-            },
-            "map" => {
-
-                {
-                    let borrowed_schema = json_schema;
-
-                    if borrowed_schema["value"].is_null() || borrowed_schema["value"].is_object() == false {
-                        return Err("Map kind requires 'value' property as schema object!");
-                    }
-                    if borrowed_schema["key"].is_null() || borrowed_schema["key"].is_object() == false {
-                        return Err("Map kind requires 'key' property as schema object!");
-                    }
-    
-                    let key_kind = borrowed_schema["key"]["kind"].to_string();
-                    let mut key_kind_is_scalar = false;
-    
-                    for i in 0..VALID_KINDS_SCALAR.len() {
-                        let kind = VALID_KINDS_SCALAR[i];
-                        if kind == key_kind {
-                            key_kind_is_scalar = true;
-                        }
-                    };
-    
-                    if key_kind_is_scalar == false {
-                        return Err("Map 'key' property must be a scalar type, not a collection type!");
-                    }
-                }
-
-
-                Ok(NoProtoSchema { 
-                    kind: Box::new(NoProtoSchemaKinds::Map { 
-                        key: self.validate_model(&json_schema["key"])?,
-                        value: self.validate_model(&json_schema["value"])?
-                    })
-                })
-            },
-            "tuple" => {
-
-                let mut schemas: Vec<NoProtoSchema> = vec![];
-                let size;
-
-                {
-                    let borrowed_schema = json_schema;
-
-                    if borrowed_schema["size"].is_number() == false  {
-                        return Err("Tuple kind requires 'size' property as number!");
-                    }
-
-                    size = borrowed_schema["size"].as_u8().unwrap_or(0);
-
-                    if borrowed_schema["values"].is_null() || borrowed_schema["values"].is_array() == false  {
-                        return Err("Tuple kind requires 'values' property as array of schema objects!");
-                    }
-
-                    for schema in borrowed_schema["values"].members() {
-                        let good_schema = self.validate_model(schema)?;
-                        schemas.push(good_schema);
-                    }
-                }
-            
-                Ok(NoProtoSchema { 
-                    kind: Box::new(NoProtoSchemaKinds::Tuple { 
-                        size: size,
-                        values: schemas
-                    })
-                })
-            },
-            "option" => { 
-
-                let mut options: Vec<String> = vec![];
-
-                {
-                    let borrowed_schema = json_schema;
-
-                    if borrowed_schema["options"].is_null() || borrowed_schema["options"].is_array() == false  {
-                        return Err("Option kind requires 'options' property as array of choices!");
-                    }
-
-                    for option in borrowed_schema["options"].members() {
-                        options.push(option.to_string());
-                    }
-                }
-
-                if options.len() > 255 {
-                    return Err("Cannot have more than 255 choices for option type!");
-                }
-
-                Ok(NoProtoSchema { 
-                    kind: Box::new(NoProtoSchemaKinds::Enum { 
-                        choices: options
-                    })
-                })
-            },
-            "string" => {
-                Ok(NoProtoSchema { kind: Box::new(NoProtoSchemaKinds::Utf8String) })
-            },
-            "bytes" => {
-                Ok(NoProtoSchema { kind: Box::new(NoProtoSchemaKinds::Bytes) })
-            },
-            "int8" => {
-                Ok(NoProtoSchema { kind: Box::new(NoProtoSchemaKinds::Int8) })
-            },
-            "int16" => {
-                Ok(NoProtoSchema { kind: Box::new(NoProtoSchemaKinds::Int16) })
-            },
-            "int32" => {
-                Ok(NoProtoSchema { kind: Box::new(NoProtoSchemaKinds::Int32) })
-            },
-            "int64" => {
-                Ok(NoProtoSchema { kind: Box::new(NoProtoSchemaKinds::Int64) })
-            },
-            "uint8" => {
-                Ok(NoProtoSchema { kind: Box::new(NoProtoSchemaKinds::Uint8) })
-            },
-            "uint16" => {
-                Ok(NoProtoSchema { kind: Box::new(NoProtoSchemaKinds::Uint16) })
-            },
-            "uint32" => {
-                Ok(NoProtoSchema { kind: Box::new(NoProtoSchemaKinds::Uint32) })
-            },
-            "uint64" => {
-                Ok(NoProtoSchema { kind: Box::new(NoProtoSchemaKinds::Uint64) })
-            },
-            "float" => {
-                Ok(NoProtoSchema { kind: Box::new(NoProtoSchemaKinds::Float) })
-            },
-            "f32" => {
-                Ok(NoProtoSchema { kind: Box::new(NoProtoSchemaKinds::Float) })
-            },
-            "double" => {
-                Ok(NoProtoSchema { kind: Box::new(NoProtoSchemaKinds::Double) })
-            },
-            "f64" => {
-                Ok(NoProtoSchema { kind: Box::new(NoProtoSchemaKinds::Double) })
-            },
-            "dec64" => {
-                Ok(NoProtoSchema { kind: Box::new(NoProtoSchemaKinds::Dec64) })
-            },
-            "boolean" => {
-                Ok(NoProtoSchema { kind: Box::new(NoProtoSchemaKinds::Boolean) })
-            },
-            "bool" => {
-                Ok(NoProtoSchema { kind: Box::new(NoProtoSchemaKinds::Boolean) })
-            },
-            "geo4" => {
-                Ok(NoProtoSchema { kind: Box::new(NoProtoSchemaKinds::Geo4) })
-            },
-            "geo8" => {
-                Ok(NoProtoSchema { kind: Box::new(NoProtoSchemaKinds::Geo8) })
-            },
-            "geo16" => {
-                Ok(NoProtoSchema { kind: Box::new(NoProtoSchemaKinds::Geo16) })
-            },
-            "uuid" => {
-                Ok(NoProtoSchema { kind: Box::new(NoProtoSchemaKinds::Uuid) })
-            },
-            "tid" => {
-                Ok(NoProtoSchema { kind: Box::new(NoProtoSchemaKinds::Tid) })
-            },
-            "date" => {
-                Ok(NoProtoSchema { kind: Box::new(NoProtoSchemaKinds::Date) })
-            },
-            _ => {
-                Err("Not a valid type!")
-            }
-        }
-    }
-}
-
-pub struct NoProtoMemory {
-    pub bytes: Vec<u8>
-}
-
-impl NoProtoMemory {
-    pub fn malloc(&mut self, bytes: Vec<u8>) -> Option<u32> {
-        let location: u32 = self.bytes.len() as u32;
-
-        // not enough space left?
-        if (location + bytes.len() as u32) as u64 >= std::u32::MAX as u64 {
-            return None;
-        }
-
-        &self.bytes.extend(bytes);
-        Some(location)
-    }
-}
-
-pub struct NoProtoBuffer<'a> {
-    pub memory: Rc<RefCell<NoProtoMemory>>,
-    root_model: &'a NoProtoSchema
-}
-
-impl<'a> NoProtoBuffer<'a> {
-
-    pub fn new(model: &'a NoProtoSchema, capcity: Option<u32>) -> Self { // make new buffer
-
-        let capacity = match capcity {
-            Some(x) => x,
-            None => 1024
-        };
-
-        let mut new_bytes: Vec<u8> = Vec::with_capacity(capacity as usize);
-
-        new_bytes.extend(vec![
-            PROTOCOL_VERSION, // Protocol version (for breaking changes if needed later)
-            0, 0, 0, 0        // u32 HEAD for root value (starts at zero)
-        ]); 
-
-        NoProtoBuffer {
-            memory: Rc::new(RefCell::new(NoProtoMemory { bytes: new_bytes })),
-            root_model: model
-        }
-    }
-
-    pub fn load(model: &'a NoProtoSchema, bytes: Vec<u8>) -> Self { // load existing buffer
-        NoProtoBuffer {
-            memory: Rc::new(RefCell::new(NoProtoMemory { bytes: bytes})),
-            root_model: model
-        }
-    }
-
-    pub fn get_root(&self) -> NoProtoPointer {        
-        NoProtoPointer::new_standard_ptr(1, self.root_model, Rc::clone(&self.memory))
-    }
-
-    pub fn compact(&self)  {
-        
-    }
-
-    pub fn calc_wasted_bytes(&self) -> u32 {
-
-        let total_bytes = self.memory.borrow().bytes.len() as u32;
-
-        return 0;
-    }
-
-    pub fn maybe_compact<F>(&self, mut callback: F) -> bool 
-        where F: FnMut(f32, f32) -> bool // wasted bytes, percent of waste
-    {
-        let wasted_bytes = self.calc_wasted_bytes() as f32;
-
-        let total_bytes = self.memory.borrow().bytes.len() as f32;
-
-        let size_without_waste = total_bytes - wasted_bytes;
-
-        if callback(wasted_bytes, (total_bytes / size_without_waste) as f32) {
-            self.compact();
-            true
-        } else {
-            false
-        }
-    }
-
-}
 
 #[cfg(test)]
 mod tests {
-    use crate::{pointer::NoProtoGeo, NoProtoBuffer, pointer::NoProtoUUID, NoProtoFactory};
+    use crate::{pointer::NoProtoGeo, NoProtoBuffer, pointer::NoProtoUUID, pointer::NoProtoPointer, NoProtoFactory, error::NoProtoError};
     use json::*;
     use std::{rc::Rc, cell::RefCell};
+    use std::result::*;
 
     #[test]
-    fn it_works() {
+    fn it_works() -> std::result::Result<(), NoProtoError> {
 
-        let factory = NoProtoFactory::new(object!{
-            "type" => "table",
-            "columns" => array![
-                array!["userID", object!{"type" => "string"}],
-                array!["pass", object!{"type" => "string"}]
+        let factory = NoProtoFactory::new(r#"{
+            "type": "table",
+            "columns": [
+                ["userID", {"type": "string"}],
+                ["pass", {"type": "string"}],
+                ["age", {"type": "uint16"}]
             ]
-        }).unwrap();
+        }"#)?;
 
-        let buffer = factory.create_buffer(None);
+        let mut myvalue = NoProtoFactory::empty::<String>();
 
-        let mut root = buffer.get_root();
+        let return_buffer = factory.new_buffer(None, |mut buffer| {
+            
+            buffer.open(|mut root| {
+            
+                let mut table = root.as_table()?;
         
-        let mut table = root.as_table().unwrap();
+                let mut x = table.select("userID")?;
+                x.set_string("some ID")?;
+        
+                let mut x = table.select("age")?;
+                x.set_generic_integer(x.integer_truncate(2033293823998))?;
+        
+                let mut x = table.select("pass")?;
+                x.set_string("password123")?;
+        
+                let mut x = table.select("pass")?;
+                x.set_string("password.")?;
 
-        match table.select("userID") {
-            Some (mut x) => {
-                // println!("ADDRESS: {:?}", x.address);
-                x.set_string("some ID");
-            },
-            None => {}
-        };
+                myvalue = x.to_string()?;
+        
+                let x = table.select("userID")?;
+                println!("VALUE: {:?}", x.to_string()?);
+        
+                let x = table.select("pass")?;
+                println!("VALUE 2: {:?}", x.to_string()?);
 
-        match table.select("pass") {
-            Some (mut x) => {
-                x.set_string("password123");
-            },
-            None => {}
-        };
+                println!("VALUE 3: {:?}", table.select("age")?.to_generic_integer());
 
-        match table.select("pass") {
-            Some (mut x) => {
-                x.set_string("password.");
-            },
-            None => {}
-        };
+                Ok(())
+            })?;
 
-        match table.select("userID") {
-            Some (x) => {
-                println!("VALUE: {:?}", x.to_string());
-            },
-            None => {}
-        };
+            buffer.close()
+        })?;
 
-        match table.select("pass") {
-            Some (x) => {
-                println!("VALUE 2: {:?}", x.to_string());
-            },
-            None => {}
-        };
+        let return_buffer = factory.load_buffer(return_buffer, |mut buffer| {
 
-        // root.set_uuid(NoProtoUUID::generate());
+            buffer.open(|mut root| {
+                let mut table = root.as_table()?;
+                let x = table.select("userID")?;
+                println!("VALUE 4: {:?}", x.to_string()?);
+                Ok(())
+            })?;
 
-        // println!("VALUE: {:?}", root.to_uuid().unwrap());
-        println!("BYTES: {:?}", buffer.memory.borrow().bytes);
+            buffer.close()
+        })?;
+
+        println!("BYTES: {:?}", return_buffer);
 
         assert_eq!(2 + 2, 4);
+
+        Ok(())
     }
 }
