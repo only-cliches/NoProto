@@ -5,11 +5,11 @@
 //! - Mutate/Update/Delete values in existing buffers
 //! - Supports native data types
 //! - Supports collection types (list, map, table & tuple)
-//! - Supports deep nesting of any type
+//! - Supports deep nesting of collection types
 //! 
 //! NoProto allows you to store and mutate structured data with near zero overhead.  It's like JSON but faster, type safe and allows native types.
 //! 
-//! NoProto moves the cost of deserialization to the access methods instead of deserializing the entire object ahead of time. This makes it a perfect use case for things like database storage or file storage of structured data.  Deserilizing is free, exporting just gives you the buffer created by the library.
+//! NoProto moves the cost of deserialization to the access methods instead of deserializing the entire object ahead of time. This makes it a perfect use case for things like database storage or file storage of structured data.
 //! 
 //! #### Compared to FlatBuffers & Cap'N Proto:
 //! - Schemas are dynamic at runtime, no compilation step
@@ -18,18 +18,96 @@
 //! 
 //! #### Compared to JSON
 //! - More space efficient
-//! - Has schemas
+//! - Has schemas / type safe
 //! - Faster serialization & deserialization
 //! - Supports raw bytes & other native types
 //! 
 //! #### Compared to BSON
 //! - Faster serialization & deserialization
-//! - Has schemas
+//! - Has schemas / type safe
 //! - Typically (but not always) more space efficient
 //! - Supports much larger documents (4GB vs 16MB)
 //! - Better collection support & more supported types
 //! 
-//! # 5 minute example
+//! ## Limitations
+//! - Buffers cannot be larger than 2^32 bytes (~4GB).
+//! - Tables & List collections cannot have more than 2^16 direct child items (~16k).
+//! - Enum/Option types are limited to 256 choices.
+//! - Buffers are not validated or checked before deserializing.
+//! 
+//! # Quick Example
+//! ```
+//! use no_proto::error::NoProtoError;
+//! use no_proto::NoProtoFactory;
+//! 
+//! // JSON is used to describe schema for the factory
+//! // Each factory represents a single schema
+//! // One factory can be used to serialize/deserialize any number of buffers
+//! let user_factory = NoProtoFactory::new(r#"{
+//!     "type": "table",
+//!     "columns": [
+//!         ["userID", {"type": "string"}],
+//!         ["pass", {"type": "string"}],
+//!         ["age", {"type": "uint16"}]
+//!     ]
+//! }"#)?;
+//! 
+//! // user_buffer contains a deserialized Vec<u8> containing our data
+//! let user_buffer: Vec<u8> = user_factory.new_buffer(None, |mut buffer| {
+//!    
+//!     // we can mutate and read the buffer here
+//!     buffer.open(|mut root| {
+//!         
+//!         // the root of our schema is a table type, so we have to convert the root pointer to a table.
+//!         let mut table = root.as_table()?;
+//!         // select a column. Selected columns can be mutated or read from.
+//!         let mut user_id = table.select("userID")?;
+//!         // set value of userID column
+//!         user_id.set_string("some ID")?;
+//!         // select age column and set it's value
+//!         let mut age = table.select("age")?;
+//!         age.set_uint16(75)?;
+//!
+//!         // done mutating the buffer
+//!         Ok(())
+//!    })?;
+//!    
+//!    // close a buffer when we're done with it
+//!    buffer.close()
+//! })?;
+//!  
+//! // read in the new buffer we just created
+//! // user_buffer_2 contains the deserialized Vec<u8> of the buffer
+//! let user_buffer_2: Vec<u8> = user_factory.load_buffer(user_buffer, |mut buffer| {
+//! 
+//!     // we can mutate and read the buffer here
+//!     buffer.open(|mut root| {
+//!         
+//!         // get the table root again
+//!         let mut table = root.as_table()?;
+//!         // read the userID column
+//!         let user_id = table.select("userID")?;
+//!         assert_eq!(user_id.to_string()?, Some("some ID".to_owned()));
+//!         // password value will be None since we haven't set it.
+//!         let password = table.select("pass")?;
+//!         assert_eq!(password.to_string()?, None);
+//!         // read age value    
+//!         let age = table.select("age")?;
+//!         assert_eq!(age.to_uint16()?, Some(75));    
+//! 
+//!         // done with the buffer
+//!         Ok(())
+//!    })?;
+//!    
+//!    // close a buffer when we're done with it
+//!    buffer.close()
+//! })?;
+//! 
+//! // we can now save user_buffer_2 to disk, 
+//! // send it over the network, or whatever else is needed with the data
+//! 
+//! # Ok::<(), NoProtoError>(()) 
+//! ```
 
 pub mod pointer;
 pub mod collection;
@@ -40,7 +118,6 @@ mod memory;
 
 use crate::error::NoProtoError;
 use crate::schema::NoProtoSchema;
-use json::*;
 use buffer::NoProtoBuffer;
 
 const PROTOCOL_VERSION: u8 = 0;
@@ -48,7 +125,7 @@ const PROTOCOL_VERSION: u8 = 0;
 
 /// Factories allow you to serialize and deserialize buffers.
 /// 
-/// Each factory should represent one schema, each factory can be reused for any number of buffers based on the factorie's schema.
+/// Each factory represents a schema, each factory can be reused for any number of buffers based on the factory's schema.
 /// 
 /// # Example
 /// ```
@@ -124,7 +201,7 @@ mod tests {
         let mut myvalue = NoProtoFactory::empty::<String>();
 
         let return_buffer = factory.new_buffer(None, |mut buffer| {
-            
+
             buffer.open(|mut root| {
             
                 let mut table = root.as_table()?;
@@ -138,8 +215,8 @@ mod tests {
                 let mut x = table.select("pass")?;
                 x.set_string("password123")?;
         
-                let mut x = table.select("pass")?;
-                x.set_string("password.")?;
+                // let mut x = table.select("pass")?;
+                // x.set_string("password203930223.")?;
 
                 myvalue = x.to_string()?;
         
@@ -157,17 +234,7 @@ mod tests {
             buffer.close()
         })?;
 
-        let return_buffer = factory.load_buffer(return_buffer, |mut buffer| {
-
-            buffer.open(|mut root| {
-                let mut table = root.as_table()?;
-                let x = table.select("userID")?;
-                println!("VALUE 4: {:?}", x.to_string()?);
-                Ok(())
-            })?;
-
-            buffer.close()
-        })?;
+        // println!("BYTES: {:?}", xx);
 
         println!("BYTES: {:?}", return_buffer);
 

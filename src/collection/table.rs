@@ -11,6 +11,7 @@ pub struct NoProtoTable<'a> {
 
 impl<'a> NoProtoTable<'a> {
 
+    #[doc(hidden)]
     pub fn new(address: u32, head: u32, memory: Rc<RefCell<NoProtoMemory>>, columns: &'a Vec<Option<(u8, String, NoProtoSchema)>>) -> Self {
         NoProtoTable {
             address,

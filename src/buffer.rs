@@ -15,9 +15,7 @@ pub struct NoProtoBuffer<'a> {
 
 impl<'a> NoProtoBuffer<'a> {
 
-    // pub fn maybe_compact<F>(&self, mut callback: F) -> bool 
-    // where F: FnMut(f32, f32) -> bool
-
+    #[doc(hidden)]
     pub fn new(model: &'a NoProtoSchema, capcity: Option<u32>) -> Self { // make new buffer
 
         let capacity = match capcity {
@@ -38,6 +36,7 @@ impl<'a> NoProtoBuffer<'a> {
         }
     }
 
+    #[doc(hidden)]
     pub fn load(model: &'a NoProtoSchema, bytes: Vec<u8>) -> Self { // load existing buffer
         NoProtoBuffer {
             memory: Rc::new(RefCell::new(NoProtoMemory { bytes: bytes})),
@@ -46,7 +45,7 @@ impl<'a> NoProtoBuffer<'a> {
     }
 
     pub fn open<F>(&mut self, mut callback: F) -> std::result::Result<(), NoProtoError>
-    where F: FnMut(NoProtoPointer) -> std::result::Result<(), NoProtoError>
+        where F: FnMut(NoProtoPointer) -> std::result::Result<(), NoProtoError>
     {        
         callback(NoProtoPointer::new_standard_ptr(1, self.root_model, Rc::clone(&self.memory))?)
     }

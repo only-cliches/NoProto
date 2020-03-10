@@ -12,6 +12,7 @@ pub struct NoProtoTuple<'a> {
 
 impl<'a> NoProtoTuple<'a> {
 
+    #[doc(hidden)]
     pub fn new(address: u32, head: u32, memory: Rc<RefCell<NoProtoMemory>>, values: &'a Vec<NoProtoSchema>) -> Self {
         NoProtoTuple {
             address,

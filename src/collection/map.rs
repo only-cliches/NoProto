@@ -6,18 +6,17 @@ pub struct NoProtoMap<'a> {
     address: u32, // pointer location
     head: u32,
     memory: Rc<RefCell<NoProtoMemory>>,
-    key: &'a NoProtoSchema,
     value: &'a NoProtoSchema,
 }
 
 impl<'a> NoProtoMap<'a> {
 
-    pub fn new(address: u32, head: u32, memory: Rc<RefCell<NoProtoMemory>>, key: &'a NoProtoSchema, value: &'a NoProtoSchema) -> Self {
+    #[doc(hidden)]
+    pub fn new(address: u32, head: u32, memory: Rc<RefCell<NoProtoMemory>>, value: &'a NoProtoSchema) -> Self {
         NoProtoMap {
             address,
             head,
             memory,
-            key,
             value
         }
     }

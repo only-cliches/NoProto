@@ -8,7 +8,6 @@ use std::cell::RefCell;
 use rand::Rng;
 use std::fmt;
 use std::time::{SystemTime};
-use json::*;
 
 fn to_hex(num: u64, length: i32) -> String {
     let mut result: String = "".to_owned();
@@ -235,7 +234,7 @@ pub enum NoProtoPointerKinds {
 
 /// The base data type, all information is stored/retrieved against pointers
 /// 
-/// Each pointer represents at least a 32 bit unsigned integer that is either zero for no value or points to an offset in the buffer.  All pointer addresses are zero based against the buffer.
+/// Each pointer represents at least a 32 bit unsigned integer that is either zero for no value or points to an offset in the buffer.  All pointer addresses are zero based against the beginning of the buffer.
 pub struct NoProtoPointer<'a> {
     address: u32, // pointer location
     kind: NoProtoPointerKinds,
@@ -446,24 +445,26 @@ impl<'a> NoProtoPointer<'a> {
                 let mut set_addr = false;
 
                 let mut head: [u8; 4] = [0; 4];
+                let mut tail: [u8; 4] = [0; 4];
 
                 // no list here, make one
                 if addr == 0 {
                     let mut memory = self.memory.try_borrow_mut()?;
 
-                    addr = memory.malloc([0 as u8; 4].to_vec())?; // stores HEAD for list
+                    addr = memory.malloc([0 as u8; 8].to_vec())?; // stores HEAD & TAIL for list
                     set_addr = true;
                 }
 
                 if set_addr { // new head, empty value
                     self.set_value_address(addr)?;
-                } else { // existing head, read value
+                } else { // existing head, read values
                     let b_bytes = &self.memory.try_borrow()?.bytes;
                     let a = addr as usize;
                     head.copy_from_slice(&b_bytes[a..(a+4)]);
+                    tail.copy_from_slice(&b_bytes[(a+4)..(a+8)]);
                 }
 
-                Ok(NoProtoList::new(addr, u32::from_le_bytes(head), Rc::clone(&self.memory), &of))
+                Ok(NoProtoList::new(addr, u32::from_le_bytes(head), u32::from_le_bytes(tail), Rc::clone(&self.memory), &of))
             }
             _ => {
                 Err(type_error(TypeReq::Collection, "list", &model))
@@ -520,17 +521,18 @@ impl<'a> NoProtoPointer<'a> {
         let model = self.schema;
 
         match &*model.kind {
-            NoProtoSchemaKinds::Map { key, value } => {
+            NoProtoSchemaKinds::Map { value } => {
+
                 let mut addr = self.get_value_address();
                 let mut set_addr = false;
 
                 let mut head: [u8; 4] = [0; 4];
 
-                // no list here, make one
+                // no map here, make one
                 if addr == 0 {
                     let mut memory = self.memory.try_borrow_mut()?;
 
-                    addr = memory.malloc([0 as u8; 4].to_vec())?; // stores HEAD for list
+                    addr = memory.malloc([0 as u8; 4].to_vec())?; // stores HEAD for map
                     set_addr = true;
                 }
 
@@ -542,7 +544,7 @@ impl<'a> NoProtoPointer<'a> {
                     head.copy_from_slice(&b_bytes[a..(a+4)]);
                 }
 
-                Ok(NoProtoMap::new(addr, u32::from_le_bytes(head), Rc::clone(&self.memory), key, value))
+                Ok(NoProtoMap::new(addr, u32::from_le_bytes(head), Rc::clone(&self.memory), value))
             }
             _ => {
                 Err(type_error(TypeReq::Collection, "map", &model))
@@ -963,7 +965,6 @@ impl<'a> NoProtoPointer<'a> {
     /// # let mut uint8_ptr = NoProtoPointer::new_example_ptr(&schema);
     /// uint8_ptr.set_generic_integer(120);
     /// 
-    /// assert_eq!(uint8_ptr.to_generic_integer()?, Some(120));
     /// assert_eq!(uint8_ptr.to_uint8()?, Some(120));
     /// # Ok::<(), NoProtoError>(())
     /// ```

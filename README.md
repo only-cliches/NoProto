@@ -15,11 +15,6 @@ https://docs.rs/byteorder/1.3.2/byteorder/
 https://docs.rs/json/0.12.0/json/
 ```
 
-Limitations:
-- Buffer and it's contents cannot be larger than 2^32 bytes (~4GB).
-- Tables & Lists cannot have more than 2^16 items (~16k).
-- Enum/Option types are limited to 256 choices.
-
 
 ```ts
 const model = {
