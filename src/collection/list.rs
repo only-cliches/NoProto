@@ -48,6 +48,7 @@ impl<'a> NoProtoList<'a> {
             
             // update head to point to newly created ListItem pointer
             self.set_head(addr);
+            self.set_tail(addr);
             
             // provide 
             return NoProtoPointer::new_list_item_ptr(self.head, &self.of, Rc::clone(&self.memory));
@@ -57,8 +58,6 @@ impl<'a> NoProtoList<'a> {
             let mut prev_addr = 0;
 
             let mut do_continue = true;
-
-            let mut is_head = true;
 
             while do_continue {
 
@@ -100,7 +99,7 @@ impl<'a> NoProtoList<'a> {
                         memory.malloc(ptr_bytes.to_vec())?
                     };
 
-                    if is_head {
+                    if curr_addr == self.head as usize {
                         // update head to new pointer
                         self.set_head(new_addr);
                     } else {
@@ -131,8 +130,6 @@ impl<'a> NoProtoList<'a> {
                         curr_addr = next_ptr;
                     }
                 }
-
-                is_head = false;
             }
 
             /*
@@ -170,10 +167,6 @@ impl<'a> NoProtoList<'a> {
 
     pub fn delete(&self, index: u16) -> bool {
         false
-    }
-
-    pub fn clear(&self) {
-
     }
 
     pub fn has(&self, column: &str) {

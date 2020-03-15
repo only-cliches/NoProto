@@ -62,7 +62,7 @@
 //! | Type                | Rust Type / Struct                                                       | Bytes (Size)   | Limits / Notes                                                           |
 //! |---------------------|--------------------------------------------------------------------------|----------------|--------------------------------------------------------------------------|
 //! | [`table`](#table)   | [`NoProtoTable`](../collection/table/index.html)                         | 4 bytes - ~4GB | Linked list with indexed keys that map against up to 255 named columns.  |
-//! | [`list`](#list)     | [`NoProtoList`](../collection/list/index.html)                           | 4 bytes - ~4GB | Linked list with up to 65,535 items.                                     |
+//! | [`list`](#list)     | [`NoProtoList`](../collection/list/index.html)                           | 8 bytes - ~4GB | Linked list with up to 65,535 items.                                     |
 //! | [`map`](#map)       | [`NoProtoMap`](../collection/map/index.html)                             | 4 bytes - ~4GB | Linked list with Vec<u8> keys.                                           |
 //! | [`tuple`](#tuple)   | [`NoProtoTuple`](../collection/tuple/index.html)                         | 4 bytes - ~4GB | Static sized collection of values.                                       |
 //! | [`string`](#string) | [`String`](https://doc.rust-lang.org/std/string/struct.String.html)      | 4 bytes - ~4GB | Utf-8 formatted string.                                                  |
@@ -80,9 +80,9 @@
 //! | [`option`](#option) | [`String`](https://doc.rust-lang.org/std/string/struct.String.html)      | 1 byte         | Up to 255 strings in schema.                                             |
 //! | [`bool`](#bool)     | [`bool`](https://doc.rust-lang.org/std/primitive.bool.html)              | 1 byte         |                                                                          |
 //! | [`dec64`](#dec64)   | [`NoProtoDec`](..pointer/struct.NoProtoDec.html)                         | 9 bytes        | Big Integer Decimal format.                                              |
-//! | [`geo4`](#geo4)     | [`NoProtoGeo`](../pointer/struct.NoProtoGeo.html)                        | 4 bytes        | 1.5km resolution (city)                                                  |
-//! | [`geo8`](#geo8)     | [`NoProtoGeo`](../pointer/struct.NoProtoGeo.html)                        | 8 bytes        | 16mm resolution (marble)                                                 |
-//! | [`geo16`](#geo16)   | [`NoProtoGeo`](../pointer/struct.NoProtoGeo.html)                        | 16 bytes       | 3.5nm resolution (flea)                                                  |
+//! | [`geo4`](#geo4)     | [`NoProtoGeo`](../pointer/struct.NoProtoGeo.html)                        | 4 bytes        | 1.5km resolution (city) geographic coordinate                            |
+//! | [`geo8`](#geo8)     | [`NoProtoGeo`](../pointer/struct.NoProtoGeo.html)                        | 8 bytes        | 16mm resolution (marble) geographic coordinate                           |
+//! | [`geo16`](#geo16)   | [`NoProtoGeo`](../pointer/struct.NoProtoGeo.html)                        | 16 bytes       | 3.5nm resolution (flea) geographic coordinate                            |
 //! | [`tid`](#tid)       | [`NoProtoTimeID`](../pointer/struct.NoProtoTimeID.html)                  | 16 bytes       | 8 byte u64 for time with 8 bytes of random numbers.                      |
 //! | [`uuid`](#uuid)     | [`NoProtoUUID`](../pointer/struct.NoProtoUUID.html)                      | 16 bytes       | v4 UUID, 2e37 possible UUID v4s                                          |
 //! | [`date`](#date)     | [`u64`](https://doc.rust-lang.org/std/primitive.u64.html)                | 8 bytes        | Good to store unix epoch (in seconds) until the year 584,942,417,355     |
@@ -138,9 +138,24 @@
 //! # date
 //! 
 //!  
+use crate::pointer::bytes::NoProtoBytes;
+use crate::collection::{list::NoProtoList, table::NoProtoTable, map::NoProtoMap};
+use crate::pointer::NoProtoValue;
 use json::*;
 use crate::error::NoProtoError;
 
+
+pub enum NoProtoSchemaKinds<T> {
+    None,
+    Scalar,
+    Table { columns: Vec<Option<(u8, String, NoProtoSchema<T>)>> },
+    List { of: NoProtoSchema<T> },
+    Map { value: NoProtoSchema<T> },
+    Enum { choices: Vec<String> },
+    Tuple { values: Vec<NoProtoSchema<T>>}
+}
+
+/*
 #[derive(Debug)]
 pub enum NoProtoSchemaKinds {
     None,
@@ -170,7 +185,7 @@ pub enum NoProtoSchemaKinds {
     Enum { choices: Vec<String> },
     Tuple { values: Vec<NoProtoSchema>}
 }
-
+*/
 
 /*
 const VALID_KINDS_COLLECTIONS: [&str; 4] = [
@@ -206,25 +221,42 @@ const VALID_KINDS_SCALAR: [&str; 21] = [
 ];
 */
 
-#[derive(Debug)]
-pub struct NoProtoSchema {
-    pub kind: Box<NoProtoSchemaKinds>
+
+pub struct NoProtoSchema<T: NoProtoValue + Default> {
+    pub kind: Box<NoProtoSchemaKinds<T>>,
+    pub value: T
 }
 
-impl NoProtoSchema {
+impl<T: NoProtoValue + Default> NoProtoSchema<T> {
 
-    pub fn init() -> NoProtoSchema {
+    pub fn init() -> NoProtoSchema<i8> {
+
         NoProtoSchema {
-            kind: Box::new(NoProtoSchemaKinds::None)
+            kind: Box::new(NoProtoSchemaKinds::None),
+            value: 0i8
         }
+    }
+
+    pub fn get_standard_types() -> Vec<T>  {
+        
+
+        vec![
+            NoProtoValue::new::<String>(),
+            NoProtoValue::new::<NoProtoBytes>(),
+            NoProtoValue::new::<i8>(),
+            NoProtoValue::new::<i16>(),
+            NoProtoValue::new::<i32>(),
+            NoProtoValue::new::<i64>(),
+            NoProtoValue::new::<i64>()
+        ]
     }
 
     pub fn get_type_str(&self) -> &str {
         match &*self.kind {
             NoProtoSchemaKinds::None => "None",
-            NoProtoSchemaKinds::Utf8String => "string",
-            NoProtoSchemaKinds::Bytes => "bytes",
-            NoProtoSchemaKinds::Int8 => "int8",
+            // NoProtoSchemaKinds::Utf8String => "string",
+            // NoProtoSchemaKinds::Bytes => "bytes",
+            /*NoProtoSchemaKinds::Int8 => "int8",
             NoProtoSchemaKinds::Int16 => "int16",
             NoProtoSchemaKinds::Int32 => "int32",
             NoProtoSchemaKinds::Int64 => "int64",
@@ -241,7 +273,7 @@ impl NoProtoSchema {
             NoProtoSchemaKinds::Geo16 => "geo16",
             NoProtoSchemaKinds::Uuid => "uuid",
             NoProtoSchemaKinds::Tid => "tid",
-            NoProtoSchemaKinds::Date => "date",
+            NoProtoSchemaKinds::Date => "date",*/
             NoProtoSchemaKinds::Table { columns: _ } => "table",
             NoProtoSchemaKinds::List { of: _ } => "list",
             NoProtoSchemaKinds::Map { value: _ } => "map",
@@ -251,11 +283,11 @@ impl NoProtoSchema {
         }
     }
 
-    pub fn from_json(&mut self, json: JsonValue) -> std::result::Result<NoProtoSchema, NoProtoError> {
-        self.validate_model(&json)
+    pub fn from_json(json: JsonValue) -> std::result::Result<Self, NoProtoError> {
+        NoProtoSchema::validate_model(&json, NoProtoSchema::get_standard_types())
     }
 
-    pub fn validate_model(&self, json_schema: &JsonValue) -> std::result::Result<NoProtoSchema, NoProtoError> {
+    pub fn validate_model(json_schema: &JsonValue, types: Vec<T>) -> std::result::Result<Self, NoProtoError> {
 
         let type_string = json_schema["type"].as_str().unwrap_or("");
 
@@ -268,7 +300,7 @@ impl NoProtoSchema {
         match type_string {
             "table" => {
                 
-                let mut columns: Vec<Option<(u8, String, NoProtoSchema)>> = vec![];
+                let mut columns: Vec<Option<(u8, String, NoProtoSchema<T>)>> = vec![];
 
                 for _x in 0..255 {
                     columns.push(None);
@@ -290,7 +322,7 @@ impl NoProtoSchema {
                             return Err(NoProtoError::new("Table kind requires all columns have a name!"));
                         }
 
-                        let good_schema = self.validate_model(&column[1])?;
+                        let good_schema = NoProtoSchema::validate_model(&column[1], types)?;
 
                         let this_index = &column[1]["i"];
 
@@ -320,7 +352,8 @@ impl NoProtoSchema {
                 Ok(NoProtoSchema { 
                     kind: Box::new(NoProtoSchemaKinds::Table { 
                         columns: columns 
-                    })
+                    }),
+                    value: NoProtoValue::new::<NoProtoTable>()
                 })
             },
             "list" => {
@@ -335,8 +368,9 @@ impl NoProtoSchema {
 
                 Ok(NoProtoSchema { 
                     kind: Box::new(NoProtoSchemaKinds::List { 
-                        of: self.validate_model(&json_schema["of"])? 
-                    })
+                        of: NoProtoSchema::validate_model(&json_schema["of"], types)? 
+                    }),
+                    value: NoProtoValue::new::<NoProtoList>()
                 })
             },
             "map" => {
@@ -351,13 +385,14 @@ impl NoProtoSchema {
 
                 Ok(NoProtoSchema { 
                     kind: Box::new(NoProtoSchemaKinds::Map { 
-                        value: self.validate_model(&json_schema["value"])?
-                    })
+                        value: NoProtoSchema::validate_model(&json_schema["value"], types)?
+                    }),
+                    value: NoProtoValue::new::<NoProtoMap>()
                 })
             },
             "tuple" => {
 
-                let mut schemas: Vec<NoProtoSchema> = vec![];
+                let mut schemas: Vec<NoProtoSchema<T>> = vec![];
 
                 {
                     let borrowed_schema = json_schema;
@@ -367,7 +402,7 @@ impl NoProtoSchema {
                     }
 
                     for schema in borrowed_schema["values"].members() {
-                        let good_schema = self.validate_model(schema)?;
+                        let good_schema = NoProtoSchema::validate_model(schema, types)?;
                         schemas.push(good_schema);
                     }
                 }
@@ -375,7 +410,8 @@ impl NoProtoSchema {
                 Ok(NoProtoSchema { 
                     kind: Box::new(NoProtoSchemaKinds::Tuple { 
                         values: schemas
-                    })
+                    }),
+                    value: NoProtoValue::new::<NoProtoTuple>()
                 })
             },
             "option" => { 
@@ -401,79 +437,21 @@ impl NoProtoSchema {
                 Ok(NoProtoSchema { 
                     kind: Box::new(NoProtoSchemaKinds::Enum { 
                         choices: options
-                    })
+                    }),
+                    value: NoProtoValue::new::<NoProtoOption>()
                 })
             },
-            "string" => {
-                Ok(NoProtoSchema { kind: Box::new(NoProtoSchemaKinds::Utf8String) })
-            },
-            "bytes" => {
-                Ok(NoProtoSchema { kind: Box::new(NoProtoSchemaKinds::Bytes) })
-            },
-            "int8" => {
-                Ok(NoProtoSchema { kind: Box::new(NoProtoSchemaKinds::Int8) })
-            },
-            "int16" => {
-                Ok(NoProtoSchema { kind: Box::new(NoProtoSchemaKinds::Int16) })
-            },
-            "int32" => {
-                Ok(NoProtoSchema { kind: Box::new(NoProtoSchemaKinds::Int32) })
-            },
-            "int64" => {
-                Ok(NoProtoSchema { kind: Box::new(NoProtoSchemaKinds::Int64) })
-            },
-            "uint8" => {
-                Ok(NoProtoSchema { kind: Box::new(NoProtoSchemaKinds::Uint8) })
-            },
-            "uint16" => {
-                Ok(NoProtoSchema { kind: Box::new(NoProtoSchemaKinds::Uint16) })
-            },
-            "uint32" => {
-                Ok(NoProtoSchema { kind: Box::new(NoProtoSchemaKinds::Uint32) })
-            },
-            "uint64" => {
-                Ok(NoProtoSchema { kind: Box::new(NoProtoSchemaKinds::Uint64) })
-            },
-            "float" => {
-                Ok(NoProtoSchema { kind: Box::new(NoProtoSchemaKinds::Float) })
-            },
-            "f32" => {
-                Ok(NoProtoSchema { kind: Box::new(NoProtoSchemaKinds::Float) })
-            },
-            "double" => {
-                Ok(NoProtoSchema { kind: Box::new(NoProtoSchemaKinds::Double) })
-            },
-            "f64" => {
-                Ok(NoProtoSchema { kind: Box::new(NoProtoSchemaKinds::Double) })
-            },
-            "dec64" => {
-                Ok(NoProtoSchema { kind: Box::new(NoProtoSchemaKinds::Dec64) })
-            },
-            "boolean" => {
-                Ok(NoProtoSchema { kind: Box::new(NoProtoSchemaKinds::Boolean) })
-            },
-            "bool" => {
-                Ok(NoProtoSchema { kind: Box::new(NoProtoSchemaKinds::Boolean) })
-            },
-            "geo4" => {
-                Ok(NoProtoSchema { kind: Box::new(NoProtoSchemaKinds::Geo4) })
-            },
-            "geo8" => {
-                Ok(NoProtoSchema { kind: Box::new(NoProtoSchemaKinds::Geo8) })
-            },
-            "geo16" => {
-                Ok(NoProtoSchema { kind: Box::new(NoProtoSchemaKinds::Geo16) })
-            },
-            "uuid" => {
-                Ok(NoProtoSchema { kind: Box::new(NoProtoSchemaKinds::Uuid) })
-            },
-            "tid" => {
-                Ok(NoProtoSchema { kind: Box::new(NoProtoSchemaKinds::Tid) })
-            },
-            "date" => {
-                Ok(NoProtoSchema { kind: Box::new(NoProtoSchemaKinds::Date) })
-            },
             _ => {
+
+                for x in types {
+                    if type_string == x.type_str() {
+                        return Ok(NoProtoSchema { 
+                            kind: Box::new(NoProtoSchemaKinds::Scalar),
+                            value: x
+                        })
+                    }
+                }
+
                 Err(NoProtoError::new("Not a valid type!"))
             }
         }

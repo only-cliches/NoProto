@@ -1,5 +1,6 @@
 
 
+use crate::pointer::NoProtoValue;
 use crate::error::NoProtoError;
 use crate::pointer::NoProtoPointer;
 use crate::memory::NoProtoMemory;
@@ -8,15 +9,15 @@ use crate::PROTOCOL_VERSION;
 use std::{rc::Rc, cell::RefCell};
 
 
-pub struct NoProtoBuffer<'a> {
+pub struct NoProtoBuffer<'a, T: NoProtoValue + Default> {
     pub memory: Rc<RefCell<NoProtoMemory>>,
-    root_model: &'a NoProtoSchema
+    root_model: &'a NoProtoSchema<T>
 }
 
-impl<'a> NoProtoBuffer<'a> {
+impl<'a, T: NoProtoValue + Default> NoProtoBuffer<'a, T> {
 
     #[doc(hidden)]
-    pub fn new(model: &'a NoProtoSchema, capcity: Option<u32>) -> Self { // make new buffer
+    pub fn new(model: &'a NoProtoSchema<T>, capcity: Option<u32>) -> Self { // make new buffer
 
         let capacity = match capcity {
             Some(x) => x,
@@ -37,7 +38,7 @@ impl<'a> NoProtoBuffer<'a> {
     }
 
     #[doc(hidden)]
-    pub fn load(model: &'a NoProtoSchema, bytes: Vec<u8>) -> Self { // load existing buffer
+    pub fn load(model: &'a NoProtoSchema<T>, bytes: Vec<u8>) -> Self { // load existing buffer
         NoProtoBuffer {
             memory: Rc::new(RefCell::new(NoProtoMemory { bytes: bytes})),
             root_model: model
@@ -45,9 +46,18 @@ impl<'a> NoProtoBuffer<'a> {
     }
 
     pub fn open<F>(&mut self, mut callback: F) -> std::result::Result<(), NoProtoError>
-        where F: FnMut(NoProtoPointer) -> std::result::Result<(), NoProtoError>
+        where F: FnMut(NoProtoPointer<T>) -> std::result::Result<(), NoProtoError>
     {        
-        callback(NoProtoPointer::new_standard_ptr(1, self.root_model, Rc::clone(&self.memory))?)
+        let buffer = NoProtoPointer::new(1, self.root_model, Rc::clone(&self.memory));
+        callback(buffer)
+    }
+
+    pub fn deep_set<X: NoProtoValue + Default, S: AsRef<str>>(&self, path: S, value: X) -> std::result::Result<(), NoProtoError> {
+        Ok(())
+    }
+
+    pub fn deep_get<X: NoProtoValue + Default>(&self, path: &str) -> std::result::Result<Option<X>, NoProtoError> {
+        Ok(Some(X::default()))
     }
 
     pub fn compact(&self)  {

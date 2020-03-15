@@ -1,5 +1,5 @@
 [package]
-name = "no_proto"
+name = "no-proto"
 version = "0.1.0"
 authors = ["Scott Lott <scott@clicksimply.com>"]
 edition = "2018"

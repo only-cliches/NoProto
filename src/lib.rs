@@ -1,3 +1,5 @@
+// #![deny(warnings, missing_docs, missing_debug_implementations, trivial_casts, trivial_numeric_casts, unused_results)]
+
 //! # High Performance Serialization Library
 //! ### Features
 //! - Nearly instant deserilization & serialization
@@ -7,31 +9,35 @@
 //! - Supports collection types (list, map, table & tuple)
 //! - Supports deep nesting of collection types
 //! 
-//! NoProto allows you to store and mutate structured data with near zero overhead.  It's like JSON but faster, type safe and allows native types.
+//! NoProto allows you to store and mutate structured data with near zero overhead.  It's like JSON but faster, type safe and allows native types.  It's like Cap'N Proto/Flatbuffers except buffers and schemas are dynamic at runtime instead of requiring compilation.  
 //! 
 //! NoProto moves the cost of deserialization to the access methods instead of deserializing the entire object ahead of time. This makes it a perfect use case for things like database storage or file storage of structured data.
 //! 
-//! #### Compared to FlatBuffers & Cap'N Proto:
+//! *Compared to FlatBuffers /Cap'N Proto*
 //! - Schemas are dynamic at runtime, no compilation step
 //! - Supports more types and better nested type support
 //! - Mutate (add/delete/update) existing/imported buffers
 //! 
-//! #### Compared to JSON
-//! - More space efficient
+//! *Compared to JSON*
+//! - Typically more space efficient
 //! - Has schemas / type safe
 //! - Faster serialization & deserialization
 //! - Supports raw bytes & other native types
 //! 
-//! #### Compared to BSON
+//! *Compared to BSON*
 //! - Faster serialization & deserialization
 //! - Has schemas / type safe
-//! - Typically (but not always) more space efficient
+//! - Typically more space efficient
 //! - Supports much larger documents (4GB vs 16MB)
 //! - Better collection support & more supported types
 //! 
-//! ## Limitations
+//! *Compared to Serde*
+//! - Objects & schemas are dynamic at runtime
+//! - Faster serialization & deserialization
+//! 
+//! #### Limitations
 //! - Buffers cannot be larger than 2^32 bytes (~4GB).
-//! - Tables & List collections cannot have more than 2^16 direct child items (~16k).
+//! - Tables & List collections cannot have more than 2^16 direct descendant child items (~16k).
 //! - Enum/Option types are limited to 256 choices.
 //! - Buffers are not validated or checked before deserializing.
 //! 
@@ -46,29 +52,30 @@
 //! let user_factory = NoProtoFactory::new(r#"{
 //!     "type": "table",
 //!     "columns": [
-//!         ["userID", {"type": "string"}],
-//!         ["pass", {"type": "string"}],
-//!         ["age", {"type": "uint16"}]
+//!         ["name",   {"type": "string"}],
+//!         ["pass",   {"type": "string"}],
+//!         ["age",    {"type": "uint16"}]
 //!     ]
 //! }"#)?;
 //! 
 //! // user_buffer contains a deserialized Vec<u8> containing our data
 //! let user_buffer: Vec<u8> = user_factory.new_buffer(None, |mut buffer| {
 //!    
-//!     // we can mutate and read the buffer here
+//!     // open the buffer to read or update values
 //!     buffer.open(|mut root| {
 //!         
-//!         // the root of our schema is a table type, so we have to convert the root pointer to a table.
+//!         // the root of our schema is a table type, 
+//!         // so we have to convert the root pointer to a table.
 //!         let mut table = root.as_table()?;
-//!         // select a column. Selected columns can be mutated or read from.
-//!         let mut user_id = table.select("userID")?;
-//!         // set value of userID column
-//!         user_id.set_string("some ID")?;
+//!         // Select a column. Selected columns can be mutated or read from.
+//!         let mut user_name = table.select("name")?;
+//!         // set value of name column
+//!         user_name.set_string("some name")?;
 //!         // select age column and set it's value
 //!         let mut age = table.select("age")?;
 //!         age.set_uint16(75)?;
 //!
-//!         // done mutating the buffer
+//!         // done mutating/reading the buffer
 //!         Ok(())
 //!    })?;
 //!    
@@ -85,9 +92,9 @@
 //!         
 //!         // get the table root again
 //!         let mut table = root.as_table()?;
-//!         // read the userID column
-//!         let user_id = table.select("userID")?;
-//!         assert_eq!(user_id.to_string()?, Some("some ID".to_owned()));
+//!         // read the name column
+//!         let user_name = table.select("name")?;
+//!         assert_eq!(user_name.to_string()?, Some("some name".to_owned()));
 //!         // password value will be None since we haven't set it.
 //!         let password = table.select("pass")?;
 //!         assert_eq!(password.to_string()?, None);
@@ -119,6 +126,7 @@ mod memory;
 use crate::error::NoProtoError;
 use crate::schema::NoProtoSchema;
 use buffer::NoProtoBuffer;
+use pointer::NoProtoValue;
 
 const PROTOCOL_VERSION: u8 = 0;
 
@@ -132,21 +140,17 @@ const PROTOCOL_VERSION: u8 = 0;
 /// 
 /// 
 /// ```
-pub struct NoProtoFactory {
-    schema: NoProtoSchema
+pub struct NoProtoFactory<T> {
+    schema: NoProtoSchema<T>
 }
 
-impl NoProtoFactory {
-    pub fn new(json_schema: &str) -> std::result::Result<NoProtoFactory, NoProtoError> {
+impl<T: NoProtoValue + Default> NoProtoFactory<T> {
+    pub fn new(json_schema: &str) -> std::result::Result<NoProtoFactory<T>, NoProtoError> {
 
         match json::parse(json_schema) {
             Ok(x) => {
-                let mut new_schema = NoProtoSchema::init();
-
-                let valid_schema = new_schema.from_json(x)?;
-        
                 Ok(NoProtoFactory {
-                    schema: valid_schema
+                    schema: NoProtoSchema::from_json(x)?
                 })
             },
             Err(e) => {
@@ -156,18 +160,18 @@ impl NoProtoFactory {
     }
 
     pub fn new_buffer<F>(&self, capacity: Option<u32>, mut callback: F) -> std::result::Result<Vec<u8>, NoProtoError>
-        where F: FnMut(NoProtoBuffer) -> std::result::Result<Vec<u8>, NoProtoError>
+        where F: FnMut(NoProtoBuffer<T>) -> std::result::Result<Vec<u8>, NoProtoError>
     {   
         callback(NoProtoBuffer::new(&self.schema, capacity))
     }
 
     pub fn load_buffer<F>(&self, buffer: Vec<u8>, mut callback: F) -> std::result::Result<Vec<u8>, NoProtoError>
-        where F: FnMut(NoProtoBuffer) -> std::result::Result<Vec<u8>, NoProtoError>
+        where F: FnMut(NoProtoBuffer<T>) -> std::result::Result<Vec<u8>, NoProtoError>
     {   
         callback(NoProtoBuffer::load(&self.schema, buffer))
     }
 
-    pub fn empty<T>() -> Option<T> {
+    pub fn empty<X>() -> Option<X> {
         None
     }
 
@@ -181,52 +185,53 @@ impl NoProtoFactory {
 
 #[cfg(test)]
 mod tests {
-    use crate::{pointer::NoProtoGeo, NoProtoBuffer, pointer::NoProtoUUID, pointer::NoProtoPointer, NoProtoFactory, error::NoProtoError};
-    use json::*;
-    use std::{rc::Rc, cell::RefCell};
-    use std::result::*;
+    use crate::pointer::any::NoProtoAny;
+    use crate::collection::table::NoProtoTable;
+    use super::*;
 
     #[test]
     fn it_works() -> std::result::Result<(), NoProtoError> {
 
-        let factory = NoProtoFactory::new(r#"{
+        let factory: NoProtoFactory<NoProtoAny> = NoProtoFactory::new(r#"{
             "type": "table",
             "columns": [
                 ["userID", {"type": "string"}],
-                ["pass", {"type": "string"}],
-                ["age", {"type": "uint16"}]
+                ["pass",   {"type": "string"}],
+                ["age",    {"type": "uint16"}]
             ]
         }"#)?;
 
-        let mut myvalue = NoProtoFactory::empty::<String>();
+        let mut myvalue = None;
 
         let return_buffer = factory.new_buffer(None, |mut buffer| {
 
+
+            buffer.deep_set("userID", "something");
+
+            let userID = buffer.deep_get::<&str>("userID")?;
+
             buffer.open(|mut root| {
             
-                let mut table = root.as_table()?;
-        
-                let mut x = table.select("userID")?;
-                x.set_string("some ID")?;
-        
-                let mut x = table.select("age")?;
-                x.set_generic_integer(x.integer_truncate(2033293823998))?;
-        
-                let mut x = table.select("pass")?;
-                x.set_string("password123")?;
-        
-                // let mut x = table.select("pass")?;
-                // x.set_string("password203930223.")?;
+                let table = NoProtoAny::cast::<NoProtoTable>(root)?.into()?.unwrap();
 
-                myvalue = x.to_string()?;
+                let mut x = table.select::<&str>("userID")?;
+                x.set("some id")?;
         
-                let x = table.select("userID")?;
-                println!("VALUE: {:?}", x.to_string()?);
+                let mut x = table.select::<i16>("age")?;
+                x.set(2032039398)?;
         
-                let x = table.select("pass")?;
-                println!("VALUE 2: {:?}", x.to_string()?);
+                let mut x = table.select::<String>("pass")?;
+                x.set("password123".to_owned())?;
 
-                println!("VALUE 3: {:?}", table.select("age")?.to_generic_integer());
+                myvalue = x.get()?;
+        
+                let x = table.select::<String>("userID")?;
+                println!("VALUE: {:?}", x.get()?);
+        
+                let x = table.select::<String>("pass")?;
+                println!("VALUE 2: {:?}", x.get()?);
+
+                println!("VALUE 3: {:?}", table.select::<i16>("age")?.get()?);
 
                 Ok(())
             })?;

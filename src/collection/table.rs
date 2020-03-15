@@ -1,4 +1,4 @@
-use crate::{memory::NoProtoMemory, pointer::NoProtoPointer, error::NoProtoError, schema::NoProtoSchema};
+use crate::{memory::NoProtoMemory, pointer::{NoProtoValue, NoProtoPointer}, error::NoProtoError, schema::NoProtoSchema};
 use std::rc::Rc;
 use std::cell::RefCell;
 
@@ -7,6 +7,14 @@ pub struct NoProtoTable<'a> {
     head: u32,
     memory: Rc<RefCell<NoProtoMemory>>,
     columns: &'a Vec<Option<(u8, String, NoProtoSchema)>>
+}
+
+impl NoProtoValue for NoProtoTable<'a> {
+
+}
+
+impl Default for NoProtoTable<'a> {
+
 }
 
 impl<'a> NoProtoTable<'a> {
@@ -21,7 +29,7 @@ impl<'a> NoProtoTable<'a> {
         }
     }
 
-    pub fn select(&mut self, column: &str) -> std::result::Result<NoProtoPointer, NoProtoError> {
+    pub fn select<X>(&mut self, column: &str) -> std::result::Result<NoProtoPointer<X>, NoProtoError> {
 
         let mut column_schema: Option<&NoProtoSchema> = None;
 
