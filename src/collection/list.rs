@@ -1,4 +1,4 @@
-use crate::{memory::NoProtoMemory, pointer::NoProtoPointer, error::NoProtoError, schema::NoProtoSchema};
+use crate::{memory::NoProtoMemory, pointer::{NoProtoValue, NoProtoPointer, NoProtoPointerKinds}, error::NoProtoError, schema::NoProtoSchema};
 use std::rc::Rc;
 use std::cell::RefCell;
 
@@ -8,7 +8,7 @@ pub struct NoProtoList<'a> {
     head: u32,
     tail: u32,
     memory: Rc<RefCell<NoProtoMemory>>,
-    of: &'a NoProtoSchema
+    of: Option<&'a NoProtoSchema>
 }
 
 impl<'a> NoProtoList<'a> {
@@ -20,11 +20,11 @@ impl<'a> NoProtoList<'a> {
             head,
             tail,
             memory,
-            of
+            of: Some(of)
         }
     }
 
-    pub fn select(&mut self, index: u16) -> std::result::Result<NoProtoPointer, NoProtoError> {
+    pub fn select<X: NoProtoValue<'a> + Default>(&'a mut self, index: u16) -> std::result::Result<NoProtoPointer<X>, NoProtoError> {
 
         if self.head == 0 { // no values, create one
 
@@ -51,7 +51,7 @@ impl<'a> NoProtoList<'a> {
             self.set_tail(addr);
             
             // provide 
-            return NoProtoPointer::new_list_item_ptr(self.head, &self.of, Rc::clone(&self.memory));
+            return NoProtoPointer::new_list_item_ptr(self.head, &self.of.unwrap(), Rc::clone(&self.memory));
         } else { // values exist, loop through them to see if we have an existing pointer for this column
 
             let mut curr_addr = self.head as usize;
@@ -72,7 +72,7 @@ impl<'a> NoProtoList<'a> {
 
                 // found our value!
                 if ptr_index == index {
-                    return NoProtoPointer::new_list_item_ptr(curr_addr as u32, &self.of, Rc::clone(&self.memory));
+                    return NoProtoPointer::new_list_item_ptr(curr_addr as u32, &self.of.unwrap(), Rc::clone(&self.memory));
                 }
 
                 // we've found an existing value above the requested index
@@ -110,7 +110,7 @@ impl<'a> NoProtoList<'a> {
                             memory.bytes[prev_addr + 4 + x] = new_addr_bytes[x];
                         }
                     }
-                    return NoProtoPointer::new_list_item_ptr(new_addr as u32, &self.of, Rc::clone(&self.memory));
+                    return NoProtoPointer::new_list_item_ptr(new_addr as u32, &self.of.unwrap(), Rc::clone(&self.memory));
                 } else {
                     // not found yet, get next address
                     let mut next: [u8; 4] = [0; 4];
@@ -197,5 +197,32 @@ impl<'a> NoProtoList<'a> {
         for x in 0..addr_bytes.len() {
             memory.bytes[(self.address + x as u32 + 4) as usize] = addr_bytes[x as usize];
         }
+    }
+}
+
+impl<'a> NoProtoValue<'a> for NoProtoList<'a> {
+    fn new<T: NoProtoValue<'a> + Default>() -> Self {
+        unreachable!()
+    }
+    fn is_type( type_str: &str) -> bool { 
+        unreachable!()
+    }
+    fn type_idx() -> (i64, String) { (-1, "map".to_owned()) }
+    fn self_type_idx(&self) -> (i64, String) { (-1, "map".to_owned()) }
+    /*fn buffer_get(&self, address: u32, kind: &NoProtoPointerKinds, schema: &NoProtoSchema, buffer: Rc<RefCell<NoProtoMemory>>) -> std::result::Result<Option<Box<Self>>, NoProtoError> {
+        Err(NoProtoError::new("This type doesn't support .get()!"))
+    }
+    fn buffer_set(&mut self, address: u32, kind: &NoProtoPointerKinds, schema: &NoProtoSchema, buffer: Rc<RefCell<NoProtoMemory>>, value: Box<&Self>) -> std::result::Result<NoProtoPointerKinds, NoProtoError> {
+        Err(NoProtoError::new("This type doesn't support .set()!"))
+    }
+    fn buffer_into(&self, address: u32, kind: &NoProtoPointerKinds, schema: &NoProtoSchema, buffer: Rc<RefCell<NoProtoMemory>>) -> std::result::Result<Option<Box<Self>>, NoProtoError> {
+        self.buffer_get(address, kind, schema, buffer)
+    }*/
+}
+
+impl<'a> Default for NoProtoList<'a> {
+
+    fn default() -> Self {
+        NoProtoList { address: 0, head: 0, tail: 0, memory: Rc::new(RefCell::new(NoProtoMemory { bytes: vec![]})), of: None}
     }
 }

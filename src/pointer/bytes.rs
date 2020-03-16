@@ -1,27 +1,34 @@
+use crate::schema::NoProtoSchema;
 use crate::error::NoProtoError;
 use crate::memory::NoProtoMemory;
 use std::{cell::RefCell, rc::Rc};
-use crate::pointer::NoProtoValue;
+use crate::{schema::NoProtoTypeKeys, pointer::NoProtoValue};
 use super::NoProtoPointerKinds;
 
 pub struct NoProtoBytes {
-    bytes: Vec<u8>
+    pub bytes: Vec<u8>
 }
 
-impl NoProtoValue for NoProtoBytes {
+impl NoProtoBytes {
+    pub fn new(bytes: Vec<u8>) -> Self {
+        NoProtoBytes { bytes: bytes }
+    }
+}
 
-    fn new() -> Self {
+impl<'a> NoProtoValue<'a> for NoProtoBytes {
+
+    fn new<T: NoProtoValue<'a> + Default>() -> Self {
         NoProtoBytes { bytes: vec![] }
     }
 
-    fn is_type(&self, type_str: &str) -> bool {
-        "bytes" == type_str || "u8[]" == type_str
+    fn is_type( type_str: &str) -> bool {
+        "bytes" == type_str || "u8[]" == type_str || "[u8]" == type_str
     }
 
-    fn type_idx() -> (i64, &'static str) { (2, "bytes") }
-    fn self_type_idx(&self) -> (i64, &'static str) { (2, "bytes") }
+    fn type_idx() -> (i64, String) { (NoProtoTypeKeys::Bytes as i64, "bytes".to_owned()) }
+    fn self_type_idx(&self) -> (i64, String) { (NoProtoTypeKeys::Bytes as i64, "bytes".to_owned()) }
 
-    fn buffer_read(&mut self, address: u32, kind: &NoProtoPointerKinds, buffer: Rc<RefCell<NoProtoMemory>>) -> std::result::Result<Option<NoProtoBytes>, NoProtoError> {
+    fn buffer_get(_address: u32, kind: &NoProtoPointerKinds, _schema: &NoProtoSchema, buffer: Rc<RefCell<NoProtoMemory>>) -> std::result::Result<Option<Box<Self>>, NoProtoError> {
 
         let value = kind.get_value();
 
@@ -40,19 +47,18 @@ impl NoProtoValue for NoProtoBytes {
         // get bytes
         let bytes = &memory.bytes[(addr+4)..(addr+4+bytes_size)];
 
-        Ok(Some(NoProtoBytes { bytes: bytes.to_vec()}))
+        Ok(Some(Box::new(NoProtoBytes { bytes: bytes.to_vec() })))
     }
 
-    fn buffer_write(&mut self, address: u32, kind: &NoProtoPointerKinds, buffer: Rc<RefCell<NoProtoMemory>>, value: Vec<u8>) -> std::result::Result<NoProtoPointerKinds, NoProtoError> {
+    fn buffer_set(address: u32, kind: &NoProtoPointerKinds, _schema: &NoProtoSchema, buffer: Rc<RefCell<NoProtoMemory>>, value: Box<&Self>) -> std::result::Result<NoProtoPointerKinds, NoProtoError> {
 
-        let size = value.len() as u64;
+        let size = value.bytes.len() as u64;
 
         if size >= std::u32::MAX as u64 { 
             return Err(NoProtoError::new("Bytes too large!"));
         } else {
 
             let mut addr = kind.get_value() as usize;
-            let mut set_addr = false;
 
             {
                 let mut memory = buffer.try_borrow_mut()?;
@@ -74,25 +80,21 @@ impl NoProtoValue for NoProtoBytes {
                     }
 
                     // set bytes
-                    for x in 0..value.len() {
-                        memory.bytes[(addr + x + 4) as usize] = value[x as usize];
+                    for x in 0..value.bytes.len() {
+                        memory.bytes[(addr + x + 4) as usize] = value.bytes[x as usize];
                     }
-
+                    return Ok(*kind);
                 } else { // not enough space or space has not been allocted yet
                     
 
                     // first 4 bytes are length
                     addr = memory.malloc((size as u32).to_le_bytes().to_vec())? as usize;
 
-                    set_addr = true;
                     // then bytes content
-                    memory.malloc(value.to_vec())?;
+                    memory.malloc(value.bytes.to_vec())?;
+
+                    return Ok(memory.set_value_address(address, addr as u32, kind)?);
                 }
-            }
-            if set_addr { 
-                Ok(kind.set_value_address(address, addr as u32, buffer)?)
-            } else {
-                Ok(*kind)
             }
         }
     }

@@ -123,6 +123,7 @@ pub mod schema;
 pub mod error;
 mod memory;
 
+use crate::pointer::NoProtoPointer;
 use crate::error::NoProtoError;
 use crate::schema::NoProtoSchema;
 use buffer::NoProtoBuffer;
@@ -140,17 +141,17 @@ const PROTOCOL_VERSION: u8 = 0;
 /// 
 /// 
 /// ```
-pub struct NoProtoFactory<T> {
-    schema: NoProtoSchema<T>
+pub struct NoProtoFactory {
+    schema: NoProtoSchema
 }
 
-impl<T: NoProtoValue + Default> NoProtoFactory<T> {
-    pub fn new(json_schema: &str) -> std::result::Result<NoProtoFactory<T>, NoProtoError> {
+impl NoProtoFactory {
+    pub fn new(json_schema: &str) -> std::result::Result<NoProtoFactory, NoProtoError> {
 
         match json::parse(json_schema) {
             Ok(x) => {
                 Ok(NoProtoFactory {
-                    schema: NoProtoSchema::from_json(x)?
+                    schema:  NoProtoSchema::from_json(x)?
                 })
             },
             Err(e) => {
@@ -160,16 +161,25 @@ impl<T: NoProtoValue + Default> NoProtoFactory<T> {
     }
 
     pub fn new_buffer<F>(&self, capacity: Option<u32>, mut callback: F) -> std::result::Result<Vec<u8>, NoProtoError>
-        where F: FnMut(NoProtoBuffer<T>) -> std::result::Result<Vec<u8>, NoProtoError>
+        where F: FnMut(NoProtoBuffer) -> std::result::Result<Vec<u8>, NoProtoError>
     {   
         callback(NoProtoBuffer::new(&self.schema, capacity))
     }
 
     pub fn load_buffer<F>(&self, buffer: Vec<u8>, mut callback: F) -> std::result::Result<Vec<u8>, NoProtoError>
-        where F: FnMut(NoProtoBuffer<T>) -> std::result::Result<Vec<u8>, NoProtoError>
+        where F: FnMut(NoProtoBuffer) -> std::result::Result<Vec<u8>, NoProtoError>
     {   
         callback(NoProtoBuffer::load(&self.schema, buffer))
     }
+
+    /*
+    pub fn load_buffer_for_value<F, X: NoProtoValue<'a> + Default, R>(&self, buffer: Vec<u8>, mut callback: F) -> std::result::Result<R, NoProtoError>
+        where F: FnMut(NoProtoPointer<X>) -> std::result::Result<R, NoProtoError>
+    {   
+        let mut buffer = NoProtoBuffer::load(&self.schema, buffer);
+        buffer.open_for_value(callback)
+    }
+    */
 
     pub fn empty<X>() -> Option<X> {
         None
@@ -185,14 +195,16 @@ impl<T: NoProtoValue + Default> NoProtoFactory<T> {
 
 #[cfg(test)]
 mod tests {
-    use crate::pointer::any::NoProtoAny;
+
+    use crate::pointer::NoProtoPointer;
+    // use crate::pointer::any::NoProtoAny;
     use crate::collection::table::NoProtoTable;
     use super::*;
 
     #[test]
     fn it_works() -> std::result::Result<(), NoProtoError> {
 
-        let factory: NoProtoFactory<NoProtoAny> = NoProtoFactory::new(r#"{
+        let factory: NoProtoFactory = NoProtoFactory::new(r#"{
             "type": "table",
             "columns": [
                 ["userID", {"type": "string"}],
@@ -201,34 +213,33 @@ mod tests {
             ]
         }"#)?;
 
-        let mut myvalue = None;
+        let mut myvalue: Option<String> = None;
 
         let return_buffer = factory.new_buffer(None, |mut buffer| {
 
+            // buffer.deep_set(".userID", "something".to_owned())?;
 
-            buffer.deep_set("userID", "something");
+            // myvalue = buffer.deep_get::<String>(".userID")?;
 
-            let userID = buffer.deep_get::<&str>("userID")?;
-
-            buffer.open(|mut root| {
+            buffer.open(|mut root: NoProtoPointer<NoProtoTable>| {
             
-                let table = NoProtoAny::cast::<NoProtoTable>(root)?.into()?.unwrap();
+                let mut table = root.convert()?.unwrap();
 
-                let mut x = table.select::<&str>("userID")?;
-                x.set("some id")?;
-        
+                let mut x = table.select::<String>("userID")?;
+                x.set("some id".to_owned())?;
+
                 let mut x = table.select::<i16>("age")?;
-                x.set(2032039398)?;
+                x.set(2032)?;
         
                 let mut x = table.select::<String>("pass")?;
                 x.set("password123".to_owned())?;
 
-                myvalue = x.get()?;
+                // myvalue = x.into()?;
         
-                let x = table.select::<String>("userID")?;
+                let mut x = table.select::<String>("userID")?;
                 println!("VALUE: {:?}", x.get()?);
         
-                let x = table.select::<String>("pass")?;
+                let mut x = table.select::<String>("pass")?;
                 println!("VALUE 2: {:?}", x.get()?);
 
                 println!("VALUE 3: {:?}", table.select::<i16>("age")?.get()?);

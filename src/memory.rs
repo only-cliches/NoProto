@@ -1,4 +1,5 @@
 
+use crate::pointer::NoProtoPointerKinds;
 use crate::error::NoProtoError;
 
 pub struct NoProtoMemory {
@@ -18,6 +19,33 @@ impl NoProtoMemory {
 
         &self.bytes.extend(bytes);
         Ok(location)
+    }
+
+    pub fn set_value_address(&mut self, address: u32, val: u32, kind: &NoProtoPointerKinds) -> std::result::Result<NoProtoPointerKinds, NoProtoError> {
+
+        let addr_bytes = val.to_le_bytes();
+    
+        for x in 0..addr_bytes.len() {
+            self.bytes[(address + x as u32) as usize] = addr_bytes[x as usize];
+        }
+
+        Ok(match kind {
+            NoProtoPointerKinds::None => {
+                NoProtoPointerKinds::None
+            }
+            NoProtoPointerKinds::Standard { value: _ } => {
+                NoProtoPointerKinds::Standard { value: val}
+            },
+            NoProtoPointerKinds::MapItem { value: _, key,  next  } => {
+                NoProtoPointerKinds::MapItem { value: val, key: *key, next: *next }
+            },
+            NoProtoPointerKinds::TableItem { value: _, i, next  } => {
+                NoProtoPointerKinds::TableItem { value: val, i: *i, next: *next }
+            },
+            NoProtoPointerKinds::ListItem { value: _, i, next  } => {
+                NoProtoPointerKinds::ListItem { value: val, i: *i, next: *next }
+            }
+        })
     }
 
     pub fn get_1_byte(&self, address: usize) -> Option<u8> {

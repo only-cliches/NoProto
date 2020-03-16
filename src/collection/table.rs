@@ -1,4 +1,5 @@
-use crate::{memory::NoProtoMemory, pointer::{NoProtoValue, NoProtoPointer}, error::NoProtoError, schema::NoProtoSchema};
+use crate::pointer::NoProtoPointerKinds;
+use crate::{memory::NoProtoMemory, pointer::{NoProtoValue, NoProtoPointer}, error::NoProtoError, schema::{NoProtoSchemaKinds, NoProtoSchema}};
 use std::rc::Rc;
 use std::cell::RefCell;
 
@@ -6,15 +7,60 @@ pub struct NoProtoTable<'a> {
     address: u32, // pointer location
     head: u32,
     memory: Rc<RefCell<NoProtoMemory>>,
-    columns: &'a Vec<Option<(u8, String, NoProtoSchema)>>
+    columns: Option<&'a Vec<Option<(u8, String, NoProtoSchema)>>>
 }
 
-impl NoProtoValue for NoProtoTable<'a> {
+impl<'a> NoProtoValue<'a> for NoProtoTable<'a> {
+    fn new<T: NoProtoValue<'a> + Default>() -> Self {
+        unreachable!()
+    }
+    fn is_type( _type_str: &str) -> bool { 
+        unreachable!()
+    }
+    fn type_idx() -> (i64, String) { (-1, "table".to_owned()) }
+    fn self_type_idx(&self) -> (i64, String) { (-1, "table".to_owned()) }
+    fn buffer_get(_address: u32, _kind: &NoProtoPointerKinds, _schema: &NoProtoSchema, _buffer: Rc<RefCell<NoProtoMemory>>) -> std::result::Result<Option<Box<Self>>, NoProtoError> {
+        Err(NoProtoError::new("This type (table) doesn't support .get()! Use .into() instead."))
+    }
+    fn buffer_set(_address: u32, _kind: &NoProtoPointerKinds, _schema: &NoProtoSchema, _buffer: Rc<RefCell<NoProtoMemory>>, value: Box<&Self>) -> std::result::Result<NoProtoPointerKinds, NoProtoError> {
+        Err(NoProtoError::new("This type (table) doesn't support .set()! Use .into() instead."))
+    }
+    fn buffer_into(address: u32, kind: NoProtoPointerKinds, schema: &'a NoProtoSchema, buffer: Rc<RefCell<NoProtoMemory>>) -> std::result::Result<Option<Box<NoProtoTable<'a>>>, NoProtoError> {
+        
+        match &*schema.kind {
+            NoProtoSchemaKinds::Table { columns } => {
 
+                let mut addr = kind.get_value();
+
+                let mut head: [u8; 4] = [0; 4];
+
+                // no table here, make one
+                if addr == 0 {
+                    // no table here, make one
+                    let mut memory = buffer.try_borrow_mut()?;
+                    addr = memory.malloc([0 as u8; 4].to_vec())?; // stores HEAD for table
+                    memory.set_value_address(address, addr, &kind)?;
+                } else {
+                    // existing head, read value
+                    let b_bytes = &buffer.try_borrow()?.bytes;
+                    let a = addr as usize;
+                    head.copy_from_slice(&b_bytes[a..(a+4)]);
+                }
+
+                Ok(Some(Box::new(NoProtoTable::new(addr, u32::from_le_bytes(head), buffer, &columns))))
+            },
+            _ => {
+                Err(NoProtoError::new(""))
+            }
+        }
+    }
 }
 
-impl Default for NoProtoTable<'a> {
+impl<'a> Default for NoProtoTable<'a> {
 
+    fn default() -> Self {
+        NoProtoTable { address: 0, head: 0, memory: Rc::new(RefCell::new(NoProtoMemory { bytes: vec![]})), columns: None}
+    }
 }
 
 impl<'a> NoProtoTable<'a> {
@@ -25,15 +71,15 @@ impl<'a> NoProtoTable<'a> {
             address,
             head,
             memory,
-            columns
+            columns: Some(columns)
         }
     }
 
-    pub fn select<X>(&mut self, column: &str) -> std::result::Result<NoProtoPointer<X>, NoProtoError> {
+    pub fn select<X: NoProtoValue<'a> + Default>(&'a mut self, column: &str) -> std::result::Result<NoProtoPointer<X>, NoProtoError> {
 
         let mut column_schema: Option<&NoProtoSchema> = None;
 
-        let column_index = &self.columns.iter().fold(0u8, |prev, cur| {
+        let column_index = &self.columns.unwrap().iter().fold(0u8, |prev, cur| {
             match cur {
                 Some(x) => {
                     if x.1.as_str() == column { 
@@ -160,7 +206,7 @@ impl<'a> NoProtoTable<'a> {
            return Ok(false);
         }
 
-        let column_index = &self.columns.iter().fold(0, |prev, cur| {
+        let column_index = &self.columns.unwrap().iter().fold(0, |prev, cur| {
             match cur {
                 Some(x) => {
                     if x.1.as_str() == column { 

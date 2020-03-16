@@ -4,20 +4,20 @@ use crate::pointer::NoProtoValue;
 use crate::error::NoProtoError;
 use crate::pointer::NoProtoPointer;
 use crate::memory::NoProtoMemory;
-use crate::schema::NoProtoSchema;
+use crate::schema::{NoProtoTypeKeys, NoProtoSchema};
 use crate::PROTOCOL_VERSION;
 use std::{rc::Rc, cell::RefCell};
 
 
-pub struct NoProtoBuffer<'a, T: NoProtoValue + Default> {
+pub struct NoProtoBuffer<'a> {
     pub memory: Rc<RefCell<NoProtoMemory>>,
-    root_model: &'a NoProtoSchema<T>
+    root_model: &'a NoProtoSchema
 }
 
-impl<'a, T: NoProtoValue + Default> NoProtoBuffer<'a, T> {
+impl<'a> NoProtoBuffer<'a> {
 
     #[doc(hidden)]
-    pub fn new(model: &'a NoProtoSchema<T>, capcity: Option<u32>) -> Self { // make new buffer
+    pub fn new(model: &'a NoProtoSchema, capcity: Option<u32>) -> Self { // make new buffer
 
         let capacity = match capcity {
             Some(x) => x,
@@ -38,25 +38,55 @@ impl<'a, T: NoProtoValue + Default> NoProtoBuffer<'a, T> {
     }
 
     #[doc(hidden)]
-    pub fn load(model: &'a NoProtoSchema<T>, bytes: Vec<u8>) -> Self { // load existing buffer
+    pub fn load(model: &'a NoProtoSchema, bytes: Vec<u8>) -> Self { // load existing buffer
         NoProtoBuffer {
             memory: Rc::new(RefCell::new(NoProtoMemory { bytes: bytes})),
             root_model: model
         }
     }
-
-    pub fn open<F>(&mut self, mut callback: F) -> std::result::Result<(), NoProtoError>
-        where F: FnMut(NoProtoPointer<T>) -> std::result::Result<(), NoProtoError>
+/*
+    #[doc(hidden)]
+    pub fn open_for_value<F, X: NoProtoValue<'a> + Default, R>(&mut self, mut callback: F) -> std::result::Result<R, NoProtoError>
+        where F: FnMut(NoProtoPointer<X>) -> std::result::Result<R, NoProtoError>
     {        
-        let buffer = NoProtoPointer::new(1, self.root_model, Rc::clone(&self.memory));
-        callback(buffer)
+        let buffer = NoProtoPointer::new_standard_ptr(1, self.root_model, Rc::clone(&self.memory))?;
+
+        // casting to ANY type -OR- schema is ANY type
+        if X::type_idx().0 == NoProtoTypeKeys::Any as i64 || buffer.schema.type_data.0 == NoProtoTypeKeys::Any as i64  {
+            return callback(buffer);
+        }
+
+        // casting matches root schema
+        if X::type_idx().0 == buffer.schema.type_data.0 {
+            return callback(buffer);
+        }
+        
+        Err(NoProtoError::new(format!("TypeError: Attempted to cast type ({}) to schema of type ({})!", X::type_idx().1, buffer.schema.type_data.1).as_str()))
+    }
+*/
+    pub fn open<F, X: NoProtoValue<'a> + Default>(&mut self, mut callback: F) -> std::result::Result<(), NoProtoError>
+        where F: FnMut(NoProtoPointer<'a, X>) -> std::result::Result<(), NoProtoError>
+    {        
+        let buffer = NoProtoPointer::new_standard_ptr(1, self.root_model, Rc::clone(&self.memory))?;
+
+        // casting to ANY type -OR- schema is ANY type
+        if X::type_idx().0 == NoProtoTypeKeys::Any as i64 || buffer.schema.type_data.0 == NoProtoTypeKeys::Any as i64  {
+            return callback(buffer);
+        }
+
+        // casting matches root schema
+        if X::type_idx().0 == buffer.schema.type_data.0 {
+            return callback(buffer);
+        }
+        
+        Err(NoProtoError::new(format!("TypeError: Attempted to cast type ({}) to schema of type ({})!", X::type_idx().1, buffer.schema.type_data.1).as_str()))
     }
 
-    pub fn deep_set<X: NoProtoValue + Default, S: AsRef<str>>(&self, path: S, value: X) -> std::result::Result<(), NoProtoError> {
+    pub fn deep_set<X: NoProtoValue<'a> + Default, S: AsRef<str>>(&self, _path: S, _value: X) -> std::result::Result<(), NoProtoError> {
         Ok(())
     }
 
-    pub fn deep_get<X: NoProtoValue + Default>(&self, path: &str) -> std::result::Result<Option<X>, NoProtoError> {
+    pub fn deep_get<X: NoProtoValue<'a> + Default>(&self, _path: &str) -> std::result::Result<Option<X>, NoProtoError> {
         Ok(Some(X::default()))
     }
 
