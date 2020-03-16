@@ -1,27 +1,27 @@
 //! Schemas are JSON used to declare & store the shape of buffer objects.
 //! 
-//! No Proto Schemas are JSON objects that describe how the data in a NoProto buffer is stored.
+//! No Proto Schemas are JSON objects that describe how the data in a NP_ buffer is stored.
 //! 
 //! Every schema object has at least a "type" key that provides the kind of value stored at that part of the schema.  Additional keys are dependent on the type of schema.
 //! 
-//! Schemas are validated and sanity checked by the [NoProtoFactory](../struct.NoProtoFactory.html) struct upon creation.  You cannot pass an invalid schema into a factory constructor and build/parse buffers with it.
+//! Schemas are validated and sanity checked by the [NP_Factory](../struct.NP_Factory.html) struct upon creation.  You cannot pass an invalid schema into a factory constructor and build/parse buffers with it.
 //! 
-//! If you're familiar with typescript, schemas can be described by this interface:
+//! If you're familiar with typescript, schemas can be described by this recursive interface:
 //! ```text
-//! interface InoProtoSchema {
+//! interface NP_Schema {
 //!     type: string;
 //!     
 //!     // used by list types
-//!     of?: InoProtoSchema
+//!     of?: NP_Schema
 //!     
 //!     // used by map types
-//!     value?: InoProtoSchema
+//!     value?: NP_Schema
 //! 
 //!     // used by tuple types
-//!     values?: InoProtoSchema[]
+//!     values?: NP_Schema[]
 //! 
 //!     // used by table types
-//!     columns?: [string, InoProtoSchema][]
+//!     columns?: [string, NP_Schema][]
 //! }
 //! ```
 //! 
@@ -32,7 +32,7 @@
 //! }
 //! ```
 //! 
-//! However, nesting is easy to perform.  For example, this  is a list of tables.  Each table has two columns: id and title.  Both columns are a string type.
+//! Nesting is easy to perform.  For example, this  is a list of tables.  Each table has two columns: id and title.  Both columns are a string type.
 //! ```text
 //! {
 //!     "type": "list",
@@ -61,12 +61,12 @@
 //! 
 //! | Type                | Rust Type / Struct                                                       | Bytes (Size)   | Limits / Notes                                                           |
 //! |---------------------|--------------------------------------------------------------------------|----------------|--------------------------------------------------------------------------|
-//! | [`table`](#table)   | [`NoProtoTable`](../collection/table/index.html)                         | 4 bytes - ~4GB | Linked list with indexed keys that map against up to 255 named columns.  |
-//! | [`list`](#list)     | [`NoProtoList`](../collection/list/index.html)                           | 8 bytes - ~4GB | Linked list with up to 65,535 items.                                     |
-//! | [`map`](#map)       | [`NoProtoMap`](../collection/map/index.html)                             | 4 bytes - ~4GB | Linked list with Vec<u8> keys.                                           |
-//! | [`tuple`](#tuple)   | [`NoProtoTuple`](../collection/tuple/index.html)                         | 4 bytes - ~4GB | Static sized collection of values.                                       |
+//! | [`table`](#table)   | [`NP_Table`](../collection/table/index.html)                             | 4 bytes - ~4GB | Linked list with indexed keys that map against up to 255 named columns.  |
+//! | [`list`](#list)     | [`NP_List`](../collection/list/index.html)                               | 8 bytes - ~4GB | Linked list with up to 65,535 items.                                     |
+//! | [`map`](#map)       | [`NP_Map`](../collection/map/index.html)                                 | 4 bytes - ~4GB | Linked list with Vec<u8> keys.                                           |
+//! | [`tuple`](#tuple)   | [`NP_Tuple`](../collection/tuple/index.html)                             | 4 bytes - ~4GB | Static sized collection of values.                                       |
 //! | [`string`](#string) | [`String`](https://doc.rust-lang.org/std/string/struct.String.html)      | 4 bytes - ~4GB | Utf-8 formatted string.                                                  |
-//! | [`bytes`](#bytes)   | [`NoProtoBytes`](https://doc.rust-lang.org/std/vec/struct.Vec.html)      | 4 bytes - ~4GB | Arbitrary bytes.                                                         |
+//! | [`bytes`](#bytes)   | [`NP_Bytes`](https://doc.rust-lang.org/std/vec/struct.Vec.html)          | 4 bytes - ~4GB | Arbitrary bytes.                                                         |
 //! | [`int8`](#int8)     | [`i8`](https://doc.rust-lang.org/std/primitive.i8.html)                  | 1 byte         | -127 to 127                                                              |
 //! | [`int16`](#int16)   | [`i16`](https://doc.rust-lang.org/std/primitive.i16.html)                | 2 bytes        | -32,768 to 32,768                                                        |
 //! | [`int32`](#int32)   | [`i32`](https://doc.rust-lang.org/std/primitive.i32.html)                | 4 bytes        | -2,147,483,648 to 2,147,483,648                                          |
@@ -77,15 +77,15 @@
 //! | [`uint64`](#uint64) | [`u64`](https://doc.rust-lang.org/std/primitive.u64.html)                | 8 bytes        | 0 - 1.84e19                                                              |
 //! | [`float`](#float)   | [`f32`](https://doc.rust-lang.org/std/primitive.f32.html)                | 4 bytes        | -3.4e38 to 3.4e38                                                        |
 //! | [`double`](#double) | [`f64`](https://doc.rust-lang.org/std/primitive.f64.html)                | 8 bytes        | -1.7e308 to 1.7e308                                                      |
-//! | [`option`](#option) | [`NoProtoOption`](https://doc.rust-lang.org/std/string/.html)            | 1 byte         | Up to 255 strings in schema.                                             |
+//! | [`option`](#option) | [`NP_Option`](https://doc.rust-lang.org/std/string/.html)                | 1 byte         | Up to 255 strings in schema.                                             |
 //! | [`bool`](#bool)     | [`bool`](https://doc.rust-lang.org/std/primitive.bool.html)              | 1 byte         |                                                                          |
-//! | [`dec64`](#dec64)   | [`NoProtoDec`](..pointer/struct.NoProtoDec.html)                         | 9 bytes        | Big Integer Decimal format.                                              |
-//! | [`geo4`](#geo4)     | [`NoProtoGeo`](../pointer/struct.NoProtoGeo.html)                        | 4 bytes        | 1.5km resolution (city) geographic coordinate                            |
-//! | [`geo8`](#geo8)     | [`NoProtoGeo`](../pointer/struct.NoProtoGeo.html)                        | 8 bytes        | 16mm resolution (marble) geographic coordinate                           |
-//! | [`geo16`](#geo16)   | [`NoProtoGeo`](../pointer/struct.NoProtoGeo.html)                        | 16 bytes       | 3.5nm resolution (flea) geographic coordinate                            |
-//! | [`tid`](#tid)       | [`NoProtoTimeID`](../pointer/struct.NoProtoTimeID.html)                  | 16 bytes       | 8 byte u64 for time with 8 bytes of random numbers.                      |
-//! | [`uuid`](#uuid)     | [`NoProtoUUID`](../pointer/struct.NoProtoUUID.html)                      | 16 bytes       | v4 UUID, 2e37 possible UUID v4s                                          |
-//! | [`date`](#date)     | [`NoProtoDate`](https://doc.rust-lang.org/std/primitive.u64.html)        | 8 bytes        | Good to store unix epoch (in seconds) until the year 584,942,417,355     |
+//! | [`dec64`](#dec64)   | [`NP_Dec`](..pointer/struct.NP_Dec.html)                                 | 9 bytes        | Big Integer Decimal format.                                              |
+//! | [`geo4`](#geo4)     | [`NP_Geo`](../pointer/struct.NP_Geo.html)                                | 4 bytes        | 1.5km resolution (city) geographic coordinate                            |
+//! | [`geo8`](#geo8)     | [`NP_Geo`](../pointer/struct.NP_Geo.html)                                | 8 bytes        | 16mm resolution (marble) geographic coordinate                           |
+//! | [`geo16`](#geo16)   | [`NP_Geo`](../pointer/struct.NP_Geo.html)                                | 16 bytes       | 3.5nm resolution (flea) geographic coordinate                            |
+//! | [`tid`](#tid)       | [`NP_TimeID`](../pointer/struct.NP_TimeID.html)                          | 16 bytes       | 8 byte u64 for time with 8 bytes of random numbers.                      |
+//! | [`uuid`](#uuid)     | [`NP_UUID`](../pointer/struct.NP_UUID.html)                              | 16 bytes       | v4 UUID, 2e37 possible UUID v4s                                          |
+//! | [`date`](#date)     | [`NP_Date`](https://doc.rust-lang.org/std/primitive.u64.html)            | 8 bytes        | Good to store unix epoch (in seconds) until the year 584,942,417,355     |
 //!  
 //! # table
 //! 
@@ -120,33 +120,34 @@
 //! # date
 //! 
 //!  
-use crate::pointer::any::NoProtoAny;
-use crate::pointer::misc::NoProtoDate;
-use crate::pointer::misc::NoProtoUUID;
-use crate::pointer::misc::NoProtoTimeID;
-use crate::pointer::misc::NoProtoGeo;
-use crate::pointer::misc::NoProtoDec;
-use crate::collection::tuple::NoProtoTuple;
-use crate::pointer::bytes::NoProtoBytes;
-use crate::collection::{list::NoProtoList, table::NoProtoTable, map::NoProtoMap};
-use crate::pointer::{misc::NoProtoOption, NoProtoValue};
+use crate::pointer::NP_ValueInto;
+use crate::pointer::any::NP_Any;
+use crate::pointer::misc::NP_Date;
+use crate::pointer::misc::NP_UUID;
+use crate::pointer::misc::NP_TimeID;
+use crate::pointer::misc::NP_Geo;
+use crate::pointer::misc::NP_Dec;
+use crate::collection::tuple::NP_Tuple;
+use crate::pointer::bytes::NP_Bytes;
+use crate::collection::{list::NP_List, table::NP_Table, map::NP_Map};
+use crate::pointer::{misc::NP_Option, NP_Value};
 use json::*;
-use crate::error::NoProtoError;
+use crate::error::NP_Error;
 
 
-pub enum NoProtoSchemaKinds {
+pub enum NP_SchemaKinds {
     None,
     Scalar,
-    Table { columns: Vec<Option<(u8, String, NoProtoSchema)>> },
-    List { of: NoProtoSchema },
-    Map { value: NoProtoSchema },
+    Table { columns: Vec<Option<(u8, String, NP_Schema)>> },
+    List { of: NP_Schema },
+    Map { value: NP_Schema },
     Enum { choices: Vec<String> },
-    Tuple { values: Vec<NoProtoSchema>}
+    Tuple { values: Vec<NP_Schema>}
 }
 
 /*
 #[derive(Debug)]
-pub enum NoProtoSchemaKinds {
+pub enum NP_SchemaKinds {
     None,
     Utf8String,
     Bytes,
@@ -168,11 +169,11 @@ pub enum NoProtoSchemaKinds {
     Uuid,
     Tid,
     Date,
-    Table { columns: Vec<Option<(u8, String, NoProtoSchema)>> },
-    List { of: NoProtoSchema },
-    Map { value: NoProtoSchema },
+    Table { columns: Vec<Option<(u8, String, NP_Schema)>> },
+    List { of: NP_Schema },
+    Map { value: NP_Schema },
     Enum { choices: Vec<String> },
-    Tuple { values: Vec<NoProtoSchema>}
+    Tuple { values: Vec<NP_Schema>}
 }
 */
 
@@ -212,7 +213,7 @@ const VALID_KINDS_SCALAR: [&str; 21] = [
 
 // These are just used for runtime type comparison, the type information is never stored in the buffer.
 // When you cast a pointer to some type, this enum is used as comparing numbers is very efficient.
-pub enum NoProtoTypeKeys {
+pub enum NP_TypeKeys {
     Any = 0,
     UTF8String = 1,
     Bytes = 2,
@@ -239,19 +240,19 @@ pub enum NoProtoTypeKeys {
     Tuple = 23
 }
 
-pub struct NoProtoSchema {
-    pub kind: Box<NoProtoSchemaKinds>,
+pub struct NP_Schema {
+    pub kind: Box<NP_SchemaKinds>,
     pub type_data: (i64, String),
     pub type_state: i64
 }
 
-pub struct NoProtoTypes { }
+pub struct NP_Types { }
 
-impl<'a> NoProtoTypes {
-    pub fn do_check<T: NoProtoValue<'a> + Default>(type_string: &str, json_schema: &JsonValue)-> std::result::Result<Option<NoProtoSchema>, NoProtoError>{
+impl<'a> NP_Types {
+    pub fn do_check<T: NP_Value + Default + NP_ValueInto<'a>>(type_string: &str, json_schema: &JsonValue)-> std::result::Result<Option<NP_Schema>, NP_Error>{
         if T::is_type(type_string) {
-            Ok(Some(NoProtoSchema { 
-                kind: Box::new(NoProtoSchemaKinds::Scalar),
+            Ok(Some(NP_Schema { 
+                kind: Box::new(NP_SchemaKinds::Scalar),
                 type_data: T::type_idx(),
                 type_state: T::schema_state(type_string, json_schema)?
             }))
@@ -260,120 +261,120 @@ impl<'a> NoProtoTypes {
         }
     }
 
-    pub fn get_type(type_string: &str, json_schema: &JsonValue)-> std::result::Result<NoProtoSchema, NoProtoError> {
+    pub fn get_type(type_string: &str, json_schema: &JsonValue)-> std::result::Result<NP_Schema, NP_Error> {
 
-        let check = NoProtoTypes::do_check::<NoProtoAny>(type_string, json_schema)?;
+        let check = NP_Types::do_check::<NP_Any>(type_string, json_schema)?;
         match check { Some(x) => return Ok(x), None => {} };
     
-        let check = NoProtoTypes::do_check::<String>(type_string, json_schema)?;
+        let check = NP_Types::do_check::<String>(type_string, json_schema)?;
         match check { Some(x) => return Ok(x), None => {} };
 
-        let check = NoProtoTypes::do_check::<NoProtoBytes>(type_string, json_schema)?;
+        let check = NP_Types::do_check::<NP_Bytes>(type_string, json_schema)?;
         match check { Some(x) => return Ok(x), None => {} };
 
-        let check = NoProtoTypes::do_check::<i8>(type_string, json_schema)?;
+        let check = NP_Types::do_check::<i8>(type_string, json_schema)?;
         match check { Some(x) => return Ok(x), None => {} };
 
-        let check = NoProtoTypes::do_check::<i16>(type_string, json_schema)?;
+        let check = NP_Types::do_check::<i16>(type_string, json_schema)?;
         match check { Some(x) => return Ok(x), None => {} };
 
-        let check = NoProtoTypes::do_check::<i32>(type_string, json_schema)?;
+        let check = NP_Types::do_check::<i32>(type_string, json_schema)?;
         match check { Some(x) => return Ok(x), None => {} };
 
-        let check = NoProtoTypes::do_check::<i64>(type_string, json_schema)?;
+        let check = NP_Types::do_check::<i64>(type_string, json_schema)?;
         match check { Some(x) => return Ok(x), None => {} };
 
-        let check = NoProtoTypes::do_check::<u8>(type_string, json_schema)?;
+        let check = NP_Types::do_check::<u8>(type_string, json_schema)?;
         match check { Some(x) => return Ok(x), None => {} };
 
-        let check = NoProtoTypes::do_check::<u16>(type_string, json_schema)?;
+        let check = NP_Types::do_check::<u16>(type_string, json_schema)?;
         match check { Some(x) => return Ok(x), None => {} };
 
-        let check = NoProtoTypes::do_check::<u32>(type_string, json_schema)?;
+        let check = NP_Types::do_check::<u32>(type_string, json_schema)?;
         match check { Some(x) => return Ok(x), None => {} };
 
-        let check = NoProtoTypes::do_check::<u64>(type_string, json_schema)?;
+        let check = NP_Types::do_check::<u64>(type_string, json_schema)?;
         match check { Some(x) => return Ok(x), None => {} };
 
-        let check = NoProtoTypes::do_check::<f32>(type_string, json_schema)?;
+        let check = NP_Types::do_check::<f32>(type_string, json_schema)?;
         match check { Some(x) => return Ok(x), None => {} };
 
-        let check = NoProtoTypes::do_check::<f64>(type_string, json_schema)?;
+        let check = NP_Types::do_check::<f64>(type_string, json_schema)?;
         match check { Some(x) => return Ok(x), None => {} };
 
-        let check = NoProtoTypes::do_check::<bool>(type_string, json_schema)?;
+        let check = NP_Types::do_check::<bool>(type_string, json_schema)?;
         match check { Some(x) => return Ok(x), None => {} };
 
-        let check = NoProtoTypes::do_check::<NoProtoDec>(type_string, json_schema)?;
+        let check = NP_Types::do_check::<NP_Dec>(type_string, json_schema)?;
         match check { Some(x) => return Ok(x), None => {} };
 
-        let check = NoProtoTypes::do_check::<NoProtoGeo>(type_string, json_schema)?;
+        let check = NP_Types::do_check::<NP_Geo>(type_string, json_schema)?;
         match check { Some(x) => return Ok(x), None => {} };
 
-        let check = NoProtoTypes::do_check::<NoProtoTimeID>(type_string, json_schema)?;
+        let check = NP_Types::do_check::<NP_TimeID>(type_string, json_schema)?;
         match check { Some(x) => return Ok(x), None => {} };
     
-        let check = NoProtoTypes::do_check::<NoProtoUUID>(type_string, json_schema)?;
+        let check = NP_Types::do_check::<NP_UUID>(type_string, json_schema)?;
         match check { Some(x) => return Ok(x), None => {} };
 
-        let check = NoProtoTypes::do_check::<NoProtoDate>(type_string, json_schema)?;
+        let check = NP_Types::do_check::<NP_Date>(type_string, json_schema)?;
         match check { Some(x) => return Ok(x), None => {} };
 
-        Err(NoProtoError::new(format!("{} is not a valid type!", type_string).as_str()))
+        Err(NP_Error::new(format!("{} is not a valid type!", type_string).as_str()))
     }
 }
 
 /*
-pub fn get_standard_types() -> Vec<Box<NoProtoValue>>  {
+pub fn get_standard_types() -> Vec<Box<NP_Value>>  {
 
     
     vec![
-        Box::new(NoProtoAny::default()),
-        NoProtoValue::new::<String>(),
-        NoProtoValue::new::<NoProtoBytes>(),
-        NoProtoValue::new::<i8>(),
-        NoProtoValue::new::<i16>(),
-        NoProtoValue::new::<i32>(),
-        NoProtoValue::new::<i64>(),
-        NoProtoValue::new::<i64>(),
-        NoProtoValue::new::<u8>(),
-        NoProtoValue::new::<u16>(),
-        NoProtoValue::new::<u32>(),
-        NoProtoValue::new::<u64>(),
-        NoProtoValue::new::<u64>(),
-        NoProtoValue::new::<f32>(),
-        NoProtoValue::new::<f64>(),
-        NoProtoValue::new::<bool>(),
-        NoProtoValue::new::<NoProtoDec>(),
-        NoProtoValue::new::<NoProtoGeo>(),
-        NoProtoValue::new::<NoProtoTimeID>(),
-        NoProtoValue::new::<NoProtoUUID>(),
-        NoProtoValue::new::<NoProtoDate>()
+        Box::new(NP_Any::default()),
+        NP_Value::new::<String>(),
+        NP_Value::new::<NP_Bytes>(),
+        NP_Value::new::<i8>(),
+        NP_Value::new::<i16>(),
+        NP_Value::new::<i32>(),
+        NP_Value::new::<i64>(),
+        NP_Value::new::<i64>(),
+        NP_Value::new::<u8>(),
+        NP_Value::new::<u16>(),
+        NP_Value::new::<u32>(),
+        NP_Value::new::<u64>(),
+        NP_Value::new::<u64>(),
+        NP_Value::new::<f32>(),
+        NP_Value::new::<f64>(),
+        NP_Value::new::<bool>(),
+        NP_Value::new::<NP_Dec>(),
+        NP_Value::new::<NP_Geo>(),
+        NP_Value::new::<NP_TimeID>(),
+        NP_Value::new::<NP_UUID>(),
+        NP_Value::new::<NP_Date>()
     ]
 }
 */
 
-impl NoProtoSchema {
+impl NP_Schema {
 
-    pub fn blank() -> NoProtoSchema {
+    pub fn blank() -> NP_Schema {
 
-        NoProtoSchema {
-            kind: Box::new(NoProtoSchemaKinds::None),
+        NP_Schema {
+            kind: Box::new(NP_SchemaKinds::None),
             type_data: (-1, "".to_owned()),
             type_state: 0
         }
     }
 
-    pub fn from_json(json: JsonValue) -> std::result::Result<Self, NoProtoError> {
-        NoProtoSchema::validate_model(&json)
+    pub fn from_json(json: JsonValue) -> std::result::Result<Self, NP_Error> {
+        NP_Schema::validate_model(&json)
     }
 
-    pub fn validate_model(json_schema: &JsonValue) -> std::result::Result<Self, NoProtoError> {
+    pub fn validate_model(json_schema: &JsonValue) -> std::result::Result<Self, NP_Error> {
 
         let type_string = json_schema["type"].as_str().unwrap_or("");
 
         if type_string.len() == 0 {
-            return Err(NoProtoError::new("Must declare a type for every schema!"));
+            return Err(NP_Error::new("Must declare a type for every schema!"));
         }
 
 
@@ -381,7 +382,7 @@ impl NoProtoSchema {
         match type_string {
             "table" => {
                 
-                let mut columns: Vec<Option<(u8, String, NoProtoSchema)>> = vec![];
+                let mut columns: Vec<Option<(u8, String, NP_Schema)>> = vec![];
 
                 for _x in 0..255 {
                     columns.push(None);
@@ -391,7 +392,7 @@ impl NoProtoSchema {
                     let borrowed_schema = json_schema;
 
                     if borrowed_schema["columns"].is_null() || borrowed_schema["columns"].is_array() == false {
-                        return Err(NoProtoError::new("Table kind requires 'columns' property as array!"));
+                        return Err(NP_Error::new("Table kind requires 'columns' property as array!"));
                     }
 
                     let mut index = 0;
@@ -400,10 +401,10 @@ impl NoProtoSchema {
                         let column_name = &column[0].to_string();
 
                         if column_name.len() == 0 {
-                            return Err(NoProtoError::new("Table kind requires all columns have a name!"));
+                            return Err(NP_Error::new("Table kind requires all columns have a name!"));
                         }
 
-                        let good_schema = NoProtoSchema::validate_model(&column[1])?;
+                        let good_schema = NP_Schema::validate_model(&column[1])?;
 
                         let this_index = &column[1]["i"];
 
@@ -414,12 +415,12 @@ impl NoProtoSchema {
                         };
 
                         if use_index > 255 {
-                            return Err(NoProtoError::new("Table cannot have column index above 255!"));
+                            return Err(NP_Error::new("Table cannot have column index above 255!"));
                         }
 
                         match &columns[use_index] {
                             Some(_x) => {
-                                return Err(NoProtoError::new("Table column index numbering conflict!"));
+                                return Err(NP_Error::new("Table column index numbering conflict!"));
                             },
                             None => {
                                 columns[use_index] = Some((use_index as u8, column_name.to_string(), good_schema));
@@ -430,11 +431,11 @@ impl NoProtoSchema {
                     }
                 }
 
-                Ok(NoProtoSchema {
-                    kind: Box::new(NoProtoSchemaKinds::Table { 
+                Ok(NP_Schema {
+                    kind: Box::new(NP_SchemaKinds::Table { 
                         columns: columns 
                     }),
-                    type_data: NoProtoTable::type_idx(),
+                    type_data: NP_Table::type_idx(),
                     type_state: 0
                 })
             },
@@ -443,15 +444,15 @@ impl NoProtoSchema {
                 {
                     let borrowed_schema = json_schema;
                     if borrowed_schema["of"].is_null() || borrowed_schema["of"].is_object() == false {
-                        return Err(NoProtoError::new("List kind requires 'of' property as schema object!"));
+                        return Err(NP_Error::new("List kind requires 'of' property as schema object!"));
                     }
                 }
 
-                Ok(NoProtoSchema {
-                    kind: Box::new(NoProtoSchemaKinds::List { 
-                        of: NoProtoSchema::validate_model(&json_schema["of"])? 
+                Ok(NP_Schema {
+                    kind: Box::new(NP_SchemaKinds::List { 
+                        of: NP_Schema::validate_model(&json_schema["of"])? 
                     }),
-                    type_data: NoProtoList::type_idx(),
+                    type_data: NP_List::type_idx(),
                     type_state: 0
                 })
             },
@@ -461,39 +462,39 @@ impl NoProtoSchema {
                     let borrowed_schema = json_schema;
 
                     if borrowed_schema["value"].is_null() || borrowed_schema["value"].is_object() == false {
-                        return Err(NoProtoError::new("Map kind requires 'value' property as schema object!"));
+                        return Err(NP_Error::new("Map kind requires 'value' property as schema object!"));
                     }
                 }
-                Ok(NoProtoSchema {
-                    kind: Box::new(NoProtoSchemaKinds::Map { 
-                        value: NoProtoSchema::validate_model(&json_schema["value"])?
+                Ok(NP_Schema {
+                    kind: Box::new(NP_SchemaKinds::Map { 
+                        value: NP_Schema::validate_model(&json_schema["value"])?
                     }),
-                    type_data: NoProtoMap::type_idx(),
+                    type_data: NP_Map::type_idx(),
                     type_state: 0
                 })
             },
             "tuple" => {
 
-                let mut schemas: Vec<NoProtoSchema> = vec![];
+                let mut schemas: Vec<NP_Schema> = vec![];
 
                 {
                     let borrowed_schema = json_schema;
 
                     if borrowed_schema["values"].is_null() || borrowed_schema["values"].is_array() == false  {
-                        return Err(NoProtoError::new("Tuple type requires 'values' property as array of schema objects!"));
+                        return Err(NP_Error::new("Tuple type requires 'values' property as array of schema objects!"));
                     }
 
                     for schema in borrowed_schema["values"].members() {
-                        let good_schema = NoProtoSchema::validate_model(schema)?;
+                        let good_schema = NP_Schema::validate_model(schema)?;
                         schemas.push(good_schema);
                     }
                 }
             
-                Ok(NoProtoSchema {
-                    kind: Box::new(NoProtoSchemaKinds::Tuple { 
+                Ok(NP_Schema {
+                    kind: Box::new(NP_SchemaKinds::Tuple { 
                         values: schemas
                     }),
-                    type_data: NoProtoTuple::type_idx(),
+                    type_data: NP_Tuple::type_idx(),
                     type_state: 0
                 })
             },
@@ -505,7 +506,7 @@ impl NoProtoSchema {
                     let borrowed_schema = json_schema;
 
                     if borrowed_schema["options"].is_null() || borrowed_schema["options"].is_array() == false  {
-                        return Err(NoProtoError::new("Option kind requires 'options' property as array of choices!"));
+                        return Err(NP_Error::new("Option kind requires 'options' property as array of choices!"));
                     }
 
                     for option in borrowed_schema["options"].members() {
@@ -514,18 +515,18 @@ impl NoProtoSchema {
                 }
 
                 if options.len() > 255 {
-                    return Err(NoProtoError::new("Cannot have more than 255 choices for option type!"));
+                    return Err(NP_Error::new("Cannot have more than 255 choices for option type!"));
                 }
-                Ok(NoProtoSchema {
-                    kind: Box::new(NoProtoSchemaKinds::Enum { 
+                Ok(NP_Schema {
+                    kind: Box::new(NP_SchemaKinds::Enum { 
                         choices: options
                     }),
-                    type_data: NoProtoOption::type_idx(),
+                    type_data: NP_Option::type_idx(),
                     type_state: 0
                 })
             },
             _ => {
-                NoProtoTypes::get_type(type_string, json_schema)
+                NP_Types::get_type(type_string, json_schema)
             }
         }
     }

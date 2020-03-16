@@ -1,4 +1,5 @@
 // #![deny(warnings, missing_docs, missing_debug_implementations, trivial_casts, trivial_numeric_casts, unused_results)]
+#![allow(non_camel_case_types)]
 
 //! # High Performance Serialization Library
 //! ### Features
@@ -43,13 +44,15 @@
 //! 
 //! # Quick Example
 //! ```
-//! use no_proto::error::NoProtoError;
-//! use no_proto::NoProtoFactory;
+//! use no_proto::error::NP_Error;
+//! use no_proto::NP_Factory;
+//! use no_proto::collection::table::NP_Table;
+//! use no_proto::pointer::NP_Ptr;
 //! 
 //! // JSON is used to describe schema for the factory
 //! // Each factory represents a single schema
 //! // One factory can be used to serialize/deserialize any number of buffers
-//! let user_factory = NoProtoFactory::new(r#"{
+//! let user_factory = NP_Factory::new(r#"{
 //!     "type": "table",
 //!     "columns": [
 //!         ["name",   {"type": "string"}],
@@ -62,18 +65,21 @@
 //! let user_buffer: Vec<u8> = user_factory.new_buffer(None, |mut buffer| {
 //!    
 //!     // open the buffer to read or update values
-//!     buffer.open(|mut root| {
+//!     buffer.open(|root: NP_Ptr<NP_Table>| { // <- type cast the root
 //!         
-//!         // the root of our schema is a table type, 
-//!         // so we have to convert the root pointer to a table.
-//!         let mut table = root.as_table()?;
-//!         // Select a column. Selected columns can be mutated or read from.
-//!         let mut user_name = table.select("name")?;
+//!         // the root of our schema is a collection type (NP_Table), 
+//!         // so we have to collapse the root pointer into the collection type.
+//!         let mut table: NP_Table = root.into()?.unwrap();
+//! 
+//!         // Select a column and type cast it. Selected columns can be mutated or read from.
+//!         let mut user_name = table.select::<String>("name")?;
+//! 
 //!         // set value of name column
-//!         user_name.set_string("some name")?;
+//!         user_name.set("some name".to_owned())?;
+//! 
 //!         // select age column and set it's value
-//!         let mut age = table.select("age")?;
-//!         age.set_uint16(75)?;
+//!         let mut age = table.select::<u16>("age")?;
+//!         age.set(75)?;
 //!
 //!         // done mutating/reading the buffer
 //!         Ok(())
@@ -88,19 +94,22 @@
 //! let user_buffer_2: Vec<u8> = user_factory.load_buffer(user_buffer, |mut buffer| {
 //! 
 //!     // we can mutate and read the buffer here
-//!     buffer.open(|mut root| {
+//!     buffer.open(|root: NP_Ptr<NP_Table>| {
 //!         
 //!         // get the table root again
-//!         let mut table = root.as_table()?;
+//!         let mut table = root.into()?.unwrap();
+//! 
 //!         // read the name column
-//!         let user_name = table.select("name")?;
-//!         assert_eq!(user_name.to_string()?, Some("some name".to_owned()));
+//!         let mut user_name = table.select::<String>("name")?;
+//!         assert_eq!(user_name.get()?, Some(&String::from("some name")));
+//! 
 //!         // password value will be None since we haven't set it.
-//!         let password = table.select("pass")?;
-//!         assert_eq!(password.to_string()?, None);
+//!         let mut password = table.select::<String>("pass")?;
+//!         assert_eq!(password.get()?, None);
+//! 
 //!         // read age value    
-//!         let age = table.select("age")?;
-//!         assert_eq!(age.to_uint16()?, Some(75));    
+//!         let mut age = table.select::<u16>("age")?;
+//!         assert_eq!(age.get()?, Some(&75));    
 //! 
 //!         // done with the buffer
 //!         Ok(())
@@ -113,7 +122,7 @@
 //! // we can now save user_buffer_2 to disk, 
 //! // send it over the network, or whatever else is needed with the data
 //! 
-//! # Ok::<(), NoProtoError>(()) 
+//! # Ok::<(), NP_Error>(()) 
 //! ```
 
 pub mod pointer;
@@ -123,11 +132,11 @@ pub mod schema;
 pub mod error;
 mod memory;
 
-use crate::pointer::NoProtoPointer;
-use crate::error::NoProtoError;
-use crate::schema::NoProtoSchema;
-use buffer::NoProtoBuffer;
-use pointer::NoProtoValue;
+use crate::pointer::NP_Ptr;
+use crate::error::NP_Error;
+use crate::schema::NP_Schema;
+use buffer::NP_Buffer;
+use pointer::NP_Value;
 
 const PROTOCOL_VERSION: u8 = 0;
 
@@ -141,70 +150,52 @@ const PROTOCOL_VERSION: u8 = 0;
 /// 
 /// 
 /// ```
-pub struct NoProtoFactory {
-    schema: NoProtoSchema
+pub struct NP_Factory {
+    schema: NP_Schema
 }
 
-impl NoProtoFactory {
-    pub fn new(json_schema: &str) -> std::result::Result<NoProtoFactory, NoProtoError> {
+impl NP_Factory {
+    pub fn new(json_schema: &str) -> std::result::Result<NP_Factory, NP_Error> {
 
         match json::parse(json_schema) {
             Ok(x) => {
-                Ok(NoProtoFactory {
-                    schema:  NoProtoSchema::from_json(x)?
+                Ok(NP_Factory {
+                    schema:  NP_Schema::from_json(x)?
                 })
             },
             Err(e) => {
-                Err(NoProtoError::new(format!("Error Parsing JSON Schema: {}", e.to_string()).as_str()))
+                Err(NP_Error::new(format!("Error Parsing JSON Schema: {}", e.to_string()).as_str()))
             }
         }
     }
 
-    pub fn new_buffer<F>(&self, capacity: Option<u32>, mut callback: F) -> std::result::Result<Vec<u8>, NoProtoError>
-        where F: FnMut(NoProtoBuffer) -> std::result::Result<Vec<u8>, NoProtoError>
+    pub fn new_buffer<F>(&self, capacity: Option<u32>, mut callback: F) -> std::result::Result<Vec<u8>, NP_Error>
+        where F: FnMut(NP_Buffer) -> std::result::Result<Vec<u8>, NP_Error>
     {   
-        callback(NoProtoBuffer::new(&self.schema, capacity))
+        callback(NP_Buffer::new(&self.schema, capacity))
     }
 
-    pub fn load_buffer<F>(&self, buffer: Vec<u8>, mut callback: F) -> std::result::Result<Vec<u8>, NoProtoError>
-        where F: FnMut(NoProtoBuffer) -> std::result::Result<Vec<u8>, NoProtoError>
+    pub fn load_buffer<F>(&self, buffer: Vec<u8>, mut callback: F) -> std::result::Result<Vec<u8>, NP_Error>
+        where F: FnMut(NP_Buffer) -> std::result::Result<Vec<u8>, NP_Error>
     {   
-        callback(NoProtoBuffer::load(&self.schema, buffer))
+        callback(NP_Buffer::load(&self.schema, buffer))
     }
-
-    /*
-    pub fn load_buffer_for_value<F, X: NoProtoValue<'a> + Default, R>(&self, buffer: Vec<u8>, mut callback: F) -> std::result::Result<R, NoProtoError>
-        where F: FnMut(NoProtoPointer<X>) -> std::result::Result<R, NoProtoError>
-    {   
-        let mut buffer = NoProtoBuffer::load(&self.schema, buffer);
-        buffer.open_for_value(callback)
-    }
-    */
-
-    pub fn empty<X>() -> Option<X> {
-        None
-    }
-
-    /*
-    pub fn parse_buffer() -> NoProtoBuffer {
-
-    }
-    */
 }
 
 
 #[cfg(test)]
 mod tests {
 
-    use crate::pointer::NoProtoPointer;
-    // use crate::pointer::any::NoProtoAny;
-    use crate::collection::table::NoProtoTable;
+    use crate::pointer::NP_Ptr;
+    // use crate::pointer::any::NP_Any;
+    use crate::collection::table::NP_Table;
     use super::*;
+    use pointer::any::NP_Any;
 
     #[test]
-    fn it_works() -> std::result::Result<(), NoProtoError> {
+    fn it_works() -> std::result::Result<(), NP_Error> {
 
-        let factory: NoProtoFactory = NoProtoFactory::new(r#"{
+        let factory: NP_Factory = NP_Factory::new(r#"{
             "type": "table",
             "columns": [
                 ["userID", {"type": "string"}],
@@ -221,28 +212,35 @@ mod tests {
 
             // myvalue = buffer.deep_get::<String>(".userID")?;
 
-            buffer.open(|mut root: NoProtoPointer<NoProtoTable>| {
+            buffer.open(|root: NP_Ptr<NP_Table>| {
             
-                let mut table = root.convert()?.unwrap();
+                let mut table = root.into()?.unwrap();
 
                 let mut x = table.select::<String>("userID")?;
-                x.set("some id".to_owned())?;
+                x.set("some username".to_owned())?;
 
-                let mut x = table.select::<i16>("age")?;
+                let mut x = table.select::<u16>("age")?;
                 x.set(2032)?;
         
                 let mut x = table.select::<String>("pass")?;
                 x.set("password123".to_owned())?;
 
-                // myvalue = x.into()?;
-        
+                myvalue = x.into()?;
+
+                Ok(())
+            })?;
+
+            buffer.open(|root: NP_Ptr<NP_Table>| {
+            
+                let mut table = root.into()?.unwrap();
+
                 let mut x = table.select::<String>("userID")?;
                 println!("VALUE: {:?}", x.get()?);
         
                 let mut x = table.select::<String>("pass")?;
                 println!("VALUE 2: {:?}", x.get()?);
 
-                println!("VALUE 3: {:?}", table.select::<i16>("age")?.get()?);
+                println!("VALUE 3: {:?}", table.select::<u16>("age")?.get()?);
 
                 Ok(())
             })?;

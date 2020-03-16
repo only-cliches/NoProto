@@ -1,6 +1,6 @@
-//! All values in NoProto buffers are accessed and modified through NoProtoPointers
+//! All values in NP_ buffers are accessed and modified through NP_Ptrs
 //! 
-//! NoProto Pointers are the primary abstraction to read, update or delete values in a buffer.
+//! NP_ Pointers are the primary abstraction to read, update or delete values in a buffer.
 //! Pointers should *never* be created directly, instead the various methods provided by the library to access
 //! the internals of the buffer should be used.
 //! 
@@ -15,10 +15,9 @@ pub mod bytes;
 pub mod any;
 pub mod numbers;
 
-use crate::collection::table::NoProtoTable;
-use crate::memory::NoProtoMemory;
-use crate::NoProtoError;
-use crate::{schema::{NoProtoSchemaKinds, NoProtoSchema}};
+use crate::memory::NP_Memory;
+use crate::NP_Error;
+use crate::{schema::{NP_Schema}};
 use std::rc::Rc;
 use std::cell::RefCell;
 use json::JsonValue;
@@ -31,16 +30,16 @@ pub enum TypeReq {
     Read, Write, Collection
 }
 
-fn type_error(req: TypeReq, kind: &str, schema: &NoProtoPointerKinds) -> NoProtoError {
+fn type_error(req: TypeReq, kind: &str, schema: &NP_PtrKinds) -> NP_Error {
     match req {
         TypeReq::Collection => {
-            return NoProtoError::new(format!("TypeError: Attempted to get collection of type ({}) from pointer of type ({})!", kind, schema.kind).as_str());
+            return NP_Error::new(format!("TypeError: Attempted to get collection of type ({}) from pointer of type ({})!", kind, schema.kind).as_str());
         },
         TypeReq::Read => {
-            return NoProtoError::new(format!("TypeError: Attempted to read value of type ({}) from pointer of type ({})!", kind, schema.kind).as_str());
+            return NP_Error::new(format!("TypeError: Attempted to read value of type ({}) from pointer of type ({})!", kind, schema.kind).as_str());
         },
         TypeReq::Write => {
-            return NoProtoError::new(format!("TypeError: Attempted to write value of type ({}) to pointer of type ({})!", kind, schema.kind).as_str());
+            return NP_Error::new(format!("TypeError: Attempted to write value of type ({}) to pointer of type ({})!", kind, schema.kind).as_str());
         }
     }
 }
@@ -48,7 +47,7 @@ fn type_error(req: TypeReq, kind: &str, schema: &NoProtoPointerKinds) -> NoProto
 
 #[doc(hidden)]
 #[derive(Debug, Clone, Copy)]
-pub enum NoProtoPointerKinds {
+pub enum NP_PtrKinds {
     None,
     // scalar / collection
     Standard  { value: u32 }, // 4 bytes [4]
@@ -59,32 +58,35 @@ pub enum NoProtoPointerKinds {
     ListItem  { value: u32, next: u32, i: u16   },  // 10 bytes [4, 4, 2]
 }
 
-impl NoProtoPointerKinds {
+impl NP_PtrKinds {
     pub fn get_value(&self) -> u32 {
         match self {
-            NoProtoPointerKinds::None                                                => { 0 },
-            NoProtoPointerKinds::Standard  { value } =>                      { *value },
-            NoProtoPointerKinds::MapItem   { value, key: _,  next: _ } =>    { *value },
-            NoProtoPointerKinds::TableItem { value, i: _,    next: _ } =>    { *value },
-            NoProtoPointerKinds::ListItem  { value, i:_ ,    next: _ } =>    { *value }
+            NP_PtrKinds::None                                                => { 0 },
+            NP_PtrKinds::Standard  { value } =>                      { *value },
+            NP_PtrKinds::MapItem   { value, key: _,  next: _ } =>    { *value },
+            NP_PtrKinds::TableItem { value, i: _,    next: _ } =>    { *value },
+            NP_PtrKinds::ListItem  { value, i:_ ,    next: _ } =>    { *value }
         }
     }
 }
 
-pub trait NoProtoValue<'a> {
-    fn new<T: NoProtoValue<'a> + Default>() -> Self;
+pub trait NP_Value {
+    fn new<T: NP_Value + Default>() -> Self;
     fn is_type(_type_str: &str) -> bool { false }
     fn type_idx() -> (i64, String) { (-1, "null".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (-1, "null".to_owned()) }
-    fn schema_state(_type_string: &str, _json_schema: &JsonValue) -> std::result::Result<i64, NoProtoError> { Ok(0) }
-    fn buffer_get(_address: u32, _kind: &NoProtoPointerKinds, _schema: &'a NoProtoSchema, _buffer: Rc<RefCell<NoProtoMemory>>) -> std::result::Result<Option<Box<Self>>, NoProtoError> {
-        Err(NoProtoError::new(format!("This type ({}) doesn't support .get()!", Self::type_idx().1).as_str()))
+    fn schema_state(_type_string: &str, _json_schema: &JsonValue) -> std::result::Result<i64, NP_Error> { Ok(0) }
+    fn buffer_get(_address: u32, _kind: &NP_PtrKinds, _schema: &NP_Schema, _buffer: Rc<RefCell<NP_Memory>>) -> std::result::Result<Option<Box<Self>>, NP_Error> {
+        Err(NP_Error::new(format!("This type ({}) doesn't support .get()!", Self::type_idx().1).as_str()))
     }
-    fn buffer_set(_address: u32, _kind: &NoProtoPointerKinds, _schema: &'a NoProtoSchema, _buffer: Rc<RefCell<NoProtoMemory>>, _value: Box<&Self>) -> std::result::Result<NoProtoPointerKinds, NoProtoError> {
-        Err(NoProtoError::new(format!("This type ({}) doesn't support .set()!", Self::type_idx().1).as_str()))
+    fn buffer_set(_address: u32, _kind: &NP_PtrKinds, _schema: &NP_Schema, _buffer: Rc<RefCell<NP_Memory>>, _value: Box<&Self>) -> std::result::Result<NP_PtrKinds, NP_Error> {
+        Err(NP_Error::new(format!("This type ({}) doesn't support .set()!", Self::type_idx().1).as_str()))
     }
-    fn buffer_into(_address: u32, _kind: NoProtoPointerKinds, _schema: &'a NoProtoSchema, _buffer: Rc<RefCell<NoProtoMemory>>) -> std::result::Result<Option<Box<Self>>, NoProtoError> {
-        Err(NoProtoError::new("This type doesn't support .into()!"))
+}
+
+pub trait NP_ValueInto<'a> {
+    fn buffer_into(_address: u32, _kind: NP_PtrKinds, _schema: &'a NP_Schema, _buffer: Rc<RefCell<NP_Memory>>) -> std::result::Result<Option<Box<Self>>, NP_Error> {
+        Err(NP_Error::new("This type doesn't support .into()!"))
     }
 }
 
@@ -92,24 +94,24 @@ pub trait NoProtoValue<'a> {
 /// The base data type, all information is stored/retrieved against pointers
 /// 
 /// Each pointer represents at least a 32 bit unsigned integer that is either zero for no value or points to an offset in the buffer.  All pointer addresses are zero based against the beginning of the buffer.
-pub struct NoProtoPointer<'a, T: NoProtoValue<'a> + Default> {
+pub struct NP_Ptr<'a, T: NP_Value + Default> {
     address: u32, // pointer location
-    kind: NoProtoPointerKinds,
-    memory: Rc<RefCell<NoProtoMemory>>,
-    pub schema: &'a NoProtoSchema,
+    kind: NP_PtrKinds,
+    memory: Rc<RefCell<NP_Memory>>,
+    pub schema: &'a NP_Schema,
     cached: bool,
     value: T
 }
 
-impl<'a, T: NoProtoValue<'a> + Default> NoProtoPointer<'a, T> {
+impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Ptr<'a, T> {
 /*
     #[doc(hidden)]
-    pub fn new_example_ptr(schema: &'a NoProtoSchema, _value: T) -> Self {
+    pub fn new_example_ptr(schema: &'a NP_Schema, _value: T) -> Self {
 
-        NoProtoPointer {
+        NP_Ptr {
             address: 0,
-            kind: &NoProtoPointerKinds::Standard { value: 0 },
-            memory: Rc::new(RefCell::new(NoProtoMemory { bytes: vec![0, 0, 0, 0] })),
+            kind: &NP_PtrKinds::Standard { value: 0 },
+            memory: Rc::new(RefCell::new(NP_Memory { bytes: vec![0, 0, 0, 0] })),
             schema: schema,
             cached: false,
             value: T::default()
@@ -117,33 +119,33 @@ impl<'a, T: NoProtoValue<'a> + Default> NoProtoPointer<'a, T> {
     }
 
     #[doc(hidden)]
-    pub fn new(address: u32, schema: &'a NoProtoSchema, memory: Rc<RefCell<NoProtoMemory>>) -> Self {
+    pub fn new(address: u32, schema: &'a NP_Schema, memory: Rc<RefCell<NP_Memory>>) -> Self {
 
         let thisKind = match *schema.kind {
-            NoProtoSchemaKinds::None => {
-                NoProtoPointerKinds::None
+            NP_SchemaKinds::None => {
+                NP_PtrKinds::None
             },
-            NoProtoSchemaKinds::Scalar => {
-                NoProtoPointerKinds::Standard { value: 0 }
+            NP_SchemaKinds::Scalar => {
+                NP_PtrKinds::Standard { value: 0 }
             },
-            NoProtoSchemaKinds::List { of } => {
-                NoProtoPointerKinds::Standard { value: 0 }
+            NP_SchemaKinds::List { of } => {
+                NP_PtrKinds::Standard { value: 0 }
             },
-            NoProtoSchemaKinds::Table { columns  } => {
-                NoProtoPointerKinds::Standard { value: 0 }
+            NP_SchemaKinds::Table { columns  } => {
+                NP_PtrKinds::Standard { value: 0 }
             },
-            NoProtoSchemaKinds::Map { value } => {
-                NoProtoPointerKinds::Standard { value: 0 }
+            NP_SchemaKinds::Map { value } => {
+                NP_PtrKinds::Standard { value: 0 }
             },
-            NoProtoSchemaKinds::Enum { choices } => {
-                NoProtoPointerKinds::Standard { value: 0 }
+            NP_SchemaKinds::Enum { choices } => {
+                NP_PtrKinds::Standard { value: 0 }
             },
-            NoProtoSchemaKinds::Tuple { values } => {
-                NoProtoPointerKinds::Standard { value: 0 }
+            NP_SchemaKinds::Tuple { values } => {
+                NP_PtrKinds::Standard { value: 0 }
             }
         };
 
-        NoProtoPointer {
+        NP_Ptr {
             address: address,
             kind: thisKind,
             memory: memory,
@@ -154,7 +156,7 @@ impl<'a, T: NoProtoValue<'a> + Default> NoProtoPointer<'a, T> {
     }
 */
 
-    pub fn get(&mut self) -> std::result::Result<Option<&T>, NoProtoError> {
+    pub fn get(&mut self) -> std::result::Result<Option<&T>, NP_Error> {
 
         if self.cached {
             return Ok(Some(&self.value));
@@ -172,7 +174,7 @@ impl<'a, T: NoProtoValue<'a> + Default> NoProtoPointer<'a, T> {
         })
     }
 
-    pub fn set(&mut self, value: T) -> std::result::Result<(), NoProtoError> {
+    pub fn set(&mut self, value: T) -> std::result::Result<(), NP_Error> {
         self.kind = T::buffer_set(self.address, &self.kind, self.schema, Rc::clone(&self.memory), Box::new(&value))?;
         self.value = value;
         self.cached = true;
@@ -180,7 +182,7 @@ impl<'a, T: NoProtoValue<'a> + Default> NoProtoPointer<'a, T> {
     }
 
     #[doc(hidden)]
-    pub fn new_standard_ptr(address: u32, schema: &'a NoProtoSchema, memory: Rc<RefCell<NoProtoMemory>>) -> std::result::Result<Self, NoProtoError> {
+    pub fn new_standard_ptr(address: u32, schema: &'a NP_Schema, memory: Rc<RefCell<NP_Memory>>) -> std::result::Result<Self, NP_Error> {
 
         let addr = address as usize;
         let mut value: [u8; 4] = [0; 4];
@@ -189,9 +191,9 @@ impl<'a, T: NoProtoValue<'a> + Default> NoProtoPointer<'a, T> {
             value.copy_from_slice(&b_bytes[addr..(addr+4)]);
         }
 
-        Ok(NoProtoPointer {
+        Ok(NP_Ptr {
             address: address,
-            kind: NoProtoPointerKinds::Standard { value: u32::from_le_bytes(value) },
+            kind: NP_PtrKinds::Standard { value: u32::from_le_bytes(value) },
             memory: memory,
             schema: schema,
             cached: false,
@@ -200,7 +202,7 @@ impl<'a, T: NoProtoValue<'a> + Default> NoProtoPointer<'a, T> {
     }
 
     #[doc(hidden)]
-    pub fn new_table_item_ptr(address: u32, schema: &'a NoProtoSchema, memory: Rc<RefCell<NoProtoMemory>>) -> std::result::Result<Self, NoProtoError> {
+    pub fn new_table_item_ptr(address: u32, schema: &'a NP_Schema, memory: Rc<RefCell<NP_Memory>>) -> std::result::Result<Self, NP_Error> {
 
         let addr = address as usize;
         let mut value: [u8; 4] = [0; 4];
@@ -214,9 +216,9 @@ impl<'a, T: NoProtoValue<'a> + Default> NoProtoPointer<'a, T> {
             index = b_bytes[addr + 8];
         }
 
-        Ok(NoProtoPointer {
+        Ok(NP_Ptr {
             address: address,
-            kind: NoProtoPointerKinds::TableItem { 
+            kind: NP_PtrKinds::TableItem { 
                 value: u32::from_le_bytes(value),
                 next: u32::from_le_bytes(next),
                 i: index
@@ -229,7 +231,7 @@ impl<'a, T: NoProtoValue<'a> + Default> NoProtoPointer<'a, T> {
     }
 
     #[doc(hidden)]
-    pub fn new_map_item_ptr(address: u32, schema: &'a NoProtoSchema, memory: Rc<RefCell<NoProtoMemory>>) -> std::result::Result<Self, NoProtoError> {
+    pub fn new_map_item_ptr(address: u32, schema: &'a NP_Schema, memory: Rc<RefCell<NP_Memory>>) -> std::result::Result<Self, NP_Error> {
 
         let addr = address as usize;
         let mut value: [u8; 4] = [0; 4];
@@ -243,9 +245,9 @@ impl<'a, T: NoProtoValue<'a> + Default> NoProtoPointer<'a, T> {
             key.copy_from_slice(&b_bytes[(addr + 8)..(addr + 12)]);
         }
 
-        Ok(NoProtoPointer {
+        Ok(NP_Ptr {
             address: address,
-            kind: NoProtoPointerKinds::MapItem { 
+            kind: NP_PtrKinds::MapItem { 
                 value: u32::from_le_bytes(value),
                 next: u32::from_le_bytes(next),
                 key: u32::from_le_bytes(key)
@@ -258,7 +260,7 @@ impl<'a, T: NoProtoValue<'a> + Default> NoProtoPointer<'a, T> {
     }
 
     #[doc(hidden)]
-    pub fn new_list_item_ptr(address: u32, schema: &'a NoProtoSchema, memory: Rc<RefCell<NoProtoMemory>>) -> std::result::Result<Self, NoProtoError> {
+    pub fn new_list_item_ptr(address: u32, schema: &'a NP_Schema, memory: Rc<RefCell<NP_Memory>>) -> std::result::Result<Self, NP_Error> {
 
         let addr = address as usize;
         let mut value: [u8; 4] = [0; 4];
@@ -272,9 +274,9 @@ impl<'a, T: NoProtoValue<'a> + Default> NoProtoPointer<'a, T> {
             index.copy_from_slice(&b_bytes[(addr + 8)..(addr + 10)]);
         }
 
-        Ok(NoProtoPointer {
+        Ok(NP_Ptr {
             address: address,
-            kind: NoProtoPointerKinds::ListItem { 
+            kind: NP_PtrKinds::ListItem { 
                 value: u32::from_le_bytes(value),
                 next: u32::from_le_bytes(next),
                 i: u16::from_le_bytes(index)
@@ -290,13 +292,13 @@ impl<'a, T: NoProtoValue<'a> + Default> NoProtoPointer<'a, T> {
         if self.address == 0 { return false; } else { return true; }
     }
 
-    pub fn clear(&mut self) -> std::result::Result<(), NoProtoError> {
+    pub fn clear(&mut self) -> std::result::Result<(), NP_Error> {
         // self.kind.set_value_address(self.address, 0, Rc::clone(&self.memory));
         Ok(())
     }
 
-    pub fn convert(self) -> std::result::Result<Option<T>, NoProtoError> {
-        let result = T::buffer_into(self.address, self.kind, self.schema, self.memory)?;
+    pub fn into(self) -> std::result::Result<Option<T>, NP_Error> {
+        let result = T::buffer_into(self.address, self.kind, self.schema, Rc::clone(&self.memory))?;
 
         Ok(match result {
             Some(x) => Some(*x),
@@ -305,10 +307,10 @@ impl<'a, T: NoProtoValue<'a> + Default> NoProtoPointer<'a, T> {
     }
 
     /*
-    pub fn as_table(&mut self) -> std::result::Result<T, NoProtoError> {
+    pub fn as_table(&mut self) -> std::result::Result<T, NP_Error> {
 
         match &*self.schema.kind {
-            NoProtoSchemaKinds::Table { columns } => {
+            NP_SchemaKinds::Table { columns } => {
 
                 let mut addr = self.kind.get_value();
 
@@ -327,20 +329,20 @@ impl<'a, T: NoProtoValue<'a> + Default> NoProtoPointer<'a, T> {
                     head.copy_from_slice(&b_bytes[a..(a+4)]);
                 }
 
-                unsafe { Ok(NoProtoTable::new(addr, u32::from_le_bytes(head), Rc::clone(&self.memory), &columns)) }
+                unsafe { Ok(NP_Table::new(addr, u32::from_le_bytes(head), Rc::clone(&self.memory), &columns)) }
             },
             _ => {
-                Err(NoProtoError::new(""))
+                Err(NP_Error::new(""))
             }
         }
     }*/
 
 /*
-    pub fn as_list(&mut self) -> std::result::Result<NoProtoList, NoProtoError> {
+    pub fn as_list(&mut self) -> std::result::Result<NP_List, NP_Error> {
         let model = self.schema;
 
         match &*model.kind {
-            NoProtoSchemaKinds::List { of } => {
+            NP_SchemaKinds::List { of } => {
                 let mut addr = self.get_value_address();
                 let mut set_addr = false;
 
@@ -364,7 +366,7 @@ impl<'a, T: NoProtoValue<'a> + Default> NoProtoPointer<'a, T> {
                     tail.copy_from_slice(&b_bytes[(a+4)..(a+8)]);
                 }
 
-                Ok(NoProtoList::new(addr, u32::from_le_bytes(head), u32::from_le_bytes(tail), Rc::clone(&self.memory), &of))
+                Ok(NP_List::new(addr, u32::from_le_bytes(head), u32::from_le_bytes(tail), Rc::clone(&self.memory), &of))
             }
             _ => {
                 Err(type_error(TypeReq::Collection, "list", &model))
@@ -372,12 +374,12 @@ impl<'a, T: NoProtoValue<'a> + Default> NoProtoPointer<'a, T> {
         }
     }
 
-    pub fn as_tuple(&mut self) -> std::result::Result<NoProtoTuple, NoProtoError> {
+    pub fn as_tuple(&mut self) -> std::result::Result<NP_Tuple, NP_Error> {
 
         let model = self.schema;
 
         match &*model.kind {
-            NoProtoSchemaKinds::Tuple { values } => {
+            NP_SchemaKinds::Tuple { values } => {
                 let mut addr = self.get_value_address();
                 let mut set_addr = false;
 
@@ -408,7 +410,7 @@ impl<'a, T: NoProtoValue<'a> + Default> NoProtoPointer<'a, T> {
                     head.copy_from_slice(&b_bytes[a..(a+4)]);
                 }
 
-                Ok(NoProtoTuple::new(addr, u32::from_le_bytes(head), Rc::clone(&self.memory), &values))
+                Ok(NP_Tuple::new(addr, u32::from_le_bytes(head), Rc::clone(&self.memory), &values))
             }
             _ => {
                 Err(type_error(TypeReq::Collection, "tuple", &model))
@@ -417,11 +419,11 @@ impl<'a, T: NoProtoValue<'a> + Default> NoProtoPointer<'a, T> {
     }
 
 
-    pub fn as_map(&mut self) -> std::result::Result<NoProtoMap, NoProtoError> {
+    pub fn as_map(&mut self) -> std::result::Result<NP_Map, NP_Error> {
         let model = self.schema;
 
         match &*model.kind {
-            NoProtoSchemaKinds::Map { value } => {
+            NP_SchemaKinds::Map { value } => {
 
                 let mut addr = self.get_value_address();
                 let mut set_addr = false;
@@ -444,7 +446,7 @@ impl<'a, T: NoProtoValue<'a> + Default> NoProtoPointer<'a, T> {
                     head.copy_from_slice(&b_bytes[a..(a+4)]);
                 }
 
-                Ok(NoProtoMap::new(addr, u32::from_le_bytes(head), Rc::clone(&self.memory), value))
+                Ok(NP_Map::new(addr, u32::from_le_bytes(head), Rc::clone(&self.memory), value))
             }
             _ => {
                 Err(type_error(TypeReq::Collection, "map", &model))
@@ -460,7 +462,7 @@ impl<'a, T: NoProtoValue<'a> + Default> NoProtoPointer<'a, T> {
 /*
 // unsigned integer size:        0 to (2^i) -1
 //   signed integer size: -2^(i-1) to  2^(i-1) 
-pub enum NoProtoDataType {
+pub enum NP_DataType {
     none,
     /*table {
         head: u32
@@ -501,30 +503,30 @@ pub enum NoProtoDataType {
 }*/
 
 // Pointer -> String
-/*impl From<&NoProtoPointer> for std::result::Result<String> {
-    fn from(ptr: &NoProtoPointer) -> std::result::Result<String> {
+/*impl From<&NP_Ptr> for std::result::Result<String> {
+    fn from(ptr: &NP_Ptr) -> std::result::Result<String> {
         ptr.to_string()
     }
 }*/
 
 /*
 // cast i64 => Pointer
-impl From<i64> for NoProtoValue {
+impl From<i64> for NP_Value {
     fn from(num: i64) -> Self {
-        NoProtoValue {
+        NP_Value {
             loaded: false,
             address: 0,
-            value: NoProtoValue::int64 { value: num },
+            value: NP_Value::int64 { value: num },
             // model: None
         }
     }
 }
 
 // cast Pointer => std::result::Result<i64>
-impl From<&NoProtoValue> for std::result::Result<i64> {
-    fn from(ptr: &NoProtoValue) -> std::result::Result<i64> {
+impl From<&NP_Value> for std::result::Result<i64> {
+    fn from(ptr: &NP_Value) -> std::result::Result<i64> {
         match ptr.value {
-            NoProtoValue::int64 { value } => {
+            NP_Value::int64 { value } => {
                 Some(value)
             }
             _ => None

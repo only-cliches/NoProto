@@ -1,22 +1,22 @@
-use crate::pointer::NoProtoPointerKinds;
-use crate::pointer::NoProtoValue;
-use crate::{memory::NoProtoMemory, pointer::NoProtoPointer, error::NoProtoError, schema::NoProtoSchema};
+use crate::pointer::NP_PtrKinds;
+use crate::pointer::NP_Value;
+use crate::{memory::NP_Memory, pointer::NP_Ptr, error::NP_Error, schema::NP_Schema};
 use std::rc::Rc;
 use std::cell::RefCell;
 
-pub struct NoProtoTuple<'a> {
+pub struct NP_Tuple<'a> {
     address: u32, // pointer location
     head: u32,
-    memory: Rc<RefCell<NoProtoMemory>>,
-    values: Option<&'a Vec<NoProtoSchema>>
+    memory: Rc<RefCell<NP_Memory>>,
+    values: Option<&'a Vec<NP_Schema>>
 }
 
 
-impl<'a> NoProtoTuple<'a> {
+impl<'a> NP_Tuple<'a> {
 
     #[doc(hidden)]
-    pub fn new(address: u32, head: u32, memory: Rc<RefCell<NoProtoMemory>>, values: &'a Vec<NoProtoSchema>) -> Self {
-        NoProtoTuple {
+    pub fn new(address: u32, head: u32, memory: Rc<RefCell<NP_Memory>>, values: &'a Vec<NP_Schema>) -> Self {
+        NP_Tuple {
             address,
             head,
             memory,
@@ -24,11 +24,11 @@ impl<'a> NoProtoTuple<'a> {
         }
     }
 /*
-    pub fn select(&self, index: u16) -> Option<NoProtoPointer> {
+    pub fn select(&self, index: u16) -> Option<NP_Ptr> {
 
     }
 */
-    pub fn delete(&self, index: u16) -> bool {
+    pub fn delete(&self, _index: u16) -> bool {
         false
     }
 
@@ -38,8 +38,8 @@ impl<'a> NoProtoTuple<'a> {
 
 }
 
-impl<'a> NoProtoValue<'a> for NoProtoTuple<'a> {
-    fn new<T: NoProtoValue<'a> + Default>() -> Self {
+impl<'a> NP_Value for NP_Tuple<'a> {
+    fn new<T: NP_Value + Default>() -> Self {
         unreachable!()
     }
     fn is_type(_type_str: &str) -> bool { 
@@ -47,20 +47,20 @@ impl<'a> NoProtoValue<'a> for NoProtoTuple<'a> {
     }
     fn type_idx() -> (i64, String) { (-1, "tuple".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (-1, "tuple".to_owned()) }
-    /*fn buffer_get(&self, _address: u32, _kind: &NoProtoPointerKinds, _schema: &NoProtoSchema, _buffer: Rc<RefCell<NoProtoMemory>>) -> std::result::Result<Option<Box<Self>>, NoProtoError> {
-        Err(NoProtoError::new("This type doesn't support .get()!"))
+    /*fn buffer_get(&self, _address: u32, _kind: &NP_PtrKinds, _schema: &NP_Schema, _buffer: Rc<RefCell<NP_Memory>>) -> std::result::Result<Option<Box<Self>>, NP_Error> {
+        Err(NP_Error::new("This type doesn't support .get()!"))
     }
-    fn buffer_set(&mut self, _address: u32, _kind: &NoProtoPointerKinds, _schema: &NoProtoSchema, _buffer: Rc<RefCell<NoProtoMemory>>, _value: Box<&Self>) -> std::result::Result<NoProtoPointerKinds, NoProtoError> {
-        Err(NoProtoError::new("This type doesn't support .set()!"))
+    fn buffer_set(&mut self, _address: u32, _kind: &NP_PtrKinds, _schema: &NP_Schema, _buffer: Rc<RefCell<NP_Memory>>, _value: Box<&Self>) -> std::result::Result<NP_PtrKinds, NP_Error> {
+        Err(NP_Error::new("This type doesn't support .set()!"))
     }
-    fn buffer_into(&self, address: u32, kind: &NoProtoPointerKinds, schema: NoProtoSchema, buffer: Rc<RefCell<NoProtoMemory>>) -> std::result::Result<Option<Box<Self>>, NoProtoError> {
+    fn buffer_into(&self, address: u32, kind: &NP_PtrKinds, schema: NP_Schema, buffer: Rc<RefCell<NP_Memory>>) -> std::result::Result<Option<Box<Self>>, NP_Error> {
         self.buffer_get(address, kind, schema, buffer)
     }*/
 }
 
-impl<'a> Default for NoProtoTuple<'a> {
+impl<'a> Default for NP_Tuple<'a> {
 
     fn default() -> Self {
-        NoProtoTuple { address: 0, head: 0, memory: Rc::new(RefCell::new(NoProtoMemory { bytes: vec![]})), values: None}
+        NP_Tuple { address: 0, head: 0, memory: Rc::new(RefCell::new(NP_Memory { bytes: vec![]})), values: None}
     }
 }

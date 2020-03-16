@@ -34,7 +34,7 @@ const model = {
 }
 ```
 
-# NoProto
+# NP_
 High Performance Serialization Library
 
 ## Features
@@ -44,9 +44,9 @@ High Performance Serialization Library
 - Supports native data types
 - Supports collection types (list, map, & table)
 
-NoProto allows you to store and mutate structured data with near zero overhead.  It's like JSON but faster, type safe and more space efficient.
+NP_ allows you to store and mutate structured data with near zero overhead.  It's like JSON but faster, type safe and more space efficient.
 
-NoProto moves the cost of deserialization to the access methods instead of deserializing the entire object ahead of time. This makes it a perfect use case for things like database storage or file storage of structured data.  Deserilizing is free, exporting just gives you the buffer created by the library.
+NP_ moves the cost of deserialization to the access methods instead of deserializing the entire object ahead of time. This makes it a perfect use case for things like database storage or file storage of structured data.  Deserilizing is free, exporting just gives you the buffer created by the library.
 
 #### Compared to FlatBuffers & Cap'N Proto:
 - Schemas are dynamic at runtime, no compilation step
@@ -66,7 +66,7 @@ NoProto moves the cost of deserialization to the access methods instead of deser
 - Supports much larger documents (4GB vs 16MB)
 - Better collection support & more supported types
 
-### Good Use Cases For NoProto
+### Good Use Cases For NP_
 - Database object storage.
 - File object storage.
 - Sending/Receiving objects over a network.
@@ -89,7 +89,7 @@ In a server/client setup compaction can be performed in batches on the server du
 
 ## Example
 ```ts
-import * as noProto from "noproto";
+import * as NP_ from "NP_";
 
 const dataModels = {
     user: [
@@ -116,7 +116,7 @@ const dataModels = {
 }
 
 // new object
-const newUser = noProto.makeRoot(dataModels.user);
+const newUser = NP_.makeRoot(dataModels.user);
 
 // Basically ES6 Map API for tables
 newUser.root.set("id", "5f1e1667-ff4d-4910-94e0-30a7d7e00310");
@@ -124,11 +124,11 @@ newUser.root.set("first", "Sherlock",);
 newUser.root.set("last",  "Holmes");
 
 // make new nested table
-const address: noProto.Table = newUser.root.set("address", noProto.makeTable()); 
+const address: NP_.Table = newUser.root.set("address", NP_.makeTable()); 
 address.set("street", "221B Baker St");
 
 // make new list
-const tags: noProto.List<string> = newUser.root.set("tags", noProto.makeList());
+const tags: NP_.List<string> = newUser.root.set("tags", NP_.makeList());
 // lists have Array like API
 tags.push("my", "tags", "here");
 tags.unshift("more");
@@ -140,7 +140,7 @@ const buffer: Uint8Array[] = newUser.export();
 // export to json: newUser.toJSON();
 
 // serialize
-const importedUser = noProto.makeRoot(dataModels.user, buffer);
+const importedUser = NP_.makeRoot(dataModels.user, buffer);
 console.log(importedUser.root.get("first")) // "SherlocK"
 
 const importedAddress = importedUser.get("address");
@@ -239,16 +239,16 @@ time_id (4 byte uint timestamp) + (16 byte random number)
 // c[0] + (c[1] << 8) + (c[2] << 16) + (c[3] << 24)
 
 // API
-import * as noproto from "noproto";
+import * as NP_ from "NP_";
 
 // parse object (Basically JS Map API)
-const user = noproto.load([ /* ArrayBuffer or Uint8Array */ ], dataModel);
+const user = NP_.load([ /* ArrayBuffer or Uint8Array */ ], dataModel);
 user.get("name"); // get value
 user.set("name", "value"); // set value
 
 // list api
 
-const newList = user.set("tags", noproto.makeList()); // replace/create list
+const newList = user.set("tags", NP_.makeList()); // replace/create list
 // const existingList = user.get("tags");
 newList.push(...) // add to end of array
 newList.unshift(...) // add to beginning of array
@@ -270,7 +270,7 @@ while(it.hasValue()) {
     it.next();
 }
 
-const newMap = user.set("address", noproto.makeMap()); // replace/create map
+const newMap = user.set("address", NP_.makeMap()); // replace/create map
 // const existingMap = user.get("address");
 
 user.getWastedBytes() // how many bytes can we free if we compact?
@@ -282,14 +282,14 @@ user.compact();
 const bytes: Uint8Array[] = user.export(); 
 
 // create new object
-const newUser = noproto.makeRoot(dataModel);
+const newUser = NP_.makeRoot(dataModel);
 newUser.set("name", "value");
 newUser.export();
 
 // recursively convert to JSON object
 user.toJSON(); 
-// serialize JSON into noproto
-const newUser2 = noproto.fromJSON(jsonObject, dataModel);
+// serialize JSON into NP_
+const newUser2 = NP_.fromJSON(jsonObject, dataModel);
 
 ```
 

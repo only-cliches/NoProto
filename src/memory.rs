@@ -1,27 +1,27 @@
 
-use crate::pointer::NoProtoPointerKinds;
-use crate::error::NoProtoError;
+use crate::pointer::NP_PtrKinds;
+use crate::error::NP_Error;
 
-pub struct NoProtoMemory {
+pub struct NP_Memory {
     pub bytes: Vec<u8>
 }
 
 const MAX_SIZE: u64 = std::u32::MAX as u64;
 
-impl NoProtoMemory {
-    pub fn malloc(&mut self, bytes: Vec<u8>) -> std::result::Result<u32, NoProtoError> {
+impl NP_Memory {
+    pub fn malloc(&mut self, bytes: Vec<u8>) -> std::result::Result<u32, NP_Error> {
         let location: u32 = self.bytes.len() as u32;
 
         // not enough space left?
         if (location + bytes.len() as u32) as u64 >= MAX_SIZE {
-            return Err(NoProtoError::new("Out of memory!"))
+            return Err(NP_Error::new("Out of memory!"))
         }
 
         &self.bytes.extend(bytes);
         Ok(location)
     }
 
-    pub fn set_value_address(&mut self, address: u32, val: u32, kind: &NoProtoPointerKinds) -> std::result::Result<NoProtoPointerKinds, NoProtoError> {
+    pub fn set_value_address(&mut self, address: u32, val: u32, kind: &NP_PtrKinds) -> std::result::Result<NP_PtrKinds, NP_Error> {
 
         let addr_bytes = val.to_le_bytes();
     
@@ -30,20 +30,20 @@ impl NoProtoMemory {
         }
 
         Ok(match kind {
-            NoProtoPointerKinds::None => {
-                NoProtoPointerKinds::None
+            NP_PtrKinds::None => {
+                NP_PtrKinds::None
             }
-            NoProtoPointerKinds::Standard { value: _ } => {
-                NoProtoPointerKinds::Standard { value: val}
+            NP_PtrKinds::Standard { value: _ } => {
+                NP_PtrKinds::Standard { value: val}
             },
-            NoProtoPointerKinds::MapItem { value: _, key,  next  } => {
-                NoProtoPointerKinds::MapItem { value: val, key: *key, next: *next }
+            NP_PtrKinds::MapItem { value: _, key,  next  } => {
+                NP_PtrKinds::MapItem { value: val, key: *key, next: *next }
             },
-            NoProtoPointerKinds::TableItem { value: _, i, next  } => {
-                NoProtoPointerKinds::TableItem { value: val, i: *i, next: *next }
+            NP_PtrKinds::TableItem { value: _, i, next  } => {
+                NP_PtrKinds::TableItem { value: val, i: *i, next: *next }
             },
-            NoProtoPointerKinds::ListItem { value: _, i, next  } => {
-                NoProtoPointerKinds::ListItem { value: val, i: *i, next: *next }
+            NP_PtrKinds::ListItem { value: _, i, next  } => {
+                NP_PtrKinds::ListItem { value: val, i: *i, next: *next }
             }
         })
     }

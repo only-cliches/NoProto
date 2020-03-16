@@ -1,17 +1,18 @@
-use crate::pointer::NoProtoPointerKinds;
-use crate::{memory::NoProtoMemory, pointer::{NoProtoValue, NoProtoPointer}, error::NoProtoError, schema::{NoProtoSchemaKinds, NoProtoSchema}};
+use crate::pointer::NP_ValueInto;
+use crate::pointer::NP_PtrKinds;
+use crate::{memory::NP_Memory, pointer::{NP_Value, NP_Ptr}, error::NP_Error, schema::{NP_SchemaKinds, NP_Schema, NP_TypeKeys}};
 use std::rc::Rc;
 use std::cell::RefCell;
 
-pub struct NoProtoTable<'a> {
+pub struct NP_Table<'a> {
     address: u32, // pointer location
     head: u32,
-    memory: Rc<RefCell<NoProtoMemory>>,
-    columns: Option<&'a Vec<Option<(u8, String, NoProtoSchema)>>>
+    memory: Rc<RefCell<NP_Memory>>,
+    columns: Option<&'a Vec<Option<(u8, String, NP_Schema)>>>
 }
 
-impl<'a> NoProtoValue<'a> for NoProtoTable<'a> {
-    fn new<T: NoProtoValue<'a> + Default>() -> Self {
+impl<'a> NP_Value for NP_Table<'a> {
+    fn new<T: NP_Value + Default>() -> Self {
         unreachable!()
     }
     fn is_type( _type_str: &str) -> bool { 
@@ -19,16 +20,19 @@ impl<'a> NoProtoValue<'a> for NoProtoTable<'a> {
     }
     fn type_idx() -> (i64, String) { (-1, "table".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (-1, "table".to_owned()) }
-    fn buffer_get(_address: u32, _kind: &NoProtoPointerKinds, _schema: &NoProtoSchema, _buffer: Rc<RefCell<NoProtoMemory>>) -> std::result::Result<Option<Box<Self>>, NoProtoError> {
-        Err(NoProtoError::new("This type (table) doesn't support .get()! Use .into() instead."))
+    fn buffer_get(_address: u32, _kind: &NP_PtrKinds, _schema: &NP_Schema, _buffer: Rc<RefCell<NP_Memory>>) -> std::result::Result<Option<Box<Self>>, NP_Error> {
+        Err(NP_Error::new("Type (table) doesn't support .get()! Use .into() instead."))
     }
-    fn buffer_set(_address: u32, _kind: &NoProtoPointerKinds, _schema: &NoProtoSchema, _buffer: Rc<RefCell<NoProtoMemory>>, value: Box<&Self>) -> std::result::Result<NoProtoPointerKinds, NoProtoError> {
-        Err(NoProtoError::new("This type (table) doesn't support .set()! Use .into() instead."))
+    fn buffer_set(_address: u32, _kind: &NP_PtrKinds, _schema: &NP_Schema, _buffer: Rc<RefCell<NP_Memory>>, _value: Box<&Self>) -> std::result::Result<NP_PtrKinds, NP_Error> {
+        Err(NP_Error::new("Type (table) doesn't support .set()! Use .into() instead."))
     }
-    fn buffer_into(address: u32, kind: NoProtoPointerKinds, schema: &'a NoProtoSchema, buffer: Rc<RefCell<NoProtoMemory>>) -> std::result::Result<Option<Box<NoProtoTable<'a>>>, NoProtoError> {
+}
+
+impl<'a> NP_ValueInto<'a> for NP_Table<'a> {
+    fn buffer_into(address: u32, kind: NP_PtrKinds, schema: &'a NP_Schema, buffer: Rc<RefCell<NP_Memory>>) -> std::result::Result<Option<Box<NP_Table<'a>>>, NP_Error> {
         
         match &*schema.kind {
-            NoProtoSchemaKinds::Table { columns } => {
+            NP_SchemaKinds::Table { columns } => {
 
                 let mut addr = kind.get_value();
 
@@ -47,27 +51,27 @@ impl<'a> NoProtoValue<'a> for NoProtoTable<'a> {
                     head.copy_from_slice(&b_bytes[a..(a+4)]);
                 }
 
-                Ok(Some(Box::new(NoProtoTable::new(addr, u32::from_le_bytes(head), buffer, &columns))))
+                Ok(Some(Box::new(NP_Table::new(addr, u32::from_le_bytes(head), buffer, &columns))))
             },
             _ => {
-                Err(NoProtoError::new(""))
+                Err(NP_Error::new(""))
             }
         }
     }
 }
 
-impl<'a> Default for NoProtoTable<'a> {
+impl<'a> Default for NP_Table<'a> {
 
     fn default() -> Self {
-        NoProtoTable { address: 0, head: 0, memory: Rc::new(RefCell::new(NoProtoMemory { bytes: vec![]})), columns: None}
+        NP_Table { address: 0, head: 0, memory: Rc::new(RefCell::new(NP_Memory { bytes: vec![]})), columns: None}
     }
 }
 
-impl<'a> NoProtoTable<'a> {
+impl<'a> NP_Table<'a> {
 
     #[doc(hidden)]
-    pub fn new(address: u32, head: u32, memory: Rc<RefCell<NoProtoMemory>>, columns: &'a Vec<Option<(u8, String, NoProtoSchema)>>) -> Self {
-        NoProtoTable {
+    pub fn new(address: u32, head: u32, memory: Rc<RefCell<NP_Memory>>, columns: &'a Vec<Option<(u8, String, NP_Schema)>>) -> Self {
+        NP_Table {
             address,
             head,
             memory,
@@ -75,9 +79,9 @@ impl<'a> NoProtoTable<'a> {
         }
     }
 
-    pub fn select<X: NoProtoValue<'a> + Default>(&'a mut self, column: &str) -> std::result::Result<NoProtoPointer<X>, NoProtoError> {
+    pub fn select<X: NP_Value + Default + NP_ValueInto<'a>>(&mut self, column: &str) -> std::result::Result<NP_Ptr<X>, NP_Error> {
 
-        let mut column_schema: Option<&NoProtoSchema> = None;
+        let mut column_schema: Option<&NP_Schema> = None;
 
         let column_index = &self.columns.unwrap().iter().fold(0u8, |prev, cur| {
             match cur {
@@ -94,8 +98,21 @@ impl<'a> NoProtoTable<'a> {
             }
         }) as &u8;
 
+
+
         match column_schema {
             Some(some_column_schema) => {
+
+
+
+                // make sure the type we're casting to isn't ANY or the cast itself isn't ANY
+                if X::type_idx().0 != NP_TypeKeys::Any as i64 && some_column_schema.type_data.0 != NP_TypeKeys::Any as i64  {
+
+                    // not using any casting, check type
+                    if some_column_schema.type_data.0 != X::type_idx().0 {
+                        return Err(NP_Error::new(format!("TypeError: Attempted to cast type ({}) to schema of type ({})!", X::type_idx().1, some_column_schema.type_data.1).as_str()));
+                    }
+                }
 
                 if self.head == 0 { // no values, create one
 
@@ -114,9 +131,9 @@ impl<'a> NoProtoTable<'a> {
                     
                     // update head to point to newly created TableItem pointer
                     self.set_head(addr);
-                    
-                    // provide 
-                    return Ok(NoProtoPointer::new_table_item_ptr(self.head, some_column_schema, Rc::clone(&self.memory))?);
+
+                    // provide
+                    return Ok(NP_Ptr::new_table_item_ptr(self.head, some_column_schema, Rc::clone(&self.memory))?);
                 } else { // values exist, loop through them to see if we have an existing pointer for this column
 
                     let mut next_addr = self.head as usize;
@@ -134,7 +151,7 @@ impl<'a> NoProtoTable<'a> {
 
                         // found our value!
                         if index == *column_index {
-                            return Ok(NoProtoPointer::new_table_item_ptr(next_addr as u32, some_column_schema, Rc::clone(&self.memory))?)
+                            return Ok(NP_Ptr::new_table_item_ptr(next_addr as u32, some_column_schema, Rc::clone(&self.memory))?)
                         }
 
                         
@@ -176,12 +193,12 @@ impl<'a> NoProtoTable<'a> {
                     }
                     
                     // provide 
-                    return Ok(NoProtoPointer::new_table_item_ptr(addr, some_column_schema, Rc::clone(&self.memory))?);
+                    return Ok(NP_Ptr::new_table_item_ptr(addr, some_column_schema, Rc::clone(&self.memory))?);
 
                 }
             },
             None => {
-                return Err(NoProtoError::new("Column not found, unable to select!"));
+                return Err(NP_Error::new("Column not found, unable to select!"));
             }
         }
     }
@@ -199,7 +216,7 @@ impl<'a> NoProtoTable<'a> {
         }
     }
 
-    pub fn has(&self, column: &str) -> std::result::Result<bool, NoProtoError> {
+    pub fn has(&self, column: &str) -> std::result::Result<bool, NP_Error> {
         let mut found = false;
 
         if self.head == 0 { // no values in this table

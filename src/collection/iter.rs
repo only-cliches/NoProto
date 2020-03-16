@@ -1,20 +1,20 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 
-pub enum NoProtoPointerItemKind {
+pub enum NP_PtrItemKind {
     list, map, table
 }
 
-pub struct NoProtoIteratorItem {
+pub struct NP_IteratorItem {
     pub i: u16,
     pub column: String,
     pub empty: bool,
-    kind: NoProtoPointerItemKind
+    kind: NP_PtrItemKind
 }
 /*
-impl NoProtoIteratorItem {
+impl NP_IteratorItem {
     
-    pub fn select(&self) -> NoProtoPointer {
+    pub fn select(&self) -> NP_Ptr {
 
     }
 
@@ -22,7 +22,7 @@ impl NoProtoIteratorItem {
 
     }
 
-    pub fn select_key(&self) -> NoProtoPointer {
+    pub fn select_key(&self) -> NP_Ptr {
 
     }
 }
@@ -30,14 +30,14 @@ impl NoProtoIteratorItem {
 
 
 // iterator / looping feature for Table
-impl Iterator for NoProtoTable {
-    type Item = NoProtoIteratorItem;
+impl Iterator for NP_Table {
+    type Item = NP_IteratorItem;
     
     // Here, we define the sequence using `.curr` and `.next`.
     // The return type is `Option<T>`:
     //     * When the `Iterator` is finished, `None` is returned.
     //     * Otherwise, the next value is wrapped in `Some` and returned.
-    fn next(&mut self) -> Option<NoProtoIteratorItem> {
+    fn next(&mut self) -> Option<NP_IteratorItem> {
 
     }
 }*/

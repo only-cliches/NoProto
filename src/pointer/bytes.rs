@@ -1,34 +1,34 @@
-use crate::schema::NoProtoSchema;
-use crate::error::NoProtoError;
-use crate::memory::NoProtoMemory;
+use crate::schema::NP_Schema;
+use crate::error::NP_Error;
+use crate::memory::NP_Memory;
 use std::{cell::RefCell, rc::Rc};
-use crate::{schema::NoProtoTypeKeys, pointer::NoProtoValue};
-use super::NoProtoPointerKinds;
+use crate::{schema::NP_TypeKeys, pointer::NP_Value};
+use super::{NP_ValueInto, NP_PtrKinds};
 
-pub struct NoProtoBytes {
+pub struct NP_Bytes {
     pub bytes: Vec<u8>
 }
 
-impl NoProtoBytes {
+impl NP_Bytes {
     pub fn new(bytes: Vec<u8>) -> Self {
-        NoProtoBytes { bytes: bytes }
+        NP_Bytes { bytes: bytes }
     }
 }
 
-impl<'a> NoProtoValue<'a> for NoProtoBytes {
+impl NP_Value for NP_Bytes {
 
-    fn new<T: NoProtoValue<'a> + Default>() -> Self {
-        NoProtoBytes { bytes: vec![] }
+    fn new<T: NP_Value + Default>() -> Self {
+        NP_Bytes { bytes: vec![] }
     }
 
     fn is_type( type_str: &str) -> bool {
         "bytes" == type_str || "u8[]" == type_str || "[u8]" == type_str
     }
 
-    fn type_idx() -> (i64, String) { (NoProtoTypeKeys::Bytes as i64, "bytes".to_owned()) }
-    fn self_type_idx(&self) -> (i64, String) { (NoProtoTypeKeys::Bytes as i64, "bytes".to_owned()) }
+    fn type_idx() -> (i64, String) { (NP_TypeKeys::Bytes as i64, "bytes".to_owned()) }
+    fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Bytes as i64, "bytes".to_owned()) }
 
-    fn buffer_get(_address: u32, kind: &NoProtoPointerKinds, _schema: &NoProtoSchema, buffer: Rc<RefCell<NoProtoMemory>>) -> std::result::Result<Option<Box<Self>>, NoProtoError> {
+    fn buffer_get(_address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, buffer: Rc<RefCell<NP_Memory>>) -> std::result::Result<Option<Box<Self>>, NP_Error> {
 
         let value = kind.get_value();
 
@@ -47,15 +47,15 @@ impl<'a> NoProtoValue<'a> for NoProtoBytes {
         // get bytes
         let bytes = &memory.bytes[(addr+4)..(addr+4+bytes_size)];
 
-        Ok(Some(Box::new(NoProtoBytes { bytes: bytes.to_vec() })))
+        Ok(Some(Box::new(NP_Bytes { bytes: bytes.to_vec() })))
     }
 
-    fn buffer_set(address: u32, kind: &NoProtoPointerKinds, _schema: &NoProtoSchema, buffer: Rc<RefCell<NoProtoMemory>>, value: Box<&Self>) -> std::result::Result<NoProtoPointerKinds, NoProtoError> {
+    fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, buffer: Rc<RefCell<NP_Memory>>, value: Box<&Self>) -> std::result::Result<NP_PtrKinds, NP_Error> {
 
         let size = value.bytes.len() as u64;
 
         if size >= std::u32::MAX as u64 { 
-            return Err(NoProtoError::new("Bytes too large!"));
+            return Err(NP_Error::new("Bytes too large!"));
         } else {
 
             let mut addr = kind.get_value() as usize;
@@ -100,8 +100,31 @@ impl<'a> NoProtoValue<'a> for NoProtoBytes {
     }
 }
 
-impl Default for NoProtoBytes {
+impl Default for NP_Bytes {
     fn default() -> Self { 
-        NoProtoBytes { bytes: vec![] }
+        NP_Bytes { bytes: vec![] }
      }
+}
+
+impl<'a> NP_ValueInto<'a> for NP_Bytes {
+    fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: &'a NP_Schema, buffer: Rc<RefCell<NP_Memory>>) -> std::result::Result<Option<Box<Self>>, NP_Error> {
+        let value = kind.get_value();
+
+        // empty value
+        if value == 0 {
+            return Ok(None)
+        }
+        
+        // get size of bytes
+        let addr = value as usize;
+        let mut size: [u8; 4] = [0; 4];
+        let memory = buffer.try_borrow()?;
+        size.copy_from_slice(&memory.bytes[addr..(addr+4)]);
+        let bytes_size = u32::from_le_bytes(size) as usize;
+
+        // get bytes
+        let bytes = &memory.bytes[(addr+4)..(addr+4+bytes_size)];
+
+        Ok(Some(Box::new(NP_Bytes { bytes: bytes.to_vec() })))
+    }
 }

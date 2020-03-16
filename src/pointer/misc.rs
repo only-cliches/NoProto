@@ -1,7 +1,8 @@
+use crate::pointer::NP_ValueInto;
 use json::JsonValue;
-use crate::schema::{NoProtoSchemaKinds, NoProtoSchema, NoProtoTypeKeys};
-use crate::pointer::NoProtoPointerKinds;
-use crate::{memory::NoProtoMemory, pointer::NoProtoValue, error::NoProtoError};
+use crate::schema::{NP_SchemaKinds, NP_Schema, NP_TypeKeys};
+use crate::pointer::NP_PtrKinds;
+use crate::{memory::NP_Memory, pointer::NP_Value, error::NP_Error};
 use std::{fmt, time::SystemTime, cell::RefCell, rc::Rc};
 use rand::Rng;
 
@@ -25,15 +26,15 @@ fn to_hex(num: u64, length: i32) -> String {
 /// 
 /// Allows floating point values to be stored without rounding errors, useful for storing financial data.
 /// 
-/// NoProto does not implement arithamtic between Big Integer Deciamls, it's recommended you use a crate like `rust_decimal` to perform calculations.  
+/// NP_ does not implement arithamtic between Big Integer Deciamls, it's recommended you use a crate like `rust_decimal` to perform calculations.  
 /// 
 /// Do NOT use the conversion to floating point to perform calculations, it'll kind of make the use of this data type moot.
-pub struct NoProtoDec {
+pub struct NP_Dec {
     num: i64,
     scale: u8
 }
 
-impl<'a> NoProtoDec {
+impl NP_Dec {
     pub fn to_float(&self) -> f64 {
         let bottom = 10i32.pow(self.scale as u32)  as f64;
 
@@ -43,7 +44,7 @@ impl<'a> NoProtoDec {
     }
 
     pub fn new(num: i64, scale: u8) -> Self {
-        NoProtoDec { num, scale }
+        NP_Dec { num, scale }
     }
 
     pub fn export(&self) -> (i64, u8) {
@@ -51,26 +52,26 @@ impl<'a> NoProtoDec {
     }
 }
 
-impl Default for NoProtoDec {
+impl Default for NP_Dec {
     fn default() -> Self { 
-        NoProtoDec::new(0,0)
+        NP_Dec::new(0,0)
      }
 }
 
-impl<'a> NoProtoValue<'a> for NoProtoDec {
+impl NP_Value for NP_Dec {
 
-    fn new<T: NoProtoValue<'a> + Default>() -> Self {
-        NoProtoDec::new(0,0)
+    fn new<T: NP_Value + Default>() -> Self {
+        NP_Dec::new(0,0)
     }
 
     fn is_type( type_str: &str) -> bool {
         "dec64" == type_str
     }
 
-    fn type_idx() -> (i64, String) { (NoProtoTypeKeys::Dec64 as i64, "dec64".to_owned()) }
-    fn self_type_idx(&self) -> (i64, String) { (NoProtoTypeKeys::Dec64 as i64, "dec64".to_owned()) }
+    fn type_idx() -> (i64, String) { (NP_TypeKeys::Dec64 as i64, "dec64".to_owned()) }
+    fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Dec64 as i64, "dec64".to_owned()) }
 
-    fn buffer_get(_address: u32, kind: &NoProtoPointerKinds, _schema: &NoProtoSchema, buffer: Rc<RefCell<NoProtoMemory>>) -> std::result::Result<Option<Box<Self>>, NoProtoError> {
+    fn buffer_get(_address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, buffer: Rc<RefCell<NP_Memory>>) -> std::result::Result<Option<Box<Self>>, NP_Error> {
 
         let addr = kind.get_value() as usize;
 
@@ -83,13 +84,13 @@ impl<'a> NoProtoValue<'a> for NoProtoDec {
 
         Ok(match memory.get_8_bytes(addr) {
             Some(x) => {
-                Some(Box::new(NoProtoDec::new(i64::from_le_bytes(x), u8::from_le_bytes([memory.bytes[(addr + 8) as usize]]))))
+                Some(Box::new(NP_Dec::new(i64::from_le_bytes(x), u8::from_le_bytes([memory.bytes[(addr + 8) as usize]]))))
             },
             None => None
         })
     }
 
-    fn buffer_set(address: u32, kind: &NoProtoPointerKinds, _schema: &NoProtoSchema, buffer: Rc<RefCell<NoProtoMemory>>, value: Box<&Self>) -> std::result::Result<NoProtoPointerKinds, NoProtoError> {
+    fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, buffer: Rc<RefCell<NP_Memory>>, value: Box<&Self>) -> std::result::Result<NP_PtrKinds, NP_Error> {
 
         let mut addr = kind.get_value();
 
@@ -121,33 +122,53 @@ impl<'a> NoProtoValue<'a> for NoProtoDec {
     }
 }
 
+impl<'a> NP_ValueInto<'a> for NP_Dec {
+    fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: &'a NP_Schema, buffer: Rc<RefCell<NP_Memory>>) -> std::result::Result<Option<Box<Self>>, NP_Error> {
+        let addr = kind.get_value() as usize;
+
+        // empty value
+        if addr == 0 {
+            return Ok(None);
+        }
+
+        let memory = buffer.try_borrow()?;
+
+        Ok(match memory.get_8_bytes(addr) {
+            Some(x) => {
+                Some(Box::new(NP_Dec::new(i64::from_le_bytes(x), u8::from_le_bytes([memory.bytes[(addr + 8) as usize]]))))
+            },
+            None => None
+        })
+    }
+}
+
 
 /// Represents a Geographic Coordinate (lat / lon)
 /// 
 /// When `geo4`, `geo8`, or `geo16` types are used the data is saved and retrieved with this struct.
 #[derive(Debug)]
-pub struct NoProtoGeo {
+pub struct NP_Geo {
     pub lat: f64,
     pub lon: f64
 }
 
-impl Default for NoProtoGeo {
+impl Default for NP_Geo {
     fn default() -> Self { 
-        NoProtoGeo { lat: 0.0, lon: 0.0 }
+        NP_Geo { lat: 0.0, lon: 0.0 }
      }
 }
 
-impl<'a> NoProtoValue<'a> for NoProtoGeo {
+impl NP_Value for NP_Geo {
 
-    fn new<T: NoProtoValue<'a> + Default>() -> Self {
-        NoProtoGeo { lat: 0.0, lon: 0.0 }
+    fn new<T: NP_Value + Default>() -> Self {
+        NP_Geo { lat: 0.0, lon: 0.0 }
     }
 
     fn is_type( type_str: &str) -> bool {
         "geo4" == type_str || "geo8" == type_str || "geo16" == type_str 
     }
 
-    fn schema_state(type_string: &str, _json_schema: &JsonValue) -> std::result::Result<i64, NoProtoError> {
+    fn schema_state(type_string: &str, _json_schema: &JsonValue) -> std::result::Result<i64, NP_Error> {
         Ok(match type_string {
             "geo4" => 4,
             "geo8" => 8,
@@ -156,10 +177,10 @@ impl<'a> NoProtoValue<'a> for NoProtoGeo {
         })
     }
 
-    fn type_idx() -> (i64, String) { (NoProtoTypeKeys::Geo as i64, "geo".to_owned()) }
-    fn self_type_idx(&self) -> (i64, String) { (NoProtoTypeKeys::Geo as i64, "geo".to_owned()) }
+    fn type_idx() -> (i64, String) { (NP_TypeKeys::Geo as i64, "geo".to_owned()) }
+    fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Geo as i64, "geo".to_owned()) }
 
-    fn buffer_get(_address: u32, kind: &NoProtoPointerKinds, schema: &NoProtoSchema, buffer: Rc<RefCell<NoProtoMemory>>) -> std::result::Result<Option<Box<Self>>, NoProtoError> {
+    fn buffer_get(_address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: Rc<RefCell<NP_Memory>>) -> std::result::Result<Option<Box<Self>>, NP_Error> {
 
         let addr = kind.get_value() as usize;
 
@@ -190,7 +211,7 @@ impl<'a> NoProtoValue<'a> for NoProtoGeo {
 
                         let dev = 100f64;
 
-                        Some(Box::new(NoProtoGeo { lat: lat / dev, lon: lon / dev}))
+                        Some(Box::new(NP_Geo { lat: lat / dev, lon: lon / dev}))
                     },
                     None => None
                 })
@@ -214,7 +235,7 @@ impl<'a> NoProtoValue<'a> for NoProtoGeo {
     
                         let dev = 10000000f64;
     
-                        Some(Box::new(NoProtoGeo { lat: lat / dev, lon: lon / dev}))
+                        Some(Box::new(NP_Geo { lat: lat / dev, lon: lon / dev}))
                     },
                     None => None
                 })
@@ -233,7 +254,7 @@ impl<'a> NoProtoValue<'a> for NoProtoGeo {
                             }
                         }
         
-                        Some(Box::new(NoProtoGeo { lat: f64::from_le_bytes(bytes_lat), lon: f64::from_le_bytes(bytes_lon)}))
+                        Some(Box::new(NP_Geo { lat: f64::from_le_bytes(bytes_lat), lon: f64::from_le_bytes(bytes_lon)}))
                     },
                     None => None
                 })   
@@ -244,7 +265,7 @@ impl<'a> NoProtoValue<'a> for NoProtoGeo {
         }
     }
 
-    fn buffer_set(address: u32, kind: &NoProtoPointerKinds, schema: &NoProtoSchema, buffer: Rc<RefCell<NoProtoMemory>>, value: Box<&Self>) -> std::result::Result<NoProtoPointerKinds, NoProtoError> {
+    fn buffer_set(address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: Rc<RefCell<NP_Memory>>, value: Box<&Self>) -> std::result::Result<NP_PtrKinds, NP_Error> {
 
         let mut addr = kind.get_value();
 
@@ -347,23 +368,110 @@ impl<'a> NoProtoValue<'a> for NoProtoGeo {
     }
 }
 
+impl<'a> NP_ValueInto<'a> for NP_Geo {
+    fn buffer_into(_address: u32, kind: NP_PtrKinds, schema: &'a NP_Schema, buffer: Rc<RefCell<NP_Memory>>) -> std::result::Result<Option<Box<Self>>, NP_Error> {
+
+        let addr = kind.get_value() as usize;
+
+        // empty value
+        if addr == 0 {
+            return Ok(None);
+        }
+
+        let memory = buffer.try_borrow()?;
+
+        match schema.type_state {
+            4 => {
+                Ok(match memory.get_4_bytes(addr) {
+                    Some(x) => {
+                        let mut bytes_lat: [u8; 2] = [0; 2];
+                        let mut bytes_lon: [u8; 2] = [0; 2];
+
+                        for i in 0..x.len() {
+                            if i < 2 {
+                                bytes_lat[i as usize] = x[i as usize];
+                            } else {
+                                bytes_lon[i as usize - 2] = x[i as usize];
+                            }
+                        }
+
+                        let lat = i16::from_le_bytes(bytes_lat) as f64;
+                        let lon = i16::from_le_bytes(bytes_lon) as f64;
+
+                        let dev = 100f64;
+
+                        Some(Box::new(NP_Geo { lat: lat / dev, lon: lon / dev}))
+                    },
+                    None => None
+                })
+            },
+            8 => {
+                Ok(match memory.get_8_bytes(addr) {
+                    Some(x) => {
+                        let mut bytes_lat: [u8; 4] = [0; 4];
+                        let mut bytes_lon: [u8; 4] = [0; 4];
+    
+                        for i in 0..x.len() {
+                            if i < 4 {
+                                bytes_lat[i as usize] = x[i as usize];
+                            } else {
+                                bytes_lon[i as usize - 4] = x[i as usize];
+                            }
+                        }
+    
+                        let lat = i32::from_le_bytes(bytes_lat) as f64;
+                        let lon = i32::from_le_bytes(bytes_lon) as f64;
+    
+                        let dev = 10000000f64;
+    
+                        Some(Box::new(NP_Geo { lat: lat / dev, lon: lon / dev}))
+                    },
+                    None => None
+                })
+            },
+            16 => {
+                Ok(match memory.get_16_bytes(addr) {
+                    Some(x) => {
+                        let mut bytes_lat: [u8; 8] = [0; 8];
+                        let mut bytes_lon: [u8; 8] = [0; 8];
+        
+                        for i in 0..x.len() {
+                            if i < 8 {
+                                bytes_lat[i as usize] = x[i as usize];
+                            } else {
+                                bytes_lon[i as usize - 8] = x[i as usize];
+                            }
+                        }
+        
+                        Some(Box::new(NP_Geo { lat: f64::from_le_bytes(bytes_lat), lon: f64::from_le_bytes(bytes_lon)}))
+                    },
+                    None => None
+                })   
+            }
+            _ => {
+                unreachable!();
+            }
+        }
+    }
+}
+
 /// Represents a Time ID type which has a 64 bit timestamp and 64 random bits.
 /// 
 /// Useful for storing time stamp data that can't have collisions.
-pub struct NoProtoTimeID {
+pub struct NP_TimeID {
     pub id: [u8; 8],
     pub time: u64
 }
 
-impl<'a> NoProtoTimeID {
+impl NP_TimeID {
 
-    pub fn generate(id_bytes: Option<[u8; 8]>) -> NoProtoTimeID {
+    pub fn generate(id_bytes: Option<[u8; 8]>) -> NP_TimeID {
         let mut rng = rand::thread_rng();
         let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
 
         match id_bytes {
             Some(x) => {
-                NoProtoTimeID {
+                NP_TimeID {
                     time: now,
                     id: x
                 }
@@ -375,7 +483,7 @@ impl<'a> NoProtoTimeID {
                     id[x] = rng.gen_range(0, 255);
                 }
         
-                NoProtoTimeID {
+                NP_TimeID {
                     time: now,
                     id: id
                 }
@@ -431,32 +539,32 @@ impl<'a> NoProtoTimeID {
 }
 
 
-impl Default for NoProtoTimeID {
+impl Default for NP_TimeID {
     fn default() -> Self { 
-        NoProtoTimeID { id: [0; 8], time: 0 }
+        NP_TimeID { id: [0; 8], time: 0 }
      }
 }
 
-impl fmt::Debug for NoProtoTimeID {
+impl fmt::Debug for NP_TimeID {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.to_string(Some(20)))
     }
 }
 
-impl<'a> NoProtoValue<'a> for NoProtoTimeID {
+impl NP_Value for NP_TimeID {
 
-    fn new<T: NoProtoValue<'a> + Default>() -> Self {
-        NoProtoTimeID { id: [0; 8], time: 0 }
+    fn new<T: NP_Value + Default>() -> Self {
+        NP_TimeID { id: [0; 8], time: 0 }
     }
 
     fn is_type( type_str: &str) -> bool {
         "tid" == type_str
     }
 
-    fn type_idx() -> (i64, String) { (NoProtoTypeKeys::Tid as i64, "tid".to_owned()) }
-    fn self_type_idx(&self) -> (i64, String) { (NoProtoTypeKeys::Tid as i64, "tid".to_owned()) }
+    fn type_idx() -> (i64, String) { (NP_TypeKeys::Tid as i64, "tid".to_owned()) }
+    fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Tid as i64, "tid".to_owned()) }
 
-    fn buffer_get(_address: u32, kind: &NoProtoPointerKinds, _schema: &NoProtoSchema, buffer: Rc<RefCell<NoProtoMemory>>) -> std::result::Result<Option<Box<Self>>, NoProtoError> {
+    fn buffer_get(_address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, buffer: Rc<RefCell<NP_Memory>>) -> std::result::Result<Option<Box<Self>>, NP_Error> {
 
         let addr = kind.get_value() as usize;
 
@@ -474,7 +582,7 @@ impl<'a> NoProtoValue<'a> for NoProtoTimeID {
                 let mut time_bytes: [u8; 8] = [0; 8];
                 time_bytes.copy_from_slice(&x[8..16]);
 
-                Some(Box::new(NoProtoTimeID {
+                Some(Box::new(NP_TimeID {
                     id: id_bytes,
                     time: u64::from_le_bytes(time_bytes)
                 }))
@@ -483,7 +591,7 @@ impl<'a> NoProtoValue<'a> for NoProtoTimeID {
         })
     }
 
-    fn buffer_set(address: u32, kind: &NoProtoPointerKinds, _schema: &NoProtoSchema, buffer: Rc<RefCell<NoProtoMemory>>, value: Box<&Self>) -> std::result::Result<NoProtoPointerKinds, NoProtoError> {
+    fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, buffer: Rc<RefCell<NP_Memory>>, value: Box<&Self>) -> std::result::Result<NP_PtrKinds, NP_Error> {
 
         let mut addr = kind.get_value();
 
@@ -526,21 +634,48 @@ impl<'a> NoProtoValue<'a> for NoProtoTimeID {
     }
 }
 
+impl<'a> NP_ValueInto<'a> for NP_TimeID {
+    fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: &'a NP_Schema, buffer: Rc<RefCell<NP_Memory>>) -> std::result::Result<Option<Box<Self>>, NP_Error> {
+        let addr = kind.get_value() as usize;
+
+        // empty value
+        if addr == 0 {
+            return Ok(None);
+        }
+
+        let memory = buffer.try_borrow()?;
+        Ok(match memory.get_16_bytes(addr) {
+            Some(x) => {
+                let mut id_bytes: [u8; 8] = [0; 8];
+                id_bytes.copy_from_slice(&x[0..8]);
+
+                let mut time_bytes: [u8; 8] = [0; 8];
+                time_bytes.copy_from_slice(&x[8..16]);
+
+                Some(Box::new(NP_TimeID {
+                    id: id_bytes,
+                    time: u64::from_le_bytes(time_bytes)
+                }))
+            },
+            None => None
+        })
+    }
+}
 
 /// Represents a V4 UUID, good for globally unique identifiers
 /// 
 /// `uuid` types are always represented with this struct.
-pub struct NoProtoUUID {
+pub struct NP_UUID {
     pub value: [u8; 16]
 }
 
-impl<'a> NoProtoUUID {
+impl NP_UUID {
 
-    pub fn generate() -> NoProtoUUID {
+    pub fn generate() -> NP_UUID {
 
         let mut rng = rand::thread_rng();
 
-        let mut uuid = NoProtoUUID {
+        let mut uuid = NP_UUID {
             value: [0; 16]
         };
 
@@ -571,32 +706,32 @@ impl<'a> NoProtoUUID {
     }
 }
 
-impl fmt::Debug for NoProtoUUID {
+impl fmt::Debug for NP_UUID {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.to_string())
     }
 }
 
-impl Default for NoProtoUUID {
+impl Default for NP_UUID {
     fn default() -> Self { 
-        NoProtoUUID { value: [0; 16] }
+        NP_UUID { value: [0; 16] }
      }
 }
 
-impl<'a> NoProtoValue<'a> for NoProtoUUID {
+impl NP_Value for NP_UUID {
 
-    fn new<T: NoProtoValue<'a> + Default>() -> Self {
-        NoProtoUUID { value: [0; 16] }
+    fn new<T: NP_Value + Default>() -> Self {
+        NP_UUID { value: [0; 16] }
     }
 
     fn is_type( type_str: &str) -> bool {
         "uuid" == type_str
     }
 
-    fn type_idx() -> (i64, String) { (NoProtoTypeKeys::Uuid as i64, "uuid".to_owned()) }
-    fn self_type_idx(&self) -> (i64, String) { (NoProtoTypeKeys::Uuid as i64, "uuid".to_owned()) }
+    fn type_idx() -> (i64, String) { (NP_TypeKeys::Uuid as i64, "uuid".to_owned()) }
+    fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Uuid as i64, "uuid".to_owned()) }
 
-    fn buffer_get(_address: u32, kind: &NoProtoPointerKinds, _schema: &NoProtoSchema, buffer: Rc<RefCell<NoProtoMemory>>) -> std::result::Result<Option<Box<Self>>, NoProtoError> {
+    fn buffer_get(_address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, buffer: Rc<RefCell<NP_Memory>>) -> std::result::Result<Option<Box<Self>>, NP_Error> {
 
         let addr = kind.get_value() as usize;
 
@@ -608,13 +743,13 @@ impl<'a> NoProtoValue<'a> for NoProtoUUID {
         let memory = buffer.try_borrow()?;
         Ok(match memory.get_16_bytes(addr) {
             Some(x) => {
-                Some(Box::new(NoProtoUUID { value: x}))
+                Some(Box::new(NP_UUID { value: x}))
             },
             None => None
         })
     }
 
-    fn buffer_set(address: u32, kind: &NoProtoPointerKinds, _schema: &NoProtoSchema, buffer: Rc<RefCell<NoProtoMemory>>, value: Box<&Self>) -> std::result::Result<NoProtoPointerKinds, NoProtoError> {
+    fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, buffer: Rc<RefCell<NP_Memory>>, value: Box<&Self>) -> std::result::Result<NP_PtrKinds, NP_Error> {
 
         let mut addr = kind.get_value();
 
@@ -642,24 +777,43 @@ impl<'a> NoProtoValue<'a> for NoProtoUUID {
     }
 }
 
-pub struct NoProtoOption {
+impl<'a> NP_ValueInto<'a> for NP_UUID {
+    fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: &'a NP_Schema, buffer: Rc<RefCell<NP_Memory>>) -> std::result::Result<Option<Box<Self>>, NP_Error> {
+        let addr = kind.get_value() as usize;
+
+        // empty value
+        if addr == 0 {
+            return Ok(None);
+        }
+
+        let memory = buffer.try_borrow()?;
+        Ok(match memory.get_16_bytes(addr) {
+            Some(x) => {
+                Some(Box::new(NP_UUID { value: x}))
+            },
+            None => None
+        })
+    }
+}
+
+pub struct NP_Option {
     pub value: Option<String>
 }
 
-impl<'a> NoProtoValue<'a> for NoProtoOption {
+impl NP_Value for NP_Option {
 
-    fn new<T: NoProtoValue<'a> + Default>() -> Self {
-        NoProtoOption { value: None }
+    fn new<T: NP_Value + Default>() -> Self {
+        NP_Option { value: None }
     }
 
     fn is_type( type_str: &str) -> bool {
         "option" == type_str || "enum" == type_str
     }
 
-    fn type_idx() -> (i64, String) { (NoProtoTypeKeys::Enum as i64, "option".to_owned()) }
-    fn self_type_idx(&self) -> (i64, String) { (NoProtoTypeKeys::Enum as i64, "option".to_owned()) }
+    fn type_idx() -> (i64, String) { (NP_TypeKeys::Enum as i64, "option".to_owned()) }
+    fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Enum as i64, "option".to_owned()) }
 
-    fn buffer_get(_address: u32, kind: &NoProtoPointerKinds, schema: &NoProtoSchema, buffer: Rc<RefCell<NoProtoMemory>>) -> std::result::Result<Option<Box<Self>>, NoProtoError> {
+    fn buffer_get(_address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: Rc<RefCell<NP_Memory>>) -> std::result::Result<Option<Box<Self>>, NP_Error> {
 
         let addr = kind.get_value() as usize;
 
@@ -671,7 +825,7 @@ impl<'a> NoProtoValue<'a> for NoProtoOption {
         let memory = buffer.try_borrow()?;
 
         match &*schema.kind {
-            NoProtoSchemaKinds::Enum { choices } => {
+            NP_SchemaKinds::Enum { choices } => {
 
                 Ok(match memory.get_1_byte(addr) {
                     Some(x) => {
@@ -680,24 +834,24 @@ impl<'a> NoProtoValue<'a> for NoProtoOption {
                         if value_num > choices.len() {
                             None
                         } else {
-                            Some(Box::new(NoProtoOption { value: Some(choices[value_num].clone()) }))
+                            Some(Box::new(NP_Option { value: Some(choices[value_num].clone()) }))
                         }
                     },
                     None => None
                 })
             },
             _ => {
-                Err(NoProtoError::new(format!("TypeError: Attempted to read value of type ({}) to pointer of type ({})!", "option", schema.type_data.1).as_str()))
+                Err(NP_Error::new(format!("TypeError: Attempted to read value of type ({}) to pointer of type ({})!", "option", schema.type_data.1).as_str()))
             }
         }
     }
 
-    fn buffer_set(address: u32, kind: &NoProtoPointerKinds, schema: &NoProtoSchema, buffer: Rc<RefCell<NoProtoMemory>>, value: Box<&Self>) -> std::result::Result<NoProtoPointerKinds, NoProtoError> {
+    fn buffer_set(address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: Rc<RefCell<NP_Memory>>, value: Box<&Self>) -> std::result::Result<NP_PtrKinds, NP_Error> {
 
         let mut addr = kind.get_value();
         
         match &*schema.kind {
-            NoProtoSchemaKinds::Enum { choices } => {
+            NP_SchemaKinds::Enum { choices } => {
 
                 let mut value_num: i32 = -1;
 
@@ -712,7 +866,7 @@ impl<'a> NoProtoValue<'a> for NoProtoOption {
                     };
 
                     if value_num == -1 {
-                        return Err(NoProtoError::new("Option not found, cannot set uknown option!"));
+                        return Err(NP_Error::new("Option not found, cannot set uknown option!"));
                     }
                 }
 
@@ -739,22 +893,56 @@ impl<'a> NoProtoValue<'a> for NoProtoOption {
                 
             },
             _ => {
-                Err(NoProtoError::new(format!("TypeError: Attempted to read value of type ({}) to pointer of type ({})!", "option", schema.type_data.1).as_str()))
+                Err(NP_Error::new(format!("TypeError: Attempted to read value of type ({}) to pointer of type ({})!", "option", schema.type_data.1).as_str()))
             }
         }
     }
 }
 
-impl Default for NoProtoOption {
+impl Default for NP_Option {
     fn default() -> Self { 
-        NoProtoOption { value: None }
+        NP_Option { value: None }
      }
 }
 
+impl<'a> NP_ValueInto<'a> for NP_Option {
+    fn buffer_into(_address: u32, kind: NP_PtrKinds, schema: &'a NP_Schema, buffer: Rc<RefCell<NP_Memory>>) -> std::result::Result<Option<Box<Self>>, NP_Error> {
+        let addr = kind.get_value() as usize;
 
-impl<'a> NoProtoValue<'a> for bool {
+        // empty value
+        if addr == 0 {
+            return Ok(None);
+        }
 
-    fn new<T: NoProtoValue<'a> + Default>() -> Self {
+        let memory = buffer.try_borrow()?;
+
+        match &*schema.kind {
+            NP_SchemaKinds::Enum { choices } => {
+
+                Ok(match memory.get_1_byte(addr) {
+                    Some(x) => {
+                        let value_num = u8::from_le_bytes([x]) as usize;
+        
+                        if value_num > choices.len() {
+                            None
+                        } else {
+                            Some(Box::new(NP_Option { value: Some(choices[value_num].clone()) }))
+                        }
+                    },
+                    None => None
+                })
+            },
+            _ => {
+                Err(NP_Error::new(format!("TypeError: Attempted to read value of type ({}) to pointer of type ({})!", "option", schema.type_data.1).as_str()))
+            }
+        }
+    }
+}
+
+
+impl NP_Value for bool {
+
+    fn new<T: NP_Value + Default>() -> Self {
         false
     }
 
@@ -762,10 +950,10 @@ impl<'a> NoProtoValue<'a> for bool {
         "bool" == type_str || "boolean" == type_str
     }
 
-    fn type_idx() -> (i64, String) { (NoProtoTypeKeys::Boolean as i64, "bool".to_owned()) }
-    fn self_type_idx(&self) -> (i64, String) { (NoProtoTypeKeys::Boolean as i64, "bool".to_owned()) }
+    fn type_idx() -> (i64, String) { (NP_TypeKeys::Boolean as i64, "bool".to_owned()) }
+    fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Boolean as i64, "bool".to_owned()) }
 
-    fn buffer_get(_address: u32, kind: &NoProtoPointerKinds, _schema: &NoProtoSchema, buffer: Rc<RefCell<NoProtoMemory>>) -> std::result::Result<Option<Box<Self>>, NoProtoError> {
+    fn buffer_get(_address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, buffer: Rc<RefCell<NP_Memory>>) -> std::result::Result<Option<Box<Self>>, NP_Error> {
 
         let addr = kind.get_value() as usize;
 
@@ -784,7 +972,7 @@ impl<'a> NoProtoValue<'a> for bool {
         })
     }
 
-    fn buffer_set(address: u32, kind: &NoProtoPointerKinds, _schema: &NoProtoSchema, buffer: Rc<RefCell<NoProtoMemory>>, value: Box<&Self>) -> std::result::Result<NoProtoPointerKinds, NoProtoError> {
+    fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, buffer: Rc<RefCell<NP_Memory>>, value: Box<&Self>) -> std::result::Result<NP_PtrKinds, NP_Error> {
 
         let mut addr = kind.get_value();
 
@@ -818,42 +1006,62 @@ impl<'a> NoProtoValue<'a> for bool {
     }
 }
 
-pub struct NoProtoDate {
-    pub value: u64
-}
+impl<'a> NP_ValueInto<'a> for bool {
+    fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: &'a NP_Schema, buffer: Rc<RefCell<NP_Memory>>) -> std::result::Result<Option<Box<Self>>, NP_Error> {
+        let addr = kind.get_value() as usize;
 
-impl<'a> NoProtoDate {
-    fn now() -> Self {
-        NoProtoDate { value: SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs() }
+        // empty value
+        if addr == 0 {
+            return Ok(None);
+        }
+
+        let memory = buffer.try_borrow()?;
+
+        Ok(match memory.get_1_byte(addr) {
+            Some(x) => {
+                Some(Box::new(if x == 1 { true } else { false }))
+            },
+            None => None
+        })
     }
 }
 
-impl Default for NoProtoDate {
+pub struct NP_Date {
+    pub value: u64
+}
+
+impl NP_Date {
+    fn now() -> Self {
+        NP_Date { value: SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs() }
+    }
+}
+
+impl Default for NP_Date {
     fn default() -> Self { 
-        NoProtoDate { value: 0 }
+        NP_Date { value: 0 }
      }
 }
 
-impl fmt::Debug for NoProtoDate {
+impl fmt::Debug for NP_Date {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.value)
     }
 }
 
-impl<'a> NoProtoValue<'a> for NoProtoDate {
+impl NP_Value for NP_Date {
 
-    fn new<T: NoProtoValue<'a> + Default>() -> Self {
-        NoProtoDate { value: 0 }
+    fn new<T: NP_Value + Default>() -> Self {
+        NP_Date { value: 0 }
     }
 
     fn is_type( type_str: &str) -> bool {
         "date" == type_str
     }
 
-    fn type_idx() -> (i64, String) { (NoProtoTypeKeys::Date as i64, "date".to_owned()) }
-    fn self_type_idx(&self) -> (i64, String) { (NoProtoTypeKeys::Date as i64, "date".to_owned()) }
+    fn type_idx() -> (i64, String) { (NP_TypeKeys::Date as i64, "date".to_owned()) }
+    fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Date as i64, "date".to_owned()) }
 
-    fn buffer_get(_address: u32, kind: &NoProtoPointerKinds, _schema: &NoProtoSchema, buffer: Rc<RefCell<NoProtoMemory>>) -> std::result::Result<Option<Box<Self>>, NoProtoError> {
+    fn buffer_get(_address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, buffer: Rc<RefCell<NP_Memory>>) -> std::result::Result<Option<Box<Self>>, NP_Error> {
 
         let addr = kind.get_value() as usize;
 
@@ -865,13 +1073,13 @@ impl<'a> NoProtoValue<'a> for NoProtoDate {
         let memory = buffer.try_borrow()?;
         Ok(match memory.get_8_bytes(addr) {
             Some(x) => {
-                Some(Box::new(NoProtoDate { value: u64::from_le_bytes(x) }))
+                Some(Box::new(NP_Date { value: u64::from_le_bytes(x) }))
             },
             None => None
         })
     }
 
-    fn buffer_set(address: u32, kind: &NoProtoPointerKinds, _schema: &NoProtoSchema, buffer: Rc<RefCell<NoProtoMemory>>, value: Box<&Self>) -> std::result::Result<NoProtoPointerKinds, NoProtoError> {
+    fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, buffer: Rc<RefCell<NP_Memory>>, value: Box<&Self>) -> std::result::Result<NP_PtrKinds, NP_Error> {
 
         let mut addr = kind.get_value();
 
@@ -895,5 +1103,24 @@ impl<'a> NoProtoValue<'a> for NoProtoDate {
                 return Ok(memory.set_value_address(address, addr as u32, kind)?);
             }                    
         }
+    }
+}
+
+impl<'a> NP_ValueInto<'a> for NP_Date {
+    fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: &'a NP_Schema, buffer: Rc<RefCell<NP_Memory>>) -> std::result::Result<Option<Box<Self>>, NP_Error> {
+        let addr = kind.get_value() as usize;
+
+        // empty value
+        if addr == 0 {
+            return Ok(None);
+        }
+
+        let memory = buffer.try_borrow()?;
+        Ok(match memory.get_8_bytes(addr) {
+            Some(x) => {
+                Some(Box::new(NP_Date { value: u64::from_le_bytes(x) }))
+            },
+            None => None
+        })
     }
 }

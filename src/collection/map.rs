@@ -1,21 +1,21 @@
-use crate::pointer::NoProtoPointerKinds;
-use crate::pointer::NoProtoValue;
-use crate::{memory::NoProtoMemory, pointer::NoProtoPointer, error::NoProtoError, schema::NoProtoSchema};
+use crate::pointer::NP_PtrKinds;
+use crate::pointer::NP_Value;
+use crate::{memory::NP_Memory, pointer::NP_Ptr, error::NP_Error, schema::NP_Schema};
 use std::rc::Rc;
 use std::cell::RefCell;
 
-pub struct NoProtoMap<'a> {
+pub struct NP_Map<'a> {
     address: u32, // pointer location
     head: u32,
-    memory: Rc<RefCell<NoProtoMemory>>,
-    value: Option<&'a NoProtoSchema>,
+    memory: Rc<RefCell<NP_Memory>>,
+    value: Option<&'a NP_Schema>,
 }
 
-impl<'a> NoProtoMap<'a> {
+impl<'a> NP_Map<'a> {
 
     #[doc(hidden)]
-    pub fn new(address: u32, head: u32, memory: Rc<RefCell<NoProtoMemory>>, value: &'a NoProtoSchema) -> Self {
-        NoProtoMap {
+    pub fn new(address: u32, head: u32, memory: Rc<RefCell<NP_Memory>>, value: &'a NP_Schema) -> Self {
+        NP_Map {
             address,
             head,
             memory,
@@ -25,10 +25,10 @@ impl<'a> NoProtoMap<'a> {
 }
 
 /*
-impl NoProtoMap {
+impl NP_Map {
 
-    pub fn new(address: u32, memory: Rc<RefCell<NoProtoMemory>>, model: Rc<RefCell<JsonValue>>) -> Self {
-        NoProtoMap {
+    pub fn new(address: u32, memory: Rc<RefCell<NP_Memory>>, model: Rc<RefCell<JsonValue>>) -> Self {
+        NP_Map {
             head: 0,
             address: address,
             memory: memory,
@@ -36,7 +36,7 @@ impl NoProtoMap {
         }
     }
 
-    pub fn select(&self, column: &str) -> NoProtoPointer {
+    pub fn select(&self, column: &str) -> NP_Ptr {
 
     }
 
@@ -55,29 +55,29 @@ impl NoProtoMap {
 }*/
 
 
-impl<'a> NoProtoValue<'a> for NoProtoMap<'a> {
-    fn new<T: NoProtoValue<'a> + Default>() -> Self {
+impl<'a> NP_Value for NP_Map<'a> {
+    fn new<T: NP_Value + Default>() -> Self {
         unreachable!()
     }
-    fn is_type( type_str: &str) -> bool { 
+    fn is_type( _type_str: &str) -> bool { 
         unreachable!()
     }
     fn type_idx() -> (i64, String) { (-1, "map".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (-1, "map".to_owned()) }
-    /*fn buffer_get(&self, address: u32, kind: &NoProtoPointerKinds, schema: &NoProtoSchema, buffer: Rc<RefCell<NoProtoMemory>>) -> std::result::Result<Option<Box<Self>>, NoProtoError> {
-        Err(NoProtoError::new("This type doesn't support .get()!"))
+    /*fn buffer_get(&self, address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: Rc<RefCell<NP_Memory>>) -> std::result::Result<Option<Box<Self>>, NP_Error> {
+        Err(NP_Error::new("This type doesn't support .get()!"))
     }
-    fn buffer_set(&mut self, address: u32, kind: &NoProtoPointerKinds, schema: &NoProtoSchema, buffer: Rc<RefCell<NoProtoMemory>>, value: Box<&Self>) -> std::result::Result<NoProtoPointerKinds, NoProtoError> {
-        Err(NoProtoError::new("This type doesn't support .set()!"))
+    fn buffer_set(&mut self, address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: Rc<RefCell<NP_Memory>>, value: Box<&Self>) -> std::result::Result<NP_PtrKinds, NP_Error> {
+        Err(NP_Error::new("This type doesn't support .set()!"))
     }
-    fn buffer_into(&self, address: u32, kind: &NoProtoPointerKinds, schema: &NoProtoSchema, buffer: Rc<RefCell<NoProtoMemory>>) -> std::result::Result<Option<Box<Self>>, NoProtoError> {
+    fn buffer_into(&self, address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: Rc<RefCell<NP_Memory>>) -> std::result::Result<Option<Box<Self>>, NP_Error> {
         self.buffer_get(address, kind, schema, buffer)
     }*/
 }
 
-impl<'a> Default for NoProtoMap<'a> {
+impl<'a> Default for NP_Map<'a> {
 
     fn default() -> Self {
-        NoProtoMap { address: 0, head: 0, memory: Rc::new(RefCell::new(NoProtoMemory { bytes: vec![]})), value: None }
+        NP_Map { address: 0, head: 0, memory: Rc::new(RefCell::new(NP_Memory { bytes: vec![]})), value: None }
     }
 }

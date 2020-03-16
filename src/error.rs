@@ -1,38 +1,38 @@
 use std::rc::Rc;
 use std::{string::FromUtf8Error, cell::{BorrowError, BorrowMutError}};
-use crate::memory::NoProtoMemory;
+use crate::memory::NP_Memory;
 
 #[derive(Debug)]
-pub struct NoProtoError {
+pub struct NP_Error {
     message: String
 }
 
-impl NoProtoError {
+impl NP_Error {
     pub fn new(message: &str) -> Self {
-        NoProtoError { message: message.to_owned() }
+        NP_Error { message: message.to_owned() }
     }
 }
 
-impl From<BorrowMutError> for NoProtoError {
-    fn from(err: BorrowMutError) -> NoProtoError {
-        NoProtoError::new(err.to_string().as_str())
+impl From<BorrowMutError> for NP_Error {
+    fn from(err: BorrowMutError) -> NP_Error {
+        NP_Error::new(err.to_string().as_str())
     }
 }
 
-impl From<BorrowError> for NoProtoError {
-    fn from(err: BorrowError) -> NoProtoError {
-        NoProtoError::new(err.to_string().as_str())
+impl From<BorrowError> for NP_Error {
+    fn from(err: BorrowError) -> NP_Error {
+        NP_Error::new(err.to_string().as_str())
     }
 }
 
-impl From<FromUtf8Error> for NoProtoError {
-    fn from(err: FromUtf8Error) -> NoProtoError {
-        NoProtoError::new(err.to_string().as_str())
+impl From<FromUtf8Error> for NP_Error {
+    fn from(err: FromUtf8Error) -> NP_Error {
+        NP_Error::new(err.to_string().as_str())
     }
 }
 
-impl From<Rc<std::cell::RefCell<NoProtoMemory>>> for NoProtoError {
-    fn from(_err: Rc<std::cell::RefCell<NoProtoMemory>>) -> NoProtoError {
-        NoProtoError::new("Reference Count Error, value still being borrowed!")
+impl From<Rc<std::cell::RefCell<NP_Memory>>> for NP_Error {
+    fn from(_err: Rc<std::cell::RefCell<NP_Memory>>) -> NP_Error {
+        NP_Error::new("Reference Count Error, value still being borrowed!")
     }
 }
