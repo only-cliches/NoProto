@@ -1,7 +1,17 @@
-// #![deny(warnings, missing_docs, missing_debug_implementations, trivial_casts, trivial_numeric_casts, unused_results)]
+// #![deny(missing_docs, missing_debug_implementations, trivial_casts, trivial_numeric_casts, unused_results)]
 #![allow(non_camel_case_types)]
 
-//! # High Performance Serialization Library
+//! ## High Performance Serialization Library
+//! 
+//! [Github](https://github.com/ClickSimply/NoProto)
+//! [Crates.io](https://crates.io/crates/no_proto)
+//! 
+//! ### TODO: 
+//! - [ ] Finish implementing Lists, Tuples & Maps
+//! - [ ] Compaction
+//! - [ ] Documentation
+//! - [ ] Test
+//! 
 //! ### Features
 //! - Nearly instant deserilization & serialization
 //! - Schemas are dynamic/flexible at runtime
@@ -20,7 +30,6 @@
 //! - Mutate (add/delete/update) existing/imported buffers
 //! 
 //! *Compared to JSON*
-//! - Typically more space efficient
 //! - Has schemas / type safe
 //! - Faster serialization & deserialization
 //! - Supports raw bytes & other native types
@@ -28,7 +37,6 @@
 //! *Compared to BSON*
 //! - Faster serialization & deserialization
 //! - Has schemas / type safe
-//! - Typically more space efficient
 //! - Supports much larger documents (4GB vs 16MB)
 //! - Better collection support & more supported types
 //! 
@@ -125,6 +133,28 @@
 //! 
 //! # Ok::<(), NP_Error>(()) 
 //! ```
+//! 
+//! MIT License
+//! 
+//! Copyright (c) 2020 Scott Lott
+//! 
+//! Permission is hereby granted, free of charge, to any person obtaining a copy
+//! of this software and associated documentation files (the "Software"), to deal
+//! in the Software without restriction, including without limitation the rights
+//! to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+//! copies of the Software, and to permit persons to whom the Software is
+//! furnished to do so, subject to the following conditions:
+//! 
+//! The above copyright notice and this permission notice shall be included in all
+//! copies or substantial portions of the Software.
+//! 
+//! THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+//! IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+//! FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+//! AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+//! LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+//! OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+//! SOFTWARE.
 
 pub mod pointer;
 pub mod collection;
@@ -133,11 +163,9 @@ pub mod schema;
 pub mod error;
 mod memory;
 
-use crate::pointer::NP_Ptr;
 use crate::error::NP_Error;
 use crate::schema::NP_Schema;
 use buffer::NP_Buffer;
-use pointer::NP_Value;
 
 const PROTOCOL_VERSION: u8 = 0;
 
@@ -188,10 +216,8 @@ impl NP_Factory {
 mod tests {
 
     use crate::pointer::NP_Ptr;
-    // use crate::pointer::any::NP_Any;
     use crate::collection::table::NP_Table;
     use super::*;
-    use pointer::any::NP_Any;
 
     #[test]
     fn it_works() -> std::result::Result<(), NP_Error> {
@@ -199,15 +225,26 @@ mod tests {
         let factory: NP_Factory = NP_Factory::new(r#"{
             "type": "table",
             "columns": [
-                ["userID", {"type": "string"}],
-                ["pass",   {"type": "string"}],
-                ["age",    {"type": "uint16"}]
+                ["userID",  {"type": "string"}],
+                ["pass",    {"type": "string"}],
+                ["age",     {"type": "uint16"}],
+                ["address", {
+                    "type": "table", 
+                    "columns": [
+                        ["street",  {"type": "string"}],
+                        ["street2", {"type": "string"}],
+                        ["city",    {"type": "string"}],
+                        ["state",   {"type": "string"}],
+                        ["zip",     {"type": "string"}],
+                        ["country", {"type": "string"}]
+                    ]
+                }]
             ]
         }"#)?;
 
         let mut myvalue: Option<String> = None;
 
-        let mut return_buffer = factory.new_buffer(None, |mut buffer| {
+        let return_buffer = factory.new_buffer(None, |mut buffer| {
 
             // buffer.deep_set(".userID", "something".to_owned())?;
 
@@ -224,6 +261,12 @@ mod tests {
                 x.set("password123".to_owned())?;
 
                 myvalue = x.get()?;
+
+                let mut address = table.select::<NP_Table>("address")?.into()?.unwrap();
+                address.select::<String>("street")?.set("13B Baker St".to_owned())?;
+                address.select::<String>("city")?.set("London".to_owned())?;
+                address.select::<String>("state")?.set("London".to_owned())?;
+                address.select::<String>("country")?.set("UK".to_owned())?;
 
                 let mut x = table.select::<u16>("age")?;
                 x.set(1039)?;
@@ -248,6 +291,10 @@ mod tests {
 
                 println!("VALUE 3: {:?}", table.select::<u16>("age")?.get()?);
 
+                let mut address = table.select::<NP_Table>("address")?.into()?.unwrap();
+                let mut x = address.select::<String>("street")?;
+                println!("VALUE 4: {:?}", x.get()?);
+
                 Ok(())
             })?;
 
@@ -256,7 +303,7 @@ mod tests {
 
         // println!("BYTES: {:?}", xx);
 
-        println!("BYTES: {:?}", return_buffer_2);
+        println!("BYTES: {} {:?}", return_buffer_2.len(), return_buffer_2);
 
         assert_eq!(2 + 2, 4);
 

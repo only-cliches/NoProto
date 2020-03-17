@@ -166,11 +166,11 @@ impl<'a> NP_List<'a> {
         Err(NP_Error::new(""))
     }
 
-    pub fn delete(&self, index: u16) -> bool {
+    pub fn delete(&self, _index: u16) -> bool {
         false
     }
 
-    pub fn has(&self, column: &str) {
+    pub fn has(&self, _column: &str) {
 
     }
 

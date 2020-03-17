@@ -94,12 +94,13 @@ pub trait NP_ValueInto<'a> {
 /// The base data type, all information is stored/retrieved against pointers
 /// 
 /// Each pointer represents at least a 32 bit unsigned integer that is either zero for no value or points to an offset in the buffer.  All pointer addresses are zero based against the beginning of the buffer.
+
 pub struct NP_Ptr<'a, T: NP_Value + Default> {
     address: u32, // pointer location
     kind: NP_PtrKinds,
     memory: Rc<RefCell<NP_Memory>>,
     pub schema: &'a NP_Schema,
-    value: T
+    pub value: T
 }
 
 impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Ptr<'a, T> {

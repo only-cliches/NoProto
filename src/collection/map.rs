@@ -1,14 +1,13 @@
-use crate::pointer::NP_PtrKinds;
 use crate::pointer::NP_Value;
-use crate::{memory::NP_Memory, pointer::NP_Ptr, error::NP_Error, schema::NP_Schema};
+use crate::{memory::NP_Memory, schema::NP_Schema};
 use std::rc::Rc;
 use std::cell::RefCell;
 
 pub struct NP_Map<'a> {
-    address: u32, // pointer location
-    head: u32,
-    memory: Rc<RefCell<NP_Memory>>,
-    value: Option<&'a NP_Schema>,
+    pub address: u32, // pointer location
+    pub head: u32,
+    pub memory: Rc<RefCell<NP_Memory>>,
+    pub value: Option<&'a NP_Schema>,
 }
 
 impl<'a> NP_Map<'a> {
