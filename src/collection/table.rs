@@ -38,12 +38,11 @@ impl<'a> NP_ValueInto<'a> for NP_Table<'a> {
 
                 let mut head: [u8; 4] = [0; 4];
 
-                // no table here, make one
                 if addr == 0 {
                     // no table here, make one
                     let mut memory = buffer.try_borrow_mut()?;
                     addr = memory.malloc([0 as u8; 4].to_vec())?; // stores HEAD for table
-                    memory.set_value_address(address, addr, &kind)?;
+                    memory.set_value_address(address, addr, &kind);
                 } else {
                     // existing head, read value
                     let b_bytes = &buffer.try_borrow()?.bytes;

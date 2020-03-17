@@ -58,7 +58,7 @@ impl NP_Value for i8 {
 
                 let bytes = value.to_le_bytes();
                 addr = memory.malloc(bytes.to_vec())?;
-                return Ok(memory.set_value_address(address, addr as u32, kind)?);
+                return Ok(memory.set_value_address(address, addr as u32, kind));
             }
         }
     }
@@ -137,7 +137,7 @@ impl NP_Value for i16 {
                 let bytes = value.to_le_bytes();
                 addr = memory.malloc(bytes.to_vec())?;
 
-                return Ok(memory.set_value_address(address, addr as u32, kind)?);
+                return Ok(memory.set_value_address(address, addr as u32, kind));
             }
         }
         
@@ -217,7 +217,7 @@ impl NP_Value for i32 {
                 let bytes = value.to_le_bytes();
                 addr = memory.malloc(bytes.to_vec())?;
 
-                return Ok(memory.set_value_address(address, addr as u32, kind)?);
+                return Ok(memory.set_value_address(address, addr as u32, kind));
             }
         }
         
@@ -297,7 +297,7 @@ impl NP_Value for i64 {
                 let bytes = value.to_le_bytes();
                 addr = memory.malloc(bytes.to_vec())?;
 
-                return Ok(memory.set_value_address(address, addr as u32, kind)?);
+                return Ok(memory.set_value_address(address, addr as u32, kind));
             }
         }
         
@@ -376,7 +376,7 @@ impl NP_Value for u8 {
                 let bytes = value.to_le_bytes();
                 addr = memory.malloc(bytes.to_vec())?;
 
-                return Ok(memory.set_value_address(address, addr as u32, kind)?);
+                return Ok(memory.set_value_address(address, addr as u32, kind));
             }
         }
 
@@ -457,7 +457,7 @@ impl NP_Value for u16 {
                 let bytes = value.to_le_bytes();
                 addr = memory.malloc(bytes.to_vec())?;
 
-                return Ok(memory.set_value_address(address, addr as u32, kind)?);
+                return Ok(memory.set_value_address(address, addr as u32, kind));
             }
 
         }
@@ -537,7 +537,7 @@ impl NP_Value for u32 {
                 let bytes = value.to_le_bytes();
                 addr = memory.malloc(bytes.to_vec())?;
 
-                return Ok(memory.set_value_address(address, addr as u32, kind)?);
+                return Ok(memory.set_value_address(address, addr as u32, kind));
             }
         }
         
@@ -617,7 +617,7 @@ impl NP_Value for u64 {
                 let bytes = value.to_le_bytes();
                 addr = memory.malloc(bytes.to_vec())?;
 
-                return Ok(memory.set_value_address(address, addr as u32, kind)?);
+                return Ok(memory.set_value_address(address, addr as u32, kind));
             }
         }
         
@@ -697,7 +697,7 @@ impl NP_Value for f32 {
                 let bytes = value.to_le_bytes();
                 addr = memory.malloc(bytes.to_vec())?;
 
-                return Ok(memory.set_value_address(address, addr as u32, kind)?);
+                return Ok(memory.set_value_address(address, addr as u32, kind));
             }
         }
     }
@@ -774,7 +774,7 @@ impl NP_Value for f64 {
 
                 let bytes = value.to_le_bytes();
                 addr = memory.malloc(bytes.to_vec())?;
-                return Ok(memory.set_value_address(address, addr as u32, kind)?);
+                return Ok(memory.set_value_address(address, addr as u32, kind));
             }
         }
         

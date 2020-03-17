@@ -61,6 +61,7 @@
 //!     ]
 //! }"#)?;
 //! 
+//! // creating a new buffer from the `user_factory` schema
 //! // user_buffer contains a deserialized Vec<u8> containing our data
 //! let user_buffer: Vec<u8> = user_factory.new_buffer(None, |mut buffer| {
 //!    
@@ -89,8 +90,8 @@
 //!    buffer.close()
 //! })?;
 //!  
-//! // read in the new buffer we just created
-//! // user_buffer_2 contains the deserialized Vec<u8> of the buffer
+//! // open the new buffer, `user_buffer`, we just created
+//! // user_buffer_2 contains the deserialized Vec<u8>
 //! let user_buffer_2: Vec<u8> = user_factory.load_buffer(user_buffer, |mut buffer| {
 //! 
 //!     // we can mutate and read the buffer here
@@ -101,7 +102,7 @@
 //! 
 //!         // read the name column
 //!         let mut user_name = table.select::<String>("name")?;
-//!         assert_eq!(user_name.get()?, Some(&String::from("some name")));
+//!         assert_eq!(user_name.get()?, Some(String::from("some name")));
 //! 
 //!         // password value will be None since we haven't set it.
 //!         let mut password = table.select::<String>("pass")?;
@@ -109,7 +110,7 @@
 //! 
 //!         // read age value    
 //!         let mut age = table.select::<u16>("age")?;
-//!         assert_eq!(age.get()?, Some(&75));    
+//!         assert_eq!(age.get()?, Some(75));    
 //! 
 //!         // done with the buffer
 //!         Ok(())
@@ -206,7 +207,7 @@ mod tests {
 
         let mut myvalue: Option<String> = None;
 
-        let return_buffer = factory.new_buffer(None, |mut buffer| {
+        let mut return_buffer = factory.new_buffer(None, |mut buffer| {
 
             // buffer.deep_set(".userID", "something".to_owned())?;
 
@@ -217,18 +218,23 @@ mod tests {
                 let mut table = root.into()?.unwrap();
 
                 let mut x = table.select::<String>("userID")?;
-                x.set("some username".to_owned())?;
-
-                let mut x = table.select::<u16>("age")?;
-                x.set(2032)?;
+                x.set("username".to_owned())?;
         
                 let mut x = table.select::<String>("pass")?;
                 x.set("password123".to_owned())?;
 
-                myvalue = x.into()?;
+                myvalue = x.get()?;
+
+                let mut x = table.select::<u16>("age")?;
+                x.set(1039)?;
 
                 Ok(())
             })?;
+
+            buffer.close()
+        })?;
+
+        let return_buffer_2 = factory.load_buffer(return_buffer, |mut buffer| {
 
             buffer.open(|root: NP_Ptr<NP_Table>| {
             
@@ -250,7 +256,7 @@ mod tests {
 
         // println!("BYTES: {:?}", xx);
 
-        println!("BYTES: {:?}", return_buffer);
+        println!("BYTES: {:?}", return_buffer_2);
 
         assert_eq!(2 + 2, 4);
 

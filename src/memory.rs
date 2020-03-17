@@ -21,7 +21,7 @@ impl NP_Memory {
         Ok(location)
     }
 
-    pub fn set_value_address(&mut self, address: u32, val: u32, kind: &NP_PtrKinds) -> std::result::Result<NP_PtrKinds, NP_Error> {
+    pub fn set_value_address(&mut self, address: u32, val: u32, kind: &NP_PtrKinds) -> NP_PtrKinds {
 
         let addr_bytes = val.to_le_bytes();
     
@@ -29,7 +29,7 @@ impl NP_Memory {
             self.bytes[(address + x as u32) as usize] = addr_bytes[x as usize];
         }
 
-        Ok(match kind {
+        match kind {
             NP_PtrKinds::None => {
                 NP_PtrKinds::None
             }
@@ -45,7 +45,7 @@ impl NP_Memory {
             NP_PtrKinds::ListItem { value: _, i, next  } => {
                 NP_PtrKinds::ListItem { value: val, i: *i, next: *next }
             }
-        })
+        }
     }
 
     pub fn get_1_byte(&self, address: usize) -> Option<u8> {

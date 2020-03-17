@@ -115,7 +115,7 @@ impl NP_Value for NP_Dec {
                 addr = memory.malloc(bytes.to_vec())?;
                 memory.malloc(value.scale.to_le_bytes().to_vec())?;
 
-                return Ok(memory.set_value_address(address, addr as u32, kind)?);
+                return Ok(memory.set_value_address(address, addr as u32, kind));
             }
         }
         
@@ -362,7 +362,7 @@ impl NP_Value for NP_Geo {
                     }
                 }
 
-                return Ok(memory.set_value_address(address, addr as u32, kind)?);
+                return Ok(memory.set_value_address(address, addr as u32, kind));
             }
         }
     }
@@ -628,7 +628,7 @@ impl NP_Value for NP_TimeID {
 
                 addr = memory.malloc(bytes.to_vec())?;
 
-                return Ok(memory.set_value_address(address, addr as u32, kind)?);
+                return Ok(memory.set_value_address(address, addr as u32, kind));
             }                    
         }
     }
@@ -771,7 +771,7 @@ impl NP_Value for NP_UUID {
                 let bytes = value.value;
                 addr = memory.malloc(bytes.to_vec())?;
 
-                return Ok(memory.set_value_address(address, addr as u32, kind)?);
+                return Ok(memory.set_value_address(address, addr as u32, kind));
             }                    
         }
     }
@@ -887,7 +887,7 @@ impl NP_Value for NP_Option {
     
                         addr = memory.malloc(bytes.to_vec())?;
 
-                        return Ok(memory.set_value_address(address, addr as u32, kind)?);
+                        return Ok(memory.set_value_address(address, addr as u32, kind));
                     }                    
                 }
                 
@@ -1000,7 +1000,7 @@ impl NP_Value for bool {
                 };
 
                 addr = memory.malloc(bytes.to_vec())?;
-                return Ok(memory.set_value_address(address, addr as u32, kind)?);
+                return Ok(memory.set_value_address(address, addr as u32, kind));
             }
         }
     }
@@ -1031,7 +1031,7 @@ pub struct NP_Date {
 }
 
 impl NP_Date {
-    fn now() -> Self {
+    pub fn now() -> Self {
         NP_Date { value: SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs() }
     }
 }
@@ -1100,7 +1100,7 @@ impl NP_Value for NP_Date {
 
                 let bytes = value.value.to_le_bytes();
                 addr = memory.malloc(bytes.to_vec())?;
-                return Ok(memory.set_value_address(address, addr as u32, kind)?);
+                return Ok(memory.set_value_address(address, addr as u32, kind));
             }                    
         }
     }

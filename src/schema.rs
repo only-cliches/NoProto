@@ -59,33 +59,34 @@
 //! 
 //! Here is a table of supported types. 
 //! 
-//! | Type                | Rust Type / Struct                                                       | Bytes (Size)   | Limits / Notes                                                           |
-//! |---------------------|--------------------------------------------------------------------------|----------------|--------------------------------------------------------------------------|
-//! | [`table`](#table)   | [`NP_Table`](../collection/table/index.html)                             | 4 bytes - ~4GB | Linked list with indexed keys that map against up to 255 named columns.  |
-//! | [`list`](#list)     | [`NP_List`](../collection/list/index.html)                               | 8 bytes - ~4GB | Linked list with up to 65,535 items.                                     |
-//! | [`map`](#map)       | [`NP_Map`](../collection/map/index.html)                                 | 4 bytes - ~4GB | Linked list with Vec<u8> keys.                                           |
-//! | [`tuple`](#tuple)   | [`NP_Tuple`](../collection/tuple/index.html)                             | 4 bytes - ~4GB | Static sized collection of values.                                       |
-//! | [`string`](#string) | [`String`](https://doc.rust-lang.org/std/string/struct.String.html)      | 4 bytes - ~4GB | Utf-8 formatted string.                                                  |
-//! | [`bytes`](#bytes)   | [`NP_Bytes`](https://doc.rust-lang.org/std/vec/struct.Vec.html)          | 4 bytes - ~4GB | Arbitrary bytes.                                                         |
-//! | [`int8`](#int8)     | [`i8`](https://doc.rust-lang.org/std/primitive.i8.html)                  | 1 byte         | -127 to 127                                                              |
-//! | [`int16`](#int16)   | [`i16`](https://doc.rust-lang.org/std/primitive.i16.html)                | 2 bytes        | -32,768 to 32,768                                                        |
-//! | [`int32`](#int32)   | [`i32`](https://doc.rust-lang.org/std/primitive.i32.html)                | 4 bytes        | -2,147,483,648 to 2,147,483,648                                          |
-//! | [`int64`](#int64)   | [`i64`](https://doc.rust-lang.org/std/primitive.i64.html)                | 8 bytes        | -9.22e18 to 9.22e18                                                      |
-//! | [`uint8`](#uint8)   | [`u8`](https://doc.rust-lang.org/std/primitive.u8.html)                  | 1 byte         | 0 - 255                                                                  |
-//! | [`uint16`](#uint16) | [`u16`](https://doc.rust-lang.org/std/primitive.u16.html)                | 2 bytes        | 0 - 65,535                                                               |
-//! | [`uint32`](#uint32) | [`u32`](https://doc.rust-lang.org/std/primitive.u32.html)                | 4 bytes        | 0 - 4,294,967,295                                                        |
-//! | [`uint64`](#uint64) | [`u64`](https://doc.rust-lang.org/std/primitive.u64.html)                | 8 bytes        | 0 - 1.84e19                                                              |
-//! | [`float`](#float)   | [`f32`](https://doc.rust-lang.org/std/primitive.f32.html)                | 4 bytes        | -3.4e38 to 3.4e38                                                        |
-//! | [`double`](#double) | [`f64`](https://doc.rust-lang.org/std/primitive.f64.html)                | 8 bytes        | -1.7e308 to 1.7e308                                                      |
-//! | [`option`](#option) | [`NP_Option`](https://doc.rust-lang.org/std/string/.html)                | 1 byte         | Up to 255 strings in schema.                                             |
-//! | [`bool`](#bool)     | [`bool`](https://doc.rust-lang.org/std/primitive.bool.html)              | 1 byte         |                                                                          |
-//! | [`dec64`](#dec64)   | [`NP_Dec`](..pointer/struct.NP_Dec.html)                                 | 9 bytes        | Big Integer Decimal format.                                              |
-//! | [`geo4`](#geo4)     | [`NP_Geo`](../pointer/struct.NP_Geo.html)                                | 4 bytes        | 1.5km resolution (city) geographic coordinate                            |
-//! | [`geo8`](#geo8)     | [`NP_Geo`](../pointer/struct.NP_Geo.html)                                | 8 bytes        | 16mm resolution (marble) geographic coordinate                           |
-//! | [`geo16`](#geo16)   | [`NP_Geo`](../pointer/struct.NP_Geo.html)                                | 16 bytes       | 3.5nm resolution (flea) geographic coordinate                            |
-//! | [`tid`](#tid)       | [`NP_TimeID`](../pointer/struct.NP_TimeID.html)                          | 16 bytes       | 8 byte u64 for time with 8 bytes of random numbers.                      |
-//! | [`uuid`](#uuid)     | [`NP_UUID`](../pointer/struct.NP_UUID.html)                              | 16 bytes       | v4 UUID, 2e37 possible UUID v4s                                          |
-//! | [`date`](#date)     | [`NP_Date`](https://doc.rust-lang.org/std/primitive.u64.html)            | 8 bytes        | Good to store unix epoch (in seconds) until the year 584,942,417,355     |
+//! | Type                                   | Rust Type / Struct                                                       | Bytes (Size)   | Limits / Notes                                                           |
+//! |----------------------------------------|--------------------------------------------------------------------------|----------------|--------------------------------------------------------------------------|
+//! | [`table`](#table)                      | [`NP_Table`](../collection/table/index.html)                             | 4 bytes - ~4GB | Linked list with indexed keys that map against up to 255 named columns.  |
+//! | [`list`](#list)                        | [`NP_List`](../collection/list/index.html)                               | 8 bytes - ~4GB | Linked list with up to 65,535 items.                                     |
+//! | [`map`](#map)                          | [`NP_Map`](../collection/map/index.html)                                 | 4 bytes - ~4GB | Linked list with `Vec<u8>` keys.                                         |
+//! | [`tuple`](#tuple)                      | [`NP_Tuple`](../collection/tuple/index.html)                             | 4 bytes - ~4GB | Static sized collection of specific values.                              |
+//! | [`any`](#any)                          | [`NP_Any`](https://doc.rust-lang.org/std/string/struct.String.html)      | 4 bytes - ~4GB | Generic type.                                                            |
+//! | [`string`](#string)                    | [`String`](https://doc.rust-lang.org/std/string/struct.String.html)      | 4 bytes - ~4GB | Utf-8 formatted string.                                                  |
+//! | [`bytes`](#bytes)                      | [`NP_Bytes`](https://doc.rust-lang.org/std/vec/struct.Vec.html)          | 4 bytes - ~4GB | Arbitrary bytes.                                                         |
+//! | [`int8`](#int8-int16-int32-int64)      | [`i8`](https://doc.rust-lang.org/std/primitive.i8.html)                  | 1 byte         | -127 to 127                                                              |
+//! | [`int16`](#int8-int16-int32-int64)     | [`i16`](https://doc.rust-lang.org/std/primitive.i16.html)                | 2 bytes        | -32,768 to 32,768                                                        |
+//! | [`int32`](#int8-int16-int32-int64)     | [`i32`](https://doc.rust-lang.org/std/primitive.i32.html)                | 4 bytes        | -2,147,483,648 to 2,147,483,648                                          |
+//! | [`int64`](#int8-int16-int32-int64)     | [`i64`](https://doc.rust-lang.org/std/primitive.i64.html)                | 8 bytes        | -9.22e18 to 9.22e18                                                      |
+//! | [`uint8`](#uint8-uint16-uint32-uint64) | [`u8`](https://doc.rust-lang.org/std/primitive.u8.html)                  | 1 byte         | 0 - 255                                                                  |
+//! | [`uint16`](#uint8-uint16-uint32-uint64)| [`u16`](https://doc.rust-lang.org/std/primitive.u16.html)                | 2 bytes        | 0 - 65,535                                                               |
+//! | [`uint32`](#uint8-uint16-uint32-uint64)| [`u32`](https://doc.rust-lang.org/std/primitive.u32.html)                | 4 bytes        | 0 - 4,294,967,295                                                        |
+//! | [`uint64`](#uint8-uint16-uint32-uint64)| [`u64`](https://doc.rust-lang.org/std/primitive.u64.html)                | 8 bytes        | 0 - 1.84e19                                                              |
+//! | [`float`](#float-double)               | [`f32`](https://doc.rust-lang.org/std/primitive.f32.html)                | 4 bytes        | -3.4e38 to 3.4e38                                                        |
+//! | [`double`](#float-double)              | [`f64`](https://doc.rust-lang.org/std/primitive.f64.html)                | 8 bytes        | -1.7e308 to 1.7e308                                                      |
+//! | [`option`](#option)                    | [`NP_Option`](https://doc.rust-lang.org/std/string/.html)                | 1 byte         | Up to 255 strings in schema.                                             |
+//! | [`bool`](#bool)                        | [`bool`](https://doc.rust-lang.org/std/primitive.bool.html)              | 1 byte         |                                                                          |
+//! | [`dec64`](#dec64)                      | [`NP_Dec`](..pointer/struct.NP_Dec.html)                                 | 9 bytes        | Big Integer Decimal format.                                              |
+//! | [`geo4`](#geo4-geo8-geo16)             | [`NP_Geo`](../pointer/struct.NP_Geo.html)                                | 4 bytes        | 1.5km resolution (city) geographic coordinate                            |
+//! | [`geo8`](#geo4-geo8-geo16)             | [`NP_Geo`](../pointer/struct.NP_Geo.html)                                | 8 bytes        | 16mm resolution (marble) geographic coordinate                           |
+//! | [`geo16`](#geo4-geo8-geo16)            | [`NP_Geo`](../pointer/struct.NP_Geo.html)                                | 16 bytes       | 3.5nm resolution (flea) geographic coordinate                            |
+//! | [`tid`](#tid)                          | [`NP_TimeID`](../pointer/struct.NP_TimeID.html)                          | 16 bytes       | 8 byte u64 for time with 8 bytes of random numbers.                      |
+//! | [`uuid`](#uuid)                        | [`NP_UUID`](../pointer/struct.NP_UUID.html)                              | 16 bytes       | v4 UUID, 2e37 possible UUID v4s                                          |
+//! | [`date`](#date)                        | [`NP_Date`](https://doc.rust-lang.org/std/primitive.u64.html)            | 8 bytes        | Good to store unix epoch (in seconds) until the year 584,942,417,355     |
 //!  
 //! # table
 //! 
@@ -94,6 +95,8 @@
 //! # map
 //! 
 //! # tuple
+//! 
+//! # any
 //! 
 //! # string
 //! 
@@ -135,6 +138,7 @@ use json::*;
 use crate::error::NP_Error;
 
 
+#[doc(hidden)]
 pub enum NP_SchemaKinds {
     None,
     Scalar,
@@ -177,40 +181,7 @@ pub enum NP_SchemaKinds {
 }
 */
 
-/*
-const VALID_KINDS_COLLECTIONS: [&str; 4] = [
-    "table",
-    "map",
-    "list",
-    "tuple",
-];
-
-
-const VALID_KINDS_SCALAR: [&str; 21] = [
-    "string",
-    "bytes",
-    "int8",
-    "int16",
-    "int32",
-    "int64",
-    "uint8",
-    "uint16",
-    "uint32",
-    "uint64",
-    "float",
-    "double",
-    "option",
-    "dec64",
-    "boolean",
-    "geo4",
-    "geo8",
-    "geo16",
-    "uuid",
-    "tid",
-    "date"
-];
-*/
-
+#[doc(hidden)]
 // These are just used for runtime type comparison, the type information is never stored in the buffer.
 // When you cast a pointer to some type, this enum is used as comparing numbers is very efficient.
 pub enum NP_TypeKeys {
@@ -240,12 +211,14 @@ pub enum NP_TypeKeys {
     Tuple = 23
 }
 
+#[doc(hidden)]
 pub struct NP_Schema {
     pub kind: Box<NP_SchemaKinds>,
     pub type_data: (i64, String),
     pub type_state: i64
 }
 
+#[doc(hidden)]
 pub struct NP_Types { }
 
 impl<'a> NP_Types {
@@ -324,36 +297,7 @@ impl<'a> NP_Types {
     }
 }
 
-/*
-pub fn get_standard_types() -> Vec<Box<NP_Value>>  {
-
-    
-    vec![
-        Box::new(NP_Any::default()),
-        NP_Value::new::<String>(),
-        NP_Value::new::<NP_Bytes>(),
-        NP_Value::new::<i8>(),
-        NP_Value::new::<i16>(),
-        NP_Value::new::<i32>(),
-        NP_Value::new::<i64>(),
-        NP_Value::new::<i64>(),
-        NP_Value::new::<u8>(),
-        NP_Value::new::<u16>(),
-        NP_Value::new::<u32>(),
-        NP_Value::new::<u64>(),
-        NP_Value::new::<u64>(),
-        NP_Value::new::<f32>(),
-        NP_Value::new::<f64>(),
-        NP_Value::new::<bool>(),
-        NP_Value::new::<NP_Dec>(),
-        NP_Value::new::<NP_Geo>(),
-        NP_Value::new::<NP_TimeID>(),
-        NP_Value::new::<NP_UUID>(),
-        NP_Value::new::<NP_Date>()
-    ]
-}
-*/
-
+#[doc(hidden)]
 impl NP_Schema {
 
     pub fn blank() -> NP_Schema {

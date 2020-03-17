@@ -1,5 +1,7 @@
+//! Primary error type used by the library
+
 use std::rc::Rc;
-use std::{string::FromUtf8Error, cell::{BorrowError, BorrowMutError}};
+use std::{string::FromUtf8Error, cell::{BorrowError, BorrowMutError}, collections};
 use crate::memory::NP_Memory;
 
 #[derive(Debug)]

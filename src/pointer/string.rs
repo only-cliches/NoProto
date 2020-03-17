@@ -88,7 +88,7 @@ impl NP_Value for String {
                     // then string content
                     memory.malloc(bytes.to_vec())?;
 
-                    return Ok(memory.set_value_address(address, addr as u32, kind)?);
+                    return Ok(memory.set_value_address(address, addr as u32, kind));
                 }
             }
         }

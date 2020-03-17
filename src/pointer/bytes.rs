@@ -93,7 +93,7 @@ impl NP_Value for NP_Bytes {
                     // then bytes content
                     memory.malloc(value.bytes.to_vec())?;
 
-                    return Ok(memory.set_value_address(address, addr as u32, kind)?);
+                    return Ok(memory.set_value_address(address, addr as u32, kind));
                 }
             }
         }

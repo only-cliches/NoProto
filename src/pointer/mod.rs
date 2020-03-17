@@ -1,4 +1,4 @@
-//! All values in NP_ buffers are accessed and modified through NP_Ptrs
+//! All values in NP_Buffers are accessed and modified through NP_Ptrs
 //! 
 //! NP_ Pointers are the primary abstraction to read, update or delete values in a buffer.
 //! Pointers should *never* be created directly, instead the various methods provided by the library to access
@@ -99,7 +99,6 @@ pub struct NP_Ptr<'a, T: NP_Value + Default> {
     kind: NP_PtrKinds,
     memory: Rc<RefCell<NP_Memory>>,
     pub schema: &'a NP_Schema,
-    cached: bool,
     value: T
 }
 
@@ -156,19 +155,14 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Ptr<'a, T> {
     }
 */
 
-    pub fn get(&mut self) -> std::result::Result<Option<&T>, NP_Error> {
+    pub fn get(&mut self) -> std::result::Result<Option<T>, NP_Error> {
 
-        if self.cached {
-            return Ok(Some(&self.value));
-        }
 
         let value = T::buffer_get(self.address, &self.kind, self.schema, Rc::clone(&self.memory))?;
         
         Ok(match value {
             Some (x) => {
-                self.value = *x;
-                self.cached = true;
-                Some(&self.value)
+                Some(*x)
             },
             None => None
         })
@@ -176,8 +170,6 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Ptr<'a, T> {
 
     pub fn set(&mut self, value: T) -> std::result::Result<(), NP_Error> {
         self.kind = T::buffer_set(self.address, &self.kind, self.schema, Rc::clone(&self.memory), Box::new(&value))?;
-        self.value = value;
-        self.cached = true;
         Ok(())
     }
 
@@ -196,7 +188,6 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Ptr<'a, T> {
             kind: NP_PtrKinds::Standard { value: u32::from_le_bytes(value) },
             memory: memory,
             schema: schema,
-            cached: false,
             value: T::default()
         })
     }
@@ -225,7 +216,6 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Ptr<'a, T> {
             },
             memory: memory,
             schema: schema,
-            cached: false,
             value: T::default()
         })
     }
@@ -254,7 +244,6 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Ptr<'a, T> {
             },
             memory: memory,
             schema: schema,
-            cached: false,
             value: T::default()
         })
     }
@@ -283,7 +272,6 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Ptr<'a, T> {
             },
             memory: memory,
             schema: schema,
-            cached: false,
             value: T::default()
         })
     }
@@ -293,7 +281,8 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Ptr<'a, T> {
     }
 
     pub fn clear(&mut self) -> std::result::Result<(), NP_Error> {
-        // self.kind.set_value_address(self.address, 0, Rc::clone(&self.memory));
+        let mut memory = self.memory.try_borrow_mut()?;
+        self.kind = memory.set_value_address(self.address, 0, &self.kind);
         Ok(())
     }
 

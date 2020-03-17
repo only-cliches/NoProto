@@ -1,4 +1,4 @@
-
+//! Allows buffers to be created and mutated
 
 use crate::pointer::NP_ValueInto;
 use crate::pointer::NP_Value;
@@ -83,11 +83,11 @@ impl<'a> NP_Buffer<'a> {
         Err(NP_Error::new(format!("TypeError: Attempted to cast type ({}) to schema of type ({})!", X::type_idx().1, buffer.schema.type_data.1).as_str()))
     }
 
-    pub fn deep_set<X: NP_Value + Default, S: AsRef<str>>(&self, _path: S, _value: X) -> std::result::Result<(), NP_Error> {
+    pub fn deep_set<X: NP_Value + Default + NP_ValueInto<'a>, S: AsRef<str>>(&self, _path: S, _value: X) -> std::result::Result<(), NP_Error> {
         Ok(())
     }
 
-    pub fn deep_get<X: NP_Value + Default>(&self, _path: &str) -> std::result::Result<Option<X>, NP_Error> {
+    pub fn deep_get<X: NP_Value + Default + NP_ValueInto<'a>>(&self, _path: &str) -> std::result::Result<Option<X>, NP_Error> {
         Ok(Some(X::default()))
     }
 
