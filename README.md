@@ -1,8 +1,7 @@
 # NoProto
 ## High Performance Serialization Library
 
-[Github](https://github.com/ClickSimply/NoProto)
-[Crates.io](https://crates.io/crates/no_proto)
+[Github](https://github.com/ClickSimply/NoProto) | [Crates.io](https://crates.io/crates/no_proto) | [Documentation](https://docs.rs/crate/no_proto/)
 
 ### TODO: 
 - [ ] Finish implementing Lists, Tuples & Maps
