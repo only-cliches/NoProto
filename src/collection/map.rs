@@ -1,23 +1,21 @@
 use crate::pointer::NP_Value;
 use crate::{memory::NP_Memory, schema::NP_Schema};
-use std::rc::Rc;
-use std::cell::RefCell;
 
 pub struct NP_Map<'a> {
     pub address: u32, // pointer location
     pub head: u32,
-    pub memory: Rc<RefCell<NP_Memory>>,
+    pub memory: Option<&'a NP_Memory>,
     pub value: Option<&'a NP_Schema>,
 }
 
 impl<'a> NP_Map<'a> {
 
     #[doc(hidden)]
-    pub fn new(address: u32, head: u32, memory: Rc<RefCell<NP_Memory>>, value: &'a NP_Schema) -> Self {
+    pub fn new(address: u32, head: u32, memory: &'a NP_Memory, value: &'a NP_Schema) -> Self {
         NP_Map {
             address,
             head,
-            memory,
+            memory: Some(memory),
             value: Some(value)
         }
     }
@@ -26,7 +24,7 @@ impl<'a> NP_Map<'a> {
 /*
 impl NP_Map {
 
-    pub fn new(address: u32, memory: Rc<RefCell<NP_Memory>>, model: Rc<RefCell<JsonValue>>) -> Self {
+    pub fn new(address: u32, memory: &NP_Memory, model: Rc<RefCell<JsonValue>>) -> Self {
         NP_Map {
             head: 0,
             address: address,
@@ -63,13 +61,13 @@ impl<'a> NP_Value for NP_Map<'a> {
     }
     fn type_idx() -> (i64, String) { (-1, "map".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (-1, "map".to_owned()) }
-    /*fn buffer_get(&self, address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: Rc<RefCell<NP_Memory>>) -> std::result::Result<Option<Box<Self>>, NP_Error> {
+    /*fn buffer_get(&self, address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: &NP_Memory) -> std::result::Result<Option<Box<Self>>, NP_Error> {
         Err(NP_Error::new("This type doesn't support .get()!"))
     }
-    fn buffer_set(&mut self, address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: Rc<RefCell<NP_Memory>>, value: Box<&Self>) -> std::result::Result<NP_PtrKinds, NP_Error> {
+    fn buffer_set(&mut self, address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: &NP_Memory, value: Box<&Self>) -> std::result::Result<NP_PtrKinds, NP_Error> {
         Err(NP_Error::new("This type doesn't support .set()!"))
     }
-    fn buffer_into(&self, address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: Rc<RefCell<NP_Memory>>) -> std::result::Result<Option<Box<Self>>, NP_Error> {
+    fn buffer_into(&self, address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: &NP_Memory) -> std::result::Result<Option<Box<Self>>, NP_Error> {
         self.buffer_get(address, kind, schema, buffer)
     }*/
 }
@@ -77,6 +75,6 @@ impl<'a> NP_Value for NP_Map<'a> {
 impl<'a> Default for NP_Map<'a> {
 
     fn default() -> Self {
-        NP_Map { address: 0, head: 0, memory: Rc::new(RefCell::new(NP_Memory { bytes: vec![]})), value: None }
+        NP_Map { address: 0, head: 0, memory: None, value: None }
     }
 }

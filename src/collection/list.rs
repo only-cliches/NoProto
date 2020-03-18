@@ -1,30 +1,29 @@
 use crate::pointer::NP_ValueInto;
 use crate::{memory::NP_Memory, pointer::{NP_Value, NP_Ptr}, error::NP_Error, schema::NP_Schema};
-use std::rc::Rc;
-use std::cell::RefCell;
 
 
 pub struct NP_List<'a> {
     address: u32, // pointer location
     head: u32,
     tail: u32,
-    memory: Rc<RefCell<NP_Memory>>,
+    memory: Option<&'a NP_Memory>,
     of: Option<&'a NP_Schema>
 }
 
 impl<'a> NP_List<'a> {
 
     #[doc(hidden)]
-    pub fn new(address: u32, head: u32, tail:u32,  memory: Rc<RefCell<NP_Memory>>, of: &'a NP_Schema) -> Self {
+    pub fn new(address: u32, head: u32, tail:u32,  memory: &'a NP_Memory, of: &'a NP_Schema) -> Self {
         NP_List {
             address,
             head,
             tail,
-            memory,
+            memory: Some(memory),
             of: Some(of)
         }
     }
 
+    /*
     pub fn select<X: NP_Value + Default + NP_ValueInto<'a>>(&'a mut self, index: u16) -> std::result::Result<NP_Ptr<X>, NP_Error> {
 
         if self.head == 0 { // no values, create one
@@ -116,7 +115,7 @@ impl<'a> NP_List<'a> {
                     // not found yet, get next address
                     let mut next: [u8; 4] = [0; 4];
                     {
-                        let memory = self.memory.try_borrow()?;
+                        let memory = self.memory;
                         next.copy_from_slice(&memory.bytes[(curr_addr + 4)..(curr_addr + 8)]);
                     }
                     
@@ -165,7 +164,7 @@ impl<'a> NP_List<'a> {
         }
         Err(NP_Error::new(""))
     }
-
+*/
     pub fn delete(&self, _index: u16) -> bool {
         false
     }
@@ -173,7 +172,7 @@ impl<'a> NP_List<'a> {
     pub fn has(&self, _column: &str) {
 
     }
-
+/*
     fn set_head(&mut self, addr: u32) {
 
         self.head = addr;
@@ -198,7 +197,7 @@ impl<'a> NP_List<'a> {
         for x in 0..addr_bytes.len() {
             memory.bytes[(self.address + x as u32 + 4) as usize] = addr_bytes[x as usize];
         }
-    }
+    }*/
 }
 
 impl<'a> NP_Value for NP_List<'a> {
@@ -210,13 +209,13 @@ impl<'a> NP_Value for NP_List<'a> {
     }
     fn type_idx() -> (i64, String) { (-1, "map".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (-1, "map".to_owned()) }
-    /*fn buffer_get(&self, address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: Rc<RefCell<NP_Memory>>) -> std::result::Result<Option<Box<Self>>, NP_Error> {
+    /*fn buffer_get(&self, address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: &NP_Memory) -> std::result::Result<Option<Box<Self>>, NP_Error> {
         Err(NP_Error::new("This type doesn't support .get()!"))
     }
-    fn buffer_set(&mut self, address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: Rc<RefCell<NP_Memory>>, value: Box<&Self>) -> std::result::Result<NP_PtrKinds, NP_Error> {
+    fn buffer_set(&mut self, address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: &NP_Memory, value: Box<&Self>) -> std::result::Result<NP_PtrKinds, NP_Error> {
         Err(NP_Error::new("This type doesn't support .set()!"))
     }
-    fn buffer_into(&self, address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: Rc<RefCell<NP_Memory>>) -> std::result::Result<Option<Box<Self>>, NP_Error> {
+    fn buffer_into(&self, address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: &NP_Memory) -> std::result::Result<Option<Box<Self>>, NP_Error> {
         self.buffer_get(address, kind, schema, buffer)
     }*/
 }
@@ -224,6 +223,6 @@ impl<'a> NP_Value for NP_List<'a> {
 impl<'a> Default for NP_List<'a> {
 
     fn default() -> Self {
-        NP_List { address: 0, head: 0, tail: 0, memory: Rc::new(RefCell::new(NP_Memory { bytes: vec![]})), of: None}
+        NP_List { address: 0, head: 0, tail: 0, memory: None, of: None}
     }
 }

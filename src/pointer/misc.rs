@@ -3,7 +3,7 @@ use json::JsonValue;
 use crate::schema::{NP_SchemaKinds, NP_Schema, NP_TypeKeys};
 use crate::pointer::NP_PtrKinds;
 use crate::{memory::NP_Memory, pointer::NP_Value, error::NP_Error};
-use std::{fmt, time::SystemTime, cell::RefCell, rc::Rc};
+use std::{fmt, time::SystemTime};
 use rand::Rng;
 
 fn to_hex(num: u64, length: i32) -> String {
@@ -71,7 +71,7 @@ impl NP_Value for NP_Dec {
     fn type_idx() -> (i64, String) { (NP_TypeKeys::Dec64 as i64, "dec64".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Dec64 as i64, "dec64".to_owned()) }
 
-    fn buffer_get(_address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, buffer: Rc<RefCell<NP_Memory>>) -> std::result::Result<Option<Box<Self>>, NP_Error> {
+    fn buffer_get(_address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, buffer: &NP_Memory) -> std::result::Result<Option<Box<Self>>, NP_Error> {
 
         let addr = kind.get_value() as usize;
 
@@ -80,7 +80,7 @@ impl NP_Value for NP_Dec {
             return Ok(None);
         }
 
-        let memory = buffer.try_borrow()?;
+        let memory = buffer;
 
         Ok(match memory.get_8_bytes(addr) {
             Some(x) => {
@@ -90,13 +90,11 @@ impl NP_Value for NP_Dec {
         })
     }
 
-    fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, buffer: Rc<RefCell<NP_Memory>>, value: Box<&Self>) -> std::result::Result<NP_PtrKinds, NP_Error> {
+    fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, buffer: &NP_Memory, value: Box<&Self>) -> std::result::Result<NP_PtrKinds, NP_Error> {
 
         let mut addr = kind.get_value();
 
-        {
-            let mut memory = buffer.try_borrow_mut()?;
-
+        buffer.borrow_mut(|memory| {
             if addr != 0 { // existing value, replace
                 let bytes = value.num.to_le_bytes();
 
@@ -116,14 +114,13 @@ impl NP_Value for NP_Dec {
                 memory.malloc(value.scale.to_le_bytes().to_vec())?;
 
                 return Ok(memory.set_value_address(address, addr as u32, kind));
-            }
-        }
-        
+            }                
+        })
     }
 }
 
 impl<'a> NP_ValueInto<'a> for NP_Dec {
-    fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: &'a NP_Schema, buffer: Rc<RefCell<NP_Memory>>) -> std::result::Result<Option<Box<Self>>, NP_Error> {
+    fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: &'a NP_Schema, buffer: &NP_Memory) -> std::result::Result<Option<Box<Self>>, NP_Error> {
         let addr = kind.get_value() as usize;
 
         // empty value
@@ -131,7 +128,7 @@ impl<'a> NP_ValueInto<'a> for NP_Dec {
             return Ok(None);
         }
 
-        let memory = buffer.try_borrow()?;
+        let memory = buffer;
 
         Ok(match memory.get_8_bytes(addr) {
             Some(x) => {
@@ -180,7 +177,7 @@ impl NP_Value for NP_Geo {
     fn type_idx() -> (i64, String) { (NP_TypeKeys::Geo as i64, "geo".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Geo as i64, "geo".to_owned()) }
 
-    fn buffer_get(_address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: Rc<RefCell<NP_Memory>>) -> std::result::Result<Option<Box<Self>>, NP_Error> {
+    fn buffer_get(_address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: &NP_Memory) -> std::result::Result<Option<Box<Self>>, NP_Error> {
 
         let addr = kind.get_value() as usize;
 
@@ -189,7 +186,7 @@ impl NP_Value for NP_Geo {
             return Ok(None);
         }
 
-        let memory = buffer.try_borrow()?;
+        let memory = buffer;
 
         match schema.type_state {
             4 => {
@@ -265,14 +262,11 @@ impl NP_Value for NP_Geo {
         }
     }
 
-    fn buffer_set(address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: Rc<RefCell<NP_Memory>>, value: Box<&Self>) -> std::result::Result<NP_PtrKinds, NP_Error> {
+    fn buffer_set(address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: &NP_Memory, value: Box<&Self>) -> std::result::Result<NP_PtrKinds, NP_Error> {
 
         let mut addr = kind.get_value();
 
-        {
-
-            let mut memory = buffer.try_borrow_mut()?;
-
+        buffer.borrow_mut(|memory| {
 
             let value_bytes_size = schema.type_state as usize;
 
@@ -364,12 +358,12 @@ impl NP_Value for NP_Geo {
 
                 return Ok(memory.set_value_address(address, addr as u32, kind));
             }
-        }
+        })
     }
 }
 
 impl<'a> NP_ValueInto<'a> for NP_Geo {
-    fn buffer_into(_address: u32, kind: NP_PtrKinds, schema: &'a NP_Schema, buffer: Rc<RefCell<NP_Memory>>) -> std::result::Result<Option<Box<Self>>, NP_Error> {
+    fn buffer_into(_address: u32, kind: NP_PtrKinds, schema: &'a NP_Schema, buffer: &NP_Memory) -> std::result::Result<Option<Box<Self>>, NP_Error> {
 
         let addr = kind.get_value() as usize;
 
@@ -378,7 +372,7 @@ impl<'a> NP_ValueInto<'a> for NP_Geo {
             return Ok(None);
         }
 
-        let memory = buffer.try_borrow()?;
+        let memory = buffer;
 
         match schema.type_state {
             4 => {
@@ -564,7 +558,7 @@ impl NP_Value for NP_TimeID {
     fn type_idx() -> (i64, String) { (NP_TypeKeys::Tid as i64, "tid".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Tid as i64, "tid".to_owned()) }
 
-    fn buffer_get(_address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, buffer: Rc<RefCell<NP_Memory>>) -> std::result::Result<Option<Box<Self>>, NP_Error> {
+    fn buffer_get(_address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, buffer: &NP_Memory) -> std::result::Result<Option<Box<Self>>, NP_Error> {
 
         let addr = kind.get_value() as usize;
 
@@ -573,7 +567,7 @@ impl NP_Value for NP_TimeID {
             return Ok(None);
         }
 
-        let memory = buffer.try_borrow()?;
+        let memory = buffer;
         Ok(match memory.get_16_bytes(addr) {
             Some(x) => {
                 let mut id_bytes: [u8; 8] = [0; 8];
@@ -591,12 +585,11 @@ impl NP_Value for NP_TimeID {
         })
     }
 
-    fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, buffer: Rc<RefCell<NP_Memory>>, value: Box<&Self>) -> std::result::Result<NP_PtrKinds, NP_Error> {
+    fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, buffer: &NP_Memory, value: Box<&Self>) -> std::result::Result<NP_PtrKinds, NP_Error> {
 
         let mut addr = kind.get_value();
 
-        {
-            let mut memory = buffer.try_borrow_mut()?;
+        buffer.borrow_mut(|memory| {
 
             if addr != 0 { // existing value, replace
 
@@ -630,12 +623,12 @@ impl NP_Value for NP_TimeID {
 
                 return Ok(memory.set_value_address(address, addr as u32, kind));
             }                    
-        }
+        })
     }
 }
 
 impl<'a> NP_ValueInto<'a> for NP_TimeID {
-    fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: &'a NP_Schema, buffer: Rc<RefCell<NP_Memory>>) -> std::result::Result<Option<Box<Self>>, NP_Error> {
+    fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: &'a NP_Schema, buffer: &NP_Memory) -> std::result::Result<Option<Box<Self>>, NP_Error> {
         let addr = kind.get_value() as usize;
 
         // empty value
@@ -643,7 +636,7 @@ impl<'a> NP_ValueInto<'a> for NP_TimeID {
             return Ok(None);
         }
 
-        let memory = buffer.try_borrow()?;
+        let memory = buffer;
         Ok(match memory.get_16_bytes(addr) {
             Some(x) => {
                 let mut id_bytes: [u8; 8] = [0; 8];
@@ -731,7 +724,7 @@ impl NP_Value for NP_UUID {
     fn type_idx() -> (i64, String) { (NP_TypeKeys::Uuid as i64, "uuid".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Uuid as i64, "uuid".to_owned()) }
 
-    fn buffer_get(_address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, buffer: Rc<RefCell<NP_Memory>>) -> std::result::Result<Option<Box<Self>>, NP_Error> {
+    fn buffer_get(_address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, buffer: &NP_Memory) -> std::result::Result<Option<Box<Self>>, NP_Error> {
 
         let addr = kind.get_value() as usize;
 
@@ -740,7 +733,7 @@ impl NP_Value for NP_UUID {
             return Ok(None);
         }
 
-        let memory = buffer.try_borrow()?;
+        let memory = buffer;
         Ok(match memory.get_16_bytes(addr) {
             Some(x) => {
                 Some(Box::new(NP_UUID { value: x}))
@@ -749,12 +742,11 @@ impl NP_Value for NP_UUID {
         })
     }
 
-    fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, buffer: Rc<RefCell<NP_Memory>>, value: Box<&Self>) -> std::result::Result<NP_PtrKinds, NP_Error> {
+    fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, buffer: &NP_Memory, value: Box<&Self>) -> std::result::Result<NP_PtrKinds, NP_Error> {
 
         let mut addr = kind.get_value();
 
-        {
-            let mut memory = buffer.try_borrow_mut()?;
+        buffer.borrow_mut(|memory| {
 
             if addr != 0 { // existing value, replace
                 let bytes = value.value;
@@ -773,12 +765,12 @@ impl NP_Value for NP_UUID {
 
                 return Ok(memory.set_value_address(address, addr as u32, kind));
             }                    
-        }
+        })
     }
 }
 
 impl<'a> NP_ValueInto<'a> for NP_UUID {
-    fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: &'a NP_Schema, buffer: Rc<RefCell<NP_Memory>>) -> std::result::Result<Option<Box<Self>>, NP_Error> {
+    fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: &'a NP_Schema, buffer: &NP_Memory) -> std::result::Result<Option<Box<Self>>, NP_Error> {
         let addr = kind.get_value() as usize;
 
         // empty value
@@ -786,7 +778,7 @@ impl<'a> NP_ValueInto<'a> for NP_UUID {
             return Ok(None);
         }
 
-        let memory = buffer.try_borrow()?;
+        let memory = buffer;
         Ok(match memory.get_16_bytes(addr) {
             Some(x) => {
                 Some(Box::new(NP_UUID { value: x}))
@@ -813,7 +805,7 @@ impl NP_Value for NP_Option {
     fn type_idx() -> (i64, String) { (NP_TypeKeys::Enum as i64, "option".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Enum as i64, "option".to_owned()) }
 
-    fn buffer_get(_address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: Rc<RefCell<NP_Memory>>) -> std::result::Result<Option<Box<Self>>, NP_Error> {
+    fn buffer_get(_address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: &NP_Memory) -> std::result::Result<Option<Box<Self>>, NP_Error> {
 
         let addr = kind.get_value() as usize;
 
@@ -822,7 +814,7 @@ impl NP_Value for NP_Option {
             return Ok(None);
         }
 
-        let memory = buffer.try_borrow()?;
+        let memory = buffer;
 
         match &*schema.kind {
             NP_SchemaKinds::Enum { choices } => {
@@ -846,7 +838,7 @@ impl NP_Value for NP_Option {
         }
     }
 
-    fn buffer_set(address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: Rc<RefCell<NP_Memory>>, value: Box<&Self>) -> std::result::Result<NP_PtrKinds, NP_Error> {
+    fn buffer_set(address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: &NP_Memory, value: Box<&Self>) -> std::result::Result<NP_PtrKinds, NP_Error> {
 
         let mut addr = kind.get_value();
         
@@ -870,8 +862,7 @@ impl NP_Value for NP_Option {
                     }
                 }
 
-                {
-                    let mut memory = buffer.try_borrow_mut()?;
+                buffer.borrow_mut(|memory| {
 
                     let bytes = (value_num as u8).to_le_bytes();
 
@@ -889,7 +880,7 @@ impl NP_Value for NP_Option {
 
                         return Ok(memory.set_value_address(address, addr as u32, kind));
                     }                    
-                }
+                })
                 
             },
             _ => {
@@ -906,7 +897,7 @@ impl Default for NP_Option {
 }
 
 impl<'a> NP_ValueInto<'a> for NP_Option {
-    fn buffer_into(_address: u32, kind: NP_PtrKinds, schema: &'a NP_Schema, buffer: Rc<RefCell<NP_Memory>>) -> std::result::Result<Option<Box<Self>>, NP_Error> {
+    fn buffer_into(_address: u32, kind: NP_PtrKinds, schema: &'a NP_Schema, buffer: &NP_Memory) -> std::result::Result<Option<Box<Self>>, NP_Error> {
         let addr = kind.get_value() as usize;
 
         // empty value
@@ -914,7 +905,7 @@ impl<'a> NP_ValueInto<'a> for NP_Option {
             return Ok(None);
         }
 
-        let memory = buffer.try_borrow()?;
+        let memory = buffer;
 
         match &*schema.kind {
             NP_SchemaKinds::Enum { choices } => {
@@ -953,7 +944,7 @@ impl NP_Value for bool {
     fn type_idx() -> (i64, String) { (NP_TypeKeys::Boolean as i64, "bool".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Boolean as i64, "bool".to_owned()) }
 
-    fn buffer_get(_address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, buffer: Rc<RefCell<NP_Memory>>) -> std::result::Result<Option<Box<Self>>, NP_Error> {
+    fn buffer_get(_address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, buffer: &NP_Memory) -> std::result::Result<Option<Box<Self>>, NP_Error> {
 
         let addr = kind.get_value() as usize;
 
@@ -962,7 +953,7 @@ impl NP_Value for bool {
             return Ok(None);
         }
 
-        let memory = buffer.try_borrow()?;
+        let memory = buffer;
 
         Ok(match memory.get_1_byte(addr) {
             Some(x) => {
@@ -972,12 +963,11 @@ impl NP_Value for bool {
         })
     }
 
-    fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, buffer: Rc<RefCell<NP_Memory>>, value: Box<&Self>) -> std::result::Result<NP_PtrKinds, NP_Error> {
+    fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, buffer: &NP_Memory, value: Box<&Self>) -> std::result::Result<NP_PtrKinds, NP_Error> {
 
         let mut addr = kind.get_value();
 
-        {
-            let mut memory = buffer.try_borrow_mut()?;
+        buffer.borrow_mut(|memory| {
 
             if addr != 0 { // existing value, replace
                 let bytes = if **value == true {
@@ -1002,12 +992,12 @@ impl NP_Value for bool {
                 addr = memory.malloc(bytes.to_vec())?;
                 return Ok(memory.set_value_address(address, addr as u32, kind));
             }
-        }
+        })
     }
 }
 
 impl<'a> NP_ValueInto<'a> for bool {
-    fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: &'a NP_Schema, buffer: Rc<RefCell<NP_Memory>>) -> std::result::Result<Option<Box<Self>>, NP_Error> {
+    fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: &'a NP_Schema, buffer: &NP_Memory) -> std::result::Result<Option<Box<Self>>, NP_Error> {
         let addr = kind.get_value() as usize;
 
         // empty value
@@ -1015,7 +1005,7 @@ impl<'a> NP_ValueInto<'a> for bool {
             return Ok(None);
         }
 
-        let memory = buffer.try_borrow()?;
+        let memory = buffer;
 
         Ok(match memory.get_1_byte(addr) {
             Some(x) => {
@@ -1061,7 +1051,7 @@ impl NP_Value for NP_Date {
     fn type_idx() -> (i64, String) { (NP_TypeKeys::Date as i64, "date".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Date as i64, "date".to_owned()) }
 
-    fn buffer_get(_address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, buffer: Rc<RefCell<NP_Memory>>) -> std::result::Result<Option<Box<Self>>, NP_Error> {
+    fn buffer_get(_address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, buffer: &NP_Memory) -> std::result::Result<Option<Box<Self>>, NP_Error> {
 
         let addr = kind.get_value() as usize;
 
@@ -1070,7 +1060,7 @@ impl NP_Value for NP_Date {
             return Ok(None);
         }
 
-        let memory = buffer.try_borrow()?;
+        let memory = buffer;
         Ok(match memory.get_8_bytes(addr) {
             Some(x) => {
                 Some(Box::new(NP_Date { value: u64::from_le_bytes(x) }))
@@ -1079,12 +1069,11 @@ impl NP_Value for NP_Date {
         })
     }
 
-    fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, buffer: Rc<RefCell<NP_Memory>>, value: Box<&Self>) -> std::result::Result<NP_PtrKinds, NP_Error> {
+    fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, buffer: &NP_Memory, value: Box<&Self>) -> std::result::Result<NP_PtrKinds, NP_Error> {
 
         let mut addr = kind.get_value();
 
-        {
-            let mut memory = buffer.try_borrow_mut()?;
+        buffer.borrow_mut(|memory| {
 
             if addr != 0 { // existing value, replace
                 let bytes = value.value.to_le_bytes();
@@ -1102,12 +1091,12 @@ impl NP_Value for NP_Date {
                 addr = memory.malloc(bytes.to_vec())?;
                 return Ok(memory.set_value_address(address, addr as u32, kind));
             }                    
-        }
+        })
     }
 }
 
 impl<'a> NP_ValueInto<'a> for NP_Date {
-    fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: &'a NP_Schema, buffer: Rc<RefCell<NP_Memory>>) -> std::result::Result<Option<Box<Self>>, NP_Error> {
+    fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: &'a NP_Schema, buffer: &NP_Memory) -> std::result::Result<Option<Box<Self>>, NP_Error> {
         let addr = kind.get_value() as usize;
 
         // empty value
@@ -1115,7 +1104,7 @@ impl<'a> NP_ValueInto<'a> for NP_Date {
             return Ok(None);
         }
 
-        let memory = buffer.try_borrow()?;
+        let memory = buffer;
         Ok(match memory.get_8_bytes(addr) {
             Some(x) => {
                 Some(Box::new(NP_Date { value: u64::from_le_bytes(x) }))

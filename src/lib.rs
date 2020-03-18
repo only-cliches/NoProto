@@ -93,8 +93,7 @@
 //!         Ok(())
 //!    })?;
 //!    
-//!    // close a buffer when we're done with it
-//!    buffer.close()
+//!    Ok(())
 //! })?;
 //!  
 //! // open the new buffer, `user_buffer`, we just created
@@ -123,8 +122,7 @@
 //!         Ok(())
 //!    })?;
 //!    
-//!    // close a buffer when we're done with it
-//!    buffer.close()
+//!    Ok(())
 //! })?;
 //! 
 //! // we can now save user_buffer_2 to disk, 
@@ -161,9 +159,11 @@ pub mod buffer;
 pub mod schema;
 pub mod error;
 mod memory;
+mod utils;
 
 use crate::error::NP_Error;
 use crate::schema::NP_Schema;
+use crate::memory::NP_Memory;
 use buffer::NP_Buffer;
 
 const PROTOCOL_VERSION: u8 = 0;
@@ -198,15 +198,36 @@ impl NP_Factory {
     }
 
     pub fn new_buffer<F>(&self, capacity: Option<u32>, mut callback: F) -> std::result::Result<Vec<u8>, NP_Error>
-        where F: FnMut(NP_Buffer) -> std::result::Result<Vec<u8>, NP_Error>
+        where F: FnMut(NP_Buffer) -> std::result::Result<(), NP_Error>
     {   
-        callback(NP_Buffer::new(&self.schema, capacity))
+
+        let capacity = match capacity {
+            Some(x) => x,
+            None => 1024
+        };
+
+        let mut new_bytes: Vec<u8> = Vec::with_capacity(capacity as usize);
+
+        new_bytes.extend(vec![
+            PROTOCOL_VERSION, // Protocol version (for breaking changes if needed later)
+            0, 0, 0, 0        // u32 HEAD for root value (starts at zero)
+        ]); 
+
+        let bytes = NP_Memory::new(new_bytes);
+
+        callback(NP_Buffer::new(&self.schema, &bytes))?;
+
+        Ok(bytes.dump())
     }
 
     pub fn load_buffer<F>(&self, buffer: Vec<u8>, mut callback: F) -> std::result::Result<Vec<u8>, NP_Error>
-        where F: FnMut(NP_Buffer) -> std::result::Result<Vec<u8>, NP_Error>
+        where F: FnMut(NP_Buffer) -> std::result::Result<(), NP_Error>
     {   
-        callback(NP_Buffer::load(&self.schema, buffer))
+        let bytes = NP_Memory::new(buffer);
+
+        callback(NP_Buffer::new(&self.schema, &bytes))?;
+
+        Ok(bytes.dump())
     }
 }
 
@@ -273,7 +294,7 @@ mod tests {
                 Ok(())
             })?;
 
-            buffer.close()
+            Ok(())
         })?;
 
         let return_buffer_2 = factory.load_buffer(return_buffer, |mut buffer| {
@@ -297,7 +318,7 @@ mod tests {
                 Ok(())
             })?;
 
-            buffer.close()
+            Ok(())
         })?;
 
         // println!("BYTES: {:?}", xx);

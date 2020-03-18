@@ -1,6 +1,12 @@
-
 use crate::pointer::NP_PtrKinds;
 use crate::error::NP_Error;
+
+unsafe fn as_mut<T>(reference: &T) -> &mut T {
+    let const_ptr = reference as *const T;
+    let mut_ptr = const_ptr as *mut T;
+    &mut *mut_ptr
+}
+
 
 pub struct NP_Memory {
     pub bytes: Vec<u8>
@@ -9,6 +15,13 @@ pub struct NP_Memory {
 const MAX_SIZE: u64 = std::u32::MAX as u64;
 
 impl NP_Memory {
+
+    pub fn new(bytes: Vec<u8>) -> Self {
+        NP_Memory {
+            bytes: bytes,
+        }
+    }
+
     pub fn malloc(&mut self, bytes: Vec<u8>) -> std::result::Result<u32, NP_Error> {
         let location: u32 = self.bytes.len() as u32;
 
@@ -19,6 +32,10 @@ impl NP_Memory {
 
         &self.bytes.extend(bytes);
         Ok(location)
+    }
+
+    pub fn borrow_mut<F, R>(&self, mut callback: F) -> std::result::Result<R, NP_Error> where F: FnMut(&mut Self) -> std::result::Result<R, NP_Error> {
+        callback(unsafe { as_mut(self) })
     }
 
     pub fn set_value_address(&mut self, address: u32, val: u32, kind: &NP_PtrKinds) -> NP_PtrKinds {

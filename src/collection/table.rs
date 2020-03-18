@@ -1,13 +1,11 @@
 use crate::pointer::NP_ValueInto;
 use crate::pointer::NP_PtrKinds;
 use crate::{memory::NP_Memory, pointer::{NP_Value, NP_Ptr}, error::NP_Error, schema::{NP_SchemaKinds, NP_Schema, NP_TypeKeys}};
-use std::rc::Rc;
-use std::cell::RefCell;
 
 pub struct NP_Table<'a> {
     address: u32, // pointer location
     head: u32,
-    memory: Rc<RefCell<NP_Memory>>,
+    memory: Option<&'a NP_Memory>,
     columns: Option<&'a Vec<Option<(u8, String, NP_Schema)>>>
 }
 
@@ -20,16 +18,16 @@ impl<'a> NP_Value for NP_Table<'a> {
     }
     fn type_idx() -> (i64, String) { (-1, "table".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (-1, "table".to_owned()) }
-    fn buffer_get(_address: u32, _kind: &NP_PtrKinds, _schema: &NP_Schema, _buffer: Rc<RefCell<NP_Memory>>) -> std::result::Result<Option<Box<Self>>, NP_Error> {
+    fn buffer_get(_address: u32, _kind: &NP_PtrKinds, _schema: &NP_Schema, _buffer: &NP_Memory) -> std::result::Result<Option<Box<Self>>, NP_Error> {
         Err(NP_Error::new("Type (table) doesn't support .get()! Use .into() instead."))
     }
-    fn buffer_set(_address: u32, _kind: &NP_PtrKinds, _schema: &NP_Schema, _buffer: Rc<RefCell<NP_Memory>>, _value: Box<&Self>) -> std::result::Result<NP_PtrKinds, NP_Error> {
+    fn buffer_set(_address: u32, _kind: &NP_PtrKinds, _schema: &NP_Schema, _buffer: &NP_Memory, _value: Box<&Self>) -> std::result::Result<NP_PtrKinds, NP_Error> {
         Err(NP_Error::new("Type (table) doesn't support .set()! Use .into() instead."))
     }
 }
 
 impl<'a> NP_ValueInto<'a> for NP_Table<'a> {
-    fn buffer_into(address: u32, kind: NP_PtrKinds, schema: &'a NP_Schema, buffer: Rc<RefCell<NP_Memory>>) -> std::result::Result<Option<Box<NP_Table<'a>>>, NP_Error> {
+    fn buffer_into(address: u32, kind: NP_PtrKinds, schema: &'a NP_Schema, buffer: &'a NP_Memory) -> std::result::Result<Option<Box<NP_Table<'a>>>, NP_Error> {
         
         match &*schema.kind {
             NP_SchemaKinds::Table { columns } => {
@@ -40,14 +38,15 @@ impl<'a> NP_ValueInto<'a> for NP_Table<'a> {
 
                 if addr == 0 {
                     // no table here, make one
-                    let mut memory = buffer.try_borrow_mut()?;
-                    addr = memory.malloc([0 as u8; 4].to_vec())?; // stores HEAD for table
-                    memory.set_value_address(address, addr, &kind);
+                    addr = buffer.borrow_mut(|memory| {
+                        let new_addr = memory.malloc([0 as u8; 4].to_vec())?; // stores HEAD for table
+                        memory.set_value_address(address, new_addr, &kind);
+                        Ok(new_addr)
+                    })?;
                 } else {
                     // existing head, read value
-                    let b_bytes = &buffer.try_borrow()?.bytes;
                     let a = addr as usize;
-                    head.copy_from_slice(&b_bytes[a..(a+4)]);
+                    head.copy_from_slice(&buffer.bytes[a..(a+4)]);
                 }
 
                 Ok(Some(Box::new(NP_Table::new(addr, u32::from_le_bytes(head), buffer, &columns))))
@@ -62,23 +61,23 @@ impl<'a> NP_ValueInto<'a> for NP_Table<'a> {
 impl<'a> Default for NP_Table<'a> {
 
     fn default() -> Self {
-        NP_Table { address: 0, head: 0, memory: Rc::new(RefCell::new(NP_Memory { bytes: vec![]})), columns: None}
+        NP_Table { address: 0, head: 0, memory: None, columns: None}
     }
 }
 
 impl<'a> NP_Table<'a> {
 
     #[doc(hidden)]
-    pub fn new(address: u32, head: u32, memory: Rc<RefCell<NP_Memory>>, columns: &'a Vec<Option<(u8, String, NP_Schema)>>) -> Self {
+    pub fn new(address: u32, head: u32, memory: &'a NP_Memory, columns: &'a Vec<Option<(u8, String, NP_Schema)>>) -> Self {
         NP_Table {
             address,
             head,
-            memory,
+            memory: Some(memory),
             columns: Some(columns)
         }
     }
 
-    pub fn select<X: NP_Value + Default + NP_ValueInto<'a>>(&mut self, column: &str) -> std::result::Result<NP_Ptr<X>, NP_Error> {
+    pub fn select<X: NP_Value + Default + NP_ValueInto<'a>>(&mut self, column: &str) -> std::result::Result<NP_Ptr<'a, X>, NP_Error> {
 
         let mut column_schema: Option<&NP_Schema> = None;
 
@@ -115,24 +114,22 @@ impl<'a> NP_Table<'a> {
 
                 if self.head == 0 { // no values, create one
 
-                    let addr;
-        
-                    {
-                        let mut memory = self.memory.try_borrow_mut()?;
+                    let addr = self.memory.unwrap().borrow_mut(|memory| {
         
                         let mut ptr_bytes: [u8; 9] = [0; 9];
         
                         // set column index in pointer
                         ptr_bytes[8] = *column_index;
         
-                        addr = memory.malloc(ptr_bytes.to_vec())?;
-                    }
+                        memory.malloc(ptr_bytes.to_vec())
+
+                    }).unwrap_or(0);
                     
                     // update head to point to newly created TableItem pointer
                     self.set_head(addr);
 
                     // provide
-                    return Ok(NP_Ptr::new_table_item_ptr(self.head, some_column_schema, Rc::clone(&self.memory))?);
+                    return Ok(NP_Ptr::new_table_item_ptr(self.head, some_column_schema, &self.memory.unwrap()));
                 } else { // values exist, loop through them to see if we have an existing pointer for this column
 
                     let mut next_addr = self.head as usize;
@@ -144,20 +141,20 @@ impl<'a> NP_Table<'a> {
                         let index;
 
                         {
-                            let memory = self.memory.try_borrow()?;
+                            let memory = self.memory.unwrap();
                             index = memory.bytes[(next_addr + 8)];
                         }
 
                         // found our value!
                         if index == *column_index {
-                            return Ok(NP_Ptr::new_table_item_ptr(next_addr as u32, some_column_schema, Rc::clone(&self.memory))?)
+                            return Ok(NP_Ptr::new_table_item_ptr(next_addr as u32, some_column_schema, &self.memory.unwrap()))
                         }
 
                         
                         // not found yet, get next address
                         let mut next: [u8; 4] = [0; 4];
                         {
-                            let memory = self.memory.try_borrow()?;
+                            let memory = self.memory.unwrap();
                             next.copy_from_slice(&memory.bytes[(next_addr + 4)..(next_addr + 8)]);
                         }
                         
@@ -171,17 +168,13 @@ impl<'a> NP_Table<'a> {
 
                     // ran out of pointers to check, make one!
 
-                    let addr;
-
-                    {
-                        let mut memory = self.memory.try_borrow_mut()?;
-        
+                    let addr = self.memory.unwrap().borrow_mut(|memory| {
                         let mut ptr_bytes: [u8; 9] = [0; 9];
         
                         // set column index in pointer
                         ptr_bytes[8] = *column_index;
                 
-                        addr = memory.malloc(ptr_bytes.to_vec())?;
+                        let addr = memory.malloc(ptr_bytes.to_vec())?;
 
                         // set previouse pointer's "next" value to this new pointer
                         let addr_bytes = addr.to_le_bytes();
@@ -189,10 +182,11 @@ impl<'a> NP_Table<'a> {
                             memory.bytes[(next_addr + 4 + x)] = addr_bytes[x];
                         }
 
-                    }
+                        Ok(addr)
+                    })?;
                     
                     // provide 
-                    return Ok(NP_Ptr::new_table_item_ptr(addr, some_column_schema, Rc::clone(&self.memory))?);
+                    return Ok(NP_Ptr::new_table_item_ptr(addr, some_column_schema, &self.memory.unwrap()));
 
                 }
             },
@@ -206,13 +200,15 @@ impl<'a> NP_Table<'a> {
 
         self.head = addr;
 
-        let mut memory = self.memory.borrow_mut();
+        self.memory.unwrap().borrow_mut(|memory| {
+            let addr_bytes = addr.to_le_bytes();
 
-        let addr_bytes = addr.to_le_bytes();
+            for x in 0..addr_bytes.len() {
+                memory.bytes[(self.address + x as u32) as usize] = addr_bytes[x as usize];
+            }
 
-        for x in 0..addr_bytes.len() {
-            memory.bytes[(self.address + x as u32) as usize] = addr_bytes[x as usize];
-        }
+            Ok(())
+        }).unwrap_or(())
     }
 
     pub fn has(&self, column: &str) -> std::result::Result<bool, NP_Error> {
@@ -251,7 +247,7 @@ impl<'a> NP_Table<'a> {
             let index;
 
             {
-                let memory = self.memory.try_borrow()?;
+                let memory = self.memory.unwrap();
                 index = memory.bytes[(next_addr + 8)];
             }
 
@@ -264,7 +260,7 @@ impl<'a> NP_Table<'a> {
             // not found yet, get next address
             let mut next: [u8; 4] = [0; 4];
             {
-                let memory = self.memory.try_borrow()?;
+                let memory = self.memory.unwrap();
                 next.copy_from_slice(&memory.bytes[(next_addr + 4)..(next_addr + 8)]);
             }
             

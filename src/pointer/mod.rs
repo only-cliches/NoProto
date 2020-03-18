@@ -18,8 +18,6 @@ pub mod numbers;
 use crate::memory::NP_Memory;
 use crate::NP_Error;
 use crate::{schema::{NP_Schema}};
-use std::rc::Rc;
-use std::cell::RefCell;
 use json::JsonValue;
 
 
@@ -76,16 +74,16 @@ pub trait NP_Value {
     fn type_idx() -> (i64, String) { (-1, "null".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (-1, "null".to_owned()) }
     fn schema_state(_type_string: &str, _json_schema: &JsonValue) -> std::result::Result<i64, NP_Error> { Ok(0) }
-    fn buffer_get(_address: u32, _kind: &NP_PtrKinds, _schema: &NP_Schema, _buffer: Rc<RefCell<NP_Memory>>) -> std::result::Result<Option<Box<Self>>, NP_Error> {
+    fn buffer_get(_address: u32, _kind: &NP_PtrKinds, _schema: &NP_Schema, _buffer: &NP_Memory) -> std::result::Result<Option<Box<Self>>, NP_Error> {
         Err(NP_Error::new(format!("This type ({}) doesn't support .get()!", Self::type_idx().1).as_str()))
     }
-    fn buffer_set(_address: u32, _kind: &NP_PtrKinds, _schema: &NP_Schema, _buffer: Rc<RefCell<NP_Memory>>, _value: Box<&Self>) -> std::result::Result<NP_PtrKinds, NP_Error> {
+    fn buffer_set(_address: u32, _kind: &NP_PtrKinds, _schema: &NP_Schema, _buffer: &NP_Memory, _value: Box<&Self>) -> std::result::Result<NP_PtrKinds, NP_Error> {
         Err(NP_Error::new(format!("This type ({}) doesn't support .set()!", Self::type_idx().1).as_str()))
     }
 }
 
 pub trait NP_ValueInto<'a> {
-    fn buffer_into(_address: u32, _kind: NP_PtrKinds, _schema: &'a NP_Schema, _buffer: Rc<RefCell<NP_Memory>>) -> std::result::Result<Option<Box<Self>>, NP_Error> {
+    fn buffer_into(_address: u32, _kind: NP_PtrKinds, _schema: &'a NP_Schema, _buffer: &'a NP_Memory) -> std::result::Result<Option<Box<Self>>, NP_Error> {
         Err(NP_Error::new("This type doesn't support .into()!"))
     }
 }
@@ -95,10 +93,10 @@ pub trait NP_ValueInto<'a> {
 /// 
 /// Each pointer represents at least a 32 bit unsigned integer that is either zero for no value or points to an offset in the buffer.  All pointer addresses are zero based against the beginning of the buffer.
 
-pub struct NP_Ptr<'a, T: NP_Value + Default> {
+pub struct NP_Ptr<'a, T: NP_Value + Default + NP_ValueInto<'a>> {
     address: u32, // pointer location
     kind: NP_PtrKinds,
-    memory: Rc<RefCell<NP_Memory>>,
+    pub memory: &'a NP_Memory,
     pub schema: &'a NP_Schema,
     pub value: T
 }
@@ -119,7 +117,7 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Ptr<'a, T> {
     }
 
     #[doc(hidden)]
-    pub fn new(address: u32, schema: &'a NP_Schema, memory: Rc<RefCell<NP_Memory>>) -> Self {
+    pub fn new(address: u32, schema: &'a NP_Schema, memory: &NP_Memory) -> Self {
 
         let thisKind = match *schema.kind {
             NP_SchemaKinds::None => {
@@ -159,7 +157,7 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Ptr<'a, T> {
     pub fn get(&mut self) -> std::result::Result<Option<T>, NP_Error> {
 
 
-        let value = T::buffer_get(self.address, &self.kind, self.schema, Rc::clone(&self.memory))?;
+        let value = T::buffer_get(self.address, &self.kind, self.schema, &self.memory)?;
         
         Ok(match value {
             Some (x) => {
@@ -170,31 +168,32 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Ptr<'a, T> {
     }
 
     pub fn set(&mut self, value: T) -> std::result::Result<(), NP_Error> {
-        self.kind = T::buffer_set(self.address, &self.kind, self.schema, Rc::clone(&self.memory), Box::new(&value))?;
+        self.kind = T::buffer_set(self.address, &self.kind, self.schema, &self.memory, Box::new(&value))?;
         Ok(())
     }
 
     #[doc(hidden)]
-    pub fn new_standard_ptr(address: u32, schema: &'a NP_Schema, memory: Rc<RefCell<NP_Memory>>) -> std::result::Result<Self, NP_Error> {
+    pub fn new_standard_ptr(address: u32, schema: &'a NP_Schema, memory: &'a NP_Memory) -> Self {
 
         let addr = address as usize;
         let mut value: [u8; 4] = [0; 4];
+
         {
-            let b_bytes = &memory.try_borrow()?.bytes;
+            let b_bytes = &memory.bytes;
             value.copy_from_slice(&b_bytes[addr..(addr+4)]);
         }
-
-        Ok(NP_Ptr {
+        
+        NP_Ptr {
             address: address,
             kind: NP_PtrKinds::Standard { value: u32::from_le_bytes(value) },
             memory: memory,
             schema: schema,
             value: T::default()
-        })
+        }
     }
 
     #[doc(hidden)]
-    pub fn new_table_item_ptr(address: u32, schema: &'a NP_Schema, memory: Rc<RefCell<NP_Memory>>) -> std::result::Result<Self, NP_Error> {
+    pub fn new_table_item_ptr(address: u32, schema: &'a NP_Schema, memory: &'a NP_Memory) -> Self {
 
         let addr = address as usize;
         let mut value: [u8; 4] = [0; 4];
@@ -202,13 +201,13 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Ptr<'a, T> {
         let index: u8;
 
         {
-            let b_bytes = &memory.try_borrow()?.bytes;
+            let b_bytes = &memory.bytes;
             value.copy_from_slice(&b_bytes[addr..(addr + 4)]);
             next.copy_from_slice(&b_bytes[(addr + 4)..(addr + 8)]);
             index = b_bytes[addr + 8];
         }
 
-        Ok(NP_Ptr {
+        NP_Ptr {
             address: address,
             kind: NP_PtrKinds::TableItem { 
                 value: u32::from_le_bytes(value),
@@ -218,11 +217,11 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Ptr<'a, T> {
             memory: memory,
             schema: schema,
             value: T::default()
-        })
+        }
     }
 
     #[doc(hidden)]
-    pub fn new_map_item_ptr(address: u32, schema: &'a NP_Schema, memory: Rc<RefCell<NP_Memory>>) -> std::result::Result<Self, NP_Error> {
+    pub fn new_map_item_ptr(address: u32, schema: &'a NP_Schema, memory: &'a NP_Memory) -> Self {
 
         let addr = address as usize;
         let mut value: [u8; 4] = [0; 4];
@@ -230,13 +229,13 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Ptr<'a, T> {
         let mut key: [u8; 4] = [0; 4];
 
         {
-            let b_bytes = &memory.try_borrow()?.bytes;
+            let b_bytes = &memory.bytes;
             value.copy_from_slice(&b_bytes[addr..(addr + 4)]);
             next.copy_from_slice(&b_bytes[(addr + 4)..(addr + 8)]);
             key.copy_from_slice(&b_bytes[(addr + 8)..(addr + 12)]);
         }
 
-        Ok(NP_Ptr {
+        NP_Ptr {
             address: address,
             kind: NP_PtrKinds::MapItem { 
                 value: u32::from_le_bytes(value),
@@ -246,11 +245,11 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Ptr<'a, T> {
             memory: memory,
             schema: schema,
             value: T::default()
-        })
+        }
     }
 
     #[doc(hidden)]
-    pub fn new_list_item_ptr(address: u32, schema: &'a NP_Schema, memory: Rc<RefCell<NP_Memory>>) -> std::result::Result<Self, NP_Error> {
+    pub fn new_list_item_ptr(address: u32, schema: &'a NP_Schema, memory: &'a NP_Memory) -> Self {
 
         let addr = address as usize;
         let mut value: [u8; 4] = [0; 4];
@@ -258,13 +257,13 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Ptr<'a, T> {
         let mut index: [u8; 2] = [0; 2];
 
         {
-            let b_bytes = &memory.try_borrow()?.bytes;
+            let b_bytes = &memory.bytes;
             value.copy_from_slice(&b_bytes[addr..(addr + 4)]);
             next.copy_from_slice(&b_bytes[(addr + 4)..(addr + 8)]);
             index.copy_from_slice(&b_bytes[(addr + 8)..(addr + 10)]);
         }
 
-        Ok(NP_Ptr {
+        NP_Ptr {
             address: address,
             kind: NP_PtrKinds::ListItem { 
                 value: u32::from_le_bytes(value),
@@ -274,7 +273,7 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Ptr<'a, T> {
             memory: memory,
             schema: schema,
             value: T::default()
-        })
+        }
     }
 
     pub fn has_value(&mut self) -> bool {
@@ -282,13 +281,15 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Ptr<'a, T> {
     }
 
     pub fn clear(&mut self) -> std::result::Result<(), NP_Error> {
-        let mut memory = self.memory.try_borrow_mut()?;
-        self.kind = memory.set_value_address(self.address, 0, &self.kind);
-        Ok(())
+
+        self.memory.borrow_mut(|buffer| {
+            self.kind = buffer.set_value_address(self.address, 0, &self.kind);
+            Ok(())
+        })
     }
 
     pub fn into(self) -> std::result::Result<Option<T>, NP_Error> {
-        let result = T::buffer_into(self.address, self.kind, self.schema, Rc::clone(&self.memory))?;
+        let result = T::buffer_into(self.address, self.kind, self.schema, &self.memory)?;
 
         Ok(match result {
             Some(x) => Some(*x),
