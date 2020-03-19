@@ -136,7 +136,12 @@ use crate::collection::{list::NP_List, table::NP_Table, map::NP_Map};
 use crate::pointer::{misc::NP_Option, NP_Value};
 use json::*;
 use crate::error::NP_Error;
-
+use alloc::vec::Vec;
+use alloc::vec;
+use alloc::string::String;
+use alloc::boxed::Box;
+use alloc::borrow::ToOwned;
+use alloc::string::ToString;
 
 #[doc(hidden)]
 pub enum NP_SchemaKinds {
@@ -222,7 +227,7 @@ pub struct NP_Schema {
 pub struct NP_Types { }
 
 impl<'a> NP_Types {
-    pub fn do_check<T: NP_Value + Default + NP_ValueInto<'a>>(type_string: &str, json_schema: &JsonValue)-> std::result::Result<Option<NP_Schema>, NP_Error>{
+    pub fn do_check<T: NP_Value + Default + NP_ValueInto<'a>>(type_string: &str, json_schema: &JsonValue)-> core::result::Result<Option<NP_Schema>, NP_Error>{
         if T::is_type(type_string) {
             Ok(Some(NP_Schema { 
                 kind: Box::new(NP_SchemaKinds::Scalar),
@@ -234,7 +239,7 @@ impl<'a> NP_Types {
         }
     }
 
-    pub fn get_type(type_string: &str, json_schema: &JsonValue)-> std::result::Result<NP_Schema, NP_Error> {
+    pub fn get_type(type_string: &str, json_schema: &JsonValue)-> core::result::Result<NP_Schema, NP_Error> {
 
         let check = NP_Types::do_check::<NP_Any>(type_string, json_schema)?;
         match check { Some(x) => return Ok(x), None => {} };
@@ -293,7 +298,9 @@ impl<'a> NP_Types {
         let check = NP_Types::do_check::<NP_Date>(type_string, json_schema)?;
         match check { Some(x) => return Ok(x), None => {} };
 
-        Err(NP_Error::new(format!("{} is not a valid type!", type_string).as_str()))
+        let mut err = type_string.to_owned();
+        err.push_str(" is not a valid type!");
+        Err(NP_Error::new(err))
     }
 }
 
@@ -309,11 +316,11 @@ impl NP_Schema {
         }
     }
 
-    pub fn from_json(json: JsonValue) -> std::result::Result<Self, NP_Error> {
+    pub fn from_json(json: JsonValue) -> core::result::Result<Self, NP_Error> {
         NP_Schema::validate_model(&json)
     }
 
-    pub fn validate_model(json_schema: &JsonValue) -> std::result::Result<Self, NP_Error> {
+    pub fn validate_model(json_schema: &JsonValue) -> core::result::Result<Self, NP_Error> {
 
         let type_string = json_schema["type"].as_str().unwrap_or("");
 

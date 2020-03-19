@@ -6,6 +6,10 @@ use crate::memory::NP_Memory;
 use crate::{schema::NP_TypeKeys, pointer::NP_Value};
 use super::NP_PtrKinds;
 
+use alloc::string::String;
+use alloc::boxed::Box;
+use alloc::borrow::ToOwned;
+
 #[derive(Debug)]
 pub struct NP_Any {
 
@@ -13,7 +17,7 @@ pub struct NP_Any {
 
 impl<'a> NP_Any {
 
-    pub fn cast<T: NP_Value + Default + NP_ValueInto<'a>>(pointer: NP_Ptr<'a, NP_Any>) -> std::result::Result<NP_Ptr<'a, T>, NP_Error> {
+    pub fn cast<T: NP_Value + Default + NP_ValueInto<'a>>(pointer: NP_Ptr<'a, NP_Any>) -> core::result::Result<NP_Ptr<'a, T>, NP_Error> {
 
         // schema is "any" type, all casting permitted
         if pointer.schema.type_data.0 == NP_TypeKeys::Any as i64 {
@@ -26,7 +30,12 @@ impl<'a> NP_Any {
         }
 
         // schema does not match type
-        Err(NP_Error::new(format!("TypeError: Attempted to cast type ({}) to schema of type ({})!", T::type_idx().1, pointer.schema.type_data.1).as_str()))
+        let mut err = "TypeError: Attempted to cast type (".to_owned();
+        err.push_str(T::type_idx().1.as_str());
+        err.push_str(") to schema of type (");
+        err.push_str(pointer.schema.type_data.1.as_str());
+        err.push_str(")");
+        Err(NP_Error::new(err))
     }
 }
 
@@ -43,17 +52,17 @@ impl<'a> NP_Value for NP_Any {
     fn type_idx() -> (i64, String) { (NP_TypeKeys::Any as i64, "any".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Any as i64, "any".to_owned()) }
 
-    fn buffer_get(_address: u32, _kind: &NP_PtrKinds, _schema: &NP_Schema, _buffer: &NP_Memory) -> std::result::Result<Option<Box<Self>>, NP_Error> {
+    fn buffer_get(_address: u32, _kind: &NP_PtrKinds, _schema: &NP_Schema, _buffer: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
         Err(NP_Error::new("Can't use .get() with (Any), must cast first with NP_Any::cast<T>(pointer)."))
     }
 
-    fn buffer_set(_address: u32, _kind: &NP_PtrKinds, _schema: &NP_Schema, _buffer: &NP_Memory, _value: Box<&Self>) -> std::result::Result<NP_PtrKinds, NP_Error> {
+    fn buffer_set(_address: u32, _kind: &NP_PtrKinds, _schema: &NP_Schema, _buffer: &NP_Memory, _value: Box<&Self>) -> core::result::Result<NP_PtrKinds, NP_Error> {
         Err(NP_Error::new("Can't use .set() with (Any), must cast first with NP_Any::cast<T>(pointer)."))
     }
 }
 
 impl<'a> NP_ValueInto<'a> for NP_Any {
-    fn buffer_into(_address: u32, _kind: NP_PtrKinds, _schema: &'a NP_Schema, _buffer: &NP_Memory) -> std::result::Result<Option<Box<Self>>, NP_Error> {
+    fn buffer_into(_address: u32, _kind: NP_PtrKinds, _schema: &'a NP_Schema, _buffer: &'a NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
         Err(NP_Error::new("Type (Any) doesn't support .into()!"))
     }
 }

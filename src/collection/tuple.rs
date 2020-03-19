@@ -1,6 +1,10 @@
 use crate::pointer::NP_Value;
 use crate::{memory::NP_Memory, schema::NP_Schema};
 
+use alloc::vec::Vec;
+use alloc::string::String;
+use alloc::borrow::ToOwned;
+
 pub struct NP_Tuple<'a> {
     pub address: u32, // pointer location
     pub head: u32,
@@ -44,13 +48,13 @@ impl<'a> NP_Value for NP_Tuple<'a> {
     }
     fn type_idx() -> (i64, String) { (-1, "tuple".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (-1, "tuple".to_owned()) }
-    /*fn buffer_get(&self, _address: u32, _kind: &NP_PtrKinds, _schema: &NP_Schema, _buffer: &NP_Memory) -> std::result::Result<Option<Box<Self>>, NP_Error> {
+    /*fn buffer_get(&self, _address: u32, _kind: &NP_PtrKinds, _schema: &NP_Schema, _buffer: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
         Err(NP_Error::new("This type doesn't support .get()!"))
     }
-    fn buffer_set(&mut self, _address: u32, _kind: &NP_PtrKinds, _schema: &NP_Schema, _buffer: &NP_Memory, _value: Box<&Self>) -> std::result::Result<NP_PtrKinds, NP_Error> {
+    fn buffer_set(&mut self, _address: u32, _kind: &NP_PtrKinds, _schema: &NP_Schema, _buffer: &NP_Memory, _value: Box<&Self>) -> core::result::Result<NP_PtrKinds, NP_Error> {
         Err(NP_Error::new("This type doesn't support .set()!"))
     }
-    fn buffer_into(&self, address: u32, kind: &NP_PtrKinds, schema: NP_Schema, buffer: &NP_Memory) -> std::result::Result<Option<Box<Self>>, NP_Error> {
+    fn buffer_into(&self, address: u32, kind: &NP_PtrKinds, schema: NP_Schema, buffer: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
         self.buffer_get(address, kind, schema, buffer)
     }*/
 }

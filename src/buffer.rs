@@ -7,6 +7,8 @@ use crate::pointer::NP_Ptr;
 use crate::memory::NP_Memory;
 use crate::schema::{NP_TypeKeys, NP_Schema};
 
+use alloc::borrow::ToOwned;
+
 
 pub struct NP_Buffer<'a> {
     pub memory: &'a NP_Memory,
@@ -22,85 +24,37 @@ impl<'a> NP_Buffer<'a> {
             root_model: model
         }
     }
-    /*
-    #[doc(hidden)]
-    pub fn new(model: &'a NP_Schema, capcity: Option<u32>) -> Self { // make new buffer
 
-        let capacity = match capcity {
-            Some(x) => x,
-            None => 1024
-        };
-
-        let mut new_bytes: Vec<u8> = Vec::with_capacity(capacity as usize);
-
-        new_bytes.extend(vec![
-            PROTOCOL_VERSION, // Protocol version (for breaking changes if needed later)
-            0, 0, 0, 0        // u32 HEAD for root value (starts at zero)
-        ]); 
-
-        NP_Buffer {
-            memory: NP_Memory::new(new_bytes),
-            root_model: model
-        }
-    }
-
-    #[doc(hidden)]
-    pub fn load(model: &'a NP_Schema, bytes: Vec<u8>) -> Self { // load existing buffer
-        NP_Buffer {
-            memory: NP_Memory::new(bytes),
-            root_model: model
-        }
-    }*/
-/*
-    #[doc(hidden)]
-    pub fn open_for_value<F, X: NP_Value<'a> + Default, R>(&mut self, mut callback: F) -> std::result::Result<R, NP_Error>
-        where F: FnMut(NP_Ptr<X>) -> std::result::Result<R, NP_Error>
-    {        
-        let buffer = NP_Ptr::new_standard_ptr(1, self.root_model, Rc::clone(&self.memory))?;
-
-        // casting to ANY type -OR- schema is ANY type
-        if X::type_idx().0 == NP_TypeKeys::Any as i64 || buffer.schema.type_data.0 == NP_TypeKeys::Any as i64  {
-            return callback(buffer);
-        }
-
-        // casting matches root schema
-        if X::type_idx().0 == buffer.schema.type_data.0 {
-            return callback(buffer);
-        }
-        
-        Err(NP_Error::new(format!("TypeError: Attempted to cast type ({}) to schema of type ({})!", X::type_idx().1, buffer.schema.type_data.1).as_str()))
-    }
-*/
-    pub fn open<F, T: NP_Value + Default + NP_ValueInto<'a>>(&mut self, mut callback: F) -> std::result::Result<(), NP_Error>
-        where F: FnMut(NP_Ptr<'a, T>) -> std::result::Result<(), NP_Error>
-    {        
-
-
-        let buffer: NP_Ptr<'a, T> = NP_Ptr::new_standard_ptr(1, self.root_model, self.memory);
+    pub fn root<T: NP_Value + Default + NP_ValueInto<'a>>(&mut self) -> core::result::Result<NP_Ptr<'a, T>, NP_Error> {
+        let buffer = NP_Ptr::new_standard_ptr(1, self.root_model, self.memory);
 
         // casting to ANY type -OR- schema is ANY type
         if T::type_idx().0 == NP_TypeKeys::Any as i64 || buffer.schema.type_data.0 == NP_TypeKeys::Any as i64  {
-            return callback(buffer);
+            return Ok(buffer);
         }
 
         // casting matches root schema
         if T::type_idx().0 == buffer.schema.type_data.0 {
-            return callback(buffer);
+            return Ok(buffer);
         }
         
-
-        Err(NP_Error::new(format!("TypeError: Attempted to cast type ({}) to schema of type ({})!", T::type_idx().1, buffer.schema.type_data.1).as_str()))
+        let mut err = "TypeError: Attempted to cast type (".to_owned();
+        err.push_str(T::type_idx().1.as_str());
+        err.push_str(") to schema of type (");
+        err.push_str(buffer.schema.type_data.1.as_str());
+        err.push_str(")");
+        Err(NP_Error::new(err))
     }
 
-    pub fn deep_set<X: NP_Value + Default + NP_ValueInto<'a>, S: AsRef<str>>(&self, _path: S, _value: X) -> std::result::Result<(), NP_Error> {
+    pub fn deep_set<X: NP_Value + Default + NP_ValueInto<'a>, S: AsRef<str>>(&self, _path: S, _value: X) -> core::result::Result<(), NP_Error> {
         Ok(())
     }
 
-    pub fn deep_get<X: NP_Value + Default + NP_ValueInto<'a>>(&self, _path: &str) -> std::result::Result<Option<X>, NP_Error> {
+    pub fn deep_get<X: NP_Value + Default + NP_ValueInto<'a>>(&self, _path: &str) -> core::result::Result<Option<X>, NP_Error> {
         Ok(Some(X::default()))
     }
 
-    pub fn compact(&self)  {
+    pub fn compact(self)  {
         
     }
 
@@ -111,12 +65,12 @@ impl<'a> NP_Buffer<'a> {
         return 0;
     }
 
-    pub fn maybe_compact<F>(&self, mut callback: F) -> bool 
+    pub fn maybe_compact<F>(self, mut callback: F) -> bool 
         where F: FnMut(f32, f32) -> bool // wasted bytes, percent of waste
     {
         let wasted_bytes = self.calc_wasted_bytes() as f32;
 
-        let total_bytes = self.memory.bytes.len() as f32;
+        let total_bytes = self.memory.read_bytes().len() as f32;
 
         let size_without_waste = total_bytes - wasted_bytes;
 

@@ -1,5 +1,5 @@
-use std::rc::Rc;
-use std::cell::RefCell;
+use core::rc::Rc;
+use core::cell::RefCell;
 
 pub enum NP_PtrItemKind {
     list, map, table

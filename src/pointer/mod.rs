@@ -20,28 +20,9 @@ use crate::NP_Error;
 use crate::{schema::{NP_Schema}};
 use json::JsonValue;
 
-
-
-/*
-#[doc(hidden)]
-pub enum TypeReq {
-    Read, Write, Collection
-}
-
-fn type_error(req: TypeReq, kind: &str, schema: &NP_PtrKinds) -> NP_Error {
-    match req {
-        TypeReq::Collection => {
-            return NP_Error::new(format!("TypeError: Attempted to get collection of type ({}) from pointer of type ({})!", kind, schema.kind).as_str());
-        },
-        TypeReq::Read => {
-            return NP_Error::new(format!("TypeError: Attempted to read value of type ({}) from pointer of type ({})!", kind, schema.kind).as_str());
-        },
-        TypeReq::Write => {
-            return NP_Error::new(format!("TypeError: Attempted to write value of type ({}) to pointer of type ({})!", kind, schema.kind).as_str());
-        }
-    }
-}
-*/
+use alloc::string::String;
+use alloc::boxed::Box;
+use alloc::borrow::ToOwned;
 
 #[doc(hidden)]
 #[derive(Debug, Clone, Copy)]
@@ -73,18 +54,25 @@ pub trait NP_Value {
     fn is_type(_type_str: &str) -> bool { false }
     fn type_idx() -> (i64, String) { (-1, "null".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (-1, "null".to_owned()) }
-    fn schema_state(_type_string: &str, _json_schema: &JsonValue) -> std::result::Result<i64, NP_Error> { Ok(0) }
-    fn buffer_get(_address: u32, _kind: &NP_PtrKinds, _schema: &NP_Schema, _buffer: &NP_Memory) -> std::result::Result<Option<Box<Self>>, NP_Error> {
-        Err(NP_Error::new(format!("This type ({}) doesn't support .get()!", Self::type_idx().1).as_str()))
+    fn schema_state(_type_string: &str, _json_schema: &JsonValue) -> core::result::Result<i64, NP_Error> { Ok(0) }
+    fn buffer_get(_address: u32, _kind: &NP_PtrKinds, _schema: &NP_Schema, _buffer: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
+        let mut message = "This type (".to_owned();
+        message.push_str(Self::type_idx().1.as_str());
+        message.push_str(") doesn't support .get()!");
+        Err(NP_Error::new(message.as_str()))
     }
-    fn buffer_set(_address: u32, _kind: &NP_PtrKinds, _schema: &NP_Schema, _buffer: &NP_Memory, _value: Box<&Self>) -> std::result::Result<NP_PtrKinds, NP_Error> {
-        Err(NP_Error::new(format!("This type ({}) doesn't support .set()!", Self::type_idx().1).as_str()))
+    fn buffer_set(_address: u32, _kind: &NP_PtrKinds, _schema: &NP_Schema, _buffer: &NP_Memory, _value: Box<&Self>) -> core::result::Result<NP_PtrKinds, NP_Error> {
+        let mut message = "This type (".to_owned();
+        message.push_str(Self::type_idx().1.as_str());
+        message.push_str(") doesn't support .set()!");
+        Err(NP_Error::new(message.as_str()))
     }
 }
 
 pub trait NP_ValueInto<'a> {
-    fn buffer_into(_address: u32, _kind: NP_PtrKinds, _schema: &'a NP_Schema, _buffer: &'a NP_Memory) -> std::result::Result<Option<Box<Self>>, NP_Error> {
-        Err(NP_Error::new("This type doesn't support .into()!"))
+    fn buffer_into(_address: u32, _kind: NP_PtrKinds, _schema: &'a NP_Schema, _buffer: &'a NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
+        let message = "This type  doesn't support into!".to_owned();
+        Err(NP_Error::new(message.as_str()))
     }
 }
 
@@ -102,59 +90,8 @@ pub struct NP_Ptr<'a, T: NP_Value + Default + NP_ValueInto<'a>> {
 }
 
 impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Ptr<'a, T> {
-/*
-    #[doc(hidden)]
-    pub fn new_example_ptr(schema: &'a NP_Schema, _value: T) -> Self {
 
-        NP_Ptr {
-            address: 0,
-            kind: &NP_PtrKinds::Standard { value: 0 },
-            memory: Rc::new(RefCell::new(NP_Memory { bytes: vec![0, 0, 0, 0] })),
-            schema: schema,
-            cached: false,
-            value: T::default()
-        }
-    }
-
-    #[doc(hidden)]
-    pub fn new(address: u32, schema: &'a NP_Schema, memory: &NP_Memory) -> Self {
-
-        let thisKind = match *schema.kind {
-            NP_SchemaKinds::None => {
-                NP_PtrKinds::None
-            },
-            NP_SchemaKinds::Scalar => {
-                NP_PtrKinds::Standard { value: 0 }
-            },
-            NP_SchemaKinds::List { of } => {
-                NP_PtrKinds::Standard { value: 0 }
-            },
-            NP_SchemaKinds::Table { columns  } => {
-                NP_PtrKinds::Standard { value: 0 }
-            },
-            NP_SchemaKinds::Map { value } => {
-                NP_PtrKinds::Standard { value: 0 }
-            },
-            NP_SchemaKinds::Enum { choices } => {
-                NP_PtrKinds::Standard { value: 0 }
-            },
-            NP_SchemaKinds::Tuple { values } => {
-                NP_PtrKinds::Standard { value: 0 }
-            }
-        };
-
-        NP_Ptr {
-            address: address,
-            kind: thisKind,
-            memory: memory,
-            schema: schema,
-            cached: false,
-            value: T::default()
-        }
-    }
-*/
-
-    pub fn get(&mut self) -> std::result::Result<Option<T>, NP_Error> {
+    pub fn get(&mut self) -> core::result::Result<Option<T>, NP_Error> {
 
 
         let value = T::buffer_get(self.address, &self.kind, self.schema, &self.memory)?;
@@ -167,7 +104,7 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Ptr<'a, T> {
         })
     }
 
-    pub fn set(&mut self, value: T) -> std::result::Result<(), NP_Error> {
+    pub fn set(&mut self, value: T) -> core::result::Result<(), NP_Error> {
         self.kind = T::buffer_set(self.address, &self.kind, self.schema, &self.memory, Box::new(&value))?;
         Ok(())
     }
@@ -176,12 +113,7 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Ptr<'a, T> {
     pub fn new_standard_ptr(address: u32, schema: &'a NP_Schema, memory: &'a NP_Memory) -> Self {
 
         let addr = address as usize;
-        let mut value: [u8; 4] = [0; 4];
-
-        {
-            let b_bytes = &memory.bytes;
-            value.copy_from_slice(&b_bytes[addr..(addr+4)]);
-        }
+        let value: [u8; 4] = *memory.get_4_bytes(addr).unwrap_or(&[0; 4]);
         
         NP_Ptr {
             address: address,
@@ -196,16 +128,11 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Ptr<'a, T> {
     pub fn new_table_item_ptr(address: u32, schema: &'a NP_Schema, memory: &'a NP_Memory) -> Self {
 
         let addr = address as usize;
-        let mut value: [u8; 4] = [0; 4];
-        let mut next: [u8; 4] = [0; 4];
-        let index: u8;
+        let b_bytes = &memory.read_bytes();
 
-        {
-            let b_bytes = &memory.bytes;
-            value.copy_from_slice(&b_bytes[addr..(addr + 4)]);
-            next.copy_from_slice(&b_bytes[(addr + 4)..(addr + 8)]);
-            index = b_bytes[addr + 8];
-        }
+        let value: [u8; 4] = *memory.get_4_bytes(addr).unwrap_or(&[0; 4]);
+        let next: [u8; 4] = *memory.get_4_bytes(addr + 4).unwrap_or(&[0; 4]);
+        let index: u8 = b_bytes[addr + 8];
 
         NP_Ptr {
             address: address,
@@ -224,16 +151,9 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Ptr<'a, T> {
     pub fn new_map_item_ptr(address: u32, schema: &'a NP_Schema, memory: &'a NP_Memory) -> Self {
 
         let addr = address as usize;
-        let mut value: [u8; 4] = [0; 4];
-        let mut next: [u8; 4] = [0; 4];
-        let mut key: [u8; 4] = [0; 4];
-
-        {
-            let b_bytes = &memory.bytes;
-            value.copy_from_slice(&b_bytes[addr..(addr + 4)]);
-            next.copy_from_slice(&b_bytes[(addr + 4)..(addr + 8)]);
-            key.copy_from_slice(&b_bytes[(addr + 8)..(addr + 12)]);
-        }
+        let value: [u8; 4] = *memory.get_4_bytes(addr).unwrap_or(&[0; 4]);
+        let next: [u8; 4] = *memory.get_4_bytes(addr + 4).unwrap_or(&[0; 4]);
+        let key: [u8; 4] = *memory.get_4_bytes(addr + 8).unwrap_or(&[0; 4]);
 
         NP_Ptr {
             address: address,
@@ -252,16 +172,9 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Ptr<'a, T> {
     pub fn new_list_item_ptr(address: u32, schema: &'a NP_Schema, memory: &'a NP_Memory) -> Self {
 
         let addr = address as usize;
-        let mut value: [u8; 4] = [0; 4];
-        let mut next: [u8; 4] = [0; 4];
-        let mut index: [u8; 2] = [0; 2];
-
-        {
-            let b_bytes = &memory.bytes;
-            value.copy_from_slice(&b_bytes[addr..(addr + 4)]);
-            next.copy_from_slice(&b_bytes[(addr + 4)..(addr + 8)]);
-            index.copy_from_slice(&b_bytes[(addr + 8)..(addr + 10)]);
-        }
+        let value: [u8; 4] = *memory.get_4_bytes(addr).unwrap_or(&[0; 4]);
+        let next: [u8; 4] = *memory.get_4_bytes(addr + 4).unwrap_or(&[0; 4]);
+        let index: [u8; 2] = *memory.get_2_bytes(addr + 8).unwrap_or(&[0; 2]);
 
         NP_Ptr {
             address: address,
@@ -280,15 +193,17 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Ptr<'a, T> {
         if self.address == 0 { return false; } else { return true; }
     }
 
-    pub fn clear(&mut self) -> std::result::Result<(), NP_Error> {
-
-        self.memory.borrow_mut(|buffer| {
-            self.kind = buffer.set_value_address(self.address, 0, &self.kind);
-            Ok(())
+    pub fn clear(self) -> core::result::Result<NP_Ptr<'a, T>, NP_Error> {
+        Ok(NP_Ptr {
+            address: self.address,
+            kind: self.memory.set_value_address(self.address, 0, &self.kind),
+            memory: self.memory,
+            schema: self.schema,
+            value: self.value
         })
     }
 
-    pub fn into(self) -> std::result::Result<Option<T>, NP_Error> {
+    pub fn into(self) -> core::result::Result<Option<T>, NP_Error> {
         let result = T::buffer_into(self.address, self.kind, self.schema, &self.memory)?;
 
         Ok(match result {
@@ -298,7 +213,7 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Ptr<'a, T> {
     }
 
     /*
-    pub fn as_table(&mut self) -> std::result::Result<T, NP_Error> {
+    pub fn as_table(&mut self) -> core::result::Result<T, NP_Error> {
 
         match &*self.schema.kind {
             NP_SchemaKinds::Table { columns } => {
@@ -329,7 +244,7 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Ptr<'a, T> {
     }*/
 
 /*
-    pub fn as_list(&mut self) -> std::result::Result<NP_List, NP_Error> {
+    pub fn as_list(&mut self) -> core::result::Result<NP_List, NP_Error> {
         let model = self.schema;
 
         match &*model.kind {
@@ -365,7 +280,7 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Ptr<'a, T> {
         }
     }
 
-    pub fn as_tuple(&mut self) -> std::result::Result<NP_Tuple, NP_Error> {
+    pub fn as_tuple(&mut self) -> core::result::Result<NP_Tuple, NP_Error> {
 
         let model = self.schema;
 
@@ -410,7 +325,7 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Ptr<'a, T> {
     }
 
 
-    pub fn as_map(&mut self) -> std::result::Result<NP_Map, NP_Error> {
+    pub fn as_map(&mut self) -> core::result::Result<NP_Map, NP_Error> {
         let model = self.schema;
 
         match &*model.kind {
@@ -494,8 +409,8 @@ pub enum NP_DataType {
 }*/
 
 // Pointer -> String
-/*impl From<&NP_Ptr> for std::result::Result<String> {
-    fn from(ptr: &NP_Ptr) -> std::result::Result<String> {
+/*impl From<&NP_Ptr> for core::result::Result<String> {
+    fn from(ptr: &NP_Ptr) -> core::result::Result<String> {
         ptr.to_string()
     }
 }*/
@@ -513,9 +428,9 @@ impl From<i64> for NP_Value {
     }
 }
 
-// cast Pointer => std::result::Result<i64>
-impl From<&NP_Value> for std::result::Result<i64> {
-    fn from(ptr: &NP_Value) -> std::result::Result<i64> {
+// cast Pointer => core::result::Result<i64>
+impl From<&NP_Value> for core::result::Result<i64> {
+    fn from(ptr: &NP_Value) -> core::result::Result<i64> {
         match ptr.value {
             NP_Value::int64 { value } => {
                 Some(value)

@@ -1,8 +1,9 @@
 //! Primary error type used by the library
 
-use std::rc::Rc;
-use std::{string::FromUtf8Error, cell::{BorrowError, BorrowMutError}};
-use crate::memory::NP_Memory;
+use alloc::string::FromUtf8Error;
+use alloc::string::String;
+use alloc::borrow::ToOwned;
+use alloc::string::ToString;
 
 #[derive(Debug)]
 pub struct NP_Error {
@@ -10,31 +11,13 @@ pub struct NP_Error {
 }
 
 impl NP_Error {
-    pub fn new(message: &str) -> Self {
-        NP_Error { message: message.to_owned() }
-    }
-}
-
-impl From<BorrowMutError> for NP_Error {
-    fn from(err: BorrowMutError) -> NP_Error {
-        NP_Error::new(err.to_string().as_str())
-    }
-}
-
-impl From<BorrowError> for NP_Error {
-    fn from(err: BorrowError) -> NP_Error {
-        NP_Error::new(err.to_string().as_str())
+    pub fn new<S: AsRef<str>>(message: S) -> Self {
+        NP_Error { message: message.as_ref().to_owned() }
     }
 }
 
 impl From<FromUtf8Error> for NP_Error {
     fn from(err: FromUtf8Error) -> NP_Error {
         NP_Error::new(err.to_string().as_str())
-    }
-}
-
-impl From<Rc<std::cell::RefCell<NP_Memory>>> for NP_Error {
-    fn from(_err: Rc<std::cell::RefCell<NP_Memory>>) -> NP_Error {
-        NP_Error::new("Reference Count Error, value still being borrowed!")
     }
 }

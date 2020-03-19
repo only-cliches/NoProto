@@ -1,4 +1,5 @@
 use core::str;
+use alloc::string::String;
 
 const KX: u32 = 123456789;
 const KY: u32 = 362436069;
@@ -35,32 +36,36 @@ impl Rand {
         }
     }
 
-    pub fn rand_range(&mut self, a: i32, b: i32) -> i32 {
+    pub fn gen_range(&mut self, a: i32, b: i32) -> i32 {
         let m = (b-a+1) as u32;
         return a+(self.rand()%m) as i32;
     }
 }
 
-pub fn from_utf8_lossy<F>(mut input: &[u8], mut push: F) where F: FnMut(&str) {
+pub fn from_utf8_lossy(input: &[u8]) -> String {
+    let mut empty = String::from("");
+
     loop {
         match str::from_utf8(input) {
             Ok(valid) => {
-                push(valid);
+                empty.push_str(valid);
                 break
             }
             Err(error) => {
-                let (valid, after_valid) = input.split_at(error.valid_up_to());
+                let (valid, _after_valid) = input.split_at(error.valid_up_to());
                 unsafe {
-                    push(str::from_utf8_unchecked(valid))
+                    empty.push_str(str::from_utf8_unchecked(valid))
                 }
-                push("\u{FFFD}");
+                empty.push_str("\u{FFFD}");
 
-                if let Some(invalid_sequence_length) = error.error_len() {
-                    input = &after_valid[invalid_sequence_length..]
+                if let Some(_invalid_sequence_length) = error.error_len() {
+                    empty.push_str("?");
                 } else {
                     break
                 }
             }
         }
     }
+
+    empty
 }

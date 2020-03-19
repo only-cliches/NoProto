@@ -1,6 +1,13 @@
 use crate::pointer::NP_ValueInto;
 use crate::{memory::NP_Memory, pointer::{NP_Value, NP_Ptr}, error::NP_Error, schema::NP_Schema};
 
+use alloc::string::FromUtf8Error;
+use alloc::vec::Vec;
+use alloc::vec;
+use alloc::string::String;
+use alloc::boxed::Box;
+use alloc::borrow::ToOwned;
+use alloc::string::ToString;
 
 pub struct NP_List<'a> {
     address: u32, // pointer location
@@ -24,7 +31,7 @@ impl<'a> NP_List<'a> {
     }
 
     /*
-    pub fn select<X: NP_Value + Default + NP_ValueInto<'a>>(&'a mut self, index: u16) -> std::result::Result<NP_Ptr<X>, NP_Error> {
+    pub fn select<X: NP_Value + Default + NP_ValueInto<'a>>(&'a mut self, index: u16) -> core::result::Result<NP_Ptr<X>, NP_Error> {
 
         if self.head == 0 { // no values, create one
 
@@ -209,13 +216,13 @@ impl<'a> NP_Value for NP_List<'a> {
     }
     fn type_idx() -> (i64, String) { (-1, "map".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (-1, "map".to_owned()) }
-    /*fn buffer_get(&self, address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: &NP_Memory) -> std::result::Result<Option<Box<Self>>, NP_Error> {
+    /*fn buffer_get(&self, address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
         Err(NP_Error::new("This type doesn't support .get()!"))
     }
-    fn buffer_set(&mut self, address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: &NP_Memory, value: Box<&Self>) -> std::result::Result<NP_PtrKinds, NP_Error> {
+    fn buffer_set(&mut self, address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: &NP_Memory, value: Box<&Self>) -> core::result::Result<NP_PtrKinds, NP_Error> {
         Err(NP_Error::new("This type doesn't support .set()!"))
     }
-    fn buffer_into(&self, address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: &NP_Memory) -> std::result::Result<Option<Box<Self>>, NP_Error> {
+    fn buffer_into(&self, address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
         self.buffer_get(address, kind, schema, buffer)
     }*/
 }

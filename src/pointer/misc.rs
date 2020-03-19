@@ -2,9 +2,13 @@ use crate::pointer::NP_ValueInto;
 use json::JsonValue;
 use crate::schema::{NP_SchemaKinds, NP_Schema, NP_TypeKeys};
 use crate::pointer::NP_PtrKinds;
-use crate::{memory::NP_Memory, pointer::NP_Value, error::NP_Error};
-use std::{fmt, time::SystemTime};
-use rand::Rng;
+use crate::{memory::NP_Memory, pointer::NP_Value, error::NP_Error, utils::Rand};
+use core::fmt;
+
+use alloc::string::String;
+use alloc::boxed::Box;
+use alloc::borrow::ToOwned;
+use alloc::string::ToString;
 
 fn to_hex(num: u64, length: i32) -> String {
     let mut result: String = "".to_owned();
@@ -71,7 +75,7 @@ impl NP_Value for NP_Dec {
     fn type_idx() -> (i64, String) { (NP_TypeKeys::Dec64 as i64, "dec64".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Dec64 as i64, "dec64".to_owned()) }
 
-    fn buffer_get(_address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, buffer: &NP_Memory) -> std::result::Result<Option<Box<Self>>, NP_Error> {
+    fn buffer_get(_address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, buffer: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
 
         let addr = kind.get_value() as usize;
 
@@ -84,43 +88,44 @@ impl NP_Value for NP_Dec {
 
         Ok(match memory.get_8_bytes(addr) {
             Some(x) => {
-                Some(Box::new(NP_Dec::new(i64::from_le_bytes(x), u8::from_le_bytes([memory.bytes[(addr + 8) as usize]]))))
+                Some(Box::new(NP_Dec::new(i64::from_le_bytes(*x), u8::from_le_bytes([memory.read_bytes()[(addr + 8) as usize]]))))
             },
             None => None
         })
     }
 
-    fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, buffer: &NP_Memory, value: Box<&Self>) -> std::result::Result<NP_PtrKinds, NP_Error> {
+    fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, memory: &NP_Memory, value: Box<&Self>) -> core::result::Result<NP_PtrKinds, NP_Error> {
 
         let mut addr = kind.get_value();
 
-        buffer.borrow_mut(|memory| {
-            if addr != 0 { // existing value, replace
-                let bytes = value.num.to_le_bytes();
+        let memory_bytes = memory.write_bytes();
 
-                // overwrite existing values in buffer
-                for x in 0..bytes.len() {
-                    memory.bytes[(addr + x as u32) as usize] = bytes[x as usize];
-                }
+        if addr != 0 { // existing value, replace
+            let bytes = value.num.to_le_bytes();
 
-                let bytes2 = value.scale.to_le_bytes();
-                memory.bytes[(addr + 8) as usize] = bytes2[0];
+            // overwrite existing values in buffer
+            for x in 0..bytes.len() {
+                memory_bytes[(addr + x as u32) as usize] = bytes[x as usize];
+            }
 
-                return Ok(*kind);
-            } else { // new value
+            let bytes2 = value.scale.to_le_bytes();
+            memory_bytes[(addr + 8) as usize] = bytes2[0];
 
-                let bytes = value.num.to_le_bytes();
-                addr = memory.malloc(bytes.to_vec())?;
-                memory.malloc(value.scale.to_le_bytes().to_vec())?;
+            return Ok(*kind);
+        } else { // new value
 
-                return Ok(memory.set_value_address(address, addr as u32, kind));
-            }                
-        })
+            let bytes = value.num.to_le_bytes();
+            addr = memory.malloc(bytes.to_vec())?;
+            memory.malloc(value.scale.to_le_bytes().to_vec())?;
+
+            return Ok(memory.set_value_address(address, addr as u32, kind));
+        }                
+        
     }
 }
 
 impl<'a> NP_ValueInto<'a> for NP_Dec {
-    fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: &'a NP_Schema, buffer: &NP_Memory) -> std::result::Result<Option<Box<Self>>, NP_Error> {
+    fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: &'a NP_Schema, buffer: &'a NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
         let addr = kind.get_value() as usize;
 
         // empty value
@@ -132,7 +137,7 @@ impl<'a> NP_ValueInto<'a> for NP_Dec {
 
         Ok(match memory.get_8_bytes(addr) {
             Some(x) => {
-                Some(Box::new(NP_Dec::new(i64::from_le_bytes(x), u8::from_le_bytes([memory.bytes[(addr + 8) as usize]]))))
+                Some(Box::new(NP_Dec::new(i64::from_le_bytes(*x), u8::from_le_bytes([memory.read_bytes()[(addr + 8) as usize]]))))
             },
             None => None
         })
@@ -165,7 +170,7 @@ impl NP_Value for NP_Geo {
         "geo4" == type_str || "geo8" == type_str || "geo16" == type_str 
     }
 
-    fn schema_state(type_string: &str, _json_schema: &JsonValue) -> std::result::Result<i64, NP_Error> {
+    fn schema_state(type_string: &str, _json_schema: &JsonValue) -> core::result::Result<i64, NP_Error> {
         Ok(match type_string {
             "geo4" => 4,
             "geo8" => 8,
@@ -177,7 +182,7 @@ impl NP_Value for NP_Geo {
     fn type_idx() -> (i64, String) { (NP_TypeKeys::Geo as i64, "geo".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Geo as i64, "geo".to_owned()) }
 
-    fn buffer_get(_address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: &NP_Memory) -> std::result::Result<Option<Box<Self>>, NP_Error> {
+    fn buffer_get(_address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
 
         let addr = kind.get_value() as usize;
 
@@ -186,184 +191,147 @@ impl NP_Value for NP_Geo {
             return Ok(None);
         }
 
-        let memory = buffer;
-
-        match schema.type_state {
+        Ok(match schema.type_state {
             4 => {
-                Ok(match memory.get_4_bytes(addr) {
-                    Some(x) => {
-                        let mut bytes_lat: [u8; 2] = [0; 2];
-                        let mut bytes_lon: [u8; 2] = [0; 2];
+                let bytes_lat: [u8; 2] = *buffer.get_2_bytes(addr).unwrap_or(&[0; 2]);
+                let bytes_lon: [u8; 2] = *buffer.get_2_bytes(addr + 2).unwrap_or(&[0; 2]);
 
-                        for i in 0..x.len() {
-                            if i < 2 {
-                                bytes_lat[i as usize] = x[i as usize];
-                            } else {
-                                bytes_lon[i as usize - 2] = x[i as usize];
-                            }
-                        }
+                let lat = i16::from_le_bytes(bytes_lat) as f64;
+                let lon = i16::from_le_bytes(bytes_lon) as f64;
 
-                        let lat = i16::from_le_bytes(bytes_lat) as f64;
-                        let lon = i16::from_le_bytes(bytes_lon) as f64;
+                let dev = 100f64;
 
-                        let dev = 100f64;
-
-                        Some(Box::new(NP_Geo { lat: lat / dev, lon: lon / dev}))
-                    },
-                    None => None
-                })
+                Some(Box::new(NP_Geo { lat: lat / dev, lon: lon / dev}))
             },
             8 => {
-                Ok(match memory.get_8_bytes(addr) {
-                    Some(x) => {
-                        let mut bytes_lat: [u8; 4] = [0; 4];
-                        let mut bytes_lon: [u8; 4] = [0; 4];
-    
-                        for i in 0..x.len() {
-                            if i < 4 {
-                                bytes_lat[i as usize] = x[i as usize];
-                            } else {
-                                bytes_lon[i as usize - 4] = x[i as usize];
-                            }
-                        }
-    
-                        let lat = i32::from_le_bytes(bytes_lat) as f64;
-                        let lon = i32::from_le_bytes(bytes_lon) as f64;
-    
-                        let dev = 10000000f64;
-    
-                        Some(Box::new(NP_Geo { lat: lat / dev, lon: lon / dev}))
-                    },
-                    None => None
-                })
+                let bytes_lat: [u8; 4] = *buffer.get_4_bytes(addr).unwrap_or(&[0; 4]);
+                let bytes_lon: [u8; 4] = *buffer.get_4_bytes(addr + 4).unwrap_or(&[0; 4]);
+
+                let lat = i32::from_le_bytes(bytes_lat) as f64;
+                let lon = i32::from_le_bytes(bytes_lon) as f64;
+
+                let dev = 10000000f64;
+
+                Some(Box::new(NP_Geo { lat: lat / dev, lon: lon / dev}))
             },
             16 => {
-                Ok(match memory.get_16_bytes(addr) {
-                    Some(x) => {
-                        let mut bytes_lat: [u8; 8] = [0; 8];
-                        let mut bytes_lon: [u8; 8] = [0; 8];
-        
-                        for i in 0..x.len() {
-                            if i < 8 {
-                                bytes_lat[i as usize] = x[i as usize];
-                            } else {
-                                bytes_lon[i as usize - 8] = x[i as usize];
-                            }
-                        }
-        
-                        Some(Box::new(NP_Geo { lat: f64::from_le_bytes(bytes_lat), lon: f64::from_le_bytes(bytes_lon)}))
-                    },
-                    None => None
-                })   
+         
+                let bytes_lat: [u8; 8] = *buffer.get_8_bytes(addr).unwrap_or(&[0; 8]);
+                let bytes_lon: [u8; 8] = *buffer.get_8_bytes(addr + 8).unwrap_or(&[0; 8]);
+
+                Some(Box::new(NP_Geo { lat: f64::from_le_bytes(bytes_lat), lon: f64::from_le_bytes(bytes_lon)}))
+
             }
             _ => {
                 unreachable!();
             }
-        }
+        })
     }
 
-    fn buffer_set(address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: &NP_Memory, value: Box<&Self>) -> std::result::Result<NP_PtrKinds, NP_Error> {
+    fn buffer_set(address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, memory: &NP_Memory, value: Box<&Self>) -> core::result::Result<NP_PtrKinds, NP_Error> {
 
         let mut addr = kind.get_value();
 
-        buffer.borrow_mut(|memory| {
+        
 
-            let value_bytes_size = schema.type_state as usize;
+        let value_bytes_size = schema.type_state as usize;
 
-            if value_bytes_size == 0 {
-                unreachable!();
+        if value_bytes_size == 0 {
+            unreachable!();
+        }
+
+        let write_bytes = memory.write_bytes();
+
+        let half_value_bytes = value_bytes_size / 2;
+
+        // convert input values into bytes
+        let value_bytes = match schema.type_state {
+            16 => {
+                let mut v_bytes: [u8; 16] = [0; 16];
+                let lat_bytes = value.lat.to_le_bytes();
+                let lon_bytes = value.lon.to_le_bytes();
+
+                for x in 0..value_bytes_size {
+                    if x < half_value_bytes {
+                        v_bytes[x] = lat_bytes[x];
+                    } else {
+                        v_bytes[x] = lon_bytes[x - half_value_bytes]; 
+                    }
+                }
+                v_bytes
+            },
+            8 => {
+                let dev = 10000000f64;
+
+                let mut v_bytes: [u8; 16] = [0; 16];
+                let lat_bytes = ((value.lat * dev) as i32).to_le_bytes();
+                let lon_bytes = ((value.lon * dev) as i32).to_le_bytes();
+
+                for x in 0..value_bytes_size {
+                    if x < half_value_bytes {
+                        v_bytes[x] = lat_bytes[x];
+                    } else {
+                        v_bytes[x] = lon_bytes[x - half_value_bytes]; 
+                    }
+                }
+                v_bytes
+            },
+            4 => {
+                let dev = 100f64;
+
+                let mut v_bytes: [u8; 16] = [0; 16];
+                let lat_bytes = ((value.lat * dev) as i16).to_le_bytes();
+                let lon_bytes = ((value.lon * dev) as i16).to_le_bytes();
+
+                for x in 0..value_bytes_size {
+                    if x < half_value_bytes {
+                        v_bytes[x] = lat_bytes[x];
+                    } else {
+                        v_bytes[x] = lon_bytes[x - half_value_bytes]; 
+                    }
+                }
+                v_bytes
+            },
+            _ => {
+                [0; 16]
+            }
+        };
+
+        if addr != 0 { // existing value, replace
+
+            // overwrite existing values in buffer
+            for x in 0..value_bytes.len() {
+                if x < value_bytes_size {
+                    write_bytes[(addr + x as u32) as usize] = value_bytes[x as usize];
+                }
             }
 
-            let half_value_bytes = value_bytes_size / 2;
+            return Ok(*kind);
 
-            // convert input values into bytes
-            let value_bytes = match schema.type_state {
-                16 => {
-                    let mut v_bytes: [u8; 16] = [0; 16];
-                    let lat_bytes = value.lat.to_le_bytes();
-                    let lon_bytes = value.lon.to_le_bytes();
+        } else { // new value
 
-                    for x in 0..value_bytes_size {
-                        if x < half_value_bytes {
-                            v_bytes[x] = lat_bytes[x];
-                        } else {
-                            v_bytes[x] = lon_bytes[x - half_value_bytes]; 
-                        }
-                    }
-                    v_bytes
-                },
-                8 => {
-                    let dev = 10000000f64;
-
-                    let mut v_bytes: [u8; 16] = [0; 16];
-                    let lat_bytes = ((value.lat * dev) as i32).to_le_bytes();
-                    let lon_bytes = ((value.lon * dev) as i32).to_le_bytes();
-
-                    for x in 0..value_bytes_size {
-                        if x < half_value_bytes {
-                            v_bytes[x] = lat_bytes[x];
-                        } else {
-                            v_bytes[x] = lon_bytes[x - half_value_bytes]; 
-                        }
-                    }
-                    v_bytes
-                },
-                4 => {
-                    let dev = 100f64;
-
-                    let mut v_bytes: [u8; 16] = [0; 16];
-                    let lat_bytes = ((value.lat * dev) as i16).to_le_bytes();
-                    let lon_bytes = ((value.lon * dev) as i16).to_le_bytes();
-
-                    for x in 0..value_bytes_size {
-                        if x < half_value_bytes {
-                            v_bytes[x] = lat_bytes[x];
-                        } else {
-                            v_bytes[x] = lon_bytes[x - half_value_bytes]; 
-                        }
-                    }
-                    v_bytes
-                },
-                _ => {
-                    [0; 16]
-                }
+            addr = match schema.type_state {
+                16 => { memory.malloc([0; 16].to_vec())? },
+                8 => { memory.malloc([0; 8].to_vec())? },
+                4 => { memory.malloc([0; 4].to_vec())? },
+                _ => { 0 }
             };
 
-            if addr != 0 { // existing value, replace
-
-                // overwrite existing values in buffer
-                for x in 0..value_bytes.len() {
-                    if x < value_bytes_size {
-                        memory.bytes[(addr + x as u32) as usize] = value_bytes[x as usize];
-                    }
+            // set values in buffer
+            for x in 0..value_bytes.len() {
+                if x < value_bytes_size {
+                    write_bytes[(addr + x as u32) as usize] = value_bytes[x as usize];
                 }
-
-                return Ok(*kind);
-
-            } else { // new value
-
-                addr = match schema.type_state {
-                    16 => { memory.malloc([0; 16].to_vec())? },
-                    8 => { memory.malloc([0; 8].to_vec())? },
-                    4 => { memory.malloc([0; 4].to_vec())? },
-                    _ => { 0 }
-                };
-
-                // set values in buffer
-                for x in 0..value_bytes.len() {
-                    if x < value_bytes_size {
-                        memory.bytes[(addr + x as u32) as usize] = value_bytes[x as usize];
-                    }
-                }
-
-                return Ok(memory.set_value_address(address, addr as u32, kind));
             }
-        })
+
+            return Ok(memory.set_value_address(address, addr as u32, kind));
+        }
+        
     }
 }
 
 impl<'a> NP_ValueInto<'a> for NP_Geo {
-    fn buffer_into(_address: u32, kind: NP_PtrKinds, schema: &'a NP_Schema, buffer: &NP_Memory) -> std::result::Result<Option<Box<Self>>, NP_Error> {
+    fn buffer_into(_address: u32, kind: NP_PtrKinds, schema: &'a NP_Schema, buffer: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
 
         let addr = kind.get_value() as usize;
 
@@ -372,80 +340,41 @@ impl<'a> NP_ValueInto<'a> for NP_Geo {
             return Ok(None);
         }
 
-        let memory = buffer;
-
-        match schema.type_state {
+        Ok(match schema.type_state {
             4 => {
-                Ok(match memory.get_4_bytes(addr) {
-                    Some(x) => {
-                        let mut bytes_lat: [u8; 2] = [0; 2];
-                        let mut bytes_lon: [u8; 2] = [0; 2];
+                let bytes_lat: [u8; 2] = *buffer.get_2_bytes(addr).unwrap_or(&[0; 2]);
+                let bytes_lon: [u8; 2] = *buffer.get_2_bytes(addr + 2).unwrap_or(&[0; 2]);
 
-                        for i in 0..x.len() {
-                            if i < 2 {
-                                bytes_lat[i as usize] = x[i as usize];
-                            } else {
-                                bytes_lon[i as usize - 2] = x[i as usize];
-                            }
-                        }
+                let lat = i16::from_le_bytes(bytes_lat) as f64;
+                let lon = i16::from_le_bytes(bytes_lon) as f64;
 
-                        let lat = i16::from_le_bytes(bytes_lat) as f64;
-                        let lon = i16::from_le_bytes(bytes_lon) as f64;
+                let dev = 100f64;
 
-                        let dev = 100f64;
-
-                        Some(Box::new(NP_Geo { lat: lat / dev, lon: lon / dev}))
-                    },
-                    None => None
-                })
+                Some(Box::new(NP_Geo { lat: lat / dev, lon: lon / dev}))
             },
             8 => {
-                Ok(match memory.get_8_bytes(addr) {
-                    Some(x) => {
-                        let mut bytes_lat: [u8; 4] = [0; 4];
-                        let mut bytes_lon: [u8; 4] = [0; 4];
-    
-                        for i in 0..x.len() {
-                            if i < 4 {
-                                bytes_lat[i as usize] = x[i as usize];
-                            } else {
-                                bytes_lon[i as usize - 4] = x[i as usize];
-                            }
-                        }
-    
-                        let lat = i32::from_le_bytes(bytes_lat) as f64;
-                        let lon = i32::from_le_bytes(bytes_lon) as f64;
-    
-                        let dev = 10000000f64;
-    
-                        Some(Box::new(NP_Geo { lat: lat / dev, lon: lon / dev}))
-                    },
-                    None => None
-                })
+                let bytes_lat: [u8; 4] = *buffer.get_4_bytes(addr).unwrap_or(&[0; 4]);
+                let bytes_lon: [u8; 4] = *buffer.get_4_bytes(addr + 4).unwrap_or(&[0; 4]);
+
+                let lat = i32::from_le_bytes(bytes_lat) as f64;
+                let lon = i32::from_le_bytes(bytes_lon) as f64;
+
+                let dev = 10000000f64;
+
+                Some(Box::new(NP_Geo { lat: lat / dev, lon: lon / dev}))
             },
             16 => {
-                Ok(match memory.get_16_bytes(addr) {
-                    Some(x) => {
-                        let mut bytes_lat: [u8; 8] = [0; 8];
-                        let mut bytes_lon: [u8; 8] = [0; 8];
-        
-                        for i in 0..x.len() {
-                            if i < 8 {
-                                bytes_lat[i as usize] = x[i as usize];
-                            } else {
-                                bytes_lon[i as usize - 8] = x[i as usize];
-                            }
-                        }
-        
-                        Some(Box::new(NP_Geo { lat: f64::from_le_bytes(bytes_lat), lon: f64::from_le_bytes(bytes_lon)}))
-                    },
-                    None => None
-                })   
+         
+                let bytes_lat: [u8; 8] = *buffer.get_8_bytes(addr).unwrap_or(&[0; 8]);
+                let bytes_lon: [u8; 8] = *buffer.get_8_bytes(addr + 8).unwrap_or(&[0; 8]);
+
+                Some(Box::new(NP_Geo { lat: f64::from_le_bytes(bytes_lat), lon: f64::from_le_bytes(bytes_lon)}))
+
             }
             _ => {
                 unreachable!();
             }
-        }
+        })
     }
 }
 
@@ -459,29 +388,32 @@ pub struct NP_TimeID {
 
 impl NP_TimeID {
 
-    pub fn generate(id_bytes: Option<[u8; 8]>) -> NP_TimeID {
-        let mut rng = rand::thread_rng();
-        let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
+    pub fn generate(now: u64, random_seed: u32) -> NP_TimeID {
+        let mut rng = Rand::new(random_seed);
 
-        match id_bytes {
-            Some(x) => {
-                NP_TimeID {
-                    time: now,
-                    id: x
-                }
-            },
-            None => {
-                let mut id = [0; 8];
+        let mut id: [u8; 8] = [0; 8];
 
-                for x in 0..id.len() {
-                    id[x] = rng.gen_range(0, 255);
-                }
-        
-                NP_TimeID {
-                    time: now,
-                    id: id
-                }
-            }
+        for x in 0..id.len() {
+            id[x] = rng.gen_range(0, 255) as u8;
+        }
+
+        NP_TimeID {
+            time: now,
+            id: id
+        }
+    }
+
+    pub fn generate_with_rand<F>(now: u64, random_fn: F) -> NP_TimeID where F: Fn(u8, u8) -> u8 {
+
+        let mut id: [u8; 8] = [0; 8];
+
+        for x in 0..id.len() {
+            id[x] = random_fn(0, 255) as u8;
+        }
+
+        NP_TimeID {
+            time: now,
+            id: id
         }
     }
 
@@ -490,33 +422,23 @@ impl NP_TimeID {
 
         // u64 can hold up to 20 digits or 584,942,417,355 years of seconds since unix epoch
         // 14 digits gets us 3,170,979 years of seconds after Unix epoch.  
-        let mut padding = time_padding.unwrap_or(14);
+        let padding = time_padding.unwrap_or(14) as usize;
 
-        if padding < 10 {
-            padding = 10;
+        let number_str = self.time.to_string();
+
+        let mut diff = padding - number_str.len();
+
+        if diff < 10 { diff = 10 }
+        if diff > 20 { diff = 20 }
+
+        let mut zeros = "".to_owned();
+
+        for _x in 0..diff {
+            zeros.push_str("0");
         }
 
-        if padding > 20 {
-            padding = 20;
-        }
-
-        // time first
-        let formatted_string = match padding {
-            10 => { format!("{:0>10}", self.time) },
-            11 => { format!("{:0>11}", self.time) },
-            12 => { format!("{:0>12}", self.time) },
-            13 => { format!("{:0>13}", self.time) }
-            14 => { format!("{:0>14}", self.time) },
-            15 => { format!("{:0>15}", self.time) },
-            16 => { format!("{:0>16}", self.time) },
-            17 => { format!("{:0>17}", self.time) },
-            18 => { format!("{:0>18}", self.time) },
-            19 => { format!("{:0>19}", self.time) },
-            20 => { format!("{:0>20}", self.time) },
-            _ => { "".to_owned() }
-        };
-
-        result.push_str(formatted_string.as_str());
+        result.push_str(zeros.as_str());
+        result.push_str(number_str.as_str());
         result.push_str("-");
 
         // then id
@@ -558,7 +480,7 @@ impl NP_Value for NP_TimeID {
     fn type_idx() -> (i64, String) { (NP_TypeKeys::Tid as i64, "tid".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Tid as i64, "tid".to_owned()) }
 
-    fn buffer_get(_address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, buffer: &NP_Memory) -> std::result::Result<Option<Box<Self>>, NP_Error> {
+    fn buffer_get(_address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, buffer: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
 
         let addr = kind.get_value() as usize;
 
@@ -585,50 +507,50 @@ impl NP_Value for NP_TimeID {
         })
     }
 
-    fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, buffer: &NP_Memory, value: Box<&Self>) -> std::result::Result<NP_PtrKinds, NP_Error> {
+    fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, memory: &NP_Memory, value: Box<&Self>) -> core::result::Result<NP_PtrKinds, NP_Error> {
 
         let mut addr = kind.get_value();
 
-        buffer.borrow_mut(|memory| {
+        if addr != 0 { // existing value, replace
 
-            if addr != 0 { // existing value, replace
+            let time_bytes = value.time.to_le_bytes();
 
-                let time_bytes = value.time.to_le_bytes();
+            let write_bytes = memory.write_bytes();
 
-                // overwrite existing values in buffer
-                for x in 0..16 {
-                    if x < 8 {
-                        memory.bytes[(addr + x as u32) as usize] = value.id[x as usize];
-                    } else {
-                        memory.bytes[(addr + x as u32) as usize] = time_bytes[x as usize - 8];
-                    }
+            // overwrite existing values in buffer
+            for x in 0..16 {
+                if x < 8 {
+                    write_bytes[(addr + x as u32) as usize] = value.id[x as usize];
+                } else {
+                    write_bytes[(addr + x as u32) as usize] = time_bytes[x as usize - 8];
                 }
+            }
 
-                return Ok(*kind);
+            return Ok(*kind);
 
-            } else { // new value
+        } else { // new value
 
-                let mut bytes: [u8; 16] = [0; 16];
-                let time_bytes = value.time.to_le_bytes();
+            let mut bytes: [u8; 16] = [0; 16];
+            let time_bytes = value.time.to_le_bytes();
 
-                for x in 0..bytes.len() {
-                    if x < 8 {
-                        bytes[(addr + x as u32) as usize] = value.id[x as usize];
-                    } else {
-                        bytes[(addr + x as u32) as usize] = time_bytes[x as usize - 8];
-                    }
+            for x in 0..bytes.len() {
+                if x < 8 {
+                    bytes[(addr + x as u32) as usize] = value.id[x as usize];
+                } else {
+                    bytes[(addr + x as u32) as usize] = time_bytes[x as usize - 8];
                 }
+            }
 
-                addr = memory.malloc(bytes.to_vec())?;
+            addr = memory.malloc(bytes.to_vec())?;
 
-                return Ok(memory.set_value_address(address, addr as u32, kind));
-            }                    
-        })
+            return Ok(memory.set_value_address(address, addr as u32, kind));
+        }                    
+        
     }
 }
 
 impl<'a> NP_ValueInto<'a> for NP_TimeID {
-    fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: &'a NP_Schema, buffer: &NP_Memory) -> std::result::Result<Option<Box<Self>>, NP_Error> {
+    fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: &'a NP_Schema, buffer: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
         let addr = kind.get_value() as usize;
 
         // empty value
@@ -636,22 +558,15 @@ impl<'a> NP_ValueInto<'a> for NP_TimeID {
             return Ok(None);
         }
 
-        let memory = buffer;
-        Ok(match memory.get_16_bytes(addr) {
-            Some(x) => {
-                let mut id_bytes: [u8; 8] = [0; 8];
-                id_bytes.copy_from_slice(&x[0..8]);
+        let id_bytes: [u8; 8] = *buffer.get_8_bytes(addr).unwrap_or(&[0; 8]);
 
-                let mut time_bytes: [u8; 8] = [0; 8];
-                time_bytes.copy_from_slice(&x[8..16]);
+        let time_bytes: [u8; 8] = *buffer.get_8_bytes(addr + 8).unwrap_or(&[0; 8]);
 
-                Some(Box::new(NP_TimeID {
-                    id: id_bytes,
-                    time: u64::from_le_bytes(time_bytes)
-                }))
-            },
-            None => None
-        })
+        Ok(Some(Box::new(NP_TimeID {
+            id: id_bytes,
+            time: u64::from_le_bytes(time_bytes)
+        })))
+         
     }
 }
 
@@ -664,19 +579,36 @@ pub struct NP_UUID {
 
 impl NP_UUID {
 
-    pub fn generate() -> NP_UUID {
+    pub fn generate(random_seed: u32) -> NP_UUID {
 
-        let mut rng = rand::thread_rng();
 
+        let mut uuid = NP_UUID {
+            value: [0; 16]
+        };
+
+        let mut rng = Rand::new(random_seed);
+
+        for x in 0..uuid.value.len() {
+            if x == 6 {
+                uuid.value[x] = 64 + rng.gen_range(0, 15) as u8;
+            } else {
+                uuid.value[x] = rng.gen_range(0, 255) as u8;
+            }
+        }
+
+        uuid
+    }
+
+    pub fn generate_with_rand<F>(random_fn: F) -> NP_UUID where F: Fn(u8, u8) -> u8 {
         let mut uuid = NP_UUID {
             value: [0; 16]
         };
 
         for x in 0..uuid.value.len() {
             if x == 6 {
-                uuid.value[x] = 64 + rng.gen_range(0, 15);
+                uuid.value[x] = 64 + random_fn(0, 15) as u8;
             } else {
-                uuid.value[x] = rng.gen_range(0, 255);
+                uuid.value[x] = random_fn(0, 255) as u8;
             }
         }
 
@@ -724,7 +656,7 @@ impl NP_Value for NP_UUID {
     fn type_idx() -> (i64, String) { (NP_TypeKeys::Uuid as i64, "uuid".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Uuid as i64, "uuid".to_owned()) }
 
-    fn buffer_get(_address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, buffer: &NP_Memory) -> std::result::Result<Option<Box<Self>>, NP_Error> {
+    fn buffer_get(_address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, buffer: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
 
         let addr = kind.get_value() as usize;
 
@@ -736,41 +668,43 @@ impl NP_Value for NP_UUID {
         let memory = buffer;
         Ok(match memory.get_16_bytes(addr) {
             Some(x) => {
-                Some(Box::new(NP_UUID { value: x}))
+                // copy since we're handing owned value outside the library
+                let mut bytes: [u8; 16] = [0; 16];
+                bytes.copy_from_slice(x);
+                Some(Box::new(NP_UUID { value: bytes}))
             },
             None => None
         })
     }
 
-    fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, buffer: &NP_Memory, value: Box<&Self>) -> std::result::Result<NP_PtrKinds, NP_Error> {
+    fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, memory: &NP_Memory, value: Box<&Self>) -> core::result::Result<NP_PtrKinds, NP_Error> {
 
         let mut addr = kind.get_value();
 
-        buffer.borrow_mut(|memory| {
+        if addr != 0 { // existing value, replace
+            let bytes = value.value;
+            let write_bytes = memory.write_bytes();
 
-            if addr != 0 { // existing value, replace
-                let bytes = value.value;
+            // overwrite existing values in buffer
+            for x in 0..bytes.len() {
+                write_bytes[(addr + x as u32) as usize] = bytes[x as usize];
+            }
 
-                // overwrite existing values in buffer
-                for x in 0..bytes.len() {
-                    memory.bytes[(addr + x as u32) as usize] = bytes[x as usize];
-                }
+            return Ok(*kind);
 
-                return Ok(*kind);
+        } else { // new value
 
-            } else { // new value
+            let bytes = value.value;
+            addr = memory.malloc(bytes.to_vec())?;
 
-                let bytes = value.value;
-                addr = memory.malloc(bytes.to_vec())?;
-
-                return Ok(memory.set_value_address(address, addr as u32, kind));
-            }                    
-        })
+            return Ok(memory.set_value_address(address, addr as u32, kind));
+        }                    
+        
     }
 }
 
 impl<'a> NP_ValueInto<'a> for NP_UUID {
-    fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: &'a NP_Schema, buffer: &NP_Memory) -> std::result::Result<Option<Box<Self>>, NP_Error> {
+    fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: &'a NP_Schema, buffer: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
         let addr = kind.get_value() as usize;
 
         // empty value
@@ -781,7 +715,10 @@ impl<'a> NP_ValueInto<'a> for NP_UUID {
         let memory = buffer;
         Ok(match memory.get_16_bytes(addr) {
             Some(x) => {
-                Some(Box::new(NP_UUID { value: x}))
+                // copy since we're handing owned value outside the library
+                let mut bytes: [u8; 16] = [0; 16];
+                bytes.copy_from_slice(x);
+                Some(Box::new(NP_UUID { value: bytes}))
             },
             None => None
         })
@@ -805,7 +742,7 @@ impl NP_Value for NP_Option {
     fn type_idx() -> (i64, String) { (NP_TypeKeys::Enum as i64, "option".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Enum as i64, "option".to_owned()) }
 
-    fn buffer_get(_address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: &NP_Memory) -> std::result::Result<Option<Box<Self>>, NP_Error> {
+    fn buffer_get(_address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
 
         let addr = kind.get_value() as usize;
 
@@ -833,12 +770,17 @@ impl NP_Value for NP_Option {
                 })
             },
             _ => {
-                Err(NP_Error::new(format!("TypeError: Attempted to read value of type ({}) to pointer of type ({})!", "option", schema.type_data.1).as_str()))
+                let mut err = "TypeError: Attempted to cast type (".to_owned();
+                err.push_str("option");
+                err.push_str(") to schema of type (");
+                err.push_str(schema.type_data.1.as_str());
+                err.push_str(")");
+                Err(NP_Error::new(err))
             }
         }
     }
 
-    fn buffer_set(address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: &NP_Memory, value: Box<&Self>) -> std::result::Result<NP_PtrKinds, NP_Error> {
+    fn buffer_set(address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, memory: &NP_Memory, value: Box<&Self>) -> core::result::Result<NP_PtrKinds, NP_Error> {
 
         let mut addr = kind.get_value();
         
@@ -862,29 +804,34 @@ impl NP_Value for NP_Option {
                     }
                 }
 
-                buffer.borrow_mut(|memory| {
+                let bytes = (value_num as u8).to_le_bytes();
 
-                    let bytes = (value_num as u8).to_le_bytes();
+                if addr != 0 { // existing value, replace
 
-                    if addr != 0 { // existing value, replace
+                    let write_bytes = memory.write_bytes();
 
-                        // overwrite existing values in buffer
-                        for x in 0..bytes.len() {
-                            memory.bytes[(addr + x as u32) as usize] = bytes[x as usize];
-                        }
-                        return Ok(*kind);
+                    // overwrite existing values in buffer
+                    for x in 0..bytes.len() {
+                        write_bytes[(addr + x as u32) as usize] = bytes[x as usize];
+                    }
+                    return Ok(*kind);
 
-                    } else { // new value
-    
-                        addr = memory.malloc(bytes.to_vec())?;
+                } else { // new value
 
-                        return Ok(memory.set_value_address(address, addr as u32, kind));
-                    }                    
-                })
+                    addr = memory.malloc(bytes.to_vec())?;
+
+                    return Ok(memory.set_value_address(address, addr as u32, kind));
+                }                    
+                
                 
             },
             _ => {
-                Err(NP_Error::new(format!("TypeError: Attempted to read value of type ({}) to pointer of type ({})!", "option", schema.type_data.1).as_str()))
+                let mut err = "TypeError: Attempted to cast type (".to_owned();
+                err.push_str("option");
+                err.push_str(") to schema of type (");
+                err.push_str(schema.type_data.1.as_str());
+                err.push_str(")");
+                Err(NP_Error::new(err))
             }
         }
     }
@@ -897,7 +844,7 @@ impl Default for NP_Option {
 }
 
 impl<'a> NP_ValueInto<'a> for NP_Option {
-    fn buffer_into(_address: u32, kind: NP_PtrKinds, schema: &'a NP_Schema, buffer: &NP_Memory) -> std::result::Result<Option<Box<Self>>, NP_Error> {
+    fn buffer_into(_address: u32, kind: NP_PtrKinds, schema: &'a NP_Schema, buffer: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
         let addr = kind.get_value() as usize;
 
         // empty value
@@ -924,7 +871,12 @@ impl<'a> NP_ValueInto<'a> for NP_Option {
                 })
             },
             _ => {
-                Err(NP_Error::new(format!("TypeError: Attempted to read value of type ({}) to pointer of type ({})!", "option", schema.type_data.1).as_str()))
+                let mut err = "TypeError: Attempted to cast type (".to_owned();
+                err.push_str("option");
+                err.push_str(") to schema of type (");
+                err.push_str(schema.type_data.1.as_str());
+                err.push_str(")");
+                Err(NP_Error::new(err))
             }
         }
     }
@@ -944,7 +896,7 @@ impl NP_Value for bool {
     fn type_idx() -> (i64, String) { (NP_TypeKeys::Boolean as i64, "bool".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Boolean as i64, "bool".to_owned()) }
 
-    fn buffer_get(_address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, buffer: &NP_Memory) -> std::result::Result<Option<Box<Self>>, NP_Error> {
+    fn buffer_get(_address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, buffer: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
 
         let addr = kind.get_value() as usize;
 
@@ -963,41 +915,39 @@ impl NP_Value for bool {
         })
     }
 
-    fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, buffer: &NP_Memory, value: Box<&Self>) -> std::result::Result<NP_PtrKinds, NP_Error> {
+    fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, memory: &NP_Memory, value: Box<&Self>) -> core::result::Result<NP_PtrKinds, NP_Error> {
 
         let mut addr = kind.get_value();
 
-        buffer.borrow_mut(|memory| {
+        if addr != 0 { // existing value, replace
+            let bytes = if **value == true {
+                [1] as [u8; 1]
+            } else {
+                [0] as [u8; 1]
+            };
 
-            if addr != 0 { // existing value, replace
-                let bytes = if **value == true {
-                    [1] as [u8; 1]
-                } else {
-                    [0] as [u8; 1]
-                };
+            // overwrite existing values in buffer
+            memory.write_bytes()[addr as usize] = bytes[0];
 
-                // overwrite existing values in buffer
-                memory.bytes[addr as usize] = bytes[0];
+            return Ok(*kind);
 
-                return Ok(*kind);
+        } else { // new value
 
-            } else { // new value
+            let bytes = if **value == true {
+                [1] as [u8; 1]
+            } else {
+                [0] as [u8; 1]
+            };
 
-                let bytes = if **value == true {
-                    [1] as [u8; 1]
-                } else {
-                    [0] as [u8; 1]
-                };
-
-                addr = memory.malloc(bytes.to_vec())?;
-                return Ok(memory.set_value_address(address, addr as u32, kind));
-            }
-        })
+            addr = memory.malloc(bytes.to_vec())?;
+            return Ok(memory.set_value_address(address, addr as u32, kind));
+        }
+        
     }
 }
 
 impl<'a> NP_ValueInto<'a> for bool {
-    fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: &'a NP_Schema, buffer: &NP_Memory) -> std::result::Result<Option<Box<Self>>, NP_Error> {
+    fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: &'a NP_Schema, buffer: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
         let addr = kind.get_value() as usize;
 
         // empty value
@@ -1021,8 +971,8 @@ pub struct NP_Date {
 }
 
 impl NP_Date {
-    pub fn now() -> Self {
-        NP_Date { value: SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs() }
+    pub fn new(time: u64) -> Self {
+        NP_Date { value: time }
     }
 }
 
@@ -1051,7 +1001,7 @@ impl NP_Value for NP_Date {
     fn type_idx() -> (i64, String) { (NP_TypeKeys::Date as i64, "date".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Date as i64, "date".to_owned()) }
 
-    fn buffer_get(_address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, buffer: &NP_Memory) -> std::result::Result<Option<Box<Self>>, NP_Error> {
+    fn buffer_get(_address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, buffer: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
 
         let addr = kind.get_value() as usize;
 
@@ -1063,40 +1013,40 @@ impl NP_Value for NP_Date {
         let memory = buffer;
         Ok(match memory.get_8_bytes(addr) {
             Some(x) => {
-                Some(Box::new(NP_Date { value: u64::from_le_bytes(x) }))
+                Some(Box::new(NP_Date { value: u64::from_le_bytes(*x) }))
             },
             None => None
         })
     }
 
-    fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, buffer: &NP_Memory, value: Box<&Self>) -> std::result::Result<NP_PtrKinds, NP_Error> {
+    fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, memory: &NP_Memory, value: Box<&Self>) -> core::result::Result<NP_PtrKinds, NP_Error> {
 
         let mut addr = kind.get_value();
 
-        buffer.borrow_mut(|memory| {
+        if addr != 0 { // existing value, replace
+            let bytes = value.value.to_le_bytes();
 
-            if addr != 0 { // existing value, replace
-                let bytes = value.value.to_le_bytes();
+            let write_bytes = memory.write_bytes();
 
-                // overwrite existing values in buffer
-                for x in 0..bytes.len() {
-                    memory.bytes[(addr + x as u32) as usize] = bytes[x as usize];
-                }
+            // overwrite existing values in buffer
+            for x in 0..bytes.len() {
+                write_bytes[(addr + x as u32) as usize] = bytes[x as usize];
+            }
 
-                return Ok(*kind);
+            return Ok(*kind);
 
-            } else { // new value
+        } else { // new value
 
-                let bytes = value.value.to_le_bytes();
-                addr = memory.malloc(bytes.to_vec())?;
-                return Ok(memory.set_value_address(address, addr as u32, kind));
-            }                    
-        })
+            let bytes = value.value.to_le_bytes();
+            addr = memory.malloc(bytes.to_vec())?;
+            return Ok(memory.set_value_address(address, addr as u32, kind));
+        }                    
+        
     }
 }
 
 impl<'a> NP_ValueInto<'a> for NP_Date {
-    fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: &'a NP_Schema, buffer: &NP_Memory) -> std::result::Result<Option<Box<Self>>, NP_Error> {
+    fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: &'a NP_Schema, buffer: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
         let addr = kind.get_value() as usize;
 
         // empty value
@@ -1107,7 +1057,7 @@ impl<'a> NP_ValueInto<'a> for NP_Date {
         let memory = buffer;
         Ok(match memory.get_8_bytes(addr) {
             Some(x) => {
-                Some(Box::new(NP_Date { value: u64::from_le_bytes(x) }))
+                Some(Box::new(NP_Date { value: u64::from_le_bytes(*x) }))
             },
             None => None
         })
