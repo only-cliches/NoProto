@@ -98,8 +98,6 @@ impl<'a> NP_Table<'a> {
             }
         }) as &u8;
 
-
-
         match column_schema {
             Some(some_column_schema) => {
 
@@ -188,7 +186,10 @@ impl<'a> NP_Table<'a> {
                 }
             },
             None => {
-                return Err(NP_Error::new("Column not found, unable to select!"));
+                let mut err_msg = "Column (".to_owned();
+                err_msg.push_str(column);
+                err_msg.push_str(") not found, unable to select!");
+                return Err(NP_Error::new(err_msg.as_str()));
             }
         }
     }

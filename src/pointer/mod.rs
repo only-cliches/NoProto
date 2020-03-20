@@ -15,10 +15,10 @@ pub mod bytes;
 pub mod any;
 pub mod numbers;
 
+use crate::json_flex::JFObject;
 use crate::memory::NP_Memory;
 use crate::NP_Error;
 use crate::{schema::{NP_Schema}};
-use json::JsonValue;
 
 use alloc::string::String;
 use alloc::boxed::Box;
@@ -54,7 +54,7 @@ pub trait NP_Value {
     fn is_type(_type_str: &str) -> bool { false }
     fn type_idx() -> (i64, String) { (-1, "null".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (-1, "null".to_owned()) }
-    fn schema_state(_type_string: &str, _json_schema: &JsonValue) -> core::result::Result<i64, NP_Error> { Ok(0) }
+    fn schema_state(_type_string: &str, _json_schema: &JFObject) -> core::result::Result<i64, NP_Error> { Ok(0) }
     fn buffer_get(_address: u32, _kind: &NP_PtrKinds, _schema: &NP_Schema, _buffer: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
         let mut message = "This type (".to_owned();
         message.push_str(Self::type_idx().1.as_str());

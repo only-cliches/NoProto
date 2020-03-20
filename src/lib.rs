@@ -161,6 +161,7 @@ mod json_flex;
 
 extern crate alloc;
 
+use crate::json_flex::json_decode;
 use crate::error::NP_Error;
 use crate::schema::NP_Schema;
 use crate::memory::NP_Memory;
@@ -169,7 +170,6 @@ use alloc::vec::Vec;
 use alloc::vec;
 use alloc::string::String;
 use alloc::borrow::ToOwned;
-use alloc::string::ToString;
 
 const PROTOCOL_VERSION: u8 = 0;
 
@@ -190,18 +190,21 @@ pub struct NP_Factory {
 impl NP_Factory {
     pub fn new(json_schema: &str) -> core::result::Result<NP_Factory, NP_Error> {
 
-        match json::parse(json_schema) {
-            Ok(x) => {
+
+        let parsed = json_decode(json_schema.to_owned());
+
+        match parsed {
+            Ok(good_parsed) => {
                 Ok(NP_Factory {
-                    schema:  NP_Schema::from_json(x)?
+                    schema:  NP_Schema::from_json(good_parsed)?
                 })
             },
-            Err(e) => {
-                let mut err = "Error Parsing JSON Schema: ".to_owned();
-                err.push_str(e.to_string().as_str());
-                Err(NP_Error::new(err))
+            Err(_x) => {
+                Err(NP_Error::new("JSON Parse Error"))
             }
         }
+
+
     }
 
     pub fn new_buffer<F>(&self, capacity: Option<u32>, mut callback: F) -> core::result::Result<Vec<u8>, NP_Error>
@@ -248,7 +251,6 @@ mod tests {
     use crate::pointer::NP_Ptr;
     use crate::collection::table::NP_Table;
     use super::*;
-    use crate::json_flex::json_decode;
 
     #[test]
     fn it_works() -> core::result::Result<(), NP_Error> {
@@ -259,6 +261,7 @@ mod tests {
                 ["userID",  {"type": "string"}],
                 ["pass",    {"type": "string"}],
                 ["age",     {"type": "uint16"}],
+                ["color",   {"type": "option", "choices": ["red", "green", "blue"]}],
                 ["address", {
                     "type": "table", 
                     "columns": [
@@ -272,28 +275,6 @@ mod tests {
                 }]
             ]
         }"#)?;
-
-        let decoded = json_decode(r#"{
-            "type": "table",
-            "columns": [
-                ["userID",  {"type": "string"}],
-                ["pass",    {"type": "string"}],
-                ["age",     {"type": "uint16"}],
-                ["address", {
-                    "type": "table", 
-                    "columns": [
-                        ["street",  {"type": "string"}],
-                        ["street2", {"type": "string"}],
-                        ["city",    {"type": "string"}],
-                        ["state",   {"type": "string"}],
-                        ["zip",     {"type": "string"}],
-                        ["country", {"type": "string"}]
-                    ]
-                }]
-            ]
-        }"#.to_owned());
-
-        println!("{:?}", decoded.to_json());
 
         let mut myvalue: Option<String> = None;
 

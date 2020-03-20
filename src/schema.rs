@@ -123,6 +123,7 @@
 //! # date
 //! 
 //!  
+use crate::json_flex::JFObject;
 use crate::pointer::NP_ValueInto;
 use crate::pointer::any::NP_Any;
 use crate::pointer::misc::NP_Date;
@@ -134,7 +135,6 @@ use crate::collection::tuple::NP_Tuple;
 use crate::pointer::bytes::NP_Bytes;
 use crate::collection::{list::NP_List, table::NP_Table, map::NP_Map};
 use crate::pointer::{misc::NP_Option, NP_Value};
-use json::*;
 use crate::error::NP_Error;
 use alloc::vec::Vec;
 use alloc::vec;
@@ -227,7 +227,7 @@ pub struct NP_Schema {
 pub struct NP_Types { }
 
 impl<'a> NP_Types {
-    pub fn do_check<T: NP_Value + Default + NP_ValueInto<'a>>(type_string: &str, json_schema: &JsonValue)-> core::result::Result<Option<NP_Schema>, NP_Error>{
+    pub fn do_check<T: NP_Value + Default + NP_ValueInto<'a>>(type_string: &str, json_schema: &JFObject)-> core::result::Result<Option<NP_Schema>, NP_Error>{
         if T::is_type(type_string) {
             Ok(Some(NP_Schema { 
                 kind: Box::new(NP_SchemaKinds::Scalar),
@@ -239,7 +239,7 @@ impl<'a> NP_Types {
         }
     }
 
-    pub fn get_type(type_string: &str, json_schema: &JsonValue)-> core::result::Result<NP_Schema, NP_Error> {
+    pub fn get_type(type_string: &str, json_schema: &JFObject)-> core::result::Result<NP_Schema, NP_Error> {
 
         let check = NP_Types::do_check::<NP_Any>(type_string, json_schema)?;
         match check { Some(x) => return Ok(x), None => {} };
@@ -316,13 +316,22 @@ impl NP_Schema {
         }
     }
 
-    pub fn from_json(json: JsonValue) -> core::result::Result<Self, NP_Error> {
-        NP_Schema::validate_model(&json)
+    pub fn from_json(json: Box<JFObject>) -> core::result::Result<Self, NP_Error> {
+        NP_Schema::validate_model(&*json)
     }
 
-    pub fn validate_model(json_schema: &JsonValue) -> core::result::Result<Self, NP_Error> {
+    pub fn validate_model(json_schema: &JFObject) -> core::result::Result<Self, NP_Error> {
 
-        let type_string = json_schema["type"].as_str().unwrap_or("");
+        if json_schema.is_dictionary() == false {
+            return Err(NP_Error::new("Object not found at root of schema!"));
+        }
+
+
+        if json_schema["type"].is_string() == false {
+            return Err(NP_Error::new("Must declare a type for every schema!"));
+        }
+
+        let type_string = (*json_schema["type"].into_string().unwrap()).as_str();
 
         if type_string.len() == 0 {
             return Err(NP_Error::new("Must declare a type for every schema!"));
@@ -342,28 +351,44 @@ impl NP_Schema {
                 {
                     let borrowed_schema = json_schema;
 
-                    if borrowed_schema["columns"].is_null() || borrowed_schema["columns"].is_array() == false {
+                    if borrowed_schema["columns"].is_array() == false {
                         return Err(NP_Error::new("Table kind requires 'columns' property as array!"));
                     }
 
                     let mut index = 0;
-                    for column in borrowed_schema["columns"].members() {
+                    for column in borrowed_schema["columns"].into_vec().unwrap() {
 
-                        let column_name = &column[0].to_string();
+                        if column[0].is_string() == false {
+                            return Err(NP_Error::new("Table kind requires all columns have a name!"));
+                        }
+
+                        let column_name = column[0].into_string().unwrap();
+                        
 
                         if column_name.len() == 0 {
                             return Err(NP_Error::new("Table kind requires all columns have a name!"));
                         }
 
+                        if column[1].is_dictionary() == false {
+                            return Err(NP_Error::new("Table kind requires all columns have a type!"));
+                        }
+
                         let good_schema = NP_Schema::validate_model(&column[1])?;
+                        
+                        let this_col_obj = &column[1].into_hashmap().unwrap();
 
-                        let this_index = &column[1]["i"];
-
-                        let use_index = if this_index.is_null() || this_index.is_number() == false {
-                            index
-                        } else {
-                            this_index.as_usize().unwrap_or(index)
+                        let use_index = match this_col_obj.get("i") {
+                            Some(obj) => {
+                                match obj {
+                                    JFObject::Integer(x) => {
+                                        *x as usize
+                                    },
+                                    _ => index as usize
+                                }
+                            },
+                            None => index as usize
                         };
+
 
                         if use_index > 255 {
                             return Err(NP_Error::new("Table cannot have column index above 255!"));
@@ -394,7 +419,7 @@ impl NP_Schema {
 
                 {
                     let borrowed_schema = json_schema;
-                    if borrowed_schema["of"].is_null() || borrowed_schema["of"].is_object() == false {
+                    if borrowed_schema["of"].is_null() || borrowed_schema["of"].is_dictionary() == false {
                         return Err(NP_Error::new("List kind requires 'of' property as schema object!"));
                     }
                 }
@@ -412,7 +437,7 @@ impl NP_Schema {
                 {
                     let borrowed_schema = json_schema;
 
-                    if borrowed_schema["value"].is_null() || borrowed_schema["value"].is_object() == false {
+                    if borrowed_schema["value"].is_null() || borrowed_schema["value"].is_dictionary() == false {
                         return Err(NP_Error::new("Map kind requires 'value' property as schema object!"));
                     }
                 }
@@ -435,7 +460,7 @@ impl NP_Schema {
                         return Err(NP_Error::new("Tuple type requires 'values' property as array of schema objects!"));
                     }
 
-                    for schema in borrowed_schema["values"].members() {
+                    for schema in borrowed_schema["values"].into_vec().unwrap().into_iter() {
                         let good_schema = NP_Schema::validate_model(schema)?;
                         schemas.push(good_schema);
                     }
@@ -456,12 +481,15 @@ impl NP_Schema {
                 {
                     let borrowed_schema = json_schema;
 
-                    if borrowed_schema["options"].is_null() || borrowed_schema["options"].is_array() == false  {
-                        return Err(NP_Error::new("Option kind requires 'options' property as array of choices!"));
+                    if borrowed_schema["choices"].is_array() == false  {
+                        return Err(NP_Error::new("Option kind requires 'choices' property as array of string choices!"));
                     }
 
-                    for option in borrowed_schema["options"].members() {
-                        options.push(option.to_string());
+                    for option in borrowed_schema["choices"].into_vec().unwrap().into_iter() {
+                        if option.is_string() == false {
+                            return Err(NP_Error::new("Option kind requires 'choices' property as array of string choices!"));
+                        }
+                        options.push(option.into_string().unwrap().to_string());
                     }
                 }
 

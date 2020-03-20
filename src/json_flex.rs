@@ -2,10 +2,12 @@
 //! https://crates.io/crates/json_flex
 //! 
 //! Library has been converted & stripped for no_std use
+//! All code paths that can panic have been replaced with proper error handling
 //! 
 //! The MIT License (MIT)
 //! 
 //! Copyright (c) 2015 nacika
+//! Copyright (c) 2020 Scott Lott
 //! 
 //! Permission is hereby granted, free of charge, to any person obtaining a copy
 //! of this software and associated documentation files (the "Software"), to deal
@@ -32,6 +34,8 @@ use alloc::boxed::Box;
 use alloc::borrow::ToOwned;
 use alloc::string::ToString;
 use core::str::FromStr;
+use core::ops::Index;
+use crate::error::NP_Error;
 
 #[derive(Debug)]
 pub struct JFMap<T> {
@@ -177,34 +181,34 @@ impl JFObject {
             _ => false,
         }
     }
-    pub fn unwrap_string(&self) -> &String {
+    pub fn unwrap_string(&self) -> Option<&String> {
         match self {
-            &JFObject::String(ref v) => v,
-            _ => panic!(),
+            &JFObject::String(ref v) => Some(v),
+            _ => None,
         }
     }
-    pub fn unwrap_i64(&self) -> &i64 {
+    pub fn unwrap_i64(&self) -> Option<&i64> {
         match self {
-            &JFObject::Integer(ref v) => v,
-            _ => panic!(),
+            &JFObject::Integer(ref v) => Some(v),
+            _ => None,
         }
     }
-    pub fn unwrap_f64(&self) -> &f64 {
+    pub fn unwrap_f64(&self) -> Option<&f64> {
         match self {
-            &JFObject::Float(ref v) => v,
-            _ => panic!(),
+            &JFObject::Float(ref v) => Some(v),
+            _ => None,
         }
     }
-    pub fn unwrap_hashmap(&self) -> &JFMap<JFObject> {
+    pub fn unwrap_hashmap(&self) -> Option<&JFMap<JFObject>> {
         match self {
-            &JFObject::Dictionary(ref v) => v,
-            _ => panic!(),
+            &JFObject::Dictionary(ref v) => Some(v),
+            _ => None,
         }
     }
-    pub fn unwrap_vec(&self) -> &Vec<JFObject> {
+    pub fn unwrap_vec(&self) -> Option<&Vec<JFObject>> {
         match self {
-            &JFObject::Array(ref v) => v,
-            _ => panic!(),
+            &JFObject::Array(ref v) => Some(v),
+            _ => None,
         }
     }
 
@@ -259,47 +263,47 @@ impl JFObject {
     }
 }
 
-pub trait Unwrap<T> {
-    fn unwrap(self) -> T;
+impl Index<usize> for JFObject {
+    type Output = JFObject;
+    fn index<'a>(&'a self, id: usize) -> &'a Self::Output {
+        match self.into_vec() {
+            Some(x) => {
+                match x.get(id) {
+                    Some(y) => y,
+                    None => &JFObject::Null
+                }
+            },
+            None => &JFObject::Null
+        }
+    }
 }
 
-impl Unwrap<String> for JFObject {
-    fn unwrap(self) -> String {
-        match self {
-            JFObject::String(s) => s,
-            _ => panic!(),
+impl Index<String> for JFObject {
+    type Output = JFObject;
+    fn index<'a>(&'a self, id: String) -> &'a Self::Output {
+        match self.into_hashmap() {
+            Some(x) => {
+                match x.get(id.as_str()) {
+                    Some(y) => y,
+                    None => &JFObject::Null
+                }
+            },
+            None => &JFObject::Null
         }
     }
 }
-impl Unwrap<i64> for JFObject {
-    fn unwrap(self) -> i64 {
-        match self {
-            JFObject::Integer(i) => i,
-            _ => panic!(),
-        }
-    }
-}
-impl Unwrap<f64> for JFObject {
-    fn unwrap(self) -> f64 {
-        match self {
-            JFObject::Float(i) => i,
-            _ => panic!(),
-        }
-    }
-}
-impl Unwrap<JFMap<JFObject>> for JFObject {
-    fn unwrap(self) -> JFMap<JFObject> {
-        match self {
-            JFObject::Dictionary(d) => d,
-            _ => panic!(),
-        }
-    }
-}
-impl Unwrap<Vec<JFObject>> for JFObject {
-    fn unwrap(self) -> Vec<JFObject> {
-        match self {
-            JFObject::Array(a) => a,
-            _ => panic!(),
+
+impl<'a> Index<&'a str> for JFObject {
+    type Output = JFObject;
+    fn index<'b>(&'b self, id: &str) -> &'b Self::Output {
+        match self.into_hashmap() {
+            Some(x) => {
+                match x.get(&id.to_owned()) {
+                    Some(y) => y,
+                    None => &JFObject::Null
+                }
+            },
+            None => &JFObject::Null
         }
     }
 }
@@ -318,16 +322,16 @@ fn recursive(v: &mut JFObject,
                       Vec<String>,
                       i64,
                       i64,
-                      char)
+                      char) -> Result<(), NP_Error>
                      ,
              value: Option<String>,
-             mut log: String)
-             -> bool {
+             log: String)
+             -> Result<bool, NP_Error> {
 
     let is_find = match *v {
 
         JFObject::Array(ref mut vvz) => {
-            let i = *a_chain.get(a_nest as usize).unwrap();
+            let i = *NP_Error::unwrap(a_chain.get(a_nest as usize))?;
             let is_find: bool = {
                 let vvv = vvz.get_mut(i as usize);
                 let is_find: bool = match vvv {
@@ -342,7 +346,7 @@ fn recursive(v: &mut JFObject,
                                   last_c,
                                   func,
                                   value.clone(),
-                                  log);
+                                  log)?;
                         a_nest -= 1;
                         true
                     }
@@ -373,7 +377,7 @@ fn recursive(v: &mut JFObject,
                                       last_c,
                                       func,
                                       value.clone(),
-                                      log);
+                                      log)?;
                             d_nest -= 1;
                             true
                         }
@@ -394,12 +398,12 @@ fn recursive(v: &mut JFObject,
              d_chain.clone(),
              a_nest,
              d_nest,
-             last_c);
+             last_c)?;
     }
-    is_find
+    Ok(is_find)
 }
 
-pub fn json_decode(text: String) -> Box<JFObject> {
+pub fn json_decode(text: String) -> Result<Box<JFObject>, NP_Error> {
 
     let mut ret = Box::new(JFObject::Null);
 
@@ -483,17 +487,18 @@ pub fn json_decode(text: String) -> Box<JFObject> {
                                     d_chain: Vec<String>,
                                     _: i64,
                                     _: i64,
-                                    _: char) {
+                                    _: char) -> Result<(), NP_Error> {
                                 match *v {
                                     JFObject::Array(ref mut vv) => {
                                         vv.push(JFObject::Array(Vec::new()));
                                     }
                                     JFObject::Dictionary(ref mut vv) => {
-                                        let key = d_chain.last().unwrap().clone();
+                                        let key = NP_Error::unwrap(d_chain.last())?.clone();
                                         vv.insert(key, JFObject::Array(Vec::new()));
                                     }
                                     _ => {}
-                                }
+                                };
+                                Ok(())
                             }
                             recursive(&mut ret,
                                       a_chain.clone(),
@@ -504,7 +509,7 @@ pub fn json_decode(text: String) -> Box<JFObject> {
                                       last_c,
                                       func,
                                       None,
-                                      log);
+                                      log)?;
                         }
                     }
                 };
@@ -518,10 +523,10 @@ pub fn json_decode(text: String) -> Box<JFObject> {
                     'w' => {}
                     't' => {
 
-                        s_true.pop().unwrap();
+                        NP_Error::unwrap(s_true.pop())?;
                         s_true = s_true.trim().to_string();
                         if s_true != "true" {
-                            panic!("parse error");
+                            return Err(NP_Error::new("JSON Parse Error"));
                         }
 
                         let a_nest = 0i64;
@@ -533,13 +538,14 @@ pub fn json_decode(text: String) -> Box<JFObject> {
                                 _: Vec<String>,
                                 _: i64,
                                 _: i64,
-                                _: char) {
+                                _: char) -> Result<(), NP_Error> {
                             match *v {
                                 JFObject::Array(ref mut vv) => {
                                     vv.push(JFObject::True);
                                 }
                                 _ => {}
-                            }
+                            };
+                            Ok(())
                         }
                         recursive(&mut ret,
                                   a_chain.clone(),
@@ -550,21 +556,21 @@ pub fn json_decode(text: String) -> Box<JFObject> {
                                   last_c,
                                   func,
                                   None,
-                                  log);
+                                  log)?;
 
-                        chain.pop().unwrap();
-                        chain.pop().unwrap();
+                        NP_Error::unwrap(chain.pop())?;
+                        NP_Error::unwrap(chain.pop())?;
                         last_chain = chain.last().unwrap_or(&' ').to_owned();
-                        a_chain.pop().unwrap();
+                        NP_Error::unwrap(a_chain.pop())?;
                         s_true = "".to_owned();
                     }
 
                     'f' => {
 
-                        s_false.pop().unwrap();
+                        NP_Error::unwrap(s_false.pop())?;
                         s_false = s_false.trim().to_string();
                         if s_false != "false" {
-                            panic!("parse error");
+                            return Err(NP_Error::new("JSON Parse Error"));
                         }
 
                         let a_nest = 0i64;
@@ -576,13 +582,14 @@ pub fn json_decode(text: String) -> Box<JFObject> {
                                 _: Vec<String>,
                                 _: i64,
                                 _: i64,
-                                _: char) {
+                                _: char) -> Result<(), NP_Error> {
                             match *v {
                                 JFObject::Array(ref mut vv) => {
                                     vv.push(JFObject::False);
                                 }
                                 _ => {}
-                            }
+                            };
+                            Ok(())
                         }
                         recursive(&mut ret,
                                   a_chain.clone(),
@@ -593,22 +600,22 @@ pub fn json_decode(text: String) -> Box<JFObject> {
                                   last_c,
                                   func,
                                   None,
-                                  log);
+                                  log)?;
 
-                        chain.pop().unwrap();
-                        chain.pop().unwrap();
+                        NP_Error::unwrap(chain.pop())?;
+                        NP_Error::unwrap(chain.pop())?;
                         last_chain = chain.last().unwrap_or(&' ').to_owned();
-                        a_chain.pop().unwrap();
+                        NP_Error::unwrap(a_chain.pop())?;
 
                         s_false = "".to_owned();
                     }
 
                     '0' => {
 
-                        s_null.pop().unwrap();
+                        NP_Error::unwrap(s_null.pop())?;
                         s_null = s_null.trim().to_string();
                         if s_null != "null" {
-                            panic!("parse error");
+                            return Err(NP_Error::new("JSON Parse Error"));
                         }
 
                         let a_nest = 0i64;
@@ -620,13 +627,14 @@ pub fn json_decode(text: String) -> Box<JFObject> {
                                 _: Vec<String>,
                                 _: i64,
                                 _: i64,
-                                _: char) {
+                                _: char) -> Result<(), NP_Error> {
                             match *v {
                                 JFObject::Array(ref mut vv) => {
                                     vv.push(JFObject::Null);
                                 }
                                 _ => {}
-                            }
+                            };
+                            Ok(())
                         }
                         recursive(&mut ret,
                                   a_chain.clone(),
@@ -637,13 +645,13 @@ pub fn json_decode(text: String) -> Box<JFObject> {
                                   last_c,
                                   func,
                                   None,
-                                  log);
+                                  log)?;
 
 
-                        chain.pop().unwrap();
-                        chain.pop().unwrap();
+                        NP_Error::unwrap(chain.pop())?;
+                        NP_Error::unwrap(chain.pop())?;
                         last_chain = chain.last().unwrap_or(&' ').to_owned();
-                        a_chain.pop().unwrap();
+                        NP_Error::unwrap(a_chain.pop())?;
 
                         s_null = "".to_owned();
                     }
@@ -659,21 +667,22 @@ pub fn json_decode(text: String) -> Box<JFObject> {
                                 _: Vec<String>,
                                 _: i64,
                                 _: i64,
-                                _: char) {
+                                _: char) -> Result<(), NP_Error> {
                             match *v {
                                 JFObject::Array(ref mut vv) => {
 
-                                    let mut new_num = value.unwrap().clone();
-                                    new_num.pop().unwrap();
+                                    let mut new_num = NP_Error::unwrap(value)?;
+                                    NP_Error::unwrap(new_num.pop())?;
                                     new_num = new_num.trim().to_string();
 
                                     match new_num.find('.') {
-                                        Some(_) => vv.push( JFObject::Float(f64::from_str(&new_num.clone()).unwrap()) ),
-                                        None    => vv.push( JFObject::Integer(i64::from_str(&new_num.clone()).unwrap()) ),
+                                        Some(_) => vv.push( JFObject::Float(f64::from_str(&new_num.clone())?) ),
+                                        None    => vv.push( JFObject::Integer(i64::from_str(&new_num.clone())?) ),
                                     };
                                 }
                                 _ => {}
-                            }
+                            };
+                            Ok(())
                         }
                         recursive(&mut ret,
                                   a_chain.clone(),
@@ -684,14 +693,14 @@ pub fn json_decode(text: String) -> Box<JFObject> {
                                   last_c,
                                   func,
                                   Some(num),
-                                  log);
+                                  log)?;
 
                         num = "".to_owned();
 
-                        chain.pop().unwrap();
-                        chain.pop().unwrap();
+                        NP_Error::unwrap(chain.pop())?;
+                        NP_Error::unwrap(chain.pop())?;
                         last_chain = chain.last().unwrap_or(&' ').to_owned();
-                        a_chain.pop().unwrap();
+                        NP_Error::unwrap(a_chain.pop())?;
 
                     }
 
@@ -709,13 +718,14 @@ pub fn json_decode(text: String) -> Box<JFObject> {
                                     _: Vec<String>,
                                     _: i64,
                                     _: i64,
-                                    _: char) {
+                                    _: char) -> Result<(), NP_Error> {
                                 match *v {
                                     JFObject::Array(ref mut vv) => {
                                         vv.push(JFObject::Null);
                                     }
                                     _ => {}
-                                }
+                                };
+                                Ok(())
                             }
                             recursive(&mut ret,
                                       a_chain.clone(),
@@ -726,16 +736,16 @@ pub fn json_decode(text: String) -> Box<JFObject> {
                                       last_c,
                                       func,
                                       None,
-                                      log);
+                                      log)?;
 
                         }
 
-                        chain.pop().unwrap();
+                        NP_Error::unwrap(chain.pop())?;
                         last_chain = chain.last().unwrap_or(&' ').to_owned();
-                        a_chain.pop().unwrap();
+                        NP_Error::unwrap(a_chain.pop())?;
                     }
 
-                    _ => panic!("unknown chain from array"),
+                    _ => return Err(NP_Error::new("JSON Parse Error: Unknown chain from Array")),
                 }
 
                 last_active_char = c.clone();
@@ -765,17 +775,18 @@ pub fn json_decode(text: String) -> Box<JFObject> {
                                 d_chain: Vec<String>,
                                 _: i64,
                                 _: i64,
-                                _: char) {
+                                _: char) -> Result<(), NP_Error> {
                             match *v {
                                 JFObject::Array(ref mut vv) => {
                                     vv.push(JFObject::Dictionary(JFMap::new()));
                                 }
                                 JFObject::Dictionary(ref mut vv) => {
-                                    let key = d_chain.last().unwrap().clone();
+                                    let key = NP_Error::unwrap(d_chain.last())?.clone();
                                     vv.insert(key, JFObject::Dictionary(JFMap::new()));
                                 }
                                 _ => {}
-                            }
+                            };
+                            Ok(())
                         }
 
                         recursive(&mut ret,
@@ -787,7 +798,7 @@ pub fn json_decode(text: String) -> Box<JFObject> {
                                   last_c,
                                   func,
                                   None,
-                                  log);
+                                  log)?;
                     }
 
                     _ => {
@@ -815,17 +826,18 @@ pub fn json_decode(text: String) -> Box<JFObject> {
                                     d_chain: Vec<String>,
                                     _: i64,
                                     _: i64,
-                                    _: char) {
+                                    _: char) -> Result<(), NP_Error> {
                                 match *v {
                                     JFObject::Array(ref mut vv) => {
                                         vv.push(JFObject::Dictionary(JFMap::new()));
                                     }
                                     JFObject::Dictionary(ref mut vv) => {
-                                        let key = d_chain.last().unwrap().clone();
+                                        let key = NP_Error::unwrap(d_chain.last())?.clone();
                                         vv.insert(key, JFObject::Dictionary(JFMap::new()));
                                     }
                                     _ => {}
-                                }
+                                };
+                                Ok(())
                             }
                             recursive(&mut ret,
                                       a_chain.clone(),
@@ -836,7 +848,7 @@ pub fn json_decode(text: String) -> Box<JFObject> {
                                       last_c,
                                       func,
                                       None,
-                                      log);
+                                      log)?;
                         }
                     }
                 }
@@ -853,17 +865,17 @@ pub fn json_decode(text: String) -> Box<JFObject> {
 
                     't' => {
 
-                        s_true.pop().unwrap();
+                        NP_Error::unwrap(s_true.pop())?;
                         s_true = s_true.trim().to_string();
                         if s_true != "true" {
-                            panic!("parse error");
+                            return Err(NP_Error::new("JSON Parse Error"));
                         }
 
-                        chain.pop().unwrap();
+                        NP_Error::unwrap(chain.pop())?;
                         last_chain = chain.last().unwrap_or(&' ').to_owned();
 
                         if last_chain == 'v' {
-                            chain.pop().unwrap();
+                            NP_Error::unwrap(chain.pop())?;
                             let a_nest = 0i64;
                             let d_nest = 0i64;
                             let log: String = "".to_owned();
@@ -873,15 +885,16 @@ pub fn json_decode(text: String) -> Box<JFObject> {
                                     d_chain: Vec<String>,
                                     _: i64,
                                     _: i64,
-                                    _: char) {
+                                    _: char) -> Result<(), NP_Error> {
 
                                 match *v {
                                     JFObject::Dictionary(ref mut vv) => {
-                                        let key = d_chain.last().unwrap().clone();
+                                        let key = NP_Error::unwrap(d_chain.last())?.clone();
                                         vv.insert(key, JFObject::True);
                                     }
                                     _ => {}
-                                }
+                                };
+                                Ok(())
                             }
                             recursive(&mut ret,
                                       a_chain.clone(),
@@ -892,28 +905,28 @@ pub fn json_decode(text: String) -> Box<JFObject> {
                                       last_c,
                                       func,
                                       None,
-                                      log);
+                                      log)?;
                         }
 
                         s_true = "".to_owned();
-                        d_chain.pop().unwrap();
-                        chain.pop().unwrap();
+                        NP_Error::unwrap(d_chain.pop())?;
+                        NP_Error::unwrap(chain.pop())?;
                         last_chain = chain.last().unwrap_or(&' ').to_owned();
                     }
 
                     'f' => {
 
-                        s_false.pop().unwrap();
+                        NP_Error::unwrap(s_false.pop())?;
                         s_false = s_false.trim().to_string();
                         if s_false != "false" {
-                            panic!("parse error");
+                            return Err(NP_Error::new("JSON Parse Error"));
                         }
 
-                        chain.pop().unwrap();
+                        NP_Error::unwrap(chain.pop())?;
                         last_chain = chain.last().unwrap_or(&' ').to_owned();
 
                         if last_chain == 'v' {
-                            chain.pop().unwrap();
+                            NP_Error::unwrap(chain.pop())?;
                             let a_nest = 0i64;
                             let d_nest = 0i64;
                             let log: String = "".to_owned();
@@ -923,15 +936,16 @@ pub fn json_decode(text: String) -> Box<JFObject> {
                                     d_chain: Vec<String>,
                                     _: i64,
                                     _: i64,
-                                    _: char) {
+                                    _: char) -> Result<(), NP_Error> {
 
                                 match *v {
                                     JFObject::Dictionary(ref mut vv) => {
-                                        let key = d_chain.last().unwrap().clone();
+                                        let key = NP_Error::unwrap(d_chain.last())?.clone();
                                         vv.insert(key, JFObject::False);
                                     }
                                     _ => {}
-                                }
+                                };
+                                Ok(())
                             }
                             recursive(&mut ret,
                                       a_chain.clone(),
@@ -942,30 +956,30 @@ pub fn json_decode(text: String) -> Box<JFObject> {
                                       last_c,
                                       func,
                                       None,
-                                      log);
+                                      log)?;
 
                         }
 
                         s_false = "".to_owned();
-                        d_chain.pop().unwrap();
-                        chain.pop().unwrap();
+                        NP_Error::unwrap(d_chain.pop())?;
+                        NP_Error::unwrap(chain.pop())?;
                         last_chain = chain.last().unwrap_or(&' ').to_owned();
                     }
 
                     '0' => {
 
-                        s_null.pop().unwrap();
+                        NP_Error::unwrap(s_null.pop())?;
                         s_null = s_null.trim().to_string();
                         if s_null != "null" {
-                            panic!("parse error");
+                            return Err(NP_Error::new("JSON Parse Error"));
                         }
 
-                        chain.pop().unwrap();
+                        NP_Error::unwrap(chain.pop())?;
                         last_chain = chain.last().unwrap_or(&' ').to_owned();
 
 
                         if last_chain == 'v' {
-                            chain.pop().unwrap();
+                            NP_Error::unwrap(chain.pop())?;
                             let a_nest = 0i64;
                             let d_nest = 0i64;
                             let log: String = "".to_owned();
@@ -975,15 +989,16 @@ pub fn json_decode(text: String) -> Box<JFObject> {
                                     d_chain: Vec<String>,
                                     _: i64,
                                     _: i64,
-                                    _: char) {
+                                    _: char) -> Result<(), NP_Error> {
 
                                 match *v {
                                     JFObject::Dictionary(ref mut vv) => {
-                                        let key = d_chain.last().unwrap().clone();
+                                        let key = NP_Error::unwrap(d_chain.last())?.clone();
                                         vv.insert(key, JFObject::Null);
                                     }
                                     _ => {}
-                                }
+                                };
+                                Ok(())
                             }
                             recursive(&mut ret,
                                       a_chain.clone(),
@@ -994,22 +1009,22 @@ pub fn json_decode(text: String) -> Box<JFObject> {
                                       last_c,
                                       func,
                                       None,
-                                      log);
+                                      log)?;
                         }
 
                         s_null = "".to_owned();
-                        d_chain.pop().unwrap();
-                        chain.pop().unwrap();
+                        NP_Error::unwrap(d_chain.pop())?;
+                        NP_Error::unwrap(chain.pop())?;
                         last_chain = chain.last().unwrap_or(&' ').to_owned();
                     }
 
                     'n' => {
 
-                        chain.pop().unwrap();
+                        NP_Error::unwrap(chain.pop())?;
                         last_chain = chain.last().unwrap_or(&' ').to_owned();
 
                         if last_chain == 'v' {
-                            chain.pop().unwrap();
+                            NP_Error::unwrap(chain.pop())?;
                             let a_nest = 0i64;
                             let d_nest = 0i64;
                             let log: String = "".to_owned();
@@ -1019,21 +1034,22 @@ pub fn json_decode(text: String) -> Box<JFObject> {
                                     d_chain: Vec<String>,
                                     _: i64,
                                     _: i64,
-                                    _: char) {
+                                    _: char) -> Result<(), NP_Error> {
 
                                 match *v {
                                     JFObject::Dictionary(ref mut vv) => {
-                                        let key = d_chain.last().unwrap().clone();
-                                        let mut value = value.unwrap();
-                                        value.pop().unwrap();
+                                        let key = NP_Error::unwrap(d_chain.last())?.clone();
+                                        let mut value = NP_Error::unwrap(value)?;
+                                        NP_Error::unwrap(value.pop())?;
                                         value = value.trim().to_string();
                                         match value.find('.') {
-                                            Some(_) => vv.insert(key, JFObject::Float(f64::from_str(&value.clone()).unwrap())) ,
-                                            None    => vv.insert(key, JFObject::Integer(i64::from_str(&value.clone()).unwrap())),
+                                            Some(_) => vv.insert(key, JFObject::Float(f64::from_str(&value.clone())?)) ,
+                                            None    => vv.insert(key, JFObject::Integer(i64::from_str(&value.clone())?)),
                                         };
                                     }
                                     _ => {}
-                                }
+                                };
+                                Ok(())
                             }
                             recursive(&mut ret,
                                       a_chain.clone(),
@@ -1044,25 +1060,25 @@ pub fn json_decode(text: String) -> Box<JFObject> {
                                       last_c,
                                       func,
                                       Some(num.clone()),
-                                      log);
+                                      log)?;
 
                         }
                         num = "".to_owned();
-                        d_chain.pop().unwrap();
-                        chain.pop().unwrap();
+                        NP_Error::unwrap(d_chain.pop())?;
+                        NP_Error::unwrap(chain.pop())?;
                         last_chain = chain.last().unwrap_or(&' ').to_owned();
                     }
 
                     'v' => {
-                        d_chain.pop().unwrap();
-                        chain.pop().unwrap();
-                        chain.pop().unwrap();
+                        NP_Error::unwrap(d_chain.pop())?;
+                        NP_Error::unwrap(chain.pop())?;
+                        NP_Error::unwrap(chain.pop())?;
                         last_chain = chain.last().unwrap_or(&' ').to_owned();
                     }
 
                     _ => {
-                        d_chain.pop().unwrap();
-                        chain.pop().unwrap();
+                        NP_Error::unwrap(d_chain.pop())?;
+                        NP_Error::unwrap(chain.pop())?;
                         last_chain = chain.last().unwrap_or(&' ').to_owned();
                     }
                 }
@@ -1082,7 +1098,7 @@ pub fn json_decode(text: String) -> Box<JFObject> {
                         last_chain = v;
 
                         key = string.clone();
-                        key.pop().unwrap();
+                        NP_Error::unwrap(key.pop())?;
 
                         d_chain.push(key.clone());
 
@@ -1104,10 +1120,10 @@ pub fn json_decode(text: String) -> Box<JFObject> {
 
                     't' => {
 
-                        s_true.pop().unwrap();
+                        NP_Error::unwrap(s_true.pop())?;
                         s_true = s_true.trim().to_string();
                         if s_true != "true" {
-                            panic!("parse error");
+                            return Err(NP_Error::new("JSON Parse Error"));
                         }
 
                         if last_chain == 't' {
@@ -1121,20 +1137,21 @@ pub fn json_decode(text: String) -> Box<JFObject> {
                                     d_chain: Vec<String>,
                                     _: i64,
                                     _: i64,
-                                    _: char) {
+                                    _: char) -> Result<(), NP_Error> {
                                 match *v {
                                     JFObject::Array(ref mut vv) => {
                                         vv.push(JFObject::True);
                                     }
                                     JFObject::Dictionary(ref mut vv) => {
 
-                                        let key = d_chain.last().unwrap().clone();
+                                        let key = NP_Error::unwrap(d_chain.last())?.clone();
 
                                         vv.insert(key, JFObject::True);
 
                                     }
                                     _ => {}
-                                }
+                                };
+                                Ok(())
                             }
                             recursive(&mut ret,
                                       a_chain.clone(),
@@ -1145,19 +1162,19 @@ pub fn json_decode(text: String) -> Box<JFObject> {
                                       last_c,
                                       func,
                                       None,
-                                      log);
+                                      log)?;
 
                         }
 
-                        chain.pop().unwrap();
+                        NP_Error::unwrap(chain.pop())?;
                         last_chain = chain.last().unwrap_or(&' ').to_owned();
 
                         if last_chain == 'v' {
-                            chain.pop().unwrap();
+                            NP_Error::unwrap(chain.pop())?;
                             last_chain = chain.last().unwrap_or(&' ').to_owned();
-                            d_chain.pop().unwrap();
+                            NP_Error::unwrap(d_chain.pop())?;
                         } else {
-                            let a = a_chain.pop().unwrap();
+                            let a = NP_Error::unwrap(a_chain.pop())?;
                             a_chain.push(a + 1i64);
                         }
 
@@ -1166,10 +1183,10 @@ pub fn json_decode(text: String) -> Box<JFObject> {
 
                     'f' => {
 
-                        s_false.pop().unwrap();
+                        NP_Error::unwrap(s_false.pop())?;
                         s_false = s_false.trim().to_string();
                         if s_false != "false" {
-                            panic!("parse error");
+                            return Err(NP_Error::new("JSON Parse Error"));
                         }
 
                         if last_chain == 'f' {
@@ -1182,20 +1199,21 @@ pub fn json_decode(text: String) -> Box<JFObject> {
                                     d_chain: Vec<String>,
                                     _: i64,
                                     _: i64,
-                                    _: char) {
+                                    _: char) -> Result<(), NP_Error> {
                                 match *v {
                                     JFObject::Array(ref mut vv) => {
                                         vv.push(JFObject::False);
                                     }
                                     JFObject::Dictionary(ref mut vv) => {
 
-                                        let key = d_chain.last().unwrap().clone();
+                                        let key = NP_Error::unwrap(d_chain.last())?.clone();
 
                                         vv.insert(key, JFObject::False);
 
                                     }
                                     _ => {}
-                                }
+                                };
+                                Ok(())
                             }
                             recursive(&mut ret,
                                       a_chain.clone(),
@@ -1206,19 +1224,19 @@ pub fn json_decode(text: String) -> Box<JFObject> {
                                       last_c,
                                       func,
                                       None,
-                                      log);
+                                      log)?;
 
                         }
 
-                        chain.pop().unwrap();
+                        NP_Error::unwrap(chain.pop())?;
                         last_chain = chain.last().unwrap_or(&' ').to_owned();
 
                         if last_chain == 'v' {
-                            chain.pop().unwrap();
+                            NP_Error::unwrap(chain.pop())?;
                             last_chain = chain.last().unwrap_or(&' ').to_owned();
-                            d_chain.pop().unwrap();
+                            NP_Error::unwrap(d_chain.pop())?;
                         } else {
-                            let a = a_chain.pop().unwrap();
+                            let a = NP_Error::unwrap(a_chain.pop())?;
                             a_chain.push(a + 1i64);
                         }
 
@@ -1227,10 +1245,10 @@ pub fn json_decode(text: String) -> Box<JFObject> {
 
                     '0' => {
 
-                        s_null.pop().unwrap();
+                        NP_Error::unwrap(s_null.pop())?;
                         s_null = s_null.trim().to_string();
                         if s_null != "null" {
-                            panic!("parse error");
+                            return Err(NP_Error::new("JSON Parse Error"));
                         }
 
                         if last_chain == '0' {
@@ -1243,19 +1261,20 @@ pub fn json_decode(text: String) -> Box<JFObject> {
                                     d_chain: Vec<String>,
                                     _: i64,
                                     _: i64,
-                                    _: char) {
+                                    _: char) -> Result<(), NP_Error> {
                                 match *v {
                                     JFObject::Array(ref mut vv) => {
                                         vv.push(JFObject::Null);
                                     }
                                     JFObject::Dictionary(ref mut vv) => {
-                                        let key = d_chain.last().unwrap().clone();
+                                        let key = NP_Error::unwrap(d_chain.last())?.clone();
                                         vv.insert(key, JFObject::Null);
                                     }
                                     _ => {}
-                                }
+                                };
+                                Ok(())
                             }
-                            chain.pop().unwrap();
+                            NP_Error::unwrap(chain.pop())?;
                             recursive(&mut ret,
                                       a_chain.clone(),
                                       d_chain.clone(),
@@ -1265,25 +1284,25 @@ pub fn json_decode(text: String) -> Box<JFObject> {
                                       last_c,
                                       func,
                                       None,
-                                      log);
+                                      log)?;
 
                         }
 
                         last_chain = chain.last().unwrap_or(&' ').to_owned();
 
                         if last_chain == 'v' {
-                            chain.pop().unwrap();
+                            NP_Error::unwrap(chain.pop())?;
                             last_chain = chain.last().unwrap_or(&' ').to_owned();
-                            d_chain.pop().unwrap();
+                            NP_Error::unwrap(d_chain.pop())?;
                         } else {
-                            let a = a_chain.pop().unwrap();
+                            let a = NP_Error::unwrap(a_chain.pop())?;
                             a_chain.push(a + 1i64);
                         }
                         s_null = "".to_owned();
                     }
 
                     'a' => {
-                        let a = a_chain.pop().unwrap();
+                        let a = NP_Error::unwrap(a_chain.pop())?;
                         a_chain.push(a + 1i64);
                         if last_active_char == '[' || last_active_char == ',' {
                             let a_nest = 0i64;
@@ -1295,13 +1314,14 @@ pub fn json_decode(text: String) -> Box<JFObject> {
                                     _: Vec<String>,
                                     _: i64,
                                     _: i64,
-                                    _: char) {
+                                    _: char) -> Result<(), NP_Error> {
                                 match *v {
                                     JFObject::Array(ref mut vv) => {
                                         vv.push(JFObject::Null);
                                     }
                                     _ => {}
-                                }
+                                };
+                                Ok(())
                             }
                             recursive(&mut ret,
                                       a_chain.clone(),
@@ -1312,7 +1332,7 @@ pub fn json_decode(text: String) -> Box<JFObject> {
                                       last_c,
                                       func,
                                       None,
-                                      log);
+                                      log)?;
                         }
                     }
 
@@ -1327,50 +1347,47 @@ pub fn json_decode(text: String) -> Box<JFObject> {
                                 d_chain: Vec<String>,
                                 _: i64,
                                 _: i64,
-                                _: char) {
+                                _: char) -> Result<(), NP_Error> {
                             match *v {
                                 JFObject::Array(ref mut vv) => {
-                                    let mut new_num = value.unwrap().clone();
-                                    new_num.pop().unwrap();
+                                    let mut new_num = NP_Error::unwrap(value)?.clone();
+                                    NP_Error::unwrap(new_num.pop())?;
                                     new_num = new_num.trim().to_string();
 
                                     match new_num.find('.') {
                                         Some(_) => {
-                                            vv.push(JFObject::Float(f64::from_str(&new_num)
-                                                                        .unwrap()))
+                                            vv.push(JFObject::Float(f64::from_str(&new_num)?))
                                         }
                                         None => {
-                                            vv.push(JFObject::Integer(i64::from_str(&new_num)
-                                                                          .unwrap()))
+                                            vv.push(JFObject::Integer(i64::from_str(&new_num)?))
                                         }
                                     };
 
                                 }
                                 JFObject::Dictionary(ref mut vv) => {
 
-                                    let key = d_chain.last().unwrap().clone();
+                                    let key = NP_Error::unwrap(d_chain.last())?.clone();
 
-                                    let mut new_num = value.unwrap().clone();
-                                    new_num.pop().unwrap();
+                                    let mut new_num = NP_Error::unwrap(value)?.clone();
+                                    NP_Error::unwrap(new_num.pop())?;
                                     new_num = new_num.trim().to_string();
 
                                     match new_num.find('.') {
                                         Some(_) => {
                                             vv.insert(key,
-                                                      JFObject::Float(f64::from_str(&new_num)
-                                                                          .unwrap()))
+                                                      JFObject::Float(f64::from_str(&new_num)?))
                                         }
                                         None => {
                                             vv.insert(key,
-                                                      JFObject::Integer(i64::from_str(&new_num)
-                                                                            .unwrap()))
+                                                      JFObject::Integer(i64::from_str(&new_num)?))
                                         }
                                     };
 
 
                                 }
                                 _ => {}
-                            }
+                            };
+                            Ok(())
                         }
                         recursive(&mut ret,
                                   a_chain.clone(),
@@ -1381,27 +1398,27 @@ pub fn json_decode(text: String) -> Box<JFObject> {
                                   last_c,
                                   func,
                                   Some(num),
-                                  log);
+                                  log)?;
 
                         num = "".to_owned();
-                        chain.pop().unwrap();
+                        NP_Error::unwrap(chain.pop())?;
                         last_chain = chain.last().unwrap_or(&' ').to_owned();
 
                         if last_chain == 'v' {
-                            chain.pop().unwrap();
+                            NP_Error::unwrap(chain.pop())?;
                             last_chain = chain.last().unwrap_or(&' ').to_owned();
-                            d_chain.pop().unwrap();
+                            NP_Error::unwrap(d_chain.pop())?;
                         } else {
-                            let a = a_chain.pop().unwrap();
+                            let a = NP_Error::unwrap(a_chain.pop())?;
                             a_chain.push(a + 1i64);
                         }
 
                     }
 
                     'v' => {
-                        chain.pop().unwrap();
+                        NP_Error::unwrap(chain.pop())?;
                         last_chain = chain.last().unwrap_or(&' ').to_owned();
-                        d_chain.pop().unwrap();
+                        NP_Error::unwrap(d_chain.pop())?;
                     }
                     _ => {}
                 }
@@ -1418,7 +1435,7 @@ pub fn json_decode(text: String) -> Box<JFObject> {
                     'w' => {
                         if last_c != '\\' {
 
-                            chain.pop().unwrap();
+                            NP_Error::unwrap(chain.pop())?;
                             last_chain = chain.last().unwrap_or(&' ').to_owned();
 
                             if last_chain == 'v' {
@@ -1432,17 +1449,18 @@ pub fn json_decode(text: String) -> Box<JFObject> {
                                         d_chain: Vec<String>,
                                         _: i64,
                                         _: i64,
-                                        _: char) {
+                                        _: char) -> Result<(), NP_Error> {
 
                                     match *v {
                                         JFObject::Dictionary(ref mut vv) => {
-                                            let key = d_chain.last().unwrap().clone();
-                                            let mut value = value.unwrap();
-                                            value.pop().unwrap();
+                                            let key = NP_Error::unwrap(d_chain.last())?.clone();
+                                            let mut value = NP_Error::unwrap(value)?;
+                                            NP_Error::unwrap(value.pop())?;
                                             vv.insert(key, JFObject::String(value.clone()));
                                         }
                                         _ => {}
-                                    }
+                                    };
+                                    Ok(())
                                 }
                                 recursive(&mut ret,
                                           a_chain.clone(),
@@ -1453,10 +1471,10 @@ pub fn json_decode(text: String) -> Box<JFObject> {
                                           last_c,
                                           func,
                                           Some(string.clone()),
-                                          log);
+                                          log)?;
                                 string = "".to_owned();
                             } else if last_chain != 'd' {
-                                string.pop().unwrap();
+                                NP_Error::unwrap(string.pop())?;
                                 let is_root = match *ret {
                                     JFObject::Null => {
                                         *ret = JFObject::String(string.clone());
@@ -1475,14 +1493,15 @@ pub fn json_decode(text: String) -> Box<JFObject> {
                                             _: Vec<String>,
                                             _: i64,
                                             _: i64,
-                                            _: char) {
+                                            _: char) -> Result<(), NP_Error> {
                                         match *v {
                                             JFObject::Array(ref mut vv) => {
-                                                vv.push(JFObject::String(value.unwrap()
+                                                vv.push(JFObject::String(NP_Error::unwrap(value)?
                                                                               .clone()));
                                             }
                                             _ => {}
-                                        }
+                                        };
+                                        Ok(())
                                     }
                                     recursive(&mut ret,
                                               a_chain.clone(),
@@ -1493,7 +1512,7 @@ pub fn json_decode(text: String) -> Box<JFObject> {
                                               last_c,
                                               func,
                                               Some(string),
-                                              log);
+                                              log)?;
                                 }
                                 string = "".to_owned();
                             }
@@ -1516,7 +1535,7 @@ pub fn json_decode(text: String) -> Box<JFObject> {
                     's' => {
                         if last_c != '\\' {
 
-                            chain.pop().unwrap();
+                            NP_Error::unwrap(chain.pop())?;
                             last_chain = chain.last().unwrap_or(&' ').to_owned();
 
                             if last_chain == 'v' {
@@ -1529,17 +1548,18 @@ pub fn json_decode(text: String) -> Box<JFObject> {
                                         d_chain: Vec<String>,
                                         _: i64,
                                         _: i64,
-                                        _: char) {
+                                        _: char) -> Result<(), NP_Error> {
 
                                     match *v {
                                         JFObject::Dictionary(ref mut vv) => {
-                                            let key = d_chain.last().unwrap().clone();
-                                            let mut value = value.unwrap();
-                                            value.pop().unwrap();
+                                            let key = NP_Error::unwrap(d_chain.last())?.clone();
+                                            let mut value = NP_Error::unwrap(value)?;
+                                            NP_Error::unwrap(value.pop())?;
                                             vv.insert(key, JFObject::String(value.clone()));
                                         }
                                         _ => {}
-                                    }
+                                    };
+                                    Ok(())
                                 }
                                 recursive(&mut ret,
                                           a_chain.clone(),
@@ -1550,11 +1570,11 @@ pub fn json_decode(text: String) -> Box<JFObject> {
                                           last_c,
                                           func,
                                           Some(string.clone()),
-                                          log);
-                                d_chain.pop().unwrap();
+                                          log)?;
+                                          NP_Error::unwrap(d_chain.pop())?;
                                 string = "".to_owned();
                             } else {
-                                string.pop().unwrap();
+                                NP_Error::unwrap(string.pop())?;
                                 let is_root = match *ret {
                                     JFObject::Null => {
                                         *ret = JFObject::String(string.clone());
@@ -1573,14 +1593,15 @@ pub fn json_decode(text: String) -> Box<JFObject> {
                                             _: Vec<String>,
                                             _: i64,
                                             _: i64,
-                                            _: char) {
+                                            _: char) -> Result<(), NP_Error> {
                                         match *v {
                                             JFObject::Array(ref mut vv) => {
-                                                vv.push(JFObject::String(value.unwrap()
+                                                vv.push(JFObject::String(NP_Error::unwrap(value)?
                                                                               .clone()));
                                             }
                                             _ => {}
-                                        }
+                                        };
+                                        Ok(())
                                     }
                                     recursive(&mut ret,
                                               a_chain.clone(),
@@ -1591,7 +1612,7 @@ pub fn json_decode(text: String) -> Box<JFObject> {
                                               last_c,
                                               func,
                                               Some(string),
-                                              log);
+                                              log)?;
                                 }
                                 string = "".to_owned();
                             }
@@ -1703,5 +1724,5 @@ pub fn json_decode(text: String) -> Box<JFObject> {
     }
 
 
-    ret
+    Ok(ret)
 }

@@ -1,5 +1,6 @@
 use core::str;
 use alloc::string::String;
+use alloc::borrow::ToOwned;
 
 const KX: u32 = 123456789;
 const KY: u32 = 362436069;
@@ -24,16 +25,6 @@ impl Rand {
         self.x = self.y; self.y = self.z; self.z = self.w;
         self.w ^= self.w.wrapping_shr(19)^t^t.wrapping_shr(8);
         return self.w;
-    }
-
-    pub fn shuffle<T>(&mut self, a: &mut [T]) {
-        if a.len()==0 {return;}
-        let mut i = a.len()-1;
-        while i>0 {
-            let j = (self.rand() as usize)%(i+1);
-            a.swap(i,j);
-            i-=1;
-        }
     }
 
     pub fn gen_range(&mut self, a: i32, b: i32) -> i32 {
@@ -68,4 +59,39 @@ pub fn from_utf8_lossy(input: &[u8]) -> String {
     }
 
     empty
+}
+
+fn fract(num: f64) -> f64 {
+    if num == 0f64 {
+        0f64
+    } else {
+        num % 1f64
+    }
+}
+
+fn floor(num: f64) -> f64 {
+    let f = fract(num);
+    if f.is_nan() || f == 0f64 {
+        0f64
+    } else if num < 0f64 {
+        num - f - 1f64
+    } else {
+        num - f
+    }
+}
+
+pub fn to_hex(num: u64, length: i32) -> String {
+    let mut result: String = "".to_owned();
+
+    let hex_values = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "a", "b", "c", "d", "e", "f"];
+
+    let mut i = length - 1;
+    while i >= 0 {
+        let raise = (16i32).pow(i as u32) as f64;
+        let index = floor(num as f64 / raise) as i32;
+        result.push_str(hex_values[(index % 16i32) as usize]);
+        i -= 1 ;
+    }
+
+    result
 }

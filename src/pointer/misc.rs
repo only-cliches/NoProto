@@ -1,30 +1,14 @@
+use crate::json_flex::JFObject;
 use crate::pointer::NP_ValueInto;
-use json::JsonValue;
 use crate::schema::{NP_SchemaKinds, NP_Schema, NP_TypeKeys};
 use crate::pointer::NP_PtrKinds;
-use crate::{memory::NP_Memory, pointer::NP_Value, error::NP_Error, utils::Rand};
+use crate::{memory::NP_Memory, pointer::NP_Value, error::NP_Error, utils::{Rand, to_hex}};
 use core::fmt;
 
 use alloc::string::String;
 use alloc::boxed::Box;
 use alloc::borrow::ToOwned;
 use alloc::string::ToString;
-
-fn to_hex(num: u64, length: i32) -> String {
-    let mut result: String = "".to_owned();
-
-    let hex_values = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "a", "b", "c", "d", "e", "f"];
-
-    let mut i = length - 1;
-    while i >= 0 {
-        let raise = (16i32).pow(i as u32) as f64;
-        let index = (num as f64 / raise).floor() as i32;
-        result.push_str(hex_values[(index % 16i32) as usize]);
-        i -= 1 ;
-    }
-
-    result
-}
 
 /// Represents a Big Integer Decimal
 /// 
@@ -170,7 +154,7 @@ impl NP_Value for NP_Geo {
         "geo4" == type_str || "geo8" == type_str || "geo16" == type_str 
     }
 
-    fn schema_state(type_string: &str, _json_schema: &JsonValue) -> core::result::Result<i64, NP_Error> {
+    fn schema_state(type_string: &str, _json_schema: &JFObject) -> core::result::Result<i64, NP_Error> {
         Ok(match type_string {
             "geo4" => 4,
             "geo8" => 8,
