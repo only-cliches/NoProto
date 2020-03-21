@@ -6,6 +6,7 @@ use crate::{memory::NP_Memory, schema::{NP_SchemaKinds, NP_Schema, NP_TypeKeys},
 use alloc::vec::Vec;
 use alloc::string::String;
 use alloc::borrow::ToOwned;
+use alloc::boxed::Box;
 
 pub struct NP_Tuple<'a> {
     address: u32, // pointer location

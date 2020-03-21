@@ -2,13 +2,10 @@ use crate::pointer::NP_PtrKinds;
 use crate::pointer::{NP_ValueInto, NP_Value, NP_Ptr};
 use crate::{memory::NP_Memory, schema::{NP_SchemaKinds, NP_Schema, NP_TypeKeys}, error::NP_Error};
 
-use alloc::string::FromUtf8Error;
 use alloc::vec::Vec;
-use alloc::vec;
 use alloc::string::String;
 use alloc::boxed::Box;
 use alloc::borrow::ToOwned;
-use alloc::string::ToString;
 
 pub struct NP_Map<'a, T> {
     address: u32, // pointer location
