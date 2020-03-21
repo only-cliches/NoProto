@@ -21,7 +21,7 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_List<'a, T> {
         // make sure the type we're casting to isn't ANY or the cast itself isn't ANY
         if T::type_idx().0 != NP_TypeKeys::Any as i64 && of.type_data.0 != NP_TypeKeys::Any as i64  {
 
-            // not using any casting, check type
+            // not using ANY casting, check type
             if of.type_data.0 != T::type_idx().0 {
                 let mut err = "TypeError: Attempted to cast type (".to_owned();
                 err.push_str(T::type_idx().1.as_str());
@@ -180,6 +180,49 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_List<'a, T> {
         }
     }
 
+    pub fn debug<F>(&self, mut callback: F) -> Result<bool, NP_Error> where F: FnMut(u16, u32, u32) {
+        callback(0, self.address, self.head);
+
+        let mut curr_addr = self.head as usize;
+
+        let mut do_continue = true;
+
+        let memory = self.memory.unwrap();
+
+        while do_continue {
+
+            let ptr_index: u16;
+
+            let index_bytes: [u8; 2];
+
+            match memory.get_2_bytes(curr_addr + 8) {
+                Some(x) => {
+                    index_bytes = *x;
+                },
+                None => {
+                    return Err(NP_Error::new("Out of range request"));
+                }
+            }
+
+            ptr_index = u16::from_le_bytes(index_bytes);
+            
+
+            let next_bytes: [u8; 4] = *memory.get_4_bytes(curr_addr + 4).unwrap_or(&[0; 4]);
+            let next_ptr = u32::from_le_bytes(next_bytes) as usize;
+            callback(ptr_index, curr_addr as u32, next_ptr as u32);
+            if next_ptr == 0 { // out of values to check
+                do_continue = false;
+            } else {
+                // set next pointer for next loop
+                curr_addr = next_ptr;
+            }
+        }
+
+        callback(0, self.address, self.tail);
+
+        Ok(true)
+    }
+
     pub fn delete(&mut self, index: u16) -> Result<bool, NP_Error> {
         if self.head == 0 { // no values in list
 
@@ -265,6 +308,75 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_List<'a, T> {
         }
     }
 
+    pub fn len(&self) -> u16 {
+        if self.tail == 0 { return 0u16; }
+        
+        let tail_index = *self.memory.unwrap().get_2_bytes((self.tail + 8) as usize).unwrap_or(&[0; 2]);
+
+        u16::from_le_bytes(tail_index)
+    }
+
+
+    pub fn shift(&mut self) -> Result<Option<(Option<T>, u16)>, NP_Error> {
+
+        let memory = self.memory.unwrap();
+
+        // no more values in this list
+        if self.head == 0 { return Ok(None) }
+
+        let value_address_bytes = *memory.get_4_bytes(self.head as usize).unwrap_or(&[0; 4]);
+        let next_address_bytes = *memory.get_4_bytes((self.head + 4) as usize).unwrap_or(&[0; 4]);
+        let index_address_bytes = *memory.get_2_bytes((self.head + 8) as usize).unwrap_or(&[0; 2]);
+
+        let value_address = u32::from_le_bytes(value_address_bytes);
+
+        let next_address = u32::from_le_bytes(next_address_bytes);
+
+        let index = u16::from_le_bytes(index_address_bytes);
+
+        self.set_head(next_address);
+
+        if self.head == 0 {
+            self.set_tail(0);
+        }
+
+        // no value for sure
+        if value_address == 0 { return Ok(Some((None, index))) }
+
+        let kind = NP_PtrKinds::ListItem { value: value_address, next: next_address, i: index };
+
+        // try to get the value with "INTO"
+        match T::buffer_get(value_address, &kind, self.of.unwrap(), self.memory.unwrap()) {
+            Ok(x) => {
+                match x {
+                    Some(y) => {
+                        Ok(Some((Some(*y), index)))
+                    },
+                    None => {
+                        Ok(Some((None, index)))
+                    }
+                }
+            },
+            Err(_e) => { // try into
+                match T::buffer_into(value_address, kind, self.of.unwrap(), self.memory.unwrap()) {
+                    Ok(x) => {
+                        match x {
+                            Some(y) => {
+                                Ok(Some((Some(*y), index)))
+                            },
+                            None => {
+                                Ok(Some((None, index)))
+                            }
+                        }
+                    },
+                    Err(e) => { // ok fine, return error
+                        Err(e)
+                    }
+                }
+            }
+        }
+    }
+
     pub fn push(&mut self) -> core::result::Result<(NP_Ptr<'a, T>, u16), NP_Error> {
 
         let memory = self.memory.unwrap();
@@ -317,7 +429,7 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_List<'a, T> {
             
             let memory_write = memory.write_bytes();
             for x in 0..next_addr_bytes.len() {
-                memory_write[(tail_addr + 4) as usize] = next_addr_bytes[x];
+                memory_write[(tail_addr + 4) as usize + x] = next_addr_bytes[x];
             }
 
             self.set_tail(addr);
@@ -455,7 +567,7 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_ValueInto<'a> for NP_List<
                 Ok(Some(Box::new(NP_List::<T>::new(addr, u32::from_le_bytes(head), u32::from_le_bytes(tail), buffer, of )?)))
             },
             _ => {
-                Err(NP_Error::new(""))
+                Err(NP_Error::new("unreachable"))
             }
         }
     }

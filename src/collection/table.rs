@@ -6,6 +6,7 @@ use alloc::vec::Vec;
 use alloc::string::String;
 use alloc::boxed::Box;
 use alloc::borrow::ToOwned;
+use core::result::Result;
 
 pub struct NP_Table<'a> {
     address: u32, // pointer location
@@ -54,7 +55,7 @@ impl<'a> NP_ValueInto<'a> for NP_Table<'a> {
                 Ok(Some(Box::new(NP_Table::new(addr, u32::from_le_bytes(head), buffer, &columns))))
             },
             _ => {
-                Err(NP_Error::new(""))
+                Err(NP_Error::new("Unreachable"))
             }
         }
     }
@@ -103,7 +104,6 @@ impl<'a> NP_Table<'a> {
 
                 let memory = self.memory.unwrap();
 
-
                 // make sure the type we're casting to isn't ANY or the cast itself isn't ANY
                 if X::type_idx().0 != NP_TypeKeys::Any as i64 && some_column_schema.type_data.0 != NP_TypeKeys::Any as i64  {
 
@@ -150,8 +150,7 @@ impl<'a> NP_Table<'a> {
                         }
                         
                         // not found yet, get next address
-                        let mut next: [u8; 4] = [0; 4];
-                        next.copy_from_slice(&memory.read_bytes()[(next_addr + 4)..(next_addr + 8)]);
+                        let next: [u8; 4] = *memory.get_4_bytes(next_addr + 4).unwrap_or(&[0; 4]);
 
                         let next_ptr = u32::from_le_bytes(next) as usize;
                         if next_ptr == 0 {
@@ -191,6 +190,88 @@ impl<'a> NP_Table<'a> {
                 err_msg.push_str(") not found, unable to select!");
                 return Err(NP_Error::new(err_msg.as_str()));
             }
+        }
+    }
+
+
+    pub fn delete(&mut self, column: &str) -> Result<bool, NP_Error> {
+
+        let memory = self.memory.unwrap();
+
+        let column_index = &self.columns.unwrap().iter().fold(0u8, |prev, cur| {
+            match cur {
+                Some(x) => {
+                    if x.1 == column {
+                        return x.0; 
+                    }
+                    prev
+                }
+                None => {
+                    prev
+                }
+            }
+        }) as &u8;
+
+        if self.head == 0 { // no values, nothing to delete
+            Ok(false)
+        } else { // values exist, loop through them to see if we have an existing pointer for this column
+
+            let mut curr_addr = self.head as usize;
+            let mut prev_addr = 0u32;
+
+            let mut has_next = true;
+
+            while has_next {
+
+                let index;
+                     
+                index = memory.read_bytes()[(curr_addr + 8)];
+                
+                // found our value!
+                if index == *column_index {
+
+                    let next_pointer_bytes: [u8; 4];
+
+                    match memory.get_4_bytes(curr_addr + 4) {
+                        Some(x) => {
+                            next_pointer_bytes = *x;
+                        },
+                        None => {
+                            return Err(NP_Error::new("Out of range request"));
+                        }
+                    }
+
+                    if curr_addr == self.head as usize { // item is HEAD
+                        self.set_head(u32::from_le_bytes(next_pointer_bytes));
+                    } else { // item is NOT head
+                
+                        let memory_bytes = memory.write_bytes();
+                
+                        for x in 0..next_pointer_bytes.len() {
+                            memory_bytes[(prev_addr + x as u32 + 4) as usize] = next_pointer_bytes[x as usize];
+                        }
+                    }
+
+                    return Ok(true);
+                }
+                
+                // not found yet, get next address
+                let next: [u8; 4] = *memory.get_4_bytes(curr_addr + 4).unwrap_or(&[0; 4]);
+
+                let next_ptr = u32::from_le_bytes(next) as usize;
+                if next_ptr == 0 {
+                    has_next = false;
+                } else {
+                    // store old value for next loop
+                    prev_addr = curr_addr as u32;
+
+                    // set next pointer for next loop
+                    curr_addr = next_ptr;
+                }
+            }
+
+            // out of pointers to check, nothing to delete
+            Ok(false)
         }
     }
 
@@ -272,9 +353,7 @@ impl<'a> NP_Table<'a> {
 
             
             // not found yet, get next address
-            let mut next: [u8; 4] = [0; 4];
-            
-            next.copy_from_slice(&memory.read_bytes()[(next_addr + 4)..(next_addr + 8)]);
+            let next: [u8; 4] = *memory.get_4_bytes(next_addr + 4).unwrap_or(&[0; 4]);
             
             next_addr = u32::from_le_bytes(next) as usize;
             if next_addr== 0 {

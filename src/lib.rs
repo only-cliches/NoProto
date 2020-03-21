@@ -1,13 +1,13 @@
 // #![deny(missing_docs, missing_debug_implementations, trivial_casts, trivial_numeric_casts, unused_results)]
 #![allow(non_camel_case_types)]
-// s#![no_std]
+#![no_std]
 
 //! ## High Performance Serialization Library
 //! 
 //! [Github](https://github.com/ClickSimply/NoProto) | [Crates.io](https://crates.io/crates/no_proto) | [Documentation](https://docs.rs/no_proto)
 //! 
 //! ### TODO: 
-//! - [ ] Finish implementing Lists, Tuples & Maps
+//! - [x] Finish implementing Lists, Tuples & Maps
 //! - [ ] Collection Iterator
 //! - [ ] Compaction
 //! - [ ] Documentation
@@ -247,11 +247,11 @@ impl NP_Factory {
 
 #[cfg(test)]
 mod tests {
-
+/*
     use crate::pointer::NP_Ptr;
     use crate::collection::table::NP_Table;
     use super::*;
-    use collection::list::NP_List;
+    use collection::{map::NP_Map, list::NP_List};
 
     #[test]
     fn it_works() -> core::result::Result<(), NP_Error> {
@@ -264,7 +264,8 @@ mod tests {
                 ["age",     {"type": "uint16"}],
                 ["colors",  {"type": "list", "of": {
                     "type": "string"
-                }}]
+                }}],
+                ["meta",    {"type": "map", "value": {"type": "string"}}]
             ]
         }"#)?;
 
@@ -301,6 +302,10 @@ mod tests {
             let mut x = table.select::<u16>("age")?;
             x.set(1039)?;
 
+            let mut meta = table.select::<NP_Map<String>>("meta")?.into()?.unwrap();
+
+            meta.select(&"some key".to_string().as_bytes().to_vec())?.set("some value".to_string())?;
+
             println!("VALUE 0: {:?}", table.select::<u16>("age")?.get()?);
 
             Ok(())
@@ -325,11 +330,25 @@ mod tests {
             println!("i10: {:?}", color.has(10)?);
             println!("i15: {:?}", color.has(15)?);
 
-            let mut new_value = color.push()?;
-            println!("Value 21 PUSH: {:?}", new_value);
-            new_value.0.set("hello, world!".to_owned())?;
+            color.push()?.0.set("hello, world!".to_owned())?;
+            color.push()?.0.set("hello, world! 3".to_owned())?;
+            color.push()?.0.set("hello, world! 2".to_owned())?;
+
+            color.select(5)?.set("hello".to_owned())?;
+
+            color.shift()?;
+
+            color.debug(|i, addr, next| {
+                println!("I: {}, ADDR: {}, NEXT: {}", i, addr, next);
+            })?;
 
             println!("Value 21 GET: {:?}", color.select(21)?.get()?);
+            println!("Value 22 GET: {:?}", color.select(22)?.get()?);
+            println!("LENGTH: {:?}", color.len());
+
+            let mut meta = table.select::<NP_Map<String>>("meta")?.into()?.unwrap();
+
+            println!("Some Key: {:?}", meta.select(&"some key".to_string().as_bytes().to_vec())?.get()?);
 
             let mut x = table.select::<String>("userID")?;
             println!("VALUE: {:?}", x.get()?);
@@ -350,4 +369,5 @@ mod tests {
 
         Ok(())
     }
+    */
 }

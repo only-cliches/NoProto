@@ -1,13 +1,14 @@
 //! All values in NP_Buffers are accessed and modified through NP_Ptrs
 //! 
-//! NP_ Pointers are the primary abstraction to read, update or delete values in a buffer.
+//! NP_Ptr are the primary abstraction to read, update or delete values in a buffer.
 //! Pointers should *never* be created directly, instead the various methods provided by the library to access
 //! the internals of the buffer should be used.
 //! 
-//! Once you have a pointer you can read it's contents if it's a scalar value (`.to_string()`, `.to_int8()`, etc) or convert it to a collection type (`.as_table()`, `.as_map()`, etc).
-//! When you attempt to read, update, or convert a pointer the schema is checked for that pointer location.  If the schema conflicts with what you're attempting to do, for example
-//! if you call `to_string()` but the schema for that location is of `int8` type, the operation will fail.  As a result, you should be careful to make sure your reads and updates to the 
-//! buffer line up with the schema you provided.
+//! Once you have a pointer you can read it's contents if it's a scalar value with '.get()` or convert it to a collection type with `.into()`.
+//! When you attempt to read, update, or convert a pointer the schema is checked for that pointer location.  If the schema conflicts with what you're attempting to do the operation will fail.
+//! As a result, you should be careful to make sure your reads and updates to the buffer line up with the schema you provided.
+//! 
+//! 
 
 pub mod misc;
 pub mod string;
@@ -18,7 +19,7 @@ pub mod numbers;
 use crate::json_flex::JFObject;
 use crate::memory::NP_Memory;
 use crate::NP_Error;
-use crate::{schema::{NP_Schema}};
+use crate::{schema::{NP_Schema, NP_TypeKeys}};
 
 use alloc::string::String;
 use alloc::boxed::Box;
@@ -190,7 +191,7 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Ptr<'a, T> {
         }
     }
 
-    pub fn has_value(&mut self) -> bool {
+    pub fn has_value(&self) -> bool {
         if self.address == 0 { return false; } else { return true; }
     }
 
@@ -205,6 +206,21 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Ptr<'a, T> {
     }
 
     pub fn into(self) -> core::result::Result<Option<T>, NP_Error> {
+
+        // make sure the type we're casting to isn't ANY or the cast itself isn't ANY
+        if T::type_idx().0 != NP_TypeKeys::Any as i64 && self.schema.type_data.0 != NP_TypeKeys::Any as i64  {
+
+            // not using ANY casting, check type
+            if self.schema.type_data.0 != T::type_idx().0 {
+                let mut err = "TypeError: Attempted to cast type (".to_owned();
+                err.push_str(T::type_idx().1.as_str());
+                err.push_str(") into schema of type (");
+                err.push_str(self.schema.type_data.1.as_str());
+                err.push_str(")");
+                return Err(NP_Error::new(err));
+            }
+        }
+        
         let result = T::buffer_into(self.address, self.kind, self.schema, &self.memory)?;
 
         Ok(match result {
@@ -212,156 +228,6 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Ptr<'a, T> {
             None => None
         })
     }
-
-    /*
-    pub fn as_table(&mut self) -> core::result::Result<T, NP_Error> {
-
-        match &*self.schema.kind {
-            NP_SchemaKinds::Table { columns } => {
-
-                let mut addr = self.kind.get_value();
-
-                let mut head: [u8; 4] = [0; 4];
-
-                // no table here, make one
-                if addr == 0 {
-                    // no table here, make one
-                    let mut memory = self.memory.try_borrow_mut()?;
-                    addr = memory.malloc([0 as u8; 4].to_vec())?; // stores HEAD for table
-                    memory.set_value_address(self.address, addr, &self.kind)?;
-                } else {
-                    // existing head, read value
-                    let b_bytes = &self.memory.try_borrow()?.bytes;
-                    let a = addr as usize;
-                    head.copy_from_slice(&b_bytes[a..(a+4)]);
-                }
-
-                unsafe { Ok(NP_Table::new(addr, u32::from_le_bytes(head), Rc::clone(&self.memory), &columns)) }
-            },
-            _ => {
-                Err(NP_Error::new(""))
-            }
-        }
-    }*/
-
-/*
-    pub fn as_list(&mut self) -> core::result::Result<NP_List, NP_Error> {
-        let model = self.schema;
-
-        match &*model.kind {
-            NP_SchemaKinds::List { of } => {
-                let mut addr = self.get_value_address();
-                let mut set_addr = false;
-
-                let mut head: [u8; 4] = [0; 4];
-                let mut tail: [u8; 4] = [0; 4];
-
-                // no list here, make one
-                if addr == 0 {
-                    let mut memory = self.memory.try_borrow_mut()?;
-
-                    addr = memory.malloc([0 as u8; 8].to_vec())?; // stores HEAD & TAIL for list
-                    set_addr = true;
-                }
-
-                if set_addr { // new head, empty value
-                    self.set_value_address(addr)?;
-                } else { // existing head, read values
-                    let b_bytes = &self.memory.try_borrow()?.bytes;
-                    let a = addr as usize;
-                    head.copy_from_slice(&b_bytes[a..(a+4)]);
-                    tail.copy_from_slice(&b_bytes[(a+4)..(a+8)]);
-                }
-
-                Ok(NP_List::new(addr, u32::from_le_bytes(head), u32::from_le_bytes(tail), Rc::clone(&self.memory), &of))
-            }
-            _ => {
-                Err(type_error(TypeReq::Collection, "list", &model))
-            }
-        }
-    }
-
-    pub fn as_tuple(&mut self) -> core::result::Result<NP_Tuple, NP_Error> {
-
-        let model = self.schema;
-
-        match &*model.kind {
-            NP_SchemaKinds::Tuple { values } => {
-                let mut addr = self.get_value_address();
-                let mut set_addr = false;
-
-                let mut head: [u8; 4] = [0; 4];
-
-                // no tuple here, make one
-                if addr == 0 {
-                    let mut memory = self.memory.try_borrow_mut()?;
-
-                    let value_num = values.len();
-
-                    let mut value_bytes: Vec<u8> = Vec::new();
-
-                    // there is one u32 address for each value
-                    for _x in 0..(value_num * 4) {
-                        value_bytes.push(0);
-                    }
-
-                    addr = memory.malloc(value_bytes)?; // stores HEAD for tuple
-                    set_addr = true;
-                }
-
-                if set_addr { // new head, empty value
-                    self.set_value_address(addr)?;
-                } else { // existing head, read value
-                    let b_bytes = &self.memory.try_borrow()?.bytes;
-                    let a = addr as usize;
-                    head.copy_from_slice(&b_bytes[a..(a+4)]);
-                }
-
-                Ok(NP_Tuple::new(addr, u32::from_le_bytes(head), Rc::clone(&self.memory), &values))
-            }
-            _ => {
-                Err(type_error(TypeReq::Collection, "tuple", &model))
-            }
-        }
-    }
-
-
-    pub fn as_map(&mut self) -> core::result::Result<NP_Map, NP_Error> {
-        let model = self.schema;
-
-        match &*model.kind {
-            NP_SchemaKinds::Map { value } => {
-
-                let mut addr = self.get_value_address();
-                let mut set_addr = false;
-
-                let mut head: [u8; 4] = [0; 4];
-
-                // no map here, make one
-                if addr == 0 {
-                    let mut memory = self.memory.try_borrow_mut()?;
-
-                    addr = memory.malloc([0 as u8; 4].to_vec())?; // stores HEAD for map
-                    set_addr = true;
-                }
-
-                if set_addr { // new head, empty value
-                    self.set_value_address(addr)?;
-                } else { // existing head, read value
-                    let b_bytes = &self.memory.try_borrow()?.bytes;
-                    let a = addr as usize;
-                    head.copy_from_slice(&b_bytes[a..(a+4)]);
-                }
-
-                Ok(NP_Map::new(addr, u32::from_le_bytes(head), Rc::clone(&self.memory), value))
-            }
-            _ => {
-                Err(type_error(TypeReq::Collection, "map", &model))
-            }
-        }
-    }
- 
-*/
 
 }
 

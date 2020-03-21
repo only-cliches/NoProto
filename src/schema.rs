@@ -447,7 +447,7 @@ impl NP_Schema {
                     kind: Box::new(NP_SchemaKinds::Map { 
                         value: NP_Schema::validate_model(&json_schema["value"])?
                     }),
-                    type_data: NP_Map::type_idx(),
+                    type_data: NP_Map::<NP_Any>::type_idx(),
                     type_state: 0
                 })
             },
