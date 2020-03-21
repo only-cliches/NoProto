@@ -3,6 +3,7 @@ use crate::error::NP_Error;
 use core::cell::UnsafeCell;
 use alloc::vec::Vec;
 
+#[derive(Debug)]
 pub struct NP_Memory {
     bytes: UnsafeCell<Vec<u8>>
 }

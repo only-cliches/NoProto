@@ -1,5 +1,6 @@
+use crate::pointer::NP_PtrKinds;
 use crate::pointer::NP_Value;
-use crate::{memory::NP_Memory, schema::NP_Schema};
+use crate::{memory::NP_Memory, schema::NP_Schema, error::NP_Error};
 
 use alloc::string::FromUtf8Error;
 use alloc::vec::Vec;
@@ -69,15 +70,12 @@ impl<'a> NP_Value for NP_Map<'a> {
     }
     fn type_idx() -> (i64, String) { (-1, "map".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (-1, "map".to_owned()) }
-    /*fn buffer_get(&self, address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
-        Err(NP_Error::new("This type doesn't support .get()!"))
+    fn buffer_get(_address: u32, _kind: &NP_PtrKinds, _schema: &NP_Schema, _buffer: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
+        Err(NP_Error::new("Type (list) doesn't support .get()! Use .into() instead."))
     }
-    fn buffer_set(&mut self, address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: &NP_Memory, value: Box<&Self>) -> core::result::Result<NP_PtrKinds, NP_Error> {
-        Err(NP_Error::new("This type doesn't support .set()!"))
+    fn buffer_set(_address: u32, _kind: &NP_PtrKinds, _schema: &NP_Schema, _buffer: &NP_Memory, _value: Box<&Self>) -> core::result::Result<NP_PtrKinds, NP_Error> {
+        Err(NP_Error::new("Type (list) doesn't support .set()! Use .into() instead."))
     }
-    fn buffer_into(&self, address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
-        self.buffer_get(address, kind, schema, buffer)
-    }*/
 }
 
 impl<'a> Default for NP_Map<'a> {

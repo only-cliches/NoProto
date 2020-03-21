@@ -81,6 +81,7 @@ pub trait NP_ValueInto<'a> {
 /// 
 /// Each pointer represents at least a 32 bit unsigned integer that is either zero for no value or points to an offset in the buffer.  All pointer addresses are zero based against the beginning of the buffer.
 
+#[derive(Debug)]
 pub struct NP_Ptr<'a, T: NP_Value + Default + NP_ValueInto<'a>> {
     address: u32, // pointer location
     kind: NP_PtrKinds,

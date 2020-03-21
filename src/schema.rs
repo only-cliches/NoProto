@@ -143,6 +143,7 @@ use alloc::boxed::Box;
 use alloc::borrow::ToOwned;
 use alloc::string::ToString;
 
+#[derive(Debug)]
 #[doc(hidden)]
 pub enum NP_SchemaKinds {
     None,
@@ -216,6 +217,7 @@ pub enum NP_TypeKeys {
     Tuple = 23
 }
 
+#[derive(Debug)]
 #[doc(hidden)]
 pub struct NP_Schema {
     pub kind: Box<NP_SchemaKinds>,
@@ -428,7 +430,7 @@ impl NP_Schema {
                     kind: Box::new(NP_SchemaKinds::List { 
                         of: NP_Schema::validate_model(&json_schema["of"])? 
                     }),
-                    type_data: NP_List::type_idx(),
+                    type_data: NP_List::<NP_Any>::type_idx(),
                     type_state: 0
                 })
             },

@@ -1,6 +1,6 @@
 // #![deny(missing_docs, missing_debug_implementations, trivial_casts, trivial_numeric_casts, unused_results)]
 #![allow(non_camel_case_types)]
-// #![no_std]
+// s#![no_std]
 
 //! ## High Performance Serialization Library
 //! 
@@ -251,6 +251,7 @@ mod tests {
     use crate::pointer::NP_Ptr;
     use crate::collection::table::NP_Table;
     use super::*;
+    use collection::list::NP_List;
 
     #[test]
     fn it_works() -> core::result::Result<(), NP_Error> {
@@ -261,18 +262,9 @@ mod tests {
                 ["userID",  {"type": "string"}],
                 ["pass",    {"type": "string"}],
                 ["age",     {"type": "uint16"}],
-                ["color",   {"type": "option", "choices": ["red", "green", "blue"]}],
-                ["address", {
-                    "type": "table", 
-                    "columns": [
-                        ["street",  {"type": "string"}],
-                        ["street2", {"type": "string"}],
-                        ["city",    {"type": "string"}],
-                        ["state",   {"type": "string"}],
-                        ["zip",     {"type": "string"}],
-                        ["country", {"type": "string"}]
-                    ]
-                }]
+                ["colors",  {"type": "list", "of": {
+                    "type": "string"
+                }}]
             ]
         }"#)?;
 
@@ -296,11 +288,15 @@ mod tests {
 
             myvalue = x.get()?;
 
-            let mut address = table.select::<NP_Table>("address")?.into()?.unwrap();
-            address.select::<String>("street")?.set("13B Baker St".to_owned())?;
-            address.select::<String>("city")?.set("London".to_owned())?;
-            address.select::<String>("state")?.set("London".to_owned())?;
-            address.select::<String>("country")?.set("UK".to_owned())?;
+            let mut color = table.select::<NP_List<String>>("colors")?.into()?.unwrap();
+
+            let mut first_test_item = color.select(20)?;
+
+            first_test_item.set("blue".to_owned())?;
+
+            let mut second_test_item = color.select(10)?;
+
+            second_test_item.set("orange".to_owned())?;
 
             let mut x = table.select::<u16>("age")?;
             x.set(1039)?;
@@ -316,6 +312,25 @@ mod tests {
             
             let mut table = root.into()?.unwrap();
 
+            let mut color = table.select::<NP_List<String>>("colors")?.into()?.unwrap();
+
+            let mut first_test_item = color.select(20)?;
+
+            println!("BLUE: {:?}", first_test_item.get()?);
+
+            let mut second_test_item = color.select(10)?;
+
+            println!("ORANGE: {:?}", second_test_item.get()?);
+
+            println!("i10: {:?}", color.has(10)?);
+            println!("i15: {:?}", color.has(15)?);
+
+            let mut new_value = color.push()?;
+            println!("Value 21 PUSH: {:?}", new_value);
+            new_value.0.set("hello, world!".to_owned())?;
+
+            println!("Value 21 GET: {:?}", color.select(21)?.get()?);
+
             let mut x = table.select::<String>("userID")?;
             println!("VALUE: {:?}", x.get()?);
     
@@ -323,10 +338,6 @@ mod tests {
             println!("VALUE 2: {:?}", x.get()?);
 
             println!("VALUE 3: {:?}", table.select::<u16>("age")?.get()?);
-
-            let mut address = table.select::<NP_Table>("address")?.into()?.unwrap();
-            let mut x = address.select::<String>("street")?;
-            println!("VALUE 4: {:?}", x.get()?);
 
             Ok(())
         })?;
