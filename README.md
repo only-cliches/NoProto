@@ -5,7 +5,7 @@
 
 ### TODO: 
 - [x] Finish implementing Lists, Tuples & Maps
-- [ ] Collection Iterator
+- [x] Collection Iterator
 - [ ] Compaction
 - [ ] Documentation
 - [ ] Tests
@@ -13,47 +13,70 @@
 ### Features
 - Zero dependencies
 - #![no_std] support, WASM ready
-- Nearly instant deserilization & serialization
+- Supports bytewise sorting of buffers
+- Automatic & instant deserilization
+- Nearly instant serialization
 - Schemas are dynamic/flexible at runtime
 - Mutate/Update/Delete values in existing buffers
 - Supports native data types
 - Supports collection types (list, map, table & tuple)
 - Supports deep nesting of collection types
 
-NoProto allows you to store, read & mutate structured data with near zero overhead.  It's like JSON but faster, type safe and allows native types.  It's like Cap'N Proto/Flatbuffers except buffers and schemas are dynamic at runtime instead of requiring compilation.  
+NoProto allows you to store, read & mutate structured data with near zero overhead.  It's like JSON but faster, type safe and allows native types.  It's like Cap'N Proto/Flatbuffers except buffers and schemas are dynamic at runtime instead of requiring compilation. 
 
-NoProto moves the cost of deserialization to the access methods instead of deserializing the entire object ahead of time. This makes it a perfect use case for things like database storage or file storage of structured data.
+Bytewise sorting comes in the box and is a first class operation. The result is two NoProto buffers can be compared at the byte level *without serializing* and a correct ordering between the buffer's internal values will be the result.  This is extremely useful for storing ordered keys in databases. 
 
-*Compared to FlatBuffers /Cap'N Proto*
+NoProto moves the cost of serialization to the access methods instead of serializing the entire object ahead of time. This makes it a perfect use case for things like database storage or file storage of structured data.
+
+*Compared to FlatBuffers / Cap'N Proto*
 - Schemas are dynamic at runtime, no compilation step
 - Supports more types and better nested type support
+- Bytewise sorting is explicitly supported
 - Mutate (add/delete/update) existing/imported buffers
 
 *Compared to JSON*
 - Has schemas / type safe
+- Supports bytewise sorting
 - Faster serialization & deserialization
 - Supports raw bytes & other native types
 
 *Compared to BSON*
 - Faster serialization & deserialization
 - Has schemas / type safe
+- Bytewise sorting is explicitly supported
 - Supports much larger documents (4GB vs 16MB)
 - Better collection support & more supported types
 
 *Compared to Serde*
+- Supports bytewise sorting
 - Objects & schemas are dynamic at runtime
 - Faster serialization & deserialization
 
+| Format           | Free De/Serialization | Size Limit | Mutatable | Schemas | Language Agnostic | Runtime Dynamic | Bytewise Sorting |
+|------------------|-----------------------|------------|-----------|---------|-------------------|-----------------|------------------|
+| JSON             | 𐄂                     | Unlimited  | ✓         | 𐄂       | ✓                 | ✓               | 𐄂                |
+| BSON             | 𐄂                     | ~16KB      | ✓         | 𐄂       | ✓                 | ✓               | ✓*               |
+| MessagePack      | 𐄂                     | Unlimited  | ✓         | 𐄂       | ✓                 | ✓               | ✓*               |
+| FlatBuffers      | ✓                     | ~2GB       | 𐄂         | ✓       | ✓                 | 𐄂               | ✓*               |
+| Protocol Buffers | 𐄂                     | ~2GB       | 𐄂         | ✓       | ✓                 | 𐄂               | ✓*               |
+| Cap'N Proto      | ✓                     | 2^64 Bytes | 𐄂         | ✓       | ✓                 | 𐄂               | ✓*               |
+| Serde            | 𐄂                     | ?          | ✓         | ✓       | 𐄂                 | 𐄂               | 𐄂                |
+| **NoProto**      | ✓                     | ~4GB       | ✓         | ✓       | ✓                 | ✓               | ✓                |
+
+\* Bytewise sorting can *technically* be achieved with these libraries.  However, it's not a first class operation and requires extra effort, configuration and care.
+
 #### Limitations
 - Buffers cannot be larger than 2^32 bytes (~4GB).
-- Tables & List collections cannot have more than 2^16 direct descendant child items (~16k).
-- Enum/Option types are limited to 256 choices.
+- Tables & List collections cannot have more than 2^16 items (~16k).
+- Enum/Option types are limited to 2^8 or 255 choices.
+- Tuple types are limited to 2^8 or 255 items.
 - Buffers are not validated or checked before deserializing.
 
 # Quick Example
-```rust
+```
 use no_proto::error::NP_Error;
 use no_proto::NP_Factory;
+use no_proto::NP;
 use no_proto::collection::table::NP_Table;
 use no_proto::pointer::NP_Ptr;
 
@@ -71,7 +94,8 @@ let user_factory = NP_Factory::new(r#"{
 
 // creating a new buffer from the `user_factory` schema
 // user_buffer contains a deserialized Vec<u8> containing our data
-let user_buffer: Vec<u8> = user_factory.new_buffer(None, |mut buffer| {
+
+let user_buffer: Vec<u8> = user_factory.open(NP::new, |mut buffer| {
    
     // open the buffer to read or update values
     let root: NP_Ptr<NP_Table> = buffer.root()?;  // <- type cast the root
@@ -89,13 +113,14 @@ let user_buffer: Vec<u8> = user_factory.new_buffer(None, |mut buffer| {
    // select age column and set it's value
    let mut age = table.select::<u16>("age")?;
    age.set(75)?;
+//!
    // done mutating/reading the buffer
    Ok(())
 })?;
  
 // open the new buffer, `user_buffer`, we just created
 // user_buffer_2 contains the deserialized Vec<u8>
-let user_buffer_2: Vec<u8> = user_factory.load_buffer(user_buffer, |mut buffer| {
+let user_buffer_2: Vec<u8> = user_factory.open(NP::bytes(user_buffer), |mut buffer| {
 
    let root: NP_Ptr<NP_Table> = buffer.root()?;
         
@@ -120,7 +145,17 @@ let user_buffer_2: Vec<u8> = user_factory.load_buffer(user_buffer, |mut buffer| 
 
 // we can now save user_buffer_2 to disk, 
 // send it over the network, or whatever else is needed with the data
+
+# Ok::<(), NP_Error>(()) 
 ```
+
+## Guided Learning / Next Steps:
+1. Schemas - Learn how to build & work with schemas.
+2. Factories - Parsing schemas into something you can work with.
+3. Buffers - How to create, update & compact buffers.
+
+
+----------------------
 
 MIT License
 

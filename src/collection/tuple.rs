@@ -33,7 +33,7 @@ impl<'a> NP_Tuple<'a> {
         let values = self.values.as_ref().unwrap();
 
         if index as usize > values.len() {
-            return Err(NP_Error::new("Attempted to access tuple value outside index!"));
+            return Err(NP_Error::new("Attempted to access tuple value outside length!"));
         }
 
         let schema_vec = *self.schemas.as_ref().unwrap();
@@ -56,19 +56,23 @@ impl<'a> NP_Tuple<'a> {
         Ok(NP_Ptr::new_standard_ptr(values[index as usize], schema, self.memory.unwrap()))
     }
 
+    pub fn it(self) -> NP_Tuple_Iterator<'a> {
+        NP_Tuple_Iterator::new(self.address, self.memory.unwrap(), self.schemas.unwrap(), self.values.unwrap())
+    }
+/*
     pub fn delete(&mut self, index: u8) -> bool {
         match &mut self.values {
-            Some(x) => {
+            Some(values) => {
 
-                if index as usize > x.len() {
+                if index as usize > values.len() {
                     return false;
                 }
 
-                if x[index as usize] == 0 {
+                if values[index as usize] == 0 {
                     return false;
                 }
 
-                x[index as usize] = 0;
+                values[index as usize] = 0;
 
                 let value_address = (self.address as u32 + (4u32 * index as u32)) as usize;
                 let write_bytes = self.memory.unwrap().write_bytes();
@@ -82,7 +86,7 @@ impl<'a> NP_Tuple<'a> {
             None => { false }
         }
     }
-
+*/
     pub fn len(&self) -> u8 {
         self.schemas.unwrap().len() as u8
     }
@@ -126,8 +130,8 @@ impl<'a> NP_Value for NP_Tuple<'a> {
     fn is_type(_type_str: &str) -> bool { 
         unreachable!()
     }
-    fn type_idx() -> (i64, String) { (-1, "tuple".to_owned()) }
-    fn self_type_idx(&self) -> (i64, String) { (-1, "tuple".to_owned()) }
+    fn type_idx() -> (i64, String) { (NP_TypeKeys::Tuple as i64, "tuple".to_owned()) }
+    fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Tuple as i64, "tuple".to_owned()) }
     fn buffer_get(_address: u32, _kind: &NP_PtrKinds, _schema: &NP_Schema, _buffer: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
         Err(NP_Error::new("Type (tuple) doesn't support .get()! Use .into() instead."))
     }
@@ -165,7 +169,7 @@ impl<'a> NP_ValueInto<'a> for NP_Tuple<'a> {
                     let a = addr as usize;
                     for x in 0..values.len() {
                         let value_address_bytes = *buffer.get_4_bytes(a + (x * 4)).unwrap_or(&[0; 4]);
-                        values_vec.push(u32::from_le_bytes(value_address_bytes));
+                        values_vec.push(u32::from_be_bytes(value_address_bytes));
                     }
                 }
 
@@ -182,5 +186,62 @@ impl<'a> Default for NP_Tuple<'a> {
 
     fn default() -> Self {
         NP_Tuple { address: 0, memory: None, schemas: None, values: None}
+    }
+}
+
+
+pub struct NP_Tuple_Iterator<'a> {
+    address: u32, // pointer location
+    memory: &'a NP_Memory,
+    current_index: u16,
+    schemas: &'a Vec<NP_Schema>,
+    values: Vec<u32>
+}
+
+impl<'a> NP_Tuple_Iterator<'a> {
+
+    pub fn new(address: u32, memory: &'a NP_Memory, schemas: &'a Vec<NP_Schema>, values: Vec<u32>) -> Self {
+        NP_Tuple_Iterator {
+            address,
+            memory,
+            current_index: 0,
+            schemas: schemas,
+            values: values
+        }
+    }
+
+    pub fn into_tuple(self) -> NP_Tuple<'a> {
+        NP_Tuple::new(self.address, self.memory, self.schemas, self.values)
+    }
+}
+
+impl<'a> Iterator for NP_Tuple_Iterator<'a> {
+    type Item = NP_Tuple_Item<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+
+        if (self.current_index as usize) > self.values.len() {
+            return None;
+        }
+
+        None
+    }
+}
+
+pub struct NP_Tuple_Item<'a> { 
+    pub index: u8,
+    pub has_value: (bool, bool),
+    pub address: u32,
+    pub memory: &'a NP_Memory
+}
+
+impl<'a> NP_Tuple_Item<'a> {
+
+    pub fn select<T: NP_Value + Default + NP_ValueInto<'a>>(&mut self) -> Result<NP_Ptr<'a, T>, NP_Error> {
+        Err(NP_Error::new(""))
+    }
+    // TODO: same as select, except for deleting the value
+    pub fn delete(&mut self) -> Result<bool, NP_Error> {
+        Ok(false)
     }
 }

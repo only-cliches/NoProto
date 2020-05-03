@@ -1,7 +1,7 @@
 use crate::schema::NP_Schema;
 use crate::error::NP_Error;
 use crate::memory::NP_Memory;
-use crate::{schema::NP_TypeKeys, pointer::NP_Value};
+use crate::{schema::NP_TypeKeys, pointer::NP_Value, json_flex::JFObject};
 use super::{NP_ValueInto, NP_PtrKinds};
 
 use alloc::string::String;
@@ -21,29 +21,18 @@ impl NP_Value for i8 {
     fn type_idx() -> (i64, String) { (NP_TypeKeys::Int8 as i64, "int8".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Int8 as i64, "int8".to_owned()) }
 
-    fn buffer_get(_address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, memory: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
-
-        let addr = kind.get_value() as usize;
-
-        // empty value
-        if addr == 0 {
-            return Ok(None);
-        }
-
-        Ok(match memory.get_1_byte(addr) {
-            Some(x) => {
-                Some(Box::new(i8::from_le_bytes([x])))
-            },
-            None => None
-        })
+    fn buffer_get(address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, memory: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
+        i8::buffer_into(address, *kind, schema, memory)
     }
 
     fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, memory: &NP_Memory, value: Box<&Self>) -> core::result::Result<NP_PtrKinds, NP_Error> {
 
         let mut addr = kind.get_value();
 
+        let offset = core::i8::MAX as i16;
+
         if addr != 0 { // existing value, replace
-            let bytes = value.to_le_bytes();
+            let bytes = (((**value as i16) + offset) as u8).to_be_bytes();
 
             let write_bytes = memory.write_bytes();
 
@@ -54,7 +43,7 @@ impl NP_Value for i8 {
             return Ok(*kind);
         } else { // new value
 
-            let bytes = value.to_le_bytes();
+            let bytes = (((**value as i16) + offset) as u8).to_be_bytes();
             addr = memory.malloc(bytes.to_vec())?;
             return Ok(memory.set_value_address(address, addr as u32, kind));
         }
@@ -71,12 +60,35 @@ impl<'a> NP_ValueInto<'a> for i8 {
             return Ok(None);
         }
 
+        let offset = core::i8::MAX as i16;
+
         Ok(match memory.get_1_byte(addr) {
             Some(x) => {
-                Some(Box::new(i8::from_le_bytes([x])))
+                Some(Box::new(((u8::from_be_bytes([x]) as i16) - offset) as i8))
             },
             None => None
         })
+    }
+
+
+    fn buffer_to_json(address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: &NP_Memory) -> JFObject {
+        let this_string = Self::buffer_into(address, *kind, schema, buffer);
+
+        match this_string {
+            Ok(x) => {
+                match x {
+                    Some(y) => {
+                        JFObject::Integer(*y as i64)
+                    },
+                    None => {
+                        JFObject::Null
+                    }
+                }
+            },
+            Err(_e) => {
+                JFObject::Null
+            }
+        }
     }
 }
 
@@ -93,50 +105,35 @@ impl NP_Value for i16 {
     fn type_idx() -> (i64, String) { (NP_TypeKeys::Int16 as i64, "int16".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Int16 as i64, "int16".to_owned()) }
 
-    fn buffer_get(_address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, memory: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
-
-        let addr = kind.get_value() as usize;
-
-        // empty value
-        if addr == 0 {
-            return Ok(None);
-        }
-
-        Ok(match memory.get_2_bytes(addr) {
-            Some(x) => {
-                Some(Box::new(i16::from_le_bytes(*x)))
-            },
-            None => None
-        })
+    fn buffer_get(address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, memory: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
+        i16::buffer_into(address, *kind, schema, memory)
     }
 
     fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, memory: &NP_Memory, value: Box<&Self>) -> core::result::Result<NP_PtrKinds, NP_Error> {
 
         let mut addr = kind.get_value();
 
-        
+        let offset = core::i16::MAX as i32;
 
         if addr != 0 { // existing value, replace
-            let bytes = value.to_le_bytes();
+            let bytes = (((**value as i32) + offset) as u16).to_be_bytes();
 
             let write_bytes = memory.write_bytes();
 
             // overwrite existing values in buffer
             for x in 0..bytes.len() {
                 write_bytes[(addr + x as u32) as usize] = bytes[x as usize];
-            }   
-
+            }
             return Ok(*kind);
         } else { // new value
 
-            let bytes = value.to_le_bytes();
+            let bytes = (((**value as i32) + offset) as u16).to_be_bytes();
             addr = memory.malloc(bytes.to_vec())?;
-
             return Ok(memory.set_value_address(address, addr as u32, kind));
         }
-        
-        
     }
+
+
 }
 
 impl<'a> NP_ValueInto<'a> for i16 {
@@ -148,12 +145,34 @@ impl<'a> NP_ValueInto<'a> for i16 {
             return Ok(None);
         }
 
+        let offset = core::i16::MAX as i32;
+
         Ok(match memory.get_2_bytes(addr) {
             Some(x) => {
-                Some(Box::new(i16::from_le_bytes(*x)))
+                Some(Box::new(((u16::from_be_bytes(*x) as i32) - offset) as i16))
             },
             None => None
         })
+    }
+
+    fn buffer_to_json(address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: &NP_Memory) -> JFObject {
+        let this_string = Self::buffer_into(address, *kind, schema, buffer);
+
+        match this_string {
+            Ok(x) => {
+                match x {
+                    Some(y) => {
+                        JFObject::Integer(*y as i64)
+                    },
+                    None => {
+                        JFObject::Null
+                    }
+                }
+            },
+            Err(_e) => {
+                JFObject::Null
+            }
+        }
     }
 }
 
@@ -170,29 +189,18 @@ impl NP_Value for i32 {
     fn type_idx() -> (i64, String) { (NP_TypeKeys::Int32 as i64, "int32".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Int32 as i64, "int32".to_owned()) }
 
-    fn buffer_get(_address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, memory: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
-
-        let addr = kind.get_value() as usize;
-
-        // empty value
-        if addr == 0 {
-            return Ok(None);
-        }
-
-        Ok(match memory.get_4_bytes(addr) {
-            Some(x) => {
-                Some(Box::new(i32::from_le_bytes(*x)))
-            },
-            None => None
-        })
+    fn buffer_get(address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, memory: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
+        i32::buffer_into(address, *kind, schema, memory)
     }
 
     fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, memory: &NP_Memory, value: Box<&Self>) -> core::result::Result<NP_PtrKinds, NP_Error> {
 
         let mut addr = kind.get_value();
 
+        let offset = core::i32::MAX as i64;
+
         if addr != 0 { // existing value, replace
-            let bytes = value.to_le_bytes();
+            let bytes = (((**value as i64) + offset) as u32).to_be_bytes();
 
             let write_bytes = memory.write_bytes();
 
@@ -200,16 +208,16 @@ impl NP_Value for i32 {
             for x in 0..bytes.len() {
                 write_bytes[(addr + x as u32) as usize] = bytes[x as usize];
             }
-
             return Ok(*kind);
         } else { // new value
 
-            let bytes = value.to_le_bytes();
+            let bytes = (((**value as i64) + offset) as u32).to_be_bytes();
             addr = memory.malloc(bytes.to_vec())?;
-
             return Ok(memory.set_value_address(address, addr as u32, kind));
         }
     }
+
+
 }
 
 impl<'a> NP_ValueInto<'a> for i32 {
@@ -221,12 +229,34 @@ impl<'a> NP_ValueInto<'a> for i32 {
             return Ok(None);
         }
 
+        let offset = core::i32::MAX as i64;
+
         Ok(match memory.get_4_bytes(addr) {
             Some(x) => {
-                Some(Box::new(i32::from_le_bytes(*x)))
+                Some(Box::new(((u32::from_be_bytes(*x) as i64) - offset) as i32))
             },
             None => None
         })
+    }
+
+    fn buffer_to_json(address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: &NP_Memory) -> JFObject {
+        let this_string = Self::buffer_into(address, *kind, schema, buffer);
+
+        match this_string {
+            Ok(x) => {
+                match x {
+                    Some(y) => {
+                        JFObject::Integer(*y as i64)
+                    },
+                    None => {
+                        JFObject::Null
+                    }
+                }
+            },
+            Err(_e) => {
+                JFObject::Null
+            }
+        }
     }
 }
 
@@ -243,29 +273,18 @@ impl NP_Value for i64 {
     fn type_idx() -> (i64, String) { (NP_TypeKeys::Int64 as i64, "int64".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Int64 as i64, "int64".to_owned()) }
 
-    fn buffer_get(_address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, memory: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
-
-        let addr = kind.get_value() as usize;
-
-        // empty value
-        if addr == 0 {
-            return Ok(None);
-        }
-
-        Ok(match memory.get_8_bytes(addr) {
-            Some(x) => {
-                Some(Box::new(i64::from_le_bytes(*x)))
-            },
-            None => None
-        })
+    fn buffer_get(address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, memory: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
+        i64::buffer_into(address, *kind, schema, memory)
     }
 
     fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, memory: &NP_Memory, value: Box<&Self>) -> core::result::Result<NP_PtrKinds, NP_Error> {
 
         let mut addr = kind.get_value();
 
+        let offset = core::i64::MAX as i128;
+
         if addr != 0 { // existing value, replace
-            let bytes = value.to_le_bytes();
+            let bytes = (((**value as i128) + offset) as u64).to_be_bytes();
 
             let write_bytes = memory.write_bytes();
 
@@ -273,17 +292,13 @@ impl NP_Value for i64 {
             for x in 0..bytes.len() {
                 write_bytes[(addr + x as u32) as usize] = bytes[x as usize];
             }
-
             return Ok(*kind);
         } else { // new value
 
-            let bytes = value.to_le_bytes();
+            let bytes = (((**value as i128) + offset) as u64).to_be_bytes();
             addr = memory.malloc(bytes.to_vec())?;
-
             return Ok(memory.set_value_address(address, addr as u32, kind));
         }
-        
-        
     }
 }
 
@@ -296,12 +311,34 @@ impl<'a> NP_ValueInto<'a> for i64 {
             return Ok(None);
         }
 
+        let offset = core::i64::MAX as i128;
+
         Ok(match memory.get_8_bytes(addr) {
             Some(x) => {
-                Some(Box::new(i64::from_le_bytes(*x)))
+                Some(Box::new(((u64::from_be_bytes(*x) as i128) - offset) as i64))
             },
             None => None
         })
+    }
+
+    fn buffer_to_json(address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: &NP_Memory) -> JFObject {
+        let this_string = Self::buffer_into(address, *kind, schema, buffer);
+
+        match this_string {
+            Ok(x) => {
+                match x {
+                    Some(y) => {
+                        JFObject::Integer(*y as i64)
+                    },
+                    None => {
+                        JFObject::Null
+                    }
+                }
+            },
+            Err(_e) => {
+                JFObject::Null
+            }
+        }
     }
 }
 
@@ -318,21 +355,9 @@ impl NP_Value for u8 {
     fn type_idx() -> (i64, String) { (NP_TypeKeys::Uint8 as i64, "uint8".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Uint8 as i64, "uint8".to_owned()) }
 
-    fn buffer_get(_address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, memory: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
+    fn buffer_get(address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, memory: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
 
-        let addr = kind.get_value() as usize;
-
-        // empty value
-        if addr == 0 {
-            return Ok(None);
-        }
-
-        Ok(match memory.get_1_byte(addr) {
-            Some(x) => {
-                Some(Box::new(u8::from_le_bytes([x])))
-            },
-            None => None
-        })
+        u8::buffer_into(address, *kind, schema, memory)
     }
 
     fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, memory: &NP_Memory, value: Box<&Self>) -> core::result::Result<NP_PtrKinds, NP_Error> {
@@ -340,7 +365,7 @@ impl NP_Value for u8 {
         let mut addr = kind.get_value();
 
         if addr != 0 { // existing value, replace
-            let bytes = value.to_le_bytes();
+            let bytes = value.to_be_bytes();
 
             let write_bytes = memory.write_bytes();
 
@@ -351,13 +376,15 @@ impl NP_Value for u8 {
             return Ok(*kind);
         } else { // new value
 
-            let bytes = value.to_le_bytes();
+            let bytes = value.to_be_bytes();
             addr = memory.malloc(bytes.to_vec())?;
 
             return Ok(memory.set_value_address(address, addr as u32, kind));
         }
 
     }
+
+
 }
 
 impl<'a> NP_ValueInto<'a> for u8 {
@@ -371,10 +398,30 @@ impl<'a> NP_ValueInto<'a> for u8 {
 
         Ok(match memory.get_1_byte(addr) {
             Some(x) => {
-                Some(Box::new(u8::from_le_bytes([x])))
+                Some(Box::new(u8::from_be_bytes([x])))
             },
             None => None
         })
+    }
+
+    fn buffer_to_json(address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: &NP_Memory) -> JFObject {
+        let this_string = Self::buffer_into(address, *kind, schema, buffer);
+
+        match this_string {
+            Ok(x) => {
+                match x {
+                    Some(y) => {
+                        JFObject::Integer(*y as i64)
+                    },
+                    None => {
+                        JFObject::Null
+                    }
+                }
+            },
+            Err(_e) => {
+                JFObject::Null
+            }
+        }
     }
 }
 
@@ -391,21 +438,9 @@ impl NP_Value for u16 {
     fn type_idx() -> (i64, String) { (NP_TypeKeys::Uint16 as i64, "uint16".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Uint16 as i64, "uint16".to_owned()) }
 
-    fn buffer_get(_address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, memory: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
+    fn buffer_get(address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, memory: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
 
-        let addr = kind.get_value() as usize;
-
-        // empty value
-        if addr == 0 {
-            return Ok(None);
-        }
-
-        Ok(match memory.get_2_bytes(addr) {
-            Some(x) => {
-                Some(Box::new(u16::from_le_bytes(*x)))
-            },
-            None => None
-        })
+        u16::buffer_into(address, *kind, schema, memory)
     }
 
     fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, memory: &NP_Memory, value: Box<&Self>) -> core::result::Result<NP_PtrKinds, NP_Error> {
@@ -413,7 +448,7 @@ impl NP_Value for u16 {
         let mut addr = kind.get_value();
 
         if addr != 0 { // existing value, replace
-            let bytes = value.to_le_bytes();
+            let bytes = value.to_be_bytes();
 
             let write_bytes = memory.write_bytes();
 
@@ -425,12 +460,14 @@ impl NP_Value for u16 {
             return Ok(*kind);
         } else { // new value
 
-            let bytes = value.to_le_bytes();
+            let bytes = value.to_be_bytes();
             addr = memory.malloc(bytes.to_vec())?;
 
             return Ok(memory.set_value_address(address, addr as u32, kind));
         }
     }
+
+
 }
 
 impl<'a> NP_ValueInto<'a> for u16 {
@@ -444,10 +481,30 @@ impl<'a> NP_ValueInto<'a> for u16 {
 
         Ok(match memory.get_2_bytes(addr) {
             Some(x) => {
-                Some(Box::new(u16::from_le_bytes(*x)))
+                Some(Box::new(u16::from_be_bytes(*x)))
             },
             None => None
         })
+    }
+
+    fn buffer_to_json(address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: &NP_Memory) -> JFObject {
+        let this_string = Self::buffer_into(address, *kind, schema, buffer);
+
+        match this_string {
+            Ok(x) => {
+                match x {
+                    Some(y) => {
+                        JFObject::Integer(*y as i64)
+                    },
+                    None => {
+                        JFObject::Null
+                    }
+                }
+            },
+            Err(_e) => {
+                JFObject::Null
+            }
+        }
     }
 }
 
@@ -464,21 +521,8 @@ impl NP_Value for u32 {
     fn type_idx() -> (i64, String) { (NP_TypeKeys::Uint32 as i64, "uint32".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Uint32 as i64, "uint32".to_owned()) }
 
-    fn buffer_get(_address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, memory: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
-
-        let addr = kind.get_value() as usize;
-
-        // empty value
-        if addr == 0 {
-            return Ok(None);
-        }
-
-        Ok(match memory.get_4_bytes(addr) {
-            Some(x) => {
-                Some(Box::new(u32::from_le_bytes(*x)))
-            },
-            None => None
-        })
+    fn buffer_get(address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, memory: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
+        u32::buffer_into(address, *kind, schema, memory)
     }
 
     fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, memory: &NP_Memory, value: Box<&Self>) -> core::result::Result<NP_PtrKinds, NP_Error> {
@@ -486,7 +530,7 @@ impl NP_Value for u32 {
         let mut addr = kind.get_value();
 
         if addr != 0 { // existing value, replace
-            let bytes = value.to_le_bytes();
+            let bytes = value.to_be_bytes();
 
             let write_bytes = memory.write_bytes();
 
@@ -498,12 +542,14 @@ impl NP_Value for u32 {
             return Ok(*kind);
         } else { // new value
 
-            let bytes = value.to_le_bytes();
+            let bytes = value.to_be_bytes();
             addr = memory.malloc(bytes.to_vec())?;
 
             return Ok(memory.set_value_address(address, addr as u32, kind));
         }
     }
+
+ 
 }
 
 impl<'a> NP_ValueInto<'a> for u32 {
@@ -517,10 +563,30 @@ impl<'a> NP_ValueInto<'a> for u32 {
 
         Ok(match memory.get_4_bytes(addr) {
             Some(x) => {
-                Some(Box::new(u32::from_le_bytes(*x)))
+                Some(Box::new(u32::from_be_bytes(*x)))
             },
             None => None
         })
+    }
+
+    fn buffer_to_json(address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: &NP_Memory) -> JFObject {
+        let this_string = Self::buffer_into(address, *kind, schema, buffer);
+
+        match this_string {
+            Ok(x) => {
+                match x {
+                    Some(y) => {
+                        JFObject::Integer(*y as i64)
+                    },
+                    None => {
+                        JFObject::Null
+                    }
+                }
+            },
+            Err(_e) => {
+                JFObject::Null
+            }
+        }
     }
 }
 
@@ -537,21 +603,8 @@ impl NP_Value for u64 {
     fn type_idx() -> (i64, String) { (NP_TypeKeys::Uint64 as i64, "uint64".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Uint64 as i64, "uint64".to_owned()) }
 
-    fn buffer_get(_address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, memory: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
-
-        let addr = kind.get_value() as usize;
-
-        // empty value
-        if addr == 0 {
-            return Ok(None);
-        }
-
-        Ok(match memory.get_8_bytes(addr) {
-            Some(x) => {
-                Some(Box::new(u64::from_le_bytes(*x)))
-            },
-            None => None
-        })
+    fn buffer_get(address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, memory: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
+        u64::buffer_into(address, *kind, schema, memory)
     }
 
     fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, memory: &NP_Memory, value: Box<&Self>) -> core::result::Result<NP_PtrKinds, NP_Error> {
@@ -559,7 +612,7 @@ impl NP_Value for u64 {
         let mut addr = kind.get_value();
 
         if addr != 0 { // existing value, replace
-            let bytes = value.to_le_bytes();
+            let bytes = value.to_be_bytes();
 
             let write_bytes = memory.write_bytes();
 
@@ -571,12 +624,14 @@ impl NP_Value for u64 {
             return Ok(*kind);
         } else { // new value
 
-            let bytes = value.to_le_bytes();
+            let bytes = value.to_be_bytes();
             addr = memory.malloc(bytes.to_vec())?;
 
             return Ok(memory.set_value_address(address, addr as u32, kind));
         }
     }
+
+
 }
 
 impl<'a> NP_ValueInto<'a> for u64 {
@@ -590,10 +645,30 @@ impl<'a> NP_ValueInto<'a> for u64 {
 
         Ok(match memory.get_8_bytes(addr) {
             Some(x) => {
-                Some(Box::new(u64::from_le_bytes(*x)))
+                Some(Box::new(u64::from_be_bytes(*x)))
             },
             None => None
         })
+    }
+
+    fn buffer_to_json(address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: &NP_Memory) -> JFObject {
+        let this_string = Self::buffer_into(address, *kind, schema, buffer);
+
+        match this_string {
+            Ok(x) => {
+                match x {
+                    Some(y) => {
+                        JFObject::Integer(*y as i64)
+                    },
+                    None => {
+                        JFObject::Null
+                    }
+                }
+            },
+            Err(_e) => {
+                JFObject::Null
+            }
+        }
     }
 }
 
@@ -610,21 +685,8 @@ impl NP_Value for f32 {
     fn type_idx() -> (i64, String) { (NP_TypeKeys::Float as i64, "float".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Float as i64, "float".to_owned()) }
 
-    fn buffer_get(_address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, memory: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
-
-        let addr = kind.get_value() as usize;
-
-        // empty value
-        if addr == 0 {
-            return Ok(None);
-        }
-
-        Ok(match memory.get_4_bytes(addr) {
-            Some(x) => {
-                Some(Box::new(f32::from_le_bytes(*x)))
-            },
-            None => None
-        })
+    fn buffer_get(address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, memory: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
+        f32::buffer_into(address, *kind, schema, memory)
     }
 
     fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, memory: &NP_Memory, value: Box<&Self>) -> core::result::Result<NP_PtrKinds, NP_Error> {
@@ -632,7 +694,7 @@ impl NP_Value for f32 {
         let mut addr = kind.get_value();
 
         if addr != 0 { // existing value, replace
-            let bytes = value.to_le_bytes();
+            let bytes = value.to_be_bytes();
 
             let write_bytes = memory.write_bytes();
 
@@ -644,12 +706,14 @@ impl NP_Value for f32 {
             return Ok(*kind);
         } else { // new value
 
-            let bytes = value.to_le_bytes();
+            let bytes = value.to_be_bytes();
             addr = memory.malloc(bytes.to_vec())?;
 
             return Ok(memory.set_value_address(address, addr as u32, kind));
         }
     }
+
+
 }
 
 impl<'a> NP_ValueInto<'a> for f32 {
@@ -663,10 +727,30 @@ impl<'a> NP_ValueInto<'a> for f32 {
 
         Ok(match memory.get_4_bytes(addr) {
             Some(x) => {
-                Some(Box::new(f32::from_le_bytes(*x)))
+                Some(Box::new(f32::from_be_bytes(*x)))
             },
             None => None
         })
+    }
+
+    fn buffer_to_json(address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: &NP_Memory) -> JFObject {
+        let this_string = Self::buffer_into(address, *kind, schema, buffer);
+
+        match this_string {
+            Ok(x) => {
+                match x {
+                    Some(y) => {
+                        JFObject::Float(*y as f64)
+                    },
+                    None => {
+                        JFObject::Null
+                    }
+                }
+            },
+            Err(_e) => {
+                JFObject::Null
+            }
+        }
     }
 }
 
@@ -683,21 +767,9 @@ impl NP_Value for f64 {
     fn type_idx() -> (i64, String) { (NP_TypeKeys::Double as i64, "double".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Double as i64, "double".to_owned()) }
 
-    fn buffer_get(_address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, memory: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
+    fn buffer_get(address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, memory: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
 
-        let addr = kind.get_value() as usize;
-
-        // empty value
-        if addr == 0 {
-            return Ok(None);
-        }
-
-        Ok(match memory.get_8_bytes(addr) {
-            Some(x) => {
-                Some(Box::new(f64::from_le_bytes(*x)))
-            },
-            None => None
-        })
+        f64::buffer_into(address, *kind, schema, memory)
     }
 
     fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, memory: &NP_Memory, value: Box<&Self>) -> core::result::Result<NP_PtrKinds, NP_Error> {
@@ -705,7 +777,7 @@ impl NP_Value for f64 {
         let mut addr = kind.get_value();
 
         if addr != 0 { // existing value, replace
-            let bytes = value.to_le_bytes();
+            let bytes = value.to_be_bytes();
 
             let write_bytes = memory.write_bytes();
 
@@ -716,11 +788,13 @@ impl NP_Value for f64 {
             return Ok(*kind);
         } else { // new value
 
-            let bytes = value.to_le_bytes();
+            let bytes = value.to_be_bytes();
             addr = memory.malloc(bytes.to_vec())?;
             return Ok(memory.set_value_address(address, addr as u32, kind));
         }
     }
+
+
 }
 
 impl<'a> NP_ValueInto<'a> for f64 {
@@ -734,9 +808,29 @@ impl<'a> NP_ValueInto<'a> for f64 {
 
         Ok(match memory.get_8_bytes(addr) {
             Some(x) => {
-                Some(Box::new(f64::from_le_bytes(*x)))
+                Some(Box::new(f64::from_be_bytes(*x)))
             },
             None => None
         })
+    }
+    
+    fn buffer_to_json(address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: &NP_Memory) -> JFObject {
+        let this_string = Self::buffer_into(address, *kind, schema, buffer);
+
+        match this_string {
+            Ok(x) => {
+                match x {
+                    Some(y) => {
+                        JFObject::Float(*y)
+                    },
+                    None => {
+                        JFObject::Null
+                    }
+                }
+            },
+            Err(_e) => {
+                JFObject::Null
+            }
+        }
     }
 }

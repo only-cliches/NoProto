@@ -18,7 +18,6 @@ pub struct NP_Buffer<'a> {
 impl<'a> NP_Buffer<'a> {
     pub fn new(model: &'a NP_Schema, memory: &'a NP_Memory) -> Self { // make new buffer
 
-
         NP_Buffer {
             memory: memory,
             root_model: model
@@ -46,28 +45,31 @@ impl<'a> NP_Buffer<'a> {
         Err(NP_Error::new(err))
     }
 
-    pub fn deep_set<X: NP_Value + Default + NP_ValueInto<'a>, S: AsRef<str>>(&self, _path: S, _value: X) -> core::result::Result<(), NP_Error> {
-        Ok(())
+    pub fn set_value<X: NP_Value + Default, S: AsRef<str>>(self, _path: S, _value: X) -> Result<bool, NP_Error> {
+        // Ok(false) 
+        todo!();
     }
 
-    pub fn deep_get<X: NP_Value + Default + NP_ValueInto<'a>>(&self, _path: &str) -> core::result::Result<Option<X>, NP_Error> {
-        Ok(Some(X::default()))
+    pub fn get_value<X: NP_Value + Default, S: AsRef<str>>(&self, _path: S) -> Result<Option<X>, NP_Error> {
+        //Ok(Some(X::default()))
+        todo!();
     }
 
     pub fn compact(self)  {
-        
+        todo!();
     }
 
     pub fn calc_wasted_bytes(&self) -> u32 {
 
         // let total_bytes = self.memory.borrow().bytes.len() as u32;
-
-        return 0;
+        todo!();
     }
 
     pub fn maybe_compact<F>(self, mut callback: F) -> bool 
         where F: FnMut(f32, f32) -> bool // wasted bytes, percent of waste
     {
+        todo!();
+        /*
         let wasted_bytes = self.calc_wasted_bytes() as f32;
 
         let total_bytes = self.memory.read_bytes().len() as f32;
@@ -79,6 +81,6 @@ impl<'a> NP_Buffer<'a> {
             true
         } else {
             false
-        }
+        }*/
     }
 }

@@ -10,11 +10,11 @@ pub struct NP_Memory {
 
 const MAX_SIZE: u64 = core::u32::MAX as u64;
 
-impl NP_Memory {
+impl<'a> NP_Memory {
 
     pub fn new(bytes: Vec<u8>) -> Self {
         NP_Memory {
-            bytes: UnsafeCell::new(bytes),
+            bytes: UnsafeCell::new(bytes)
         }
     }
 
@@ -45,7 +45,7 @@ impl NP_Memory {
 
     pub fn set_value_address(&self, address: u32, val: u32, kind: &NP_PtrKinds) -> NP_PtrKinds {
 
-        let addr_bytes = val.to_le_bytes();
+        let addr_bytes = val.to_be_bytes();
 
         let self_bytes = unsafe { &mut *self.bytes.get() };
     

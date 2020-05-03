@@ -19,11 +19,14 @@ pub mod numbers;
 use crate::json_flex::JFObject;
 use crate::memory::NP_Memory;
 use crate::NP_Error;
-use crate::{schema::{NP_Schema, NP_TypeKeys}};
+use crate::{schema::{NP_Schema, NP_TypeKeys}, collection::{map::NP_Map, table::NP_Table, list::NP_List, tuple::NP_Tuple}};
 
 use alloc::string::String;
 use alloc::boxed::Box;
 use alloc::borrow::ToOwned;
+use bytes::NP_Bytes;
+use misc::{NP_Geo, NP_Dec, NP_UUID, NP_TimeID, NP_Date, NP_Option};
+use any::NP_Any;
 
 #[doc(hidden)]
 #[derive(Debug, Clone, Copy)]
@@ -75,6 +78,21 @@ pub trait NP_ValueInto<'a> {
         let message = "This type  doesn't support into!".to_owned();
         Err(NP_Error::new(message.as_str()))
     }
+    fn buffer_to_json(_address: u32, _kind: &'a NP_PtrKinds, _schema: &'a NP_Schema, _buffer: &'a NP_Memory) -> JFObject {
+        JFObject::Null
+    }
+    fn buffer_get_size(_address: u32, _kind: &'a NP_PtrKinds, _schema: &'a NP_Schema, _buffer: &'a NP_Memory) -> core::result::Result<u32, NP_Error> {
+        Err(NP_Error::new("Size not supported for this type!"))
+    }
+    fn buffer_do_compact(_address: u32, _kind: &'a NP_PtrKinds, _schema: &'a NP_Schema, _old_buffer: &'a NP_Memory, _new_buffer: &'a NP_Memory) -> core::result::Result<(), NP_Error> {
+        Err(NP_Error::new("Compaction not supported for this type!"))
+    }
+    fn to_sorted_bytes(_value: Box<Self>) -> Option<Box<[u8]>> {
+        None
+    }
+    fn from_sorted_bytes(_bytes: Box<[u8]>) -> Option<Box<Self>> {
+        None
+    } 
 }
 
 
@@ -119,7 +137,7 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Ptr<'a, T> {
         
         NP_Ptr {
             address: address,
-            kind: NP_PtrKinds::Standard { value: u32::from_le_bytes(value) },
+            kind: NP_PtrKinds::Standard { value: u32::from_be_bytes(value) },
             memory: memory,
             schema: schema,
             value: T::default()
@@ -139,8 +157,8 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Ptr<'a, T> {
         NP_Ptr {
             address: address,
             kind: NP_PtrKinds::TableItem { 
-                value: u32::from_le_bytes(value),
-                next: u32::from_le_bytes(next),
+                value: u32::from_be_bytes(value),
+                next: u32::from_be_bytes(next),
                 i: index
             },
             memory: memory,
@@ -160,9 +178,9 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Ptr<'a, T> {
         NP_Ptr {
             address: address,
             kind: NP_PtrKinds::MapItem { 
-                value: u32::from_le_bytes(value),
-                next: u32::from_le_bytes(next),
-                key: u32::from_le_bytes(key)
+                value: u32::from_be_bytes(value),
+                next: u32::from_be_bytes(next),
+                key: u32::from_be_bytes(key)
             },
             memory: memory,
             schema: schema,
@@ -181,9 +199,9 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Ptr<'a, T> {
         NP_Ptr {
             address: address,
             kind: NP_PtrKinds::ListItem { 
-                value: u32::from_le_bytes(value),
-                next: u32::from_le_bytes(next),
-                i: u16::from_le_bytes(index)
+                value: u32::from_be_bytes(value),
+                next: u32::from_be_bytes(next),
+                i: u16::from_be_bytes(index)
             },
             memory: memory,
             schema: schema,
@@ -227,6 +245,89 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Ptr<'a, T> {
             Some(x) => Some(*x),
             None => None
         })
+    }
+
+    pub fn json_encode(&self) -> JFObject {
+        if self.address == 0 {
+            return JFObject::Null;
+        }
+
+        let type_key = NP_TypeKeys::from(self.schema.type_data.0);
+
+        match type_key {
+            NP_TypeKeys::Any => {
+                JFObject::Null
+            },
+            NP_TypeKeys::UTF8String => {
+                String::buffer_to_json(self.address, &self.kind, self.schema, self.memory)
+            },
+            NP_TypeKeys::Bytes => {
+                NP_Bytes::buffer_to_json(self.address, &self.kind, self.schema, self.memory)
+            },
+            NP_TypeKeys::Int8 => {
+                i8::buffer_to_json(self.address, &self.kind, self.schema, self.memory)
+            },
+            NP_TypeKeys::Int16 => {
+                i16::buffer_to_json(self.address, &self.kind, self.schema, self.memory)
+            },
+            NP_TypeKeys::Int32 => {
+                i32::buffer_to_json(self.address, &self.kind, self.schema, self.memory)
+            },
+            NP_TypeKeys::Int64 => {
+                i64::buffer_to_json(self.address, &self.kind, self.schema, self.memory)
+            },
+            NP_TypeKeys::Uint8 => {
+                u8::buffer_to_json(self.address, &self.kind, self.schema, self.memory)
+            },
+            NP_TypeKeys::Uint16 => {
+                u16::buffer_to_json(self.address, &self.kind, self.schema, self.memory)
+            },
+            NP_TypeKeys::Uint32 => {
+                u32::buffer_to_json(self.address, &self.kind, self.schema, self.memory)
+            },
+            NP_TypeKeys::Uint64 => {
+                u64::buffer_to_json(self.address, &self.kind, self.schema, self.memory)
+            },
+            NP_TypeKeys::Float => {
+                f32::buffer_to_json(self.address, &self.kind, self.schema, self.memory)
+            },
+            NP_TypeKeys::Double => {
+                f64::buffer_to_json(self.address, &self.kind, self.schema, self.memory)
+            },
+            NP_TypeKeys::Dec64 => {
+                NP_Dec::buffer_to_json(self.address, &self.kind, self.schema, self.memory)
+            },
+            NP_TypeKeys::Boolean => {
+                bool::buffer_to_json(self.address, &self.kind, self.schema, self.memory)
+            },
+            NP_TypeKeys::Geo => {
+                NP_Geo::buffer_to_json(self.address, &self.kind, self.schema, self.memory)
+            },
+            NP_TypeKeys::Uuid => {
+                NP_UUID::buffer_to_json(self.address, &self.kind, self.schema, self.memory)
+            },
+            NP_TypeKeys::Tid => {
+                NP_TimeID::buffer_to_json(self.address, &self.kind, self.schema, self.memory)
+            },
+            NP_TypeKeys::Date => {
+                NP_Date::buffer_to_json(self.address, &self.kind, self.schema, self.memory)
+            },
+            NP_TypeKeys::Enum => {
+                NP_Option::buffer_to_json(self.address, &self.kind, self.schema, self.memory)
+            },
+            NP_TypeKeys::Table => {
+                NP_Table::buffer_to_json(self.address, &self.kind, self.schema, self.memory)
+            },
+            NP_TypeKeys::Map => {
+                NP_Map::<NP_Any>::buffer_to_json(self.address, &self.kind, self.schema, self.memory)
+            },
+            NP_TypeKeys::List => {
+                NP_List::<NP_Any>::buffer_to_json(self.address, &self.kind, self.schema, self.memory)
+            },
+            NP_TypeKeys::Tuple => {
+                NP_Tuple::buffer_to_json(self.address, &self.kind, self.schema, self.memory)
+            }
+        }
     }
 
 }

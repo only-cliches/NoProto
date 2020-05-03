@@ -1,8 +1,13 @@
-//! https://github.com/nacika-ins/json_flex
-//! https://crates.io/crates/json_flex
+//! JSON Parser, serializer and deserializer
 //! 
-//! Library has been converted & stripped for no_std use
-//! All code paths that can panic have been replaced with proper error handling
+//! This file is derived from the json_flex crate.
+//! 
+//! [github](https://github.com/nacika-ins/json_flex) | [crates.io](https://crates.io/crates/json_flex)
+//! 
+//! Changes:
+//! - Library has been converted & stripped for no_std use
+//! - All code paths that can panic have been replaced with proper error handling
+//! - Some minor optimizations
 //! 
 //! The MIT License (MIT)
 //! 

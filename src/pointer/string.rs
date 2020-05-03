@@ -2,7 +2,7 @@ use crate::pointer::NP_ValueInto;
 use crate::schema::NP_Schema;
 use crate::error::NP_Error;
 use crate::memory::NP_Memory;
-use crate::{schema::NP_TypeKeys, pointer::NP_Value, utils::from_utf8_lossy};
+use crate::{schema::NP_TypeKeys, pointer::NP_Value, utils::from_utf8_lossy, json_flex::JFObject};
 use super::NP_PtrKinds;
 
 use alloc::string::String;
@@ -34,7 +34,7 @@ impl NP_Value for String {
         
         // get size of string
         let size: [u8; 4] = *buffer.get_4_bytes(addr).unwrap_or(&[0; 4]);
-        let str_size = u32::from_le_bytes(size) as usize;
+        let str_size = u32::from_be_bytes(size) as usize;
 
         // get string bytes
         let array_bytes = &buffer.read_bytes()[(addr+4)..(addr+4+str_size)];
@@ -56,14 +56,14 @@ impl NP_Value for String {
             let prev_size: usize = if addr != 0 {
                 let mut size_bytes: [u8; 4] = [0; 4];
                 size_bytes.copy_from_slice(&memory.read_bytes()[addr..(addr+4)]);
-                u32::from_le_bytes(size_bytes) as usize
+                u32::from_be_bytes(size_bytes) as usize
             } else {
                 0 as usize
             };
 
             if prev_size >= str_size as usize { // previous string is larger than this one, use existing memory
         
-                let size_bytes = (str_size as u32).to_le_bytes();
+                let size_bytes = (str_size as u32).to_be_bytes();
 
                 let mem_bytes = memory.write_bytes();
                 // set string size
@@ -81,7 +81,7 @@ impl NP_Value for String {
                 
 
                 // first 4 bytes are string length
-                addr = memory.malloc((str_size as u32).to_le_bytes().to_vec())? as usize;
+                addr = memory.malloc((str_size as u32).to_be_bytes().to_vec())? as usize;
 
                 // then string content
                 memory.malloc(bytes.to_vec())?;
@@ -91,6 +91,8 @@ impl NP_Value for String {
             
         }
     }
+
+
 }
 
 
@@ -107,11 +109,31 @@ impl<'a> NP_ValueInto<'a> for String {
         let mut size: [u8; 4] = [0; 4];
         let memory = buffer;
         size.copy_from_slice(&memory.read_bytes()[addr..(addr+4)]);
-        let str_size = u32::from_le_bytes(size) as usize;
+        let str_size = u32::from_be_bytes(size) as usize;
 
         let array_bytes = &buffer.read_bytes()[(addr+4)..(addr+4+str_size)];
 
         Ok(Some(Box::new(from_utf8_lossy(array_bytes))))
+    }
+
+    fn buffer_to_json(address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: &NP_Memory) -> JFObject {
+        let this_string = Self::buffer_into(address, *kind, schema, buffer);
+
+        match this_string {
+            Ok(x) => {
+                match x {
+                    Some(y) => {
+                        JFObject::String(*y)
+                    },
+                    None => {
+                        JFObject::Null
+                    }
+                }
+            },
+            Err(_e) => {
+                JFObject::Null
+            }
+        }
     }
 }
 
@@ -150,14 +172,14 @@ impl NP_Value for &str {
                 let prev_size: usize = if addr != 0 {
                     let mut size_bytes: [u8; 4] = [0; 4];
                     size_bytes.copy_from_slice(&memory.bytes[addr..(addr+4)]);
-                    u32::from_le_bytes(size_bytes) as usize
+                    u32::from_be_bytes(size_bytes) as usize
                 } else {
                     0 as usize
                 };
 
                 if prev_size >= str_size as usize { // previous string is larger than this one, use existing memory
             
-                    let size_bytes = (str_size as u32).to_le_bytes();
+                    let size_bytes = (str_size as u32).to_be_bytes();
                     // set string size
                     for x in 0..size_bytes.len() {
                         memory.bytes[(addr + x) as usize] = size_bytes[x as usize];
@@ -173,7 +195,7 @@ impl NP_Value for &str {
                     
 
                     // first 4 bytes are string length
-                    addr = memory.malloc((str_size as u32).to_le_bytes().to_vec())? as usize;
+                    addr = memory.malloc((str_size as u32).to_be_bytes().to_vec())? as usize;
 
                     // then string content
                     memory.malloc(bytes.to_vec())?;

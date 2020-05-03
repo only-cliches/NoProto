@@ -1,7 +1,7 @@
 use crate::schema::NP_Schema;
 use crate::error::NP_Error;
 use crate::memory::NP_Memory;
-use crate::{schema::NP_TypeKeys, pointer::NP_Value};
+use crate::{schema::NP_TypeKeys, pointer::NP_Value, json_flex::JFObject};
 use super::{NP_ValueInto, NP_PtrKinds};
 
 use alloc::vec::Vec;
@@ -46,7 +46,7 @@ impl NP_Value for NP_Bytes {
         let addr = value as usize;
         let size: [u8; 4] = *buffer.get_4_bytes(addr).unwrap_or(&[0; 4]);
         let memory = buffer;
-        let bytes_size = u32::from_le_bytes(size) as usize;
+        let bytes_size = u32::from_be_bytes(size) as usize;
 
         // get bytes
         let bytes = &memory.read_bytes()[(addr+4)..(addr+4+bytes_size)];
@@ -68,14 +68,14 @@ impl NP_Value for NP_Bytes {
 
             let prev_size: usize = if addr != 0 {
                 let size_bytes: [u8; 4] = *memory.get_4_bytes(addr).unwrap_or(&[0; 4]);
-                u32::from_le_bytes(size_bytes) as usize
+                u32::from_be_bytes(size_bytes) as usize
             } else {
                 0 as usize
             };
 
             if prev_size >= size as usize { // previous bytes is larger than this one, use existing memory
         
-                let size_bytes = size.to_le_bytes();
+                let size_bytes = size.to_be_bytes();
                 // set string size
                 for x in 0..size_bytes.len() {
                     write_bytes[(addr + x) as usize] = size_bytes[x as usize];
@@ -90,7 +90,7 @@ impl NP_Value for NP_Bytes {
                 
 
                 // first 4 bytes are length
-                addr = memory.malloc((size as u32).to_le_bytes().to_vec())? as usize;
+                addr = memory.malloc((size as u32).to_be_bytes().to_vec())? as usize;
 
                 // then bytes content
                 memory.malloc(value.bytes.to_vec())?;
@@ -100,6 +100,7 @@ impl NP_Value for NP_Bytes {
             
         }
     }
+
 }
 
 impl Default for NP_Bytes {
@@ -122,11 +123,34 @@ impl<'a> NP_ValueInto<'a> for NP_Bytes {
         let mut size: [u8; 4] = [0; 4];
         let memory = buffer;
         size.copy_from_slice(&memory.read_bytes()[addr..(addr+4)]);
-        let bytes_size = u32::from_le_bytes(size) as usize;
+        let bytes_size = u32::from_be_bytes(size) as usize;
 
         // get bytes
         let bytes = &memory.read_bytes()[(addr+4)..(addr+4+bytes_size)];
 
         Ok(Some(Box::new(NP_Bytes { bytes: bytes.to_vec() })))
+    }
+
+    fn buffer_to_json(address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: &NP_Memory) -> JFObject {
+        let this_bytes = Self::buffer_into(address, *kind, schema, buffer);
+
+        match this_bytes {
+            Ok(x) => {
+                match x {
+                    Some(y) => {
+
+                        let bytes = y.bytes.into_iter().map(|x| JFObject::Integer(x as i64)).collect();
+
+                        JFObject::Array(bytes)
+                    },
+                    None => {
+                        JFObject::Null
+                    }
+                }
+            },
+            Err(_e) => {
+                JFObject::Null
+            }
+        }
     }
 }
