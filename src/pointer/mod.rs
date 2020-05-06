@@ -24,10 +24,12 @@ use crate::{schema::{NP_Schema, NP_TypeKeys}, collection::{map::NP_Map, table::N
 use alloc::string::String;
 use alloc::boxed::Box;
 use alloc::borrow::ToOwned;
+use alloc::vec::Vec;
 use bytes::NP_Bytes;
 use misc::{NP_Geo, NP_Dec, NP_UUID, NP_TimeID, NP_Date, NP_Option};
 use any::NP_Any;
 
+// stores the different kinds of pointers and the details for each pointer
 #[doc(hidden)]
 #[derive(Debug, Clone, Copy)]
 pub enum NP_PtrKinds {
@@ -41,7 +43,10 @@ pub enum NP_PtrKinds {
     ListItem  { value: u32, next: u32, i: u16   },  // 10 bytes [4, 4, 2]
 }
 
+
 impl NP_PtrKinds {
+
+    // get the address of the value for this pointer
     pub fn get_value(&self) -> u32 {
         match self {
             NP_PtrKinds::None                                                => { 0 },
@@ -51,20 +56,33 @@ impl NP_PtrKinds {
             NP_PtrKinds::ListItem  { value, i:_ ,    next: _ } =>    { *value }
         }
     }
+
+    // get the size of this pointer based it's kind
+    pub fn get_size(&self) -> u32 {
+        match self {
+            NP_PtrKinds::None                                     =>    { 0u32 },
+            NP_PtrKinds::Standard  { value: _ }                   =>    { 4u32 },
+            NP_PtrKinds::MapItem   { value: _, key: _,  next: _ } =>    { 12u32 },
+            NP_PtrKinds::TableItem { value: _, i:_ ,    next: _ } =>    { 9u32 },
+            NP_PtrKinds::ListItem  { value: _, i:_ ,    next: _ } =>    { 10u32 }
+        }
+    }
 }
 
 pub trait NP_Value {
-    fn new<T: NP_Value + Default>() -> Self;
+    // check if a specific string "type" in the schema matches this type
     fn is_type(_type_str: &str) -> bool { false }
+
+    // Get the static type information for this type (static)
     fn type_idx() -> (i64, String) { (-1, "null".to_owned()) }
+
+    // Get the static type information for this type (instance)
     fn self_type_idx(&self) -> (i64, String) { (-1, "null".to_owned()) }
+
+    // called for each declaration in the schema for a given type, useful for storing configuration details about the schema
     fn schema_state(_type_string: &str, _json_schema: &JFObject) -> core::result::Result<i64, NP_Error> { Ok(0) }
-    fn buffer_get(_address: u32, _kind: &NP_PtrKinds, _schema: &NP_Schema, _buffer: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
-        let mut message = "This type (".to_owned();
-        message.push_str(Self::type_idx().1.as_str());
-        message.push_str(") doesn't support .get()!");
-        Err(NP_Error::new(message.as_str()))
-    }
+
+    // set the pointer to a given scalar value, does not work for collections
     fn buffer_set(_address: u32, _kind: &NP_PtrKinds, _schema: &NP_Schema, _buffer: &NP_Memory, _value: Box<&Self>) -> core::result::Result<NP_PtrKinds, NP_Error> {
         let mut message = "This type (".to_owned();
         message.push_str(Self::type_idx().1.as_str());
@@ -74,27 +92,49 @@ pub trait NP_Value {
 }
 
 pub trait NP_ValueInto<'a> {
+
+    // convert pointer into scalar value, does not work for collections
     fn buffer_into(_address: u32, _kind: NP_PtrKinds, _schema: &'a NP_Schema, _buffer: &'a NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
         let message = "This type  doesn't support into!".to_owned();
         Err(NP_Error::new(message.as_str()))
     }
+
+    // convert this pointer into a JSON value (recursive for collections)
     fn buffer_to_json(_address: u32, _kind: &'a NP_PtrKinds, _schema: &'a NP_Schema, _buffer: &'a NP_Memory) -> JFObject {
-        JFObject::Null
+         JFObject::Null
     }
+
+    /// Calculate the size of this pointer and it's children (recursive for collections)
     fn buffer_get_size(_address: u32, _kind: &'a NP_PtrKinds, _schema: &'a NP_Schema, _buffer: &'a NP_Memory) -> core::result::Result<u32, NP_Error> {
-        Err(NP_Error::new("Size not supported for this type!"))
+         Err(NP_Error::new("Size not supported for this type!"))
     }
-    fn buffer_do_compact(_address: u32, _kind: &'a NP_PtrKinds, _schema: &'a NP_Schema, _old_buffer: &'a NP_Memory, _new_buffer: &'a NP_Memory) -> core::result::Result<(), NP_Error> {
-        Err(NP_Error::new("Compaction not supported for this type!"))
+    
+    /// Handle copying from old pointer/buffer to new pointer/buffer (recursive for collections)
+    fn buffer_do_compact<X: NP_Value + Default + NP_ValueInto<'a>>(from_ptr: &NP_Ptr<'a, X>, to_ptr: NP_Ptr<'a, NP_Any>) -> Result<(u32, NP_PtrKinds, &'a NP_Schema), NP_Error> where Self: NP_Value + Default {
+        if from_ptr.location == 0 {
+            return Ok((0, from_ptr.kind, from_ptr.schema));
+        }
+
+        match Self::buffer_into(from_ptr.location, from_ptr.kind, from_ptr.schema, from_ptr.memory)? {
+            Some(x) => {
+                Self::buffer_set(to_ptr.location, &to_ptr.kind, to_ptr.schema, to_ptr.memory, Box::new(&*x))?;
+                return Ok((to_ptr.location, to_ptr.kind, to_ptr.schema));
+            },
+            None => { }
+        }
+
+        Ok((0, from_ptr.kind, from_ptr.schema))
     }
-    fn to_sorted_bytes(_value: Box<Self>) -> Option<Box<[u8]>> {
-        None
-    }
-    fn from_sorted_bytes(_bytes: Box<[u8]>) -> Option<Box<Self>> {
-        None
-    } 
 }
 
+/*
+#[derive(Debug)]
+pub struct NP_Ptr_Parts<'a> {
+    location: u32, // pointer location
+    pub kind: NP_PtrKinds,
+    pub schema: &'a NP_Schema
+}
+*/
 
 /// The base data type, all information is stored/retrieved against pointers
 /// 
@@ -102,19 +142,18 @@ pub trait NP_ValueInto<'a> {
 
 #[derive(Debug)]
 pub struct NP_Ptr<'a, T: NP_Value + Default + NP_ValueInto<'a>> {
-    address: u32, // pointer location
-    kind: NP_PtrKinds,
-    pub memory: &'a NP_Memory,
-    pub schema: &'a NP_Schema,
-    pub value: T
+    pub location: u32, // pointer address in buffer
+    pub kind: NP_PtrKinds, // the kind of pointer this is (standard, list item, map item, etc).  Includes value address
+    pub memory: &'a NP_Memory, // the underlying buffer this pointer is a part of
+    pub schema: &'a NP_Schema, // schema stores the *actual* schema data for this pointer, regardless of type casting
+    pub value: T // a static invocation of the pointer type
 }
 
 impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Ptr<'a, T> {
 
     pub fn get(&mut self) -> core::result::Result<Option<T>, NP_Error> {
 
-
-        let value = T::buffer_get(self.address, &self.kind, self.schema, &self.memory)?;
+        let value = T::buffer_into(self.location, self.kind, self.schema, &self.memory)?;
         
         Ok(match value {
             Some (x) => {
@@ -125,18 +164,18 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Ptr<'a, T> {
     }
 
     pub fn set(&mut self, value: T) -> core::result::Result<(), NP_Error> {
-        self.kind = T::buffer_set(self.address, &self.kind, self.schema, &self.memory, Box::new(&value))?;
+        self.kind = T::buffer_set(self.location, &self.kind, self.schema, &self.memory, Box::new(&value))?;
         Ok(())
     }
 
     #[doc(hidden)]
-    pub fn new_standard_ptr(address: u32, schema: &'a NP_Schema, memory: &'a NP_Memory) -> Self {
+    pub fn new_standard_ptr(location: u32, schema: &'a NP_Schema, memory: &'a NP_Memory) -> Self {
 
-        let addr = address as usize;
+        let addr = location as usize;
         let value: [u8; 4] = *memory.get_4_bytes(addr).unwrap_or(&[0; 4]);
         
         NP_Ptr {
-            address: address,
+            location: location,
             kind: NP_PtrKinds::Standard { value: u32::from_be_bytes(value) },
             memory: memory,
             schema: schema,
@@ -145,9 +184,9 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Ptr<'a, T> {
     }
 
     #[doc(hidden)]
-    pub fn new_table_item_ptr(address: u32, schema: &'a NP_Schema, memory: &'a NP_Memory) -> Self {
+    pub fn new_table_item_ptr(location: u32, schema: &'a NP_Schema, memory: &'a NP_Memory) -> Self {
 
-        let addr = address as usize;
+        let addr = location as usize;
         let b_bytes = &memory.read_bytes();
 
         let value: [u8; 4] = *memory.get_4_bytes(addr).unwrap_or(&[0; 4]);
@@ -155,7 +194,7 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Ptr<'a, T> {
         let index: u8 = b_bytes[addr + 8];
 
         NP_Ptr {
-            address: address,
+            location: location,
             kind: NP_PtrKinds::TableItem { 
                 value: u32::from_be_bytes(value),
                 next: u32::from_be_bytes(next),
@@ -168,15 +207,15 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Ptr<'a, T> {
     }
 
     #[doc(hidden)]
-    pub fn new_map_item_ptr(address: u32, schema: &'a NP_Schema, memory: &'a NP_Memory) -> Self {
+    pub fn new_map_item_ptr(location: u32, schema: &'a NP_Schema, memory: &'a NP_Memory) -> Self {
 
-        let addr = address as usize;
+        let addr = location as usize;
         let value: [u8; 4] = *memory.get_4_bytes(addr).unwrap_or(&[0; 4]);
         let next: [u8; 4] = *memory.get_4_bytes(addr + 4).unwrap_or(&[0; 4]);
         let key: [u8; 4] = *memory.get_4_bytes(addr + 8).unwrap_or(&[0; 4]);
 
         NP_Ptr {
-            address: address,
+            location: location,
             kind: NP_PtrKinds::MapItem { 
                 value: u32::from_be_bytes(value),
                 next: u32::from_be_bytes(next),
@@ -189,15 +228,15 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Ptr<'a, T> {
     }
 
     #[doc(hidden)]
-    pub fn new_list_item_ptr(address: u32, schema: &'a NP_Schema, memory: &'a NP_Memory) -> Self {
+    pub fn new_list_item_ptr(location: u32, schema: &'a NP_Schema, memory: &'a NP_Memory) -> Self {
 
-        let addr = address as usize;
+        let addr = location as usize;
         let value: [u8; 4] = *memory.get_4_bytes(addr).unwrap_or(&[0; 4]);
         let next: [u8; 4] = *memory.get_4_bytes(addr + 4).unwrap_or(&[0; 4]);
         let index: [u8; 2] = *memory.get_2_bytes(addr + 8).unwrap_or(&[0; 2]);
 
         NP_Ptr {
-            address: address,
+            location: location,
             kind: NP_PtrKinds::ListItem { 
                 value: u32::from_be_bytes(value),
                 next: u32::from_be_bytes(next),
@@ -210,13 +249,18 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Ptr<'a, T> {
     }
 
     pub fn has_value(&self) -> bool {
-        if self.address == 0 { return false; } else { return true; }
+
+        if self.kind.get_value() == 0 {
+            return false;
+        }
+
+        return true;
     }
 
     pub fn clear(self) -> core::result::Result<NP_Ptr<'a, T>, NP_Error> {
         Ok(NP_Ptr {
-            address: self.address,
-            kind: self.memory.set_value_address(self.address, 0, &self.kind),
+            location: self.location,
+            kind: self.memory.set_value_address(self.location, 0, &self.kind),
             memory: self.memory,
             schema: self.schema,
             value: self.value
@@ -239,7 +283,7 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Ptr<'a, T> {
             }
         }
         
-        let result = T::buffer_into(self.address, self.kind, self.schema, &self.memory)?;
+        let result = T::buffer_into(self.location, self.kind, self.schema, &self.memory)?;
 
         Ok(match result {
             Some(x) => Some(*x),
@@ -247,8 +291,285 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Ptr<'a, T> {
         })
     }
 
+    pub fn clone_ptr(schema: &'a NP_Schema, kind: NP_PtrKinds, memory: &'a NP_Memory) -> Result<NP_Ptr<'a, T>, NP_Error> {
+
+        let pointer_size = kind.get_size();
+
+        let mut new_pointer_bytes = Vec::with_capacity(pointer_size as usize);
+
+        for _x in 0..pointer_size {
+            new_pointer_bytes.push(0);
+        }
+
+        let location = memory.malloc(new_pointer_bytes)?;
+        
+        let new_ptr: NP_Ptr<T> = match kind {
+            NP_PtrKinds::None                                     =>    { 
+                unreachable!()
+            },
+            NP_PtrKinds::Standard  { value: _ }                   =>    {
+                NP_Ptr::new_standard_ptr(location, schema, memory)
+            },
+            NP_PtrKinds::MapItem   { value: _, key: _,  next: _ } =>    {
+                NP_Ptr::new_map_item_ptr(location, schema, memory)
+            },
+            NP_PtrKinds::TableItem { value: _, i:_ ,    next: _ } =>    {
+                NP_Ptr::new_table_item_ptr(location, schema, memory)
+            },
+            NP_PtrKinds::ListItem  { value: _, i:_ ,    next: _ } =>    {
+                NP_Ptr::new_list_item_ptr(location, schema, memory)
+            }
+        };
+
+        Ok(new_ptr)
+    }
+
+    pub fn set_default(&self) -> Result<(), NP_Error> {
+
+        match NP_TypeKeys::from(self.schema.type_data.0) {
+            NP_TypeKeys::Any => {
+                
+            },
+            NP_TypeKeys::UTF8String => {
+                String::buffer_set(self.location, &self.kind, self.schema, self.memory, Box::new(&String::default()))?;
+            },
+            NP_TypeKeys::Bytes => {
+                NP_Bytes::buffer_set(self.location, &self.kind, self.schema, self.memory, Box::new(&NP_Bytes::default()))?;
+            },
+            NP_TypeKeys::Int8 => {
+                i8::buffer_set(self.location, &self.kind, self.schema, self.memory, Box::new(&i8::default()))?;
+            },
+            NP_TypeKeys::Int16 => {
+                i16::buffer_set(self.location, &self.kind, self.schema, self.memory, Box::new(&i16::default()))?;
+            },
+            NP_TypeKeys::Int32 => {
+                i32::buffer_set(self.location, &self.kind, self.schema, self.memory, Box::new(&i32::default()))?;
+            },
+            NP_TypeKeys::Int64 => {
+                i64::buffer_set(self.location, &self.kind, self.schema, self.memory, Box::new(&i64::default()))?;
+            },
+            NP_TypeKeys::Uint8 => {
+                u8::buffer_set(self.location, &self.kind, self.schema, self.memory, Box::new(&u8::default()))?;
+            },
+            NP_TypeKeys::Uint16 => {
+                u16::buffer_set(self.location, &self.kind, self.schema, self.memory, Box::new(&u16::default()))?;
+            },
+            NP_TypeKeys::Uint32 => {
+                u32::buffer_set(self.location, &self.kind, self.schema, self.memory, Box::new(&u32::default()))?;
+            },
+            NP_TypeKeys::Uint64 => {
+                u64::buffer_set(self.location, &self.kind, self.schema, self.memory, Box::new(&u64::default()))?;
+            },
+            NP_TypeKeys::Float => {
+                f32::buffer_set(self.location, &self.kind, self.schema, self.memory, Box::new(&f32::default()))?;
+            },
+            NP_TypeKeys::Double => {
+                f64::buffer_set(self.location, &self.kind, self.schema, self.memory, Box::new(&f64::default()))?;
+            },
+            NP_TypeKeys::Dec64 => {
+                NP_Dec::buffer_set(self.location, &self.kind, self.schema, self.memory, Box::new(&NP_Dec::default()))?;
+            },
+            NP_TypeKeys::Boolean => {
+                bool::buffer_set(self.location, &self.kind, self.schema, self.memory, Box::new(&bool::default()))?;
+            },
+            NP_TypeKeys::Geo => {
+                NP_Geo::buffer_set(self.location, &self.kind, self.schema, self.memory, Box::new(&NP_Geo::default()))?;
+            },
+            NP_TypeKeys::Uuid => {
+                NP_UUID::buffer_set(self.location, &self.kind, self.schema, self.memory, Box::new(&NP_UUID::default()))?;
+            },
+            NP_TypeKeys::Tid => {
+                NP_TimeID::buffer_set(self.location, &self.kind, self.schema, self.memory, Box::new(&NP_TimeID::default()))?;
+            },
+            NP_TypeKeys::Date => {
+                NP_Date::buffer_set(self.location, &self.kind, self.schema, self.memory, Box::new(&NP_Date::default()))?;
+            },
+            NP_TypeKeys::Enum => {
+                NP_Option::buffer_set(self.location, &self.kind, self.schema, self.memory, Box::new(&NP_Option::default()))?;
+            },
+            NP_TypeKeys::Table => {
+                NP_Table::buffer_set(self.location, &self.kind, self.schema, self.memory, Box::new(&NP_Table::default()))?;
+            },
+            NP_TypeKeys::Map => {
+                NP_Map::<NP_Any>::buffer_set(self.location, &self.kind, self.schema, self.memory, Box::new(&NP_Map::default()))?;
+            },
+            NP_TypeKeys::List => {
+                NP_List::<NP_Any>::buffer_set(self.location, &self.kind, self.schema, self.memory, Box::new(&NP_List::default()))?;
+            },
+            NP_TypeKeys::Tuple => {
+                NP_Tuple::buffer_set(self.location, &self.kind, self.schema, self.memory, Box::new(&NP_Tuple::default()))?;
+            }
+        };
+
+        Ok(())
+    }
+
+    pub fn compact(&self, copy_to: NP_Ptr<'a, NP_Any>) -> Result<(u32, NP_PtrKinds, &'a NP_Schema), NP_Error> {
+
+        match NP_TypeKeys::from(self.schema.type_data.0) {
+            NP_TypeKeys::Any => {
+                Ok((0, self.kind.clone(), self.schema))
+            },
+            NP_TypeKeys::UTF8String => {
+                String::buffer_do_compact(self, copy_to)
+            },
+            NP_TypeKeys::Bytes => {
+                NP_Bytes::buffer_do_compact(self, copy_to)
+            },
+            NP_TypeKeys::Int8 => {
+                i8::buffer_do_compact(self, copy_to)
+            },
+            NP_TypeKeys::Int16 => {
+                i16::buffer_do_compact(self, copy_to)
+            },
+            NP_TypeKeys::Int32 => {
+                i32::buffer_do_compact(self, copy_to)
+            },
+            NP_TypeKeys::Int64 => {
+                i64::buffer_do_compact(self, copy_to)
+            },
+            NP_TypeKeys::Uint8 => {
+                u8::buffer_do_compact(self, copy_to)
+            },
+            NP_TypeKeys::Uint16 => {
+                u16::buffer_do_compact(self, copy_to)
+            },
+            NP_TypeKeys::Uint32 => {
+                u32::buffer_do_compact(self, copy_to)
+            },
+            NP_TypeKeys::Uint64 => {
+                u64::buffer_do_compact(self, copy_to)
+            },
+            NP_TypeKeys::Float => {
+                f32::buffer_do_compact(self, copy_to)
+            },
+            NP_TypeKeys::Double => {
+                f64::buffer_do_compact(self, copy_to)
+            },
+            NP_TypeKeys::Dec64 => {
+                NP_Dec::buffer_do_compact(self, copy_to)
+            },
+            NP_TypeKeys::Boolean => {
+                bool::buffer_do_compact(self, copy_to)
+            },
+            NP_TypeKeys::Geo => {
+                NP_Geo::buffer_do_compact(self, copy_to)
+            },
+            NP_TypeKeys::Uuid => {
+                NP_UUID::buffer_do_compact(self, copy_to)
+            },
+            NP_TypeKeys::Tid => {
+                NP_TimeID::buffer_do_compact(self, copy_to)
+            },
+            NP_TypeKeys::Date => {
+                NP_Date::buffer_do_compact(self, copy_to)
+            },
+            NP_TypeKeys::Enum => {
+                NP_Option::buffer_do_compact(self, copy_to)
+            },
+            NP_TypeKeys::Table => {
+                NP_Table::buffer_do_compact(self, copy_to)
+            },
+            NP_TypeKeys::Map => {
+                NP_Map::<NP_Any>::buffer_do_compact(self, copy_to)
+            },
+            NP_TypeKeys::List => {
+                NP_List::<NP_Any>::buffer_do_compact(self, copy_to)
+            },
+            NP_TypeKeys::Tuple => {
+                NP_Tuple::buffer_do_compact(self, copy_to)
+            }
+        }
+    }
+
+    pub fn calc_size(&self) -> Result<u32, NP_Error> {
+
+        let base_size = self.kind.get_size();
+
+        if self.location == 0 { // no value, just base size
+            return Ok(base_size);
+        }
+
+        let type_size = match NP_TypeKeys::from(self.schema.type_data.0) {
+            NP_TypeKeys::Any => {
+                Ok(0)
+            },
+            NP_TypeKeys::UTF8String => {
+                String::buffer_get_size(self.location, &self.kind, self.schema, self.memory)
+            },
+            NP_TypeKeys::Bytes => {
+                NP_Bytes::buffer_get_size(self.location, &self.kind, self.schema, self.memory)
+            },
+            NP_TypeKeys::Int8 => {
+                i8::buffer_get_size(self.location, &self.kind, self.schema, self.memory)
+            },
+            NP_TypeKeys::Int16 => {
+                i16::buffer_get_size(self.location, &self.kind, self.schema, self.memory)
+            },
+            NP_TypeKeys::Int32 => {
+                i32::buffer_get_size(self.location, &self.kind, self.schema, self.memory)
+            },
+            NP_TypeKeys::Int64 => {
+                i64::buffer_get_size(self.location, &self.kind, self.schema, self.memory)
+            },
+            NP_TypeKeys::Uint8 => {
+                u8::buffer_get_size(self.location, &self.kind, self.schema, self.memory)
+            },
+            NP_TypeKeys::Uint16 => {
+                u16::buffer_get_size(self.location, &self.kind, self.schema, self.memory)
+            },
+            NP_TypeKeys::Uint32 => {
+                u32::buffer_get_size(self.location, &self.kind, self.schema, self.memory)
+            },
+            NP_TypeKeys::Uint64 => {
+                u64::buffer_get_size(self.location, &self.kind, self.schema, self.memory)
+            },
+            NP_TypeKeys::Float => {
+                f32::buffer_get_size(self.location, &self.kind, self.schema, self.memory)
+            },
+            NP_TypeKeys::Double => {
+                f64::buffer_get_size(self.location, &self.kind, self.schema, self.memory)
+            },
+            NP_TypeKeys::Dec64 => {
+                NP_Dec::buffer_get_size(self.location, &self.kind, self.schema, self.memory)
+            },
+            NP_TypeKeys::Boolean => {
+                bool::buffer_get_size(self.location, &self.kind, self.schema, self.memory)
+            },
+            NP_TypeKeys::Geo => {
+                NP_Geo::buffer_get_size(self.location, &self.kind, self.schema, self.memory)
+            },
+            NP_TypeKeys::Uuid => {
+                NP_UUID::buffer_get_size(self.location, &self.kind, self.schema, self.memory)
+            },
+            NP_TypeKeys::Tid => {
+                NP_TimeID::buffer_get_size(self.location, &self.kind, self.schema, self.memory)
+            },
+            NP_TypeKeys::Date => {
+                NP_Date::buffer_get_size(self.location, &self.kind, self.schema, self.memory)
+            },
+            NP_TypeKeys::Enum => {
+                NP_Option::buffer_get_size(self.location, &self.kind, self.schema, self.memory)
+            },
+            NP_TypeKeys::Table => {
+                NP_Table::buffer_get_size(self.location, &self.kind, self.schema, self.memory)
+            },
+            NP_TypeKeys::Map => {
+                NP_Map::<NP_Any>::buffer_get_size(self.location, &self.kind, self.schema, self.memory)
+            },
+            NP_TypeKeys::List => {
+                NP_List::<NP_Any>::buffer_get_size(self.location, &self.kind, self.schema, self.memory)
+            },
+            NP_TypeKeys::Tuple => {
+                NP_Tuple::buffer_get_size(self.location, &self.kind, self.schema, self.memory)
+            }
+        }?;
+
+        Ok(type_size + base_size)
+    }
+
     pub fn json_encode(&self) -> JFObject {
-        if self.address == 0 {
+        if self.location == 0 {
             return JFObject::Null;
         }
 
@@ -259,73 +580,73 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Ptr<'a, T> {
                 JFObject::Null
             },
             NP_TypeKeys::UTF8String => {
-                String::buffer_to_json(self.address, &self.kind, self.schema, self.memory)
+                String::buffer_to_json(self.location, &self.kind, self.schema, self.memory)
             },
             NP_TypeKeys::Bytes => {
-                NP_Bytes::buffer_to_json(self.address, &self.kind, self.schema, self.memory)
+                NP_Bytes::buffer_to_json(self.location, &self.kind, self.schema, self.memory)
             },
             NP_TypeKeys::Int8 => {
-                i8::buffer_to_json(self.address, &self.kind, self.schema, self.memory)
+                i8::buffer_to_json(self.location, &self.kind, self.schema, self.memory)
             },
             NP_TypeKeys::Int16 => {
-                i16::buffer_to_json(self.address, &self.kind, self.schema, self.memory)
+                i16::buffer_to_json(self.location, &self.kind, self.schema, self.memory)
             },
             NP_TypeKeys::Int32 => {
-                i32::buffer_to_json(self.address, &self.kind, self.schema, self.memory)
+                i32::buffer_to_json(self.location, &self.kind, self.schema, self.memory)
             },
             NP_TypeKeys::Int64 => {
-                i64::buffer_to_json(self.address, &self.kind, self.schema, self.memory)
+                i64::buffer_to_json(self.location, &self.kind, self.schema, self.memory)
             },
             NP_TypeKeys::Uint8 => {
-                u8::buffer_to_json(self.address, &self.kind, self.schema, self.memory)
+                u8::buffer_to_json(self.location, &self.kind, self.schema, self.memory)
             },
             NP_TypeKeys::Uint16 => {
-                u16::buffer_to_json(self.address, &self.kind, self.schema, self.memory)
+                u16::buffer_to_json(self.location, &self.kind, self.schema, self.memory)
             },
             NP_TypeKeys::Uint32 => {
-                u32::buffer_to_json(self.address, &self.kind, self.schema, self.memory)
+                u32::buffer_to_json(self.location, &self.kind, self.schema, self.memory)
             },
             NP_TypeKeys::Uint64 => {
-                u64::buffer_to_json(self.address, &self.kind, self.schema, self.memory)
+                u64::buffer_to_json(self.location, &self.kind, self.schema, self.memory)
             },
             NP_TypeKeys::Float => {
-                f32::buffer_to_json(self.address, &self.kind, self.schema, self.memory)
+                f32::buffer_to_json(self.location, &self.kind, self.schema, self.memory)
             },
             NP_TypeKeys::Double => {
-                f64::buffer_to_json(self.address, &self.kind, self.schema, self.memory)
+                f64::buffer_to_json(self.location, &self.kind, self.schema, self.memory)
             },
             NP_TypeKeys::Dec64 => {
-                NP_Dec::buffer_to_json(self.address, &self.kind, self.schema, self.memory)
+                NP_Dec::buffer_to_json(self.location, &self.kind, self.schema, self.memory)
             },
             NP_TypeKeys::Boolean => {
-                bool::buffer_to_json(self.address, &self.kind, self.schema, self.memory)
+                bool::buffer_to_json(self.location, &self.kind, self.schema, self.memory)
             },
             NP_TypeKeys::Geo => {
-                NP_Geo::buffer_to_json(self.address, &self.kind, self.schema, self.memory)
+                NP_Geo::buffer_to_json(self.location, &self.kind, self.schema, self.memory)
             },
             NP_TypeKeys::Uuid => {
-                NP_UUID::buffer_to_json(self.address, &self.kind, self.schema, self.memory)
+                NP_UUID::buffer_to_json(self.location, &self.kind, self.schema, self.memory)
             },
             NP_TypeKeys::Tid => {
-                NP_TimeID::buffer_to_json(self.address, &self.kind, self.schema, self.memory)
+                NP_TimeID::buffer_to_json(self.location, &self.kind, self.schema, self.memory)
             },
             NP_TypeKeys::Date => {
-                NP_Date::buffer_to_json(self.address, &self.kind, self.schema, self.memory)
+                NP_Date::buffer_to_json(self.location, &self.kind, self.schema, self.memory)
             },
             NP_TypeKeys::Enum => {
-                NP_Option::buffer_to_json(self.address, &self.kind, self.schema, self.memory)
+                NP_Option::buffer_to_json(self.location, &self.kind, self.schema, self.memory)
             },
             NP_TypeKeys::Table => {
-                NP_Table::buffer_to_json(self.address, &self.kind, self.schema, self.memory)
+                NP_Table::buffer_to_json(self.location, &self.kind, self.schema, self.memory)
             },
             NP_TypeKeys::Map => {
-                NP_Map::<NP_Any>::buffer_to_json(self.address, &self.kind, self.schema, self.memory)
+                NP_Map::<NP_Any>::buffer_to_json(self.location, &self.kind, self.schema, self.memory)
             },
             NP_TypeKeys::List => {
-                NP_List::<NP_Any>::buffer_to_json(self.address, &self.kind, self.schema, self.memory)
+                NP_List::<NP_Any>::buffer_to_json(self.location, &self.kind, self.schema, self.memory)
             },
             NP_TypeKeys::Tuple => {
-                NP_Tuple::buffer_to_json(self.address, &self.kind, self.schema, self.memory)
+                NP_Tuple::buffer_to_json(self.location, &self.kind, self.schema, self.memory)
             }
         }
     }

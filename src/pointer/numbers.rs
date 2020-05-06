@@ -10,10 +10,6 @@ use alloc::borrow::ToOwned;
 
 impl NP_Value for i8 {
 
-    fn new<T: NP_Value + Default>() -> Self {
-        0
-    }
-
     fn is_type( type_str: &str) -> bool {
         "int8" == type_str || "i8" == type_str
     }
@@ -21,11 +17,7 @@ impl NP_Value for i8 {
     fn type_idx() -> (i64, String) { (NP_TypeKeys::Int8 as i64, "int8".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Int8 as i64, "int8".to_owned()) }
 
-    fn buffer_get(address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, memory: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
-        i8::buffer_into(address, *kind, schema, memory)
-    }
-
-    fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, memory: &NP_Memory, value: Box<&Self>) -> core::result::Result<NP_PtrKinds, NP_Error> {
+    fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, memory: &NP_Memory, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
 
         let mut addr = kind.get_value();
 
@@ -52,7 +44,7 @@ impl NP_Value for i8 {
 }
 
 impl<'a> NP_ValueInto<'a> for i8 {
-    fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: &'a NP_Schema, memory: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
+    fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: &'a NP_Schema, memory: &NP_Memory) -> Result<Option<Box<Self>>, NP_Error> {
         let addr = kind.get_value() as usize;
 
         // empty value
@@ -90,13 +82,19 @@ impl<'a> NP_ValueInto<'a> for i8 {
             }
         }
     }
+
+    fn buffer_get_size(_address: u32, kind: &'a NP_PtrKinds, _schema: &'a NP_Schema, _buffer: &'a NP_Memory) -> Result<u32, NP_Error> {
+ 
+        if kind.get_value() == 0 {
+            return Ok(0) 
+        } else {
+            Ok(core::mem::size_of::<Self>() as u32)
+        }
+    }
+
 }
 
 impl NP_Value for i16 {
-
-    fn new<T: NP_Value + Default>() -> Self {
-        0
-    }
 
     fn is_type( type_str: &str) -> bool {
         "int16" == type_str || "i16" == type_str
@@ -105,11 +103,7 @@ impl NP_Value for i16 {
     fn type_idx() -> (i64, String) { (NP_TypeKeys::Int16 as i64, "int16".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Int16 as i64, "int16".to_owned()) }
 
-    fn buffer_get(address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, memory: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
-        i16::buffer_into(address, *kind, schema, memory)
-    }
-
-    fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, memory: &NP_Memory, value: Box<&Self>) -> core::result::Result<NP_PtrKinds, NP_Error> {
+    fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, memory: &NP_Memory, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
 
         let mut addr = kind.get_value();
 
@@ -137,7 +131,7 @@ impl NP_Value for i16 {
 }
 
 impl<'a> NP_ValueInto<'a> for i16 {
-    fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: &'a NP_Schema, memory: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
+    fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: &'a NP_Schema, memory: &NP_Memory) -> Result<Option<Box<Self>>, NP_Error> {
         let addr = kind.get_value() as usize;
 
         // empty value
@@ -174,13 +168,20 @@ impl<'a> NP_ValueInto<'a> for i16 {
             }
         }
     }
+
+    fn buffer_get_size(_address: u32, kind: &'a NP_PtrKinds, _schema: &'a NP_Schema, _buffer: &'a NP_Memory) -> Result<u32, NP_Error> {
+        let addr = kind.get_value() as usize;
+
+        if addr == 0 {
+            return Ok(0) 
+        } else {
+            Ok(core::mem::size_of::<Self>() as u32)
+        }
+    }
+
 }
 
 impl NP_Value for i32 {
-
-    fn new<T: NP_Value + Default>() -> Self {
-        0
-    }
 
     fn is_type( type_str: &str) -> bool {
         "int32" == type_str || "i32" == type_str
@@ -189,11 +190,7 @@ impl NP_Value for i32 {
     fn type_idx() -> (i64, String) { (NP_TypeKeys::Int32 as i64, "int32".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Int32 as i64, "int32".to_owned()) }
 
-    fn buffer_get(address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, memory: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
-        i32::buffer_into(address, *kind, schema, memory)
-    }
-
-    fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, memory: &NP_Memory, value: Box<&Self>) -> core::result::Result<NP_PtrKinds, NP_Error> {
+    fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, memory: &NP_Memory, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
 
         let mut addr = kind.get_value();
 
@@ -221,7 +218,7 @@ impl NP_Value for i32 {
 }
 
 impl<'a> NP_ValueInto<'a> for i32 {
-    fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: &'a NP_Schema, memory: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
+    fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: &'a NP_Schema, memory: &NP_Memory) -> Result<Option<Box<Self>>, NP_Error> {
         let addr = kind.get_value() as usize;
 
         // empty value
@@ -258,13 +255,20 @@ impl<'a> NP_ValueInto<'a> for i32 {
             }
         }
     }
+
+    fn buffer_get_size(_address: u32, kind: &'a NP_PtrKinds, _schema: &'a NP_Schema, _buffer: &'a NP_Memory) -> Result<u32, NP_Error> {
+        let addr = kind.get_value() as usize;
+
+        if addr == 0 {
+            return Ok(0) 
+        } else {
+            Ok(core::mem::size_of::<Self>() as u32)
+        }
+    }
+
 }
 
 impl NP_Value for i64 {
-
-    fn new<T: NP_Value + Default>() -> Self {
-        0
-    }
 
     fn is_type( type_str: &str) -> bool {
         "int64" == type_str || "i64" == type_str
@@ -273,11 +277,7 @@ impl NP_Value for i64 {
     fn type_idx() -> (i64, String) { (NP_TypeKeys::Int64 as i64, "int64".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Int64 as i64, "int64".to_owned()) }
 
-    fn buffer_get(address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, memory: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
-        i64::buffer_into(address, *kind, schema, memory)
-    }
-
-    fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, memory: &NP_Memory, value: Box<&Self>) -> core::result::Result<NP_PtrKinds, NP_Error> {
+    fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, memory: &NP_Memory, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
 
         let mut addr = kind.get_value();
 
@@ -303,7 +303,7 @@ impl NP_Value for i64 {
 }
 
 impl<'a> NP_ValueInto<'a> for i64 {
-    fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: &'a NP_Schema, memory: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
+    fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: &'a NP_Schema, memory: &NP_Memory) -> Result<Option<Box<Self>>, NP_Error> {
         let addr = kind.get_value() as usize;
 
         // empty value
@@ -340,13 +340,20 @@ impl<'a> NP_ValueInto<'a> for i64 {
             }
         }
     }
+
+    fn buffer_get_size(_address: u32, kind: &'a NP_PtrKinds, _schema: &'a NP_Schema, _buffer: &'a NP_Memory) -> Result<u32, NP_Error> {
+        let addr = kind.get_value() as usize;
+
+        if addr == 0 {
+            return Ok(0) 
+        } else {
+            Ok(core::mem::size_of::<Self>() as u32)
+        }
+    }
+
 }
 
 impl NP_Value for u8 {
-
-    fn new<T: NP_Value + Default>() -> Self {
-        0
-    }
 
     fn is_type( type_str: &str) -> bool {
         "uint8" == type_str || "u8" == type_str
@@ -355,12 +362,7 @@ impl NP_Value for u8 {
     fn type_idx() -> (i64, String) { (NP_TypeKeys::Uint8 as i64, "uint8".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Uint8 as i64, "uint8".to_owned()) }
 
-    fn buffer_get(address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, memory: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
-
-        u8::buffer_into(address, *kind, schema, memory)
-    }
-
-    fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, memory: &NP_Memory, value: Box<&Self>) -> core::result::Result<NP_PtrKinds, NP_Error> {
+    fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, memory: &NP_Memory, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
 
         let mut addr = kind.get_value();
 
@@ -388,7 +390,7 @@ impl NP_Value for u8 {
 }
 
 impl<'a> NP_ValueInto<'a> for u8 {
-    fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: &'a NP_Schema, memory: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
+    fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: &'a NP_Schema, memory: &NP_Memory) -> Result<Option<Box<Self>>, NP_Error> {
         let addr = kind.get_value() as usize;
 
         // empty value
@@ -423,13 +425,20 @@ impl<'a> NP_ValueInto<'a> for u8 {
             }
         }
     }
+
+    fn buffer_get_size(_address: u32, kind: &'a NP_PtrKinds, _schema: &'a NP_Schema, _buffer: &'a NP_Memory) -> Result<u32, NP_Error> {
+        let addr = kind.get_value() as usize;
+
+        if addr == 0 {
+            return Ok(0) 
+        } else {
+            Ok(core::mem::size_of::<Self>() as u32)
+        }
+    }
+
 }
 
 impl NP_Value for u16 {
-
-    fn new<T: NP_Value + Default>() -> Self {
-        0
-    }
 
     fn is_type( type_str: &str) -> bool {
         "uint16" == type_str || "u16" == type_str
@@ -438,12 +447,7 @@ impl NP_Value for u16 {
     fn type_idx() -> (i64, String) { (NP_TypeKeys::Uint16 as i64, "uint16".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Uint16 as i64, "uint16".to_owned()) }
 
-    fn buffer_get(address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, memory: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
-
-        u16::buffer_into(address, *kind, schema, memory)
-    }
-
-    fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, memory: &NP_Memory, value: Box<&Self>) -> core::result::Result<NP_PtrKinds, NP_Error> {
+    fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, memory: &NP_Memory, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
 
         let mut addr = kind.get_value();
 
@@ -471,7 +475,7 @@ impl NP_Value for u16 {
 }
 
 impl<'a> NP_ValueInto<'a> for u16 {
-    fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: &'a NP_Schema, memory: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
+    fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: &'a NP_Schema, memory: &NP_Memory) -> Result<Option<Box<Self>>, NP_Error> {
         let addr = kind.get_value() as usize;
 
         // empty value
@@ -506,14 +510,20 @@ impl<'a> NP_ValueInto<'a> for u16 {
             }
         }
     }
+
+    fn buffer_get_size(_address: u32, kind: &'a NP_PtrKinds, _schema: &'a NP_Schema, _buffer: &'a NP_Memory) -> Result<u32, NP_Error> {
+        let addr = kind.get_value() as usize;
+
+        if addr == 0 {
+            return Ok(0) 
+        } else {
+            Ok(core::mem::size_of::<Self>() as u32)
+        }
+    }
+
 }
 
 impl NP_Value for u32 {
-
-    fn new<T: NP_Value + Default>() -> Self {
-        0
-    }
-
     fn is_type( type_str: &str) -> bool {
         "uint32" == type_str || "u32" == type_str
     }
@@ -521,11 +531,7 @@ impl NP_Value for u32 {
     fn type_idx() -> (i64, String) { (NP_TypeKeys::Uint32 as i64, "uint32".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Uint32 as i64, "uint32".to_owned()) }
 
-    fn buffer_get(address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, memory: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
-        u32::buffer_into(address, *kind, schema, memory)
-    }
-
-    fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, memory: &NP_Memory, value: Box<&Self>) -> core::result::Result<NP_PtrKinds, NP_Error> {
+    fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, memory: &NP_Memory, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
 
         let mut addr = kind.get_value();
 
@@ -553,7 +559,7 @@ impl NP_Value for u32 {
 }
 
 impl<'a> NP_ValueInto<'a> for u32 {
-    fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: &'a NP_Schema, memory: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
+    fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: &'a NP_Schema, memory: &NP_Memory) -> Result<Option<Box<Self>>, NP_Error> {
         let addr = kind.get_value() as usize;
 
         // empty value
@@ -588,13 +594,20 @@ impl<'a> NP_ValueInto<'a> for u32 {
             }
         }
     }
+
+    fn buffer_get_size(_address: u32, kind: &'a NP_PtrKinds, _schema: &'a NP_Schema, _buffer: &'a NP_Memory) -> Result<u32, NP_Error> {
+        let addr = kind.get_value() as usize;
+
+        if addr == 0 {
+            return Ok(0) 
+        } else {
+            Ok(core::mem::size_of::<Self>() as u32)
+        }
+    }
+
 }
 
 impl NP_Value for u64 {
-
-    fn new<T: NP_Value + Default>() -> Self {
-        0
-    }
 
     fn is_type( type_str: &str) -> bool {
         "uint64" == type_str || "u64" == type_str
@@ -603,11 +616,7 @@ impl NP_Value for u64 {
     fn type_idx() -> (i64, String) { (NP_TypeKeys::Uint64 as i64, "uint64".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Uint64 as i64, "uint64".to_owned()) }
 
-    fn buffer_get(address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, memory: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
-        u64::buffer_into(address, *kind, schema, memory)
-    }
-
-    fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, memory: &NP_Memory, value: Box<&Self>) -> core::result::Result<NP_PtrKinds, NP_Error> {
+    fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, memory: &NP_Memory, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
 
         let mut addr = kind.get_value();
 
@@ -635,7 +644,7 @@ impl NP_Value for u64 {
 }
 
 impl<'a> NP_ValueInto<'a> for u64 {
-    fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: &'a NP_Schema, memory: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
+    fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: &'a NP_Schema, memory: &NP_Memory) -> Result<Option<Box<Self>>, NP_Error> {
         let addr = kind.get_value() as usize;
 
         // empty value
@@ -670,13 +679,20 @@ impl<'a> NP_ValueInto<'a> for u64 {
             }
         }
     }
+
+    fn buffer_get_size(_address: u32, kind: &'a NP_PtrKinds, _schema: &'a NP_Schema, _buffer: &'a NP_Memory) -> Result<u32, NP_Error> {
+        let addr = kind.get_value() as usize;
+
+        if addr == 0 {
+            return Ok(0) 
+        } else {
+            Ok(core::mem::size_of::<Self>() as u32)
+        }
+    }
+
 }
 
 impl NP_Value for f32 {
-
-    fn new<T: NP_Value + Default>() -> Self {
-        0.0
-    }
 
     fn is_type( type_str: &str) -> bool {
         "float" == type_str || "f32" == type_str
@@ -685,11 +701,7 @@ impl NP_Value for f32 {
     fn type_idx() -> (i64, String) { (NP_TypeKeys::Float as i64, "float".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Float as i64, "float".to_owned()) }
 
-    fn buffer_get(address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, memory: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
-        f32::buffer_into(address, *kind, schema, memory)
-    }
-
-    fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, memory: &NP_Memory, value: Box<&Self>) -> core::result::Result<NP_PtrKinds, NP_Error> {
+    fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, memory: &NP_Memory, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
 
         let mut addr = kind.get_value();
 
@@ -713,11 +725,10 @@ impl NP_Value for f32 {
         }
     }
 
-
 }
 
 impl<'a> NP_ValueInto<'a> for f32 {
-    fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: &'a NP_Schema, memory: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
+    fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: &'a NP_Schema, memory: &NP_Memory) -> Result<Option<Box<Self>>, NP_Error> {
         let addr = kind.get_value() as usize;
 
         // empty value
@@ -752,13 +763,20 @@ impl<'a> NP_ValueInto<'a> for f32 {
             }
         }
     }
+
+    fn buffer_get_size(_address: u32, kind: &'a NP_PtrKinds, _schema: &'a NP_Schema, _buffer: &'a NP_Memory) -> Result<u32, NP_Error> {
+        let addr = kind.get_value() as usize;
+
+        if addr == 0 {
+            return Ok(0) 
+        } else {
+            Ok(core::mem::size_of::<Self>() as u32)
+        }
+    }
+
 }
 
 impl NP_Value for f64 {
-
-    fn new<T: NP_Value + Default>() -> Self {
-        0.0
-    }
 
     fn is_type( type_str: &str) -> bool {
         "double" == type_str || "f64" == type_str
@@ -767,12 +785,7 @@ impl NP_Value for f64 {
     fn type_idx() -> (i64, String) { (NP_TypeKeys::Double as i64, "double".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Double as i64, "double".to_owned()) }
 
-    fn buffer_get(address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, memory: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
-
-        f64::buffer_into(address, *kind, schema, memory)
-    }
-
-    fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, memory: &NP_Memory, value: Box<&Self>) -> core::result::Result<NP_PtrKinds, NP_Error> {
+    fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, memory: &NP_Memory, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
 
         let mut addr = kind.get_value();
 
@@ -798,7 +811,7 @@ impl NP_Value for f64 {
 }
 
 impl<'a> NP_ValueInto<'a> for f64 {
-    fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: &'a NP_Schema, memory: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
+    fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: &'a NP_Schema, memory: &NP_Memory) -> Result<Option<Box<Self>>, NP_Error> {
         let addr = kind.get_value() as usize;
 
         // empty value
@@ -833,4 +846,15 @@ impl<'a> NP_ValueInto<'a> for f64 {
             }
         }
     }
+
+    fn buffer_get_size(_address: u32, kind: &'a NP_PtrKinds, _schema: &'a NP_Schema, _buffer: &'a NP_Memory) -> Result<u32, NP_Error> {
+        let addr = kind.get_value() as usize;
+
+        if addr == 0 {
+            return Ok(0) 
+        } else {
+            Ok(core::mem::size_of::<Self>() as u32)
+        }
+    }
+
 }

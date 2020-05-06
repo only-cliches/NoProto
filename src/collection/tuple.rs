@@ -1,7 +1,8 @@
+use crate::pointer::any::NP_Any;
 use crate::pointer::NP_Ptr;
 use crate::pointer::NP_ValueInto;
 use crate::pointer::{NP_PtrKinds, NP_Value};
-use crate::{memory::NP_Memory, schema::{NP_SchemaKinds, NP_Schema, NP_TypeKeys}, error::NP_Error};
+use crate::{memory::NP_Memory, schema::{NP_SchemaKinds, NP_Schema, NP_TypeKeys}, error::NP_Error, json_flex::JFObject};
 
 use alloc::vec::Vec;
 use alloc::string::String;
@@ -39,10 +40,10 @@ impl<'a> NP_Tuple<'a> {
         let schema_vec = *self.schemas.as_ref().unwrap();
         let schema: &NP_Schema = &schema_vec[index as usize];
 
-        // make sure the type we're casting to isn't ANY or the cast itself isn't ANY
+        // match type casting
         if T::type_idx().0 != NP_TypeKeys::Any as i64 && schema.type_data.0 != NP_TypeKeys::Any as i64  {
 
-            // not using any casting, check type
+            // not using ANY casting, check type
             if schema.type_data.0 != T::type_idx().0 {
                 let mut err = "TypeError: Attempted to cast type (".to_owned();
                 err.push_str(T::type_idx().1.as_str());
@@ -124,17 +125,11 @@ impl<'a> NP_Tuple<'a> {
 }
 
 impl<'a> NP_Value for NP_Tuple<'a> {
-    fn new<T: NP_Value + Default>() -> Self {
-        unreachable!()
-    }
-    fn is_type(_type_str: &str) -> bool { 
+    fn is_type(_type_str: &str) -> bool {  // not needed for collection types
         unreachable!()
     }
     fn type_idx() -> (i64, String) { (NP_TypeKeys::Tuple as i64, "tuple".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Tuple as i64, "tuple".to_owned()) }
-    fn buffer_get(_address: u32, _kind: &NP_PtrKinds, _schema: &NP_Schema, _buffer: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
-        Err(NP_Error::new("Type (tuple) doesn't support .get()! Use .into() instead."))
-    }
     fn buffer_set(_address: u32, _kind: &NP_PtrKinds, _schema: &NP_Schema, _buffer: &NP_Memory, _value: Box<&Self>) -> core::result::Result<NP_PtrKinds, NP_Error> {
         Err(NP_Error::new("Type (tuple) doesn't support .set()! Use .into() instead."))
     }
@@ -144,24 +139,33 @@ impl<'a> NP_ValueInto<'a> for NP_Tuple<'a> {
     fn buffer_into(address: u32, kind: NP_PtrKinds, schema: &'a NP_Schema, buffer: &'a NP_Memory) -> core::result::Result<Option<Box<NP_Tuple<'a>>>, NP_Error> {
         
         match &*schema.kind {
-            NP_SchemaKinds::Tuple { values } => {
+            NP_SchemaKinds::Tuple { values, sorted } => {
 
                 let mut addr = kind.get_value();
-
-                let mut addresses = Vec::with_capacity(4 * values.len());
-
-                for x in 0..addresses.len() {
-                    addresses[x] = 0;
-                }
 
                 let mut values_vec: Vec<u32> = Vec::new();
 
                 if addr == 0 {
+                    let mut addresses = Vec::with_capacity(4 * values.len());
+
+                    for x in 0..addresses.len() {
+                        addresses[x] = 0;
+                    }
+
                     // no tuple here, make one
                     addr = buffer.malloc(addresses)?; // stores value addresses
                     buffer.set_value_address(address, addr, &kind);
                     for _x in 0..values.len() {
                         values_vec.push(0);
+                    }
+
+                    if *sorted { // write default values in sorted order
+                        for x in 0..values_vec.len() as u32 {
+                            let ptr = NP_Ptr::<NP_Any>::new_standard_ptr(addr + (x * 4), schema, buffer);
+                            ptr.set_default()?;
+                            values_vec[x as usize] = ptr.location;
+                            buffer.set_value_address(addr + (x * 4), ptr.location, &kind);
+                        }
                     }
 
                 } else {
@@ -176,9 +180,119 @@ impl<'a> NP_ValueInto<'a> for NP_Tuple<'a> {
                 Ok(Some(Box::new(NP_Tuple::new(addr, buffer, values, values_vec))))
             },
             _ => {
-                Err(NP_Error::new("unreachable"))
+                unreachable!();
             }
         }
+    }
+
+    fn buffer_get_size(_address: u32, kind: &'a NP_PtrKinds, schema: &'a NP_Schema, buffer: &'a NP_Memory) -> Result<u32, NP_Error> {
+        
+        let base_size = 0u32;
+
+        let addr = kind.get_value();
+
+        if addr == 0 {
+            return Ok(0);
+        }
+
+        match &*schema.kind {
+            NP_SchemaKinds::Tuple { values: _, sorted: _ } => {
+
+                let tuple = NP_Tuple::buffer_into(addr, *kind, schema, buffer)?.unwrap();
+
+                let mut acc_size = 0u32;
+
+                for mut l in tuple.it().into_iter() {
+                    if l.has_value == true {
+                        let ptr = l.select::<NP_Any>()?;
+                        acc_size += ptr.calc_size()?;
+                    } else {
+                        acc_size += 4; // empty pointer
+                    }
+                }
+
+                return Ok(base_size + acc_size);
+            },
+            _ => {
+                unreachable!();
+            }
+        }
+    }
+
+    fn buffer_to_json(_address: u32, kind: &NP_PtrKinds, schema: &'a NP_Schema, buffer: &'a NP_Memory) -> JFObject {
+
+        match &*schema.kind {
+            NP_SchemaKinds::Tuple { values: _, sorted: _ } => {
+
+                let addr = kind.get_value();
+
+                if addr == 0 {
+                    return JFObject::Null;
+                }
+
+                let tuple = NP_Tuple::buffer_into(addr, *kind, schema, buffer).unwrap().unwrap();
+
+                let mut json_list = Vec::new();
+
+                for mut l in tuple.it().into_iter() {
+                    if l.has_value == true {
+                        let ptr = l.select::<NP_Any>();
+                        match ptr {
+                            Ok(p) => {
+                                json_list.push(p.json_encode());
+                            },
+                            Err (_e) => {
+                                json_list.push(JFObject::Null);
+                            }
+                        }
+                    } else {
+                        json_list.push(JFObject::Null);
+                    }
+                }
+
+                JFObject::Array(json_list)
+            },
+            _ => {
+                unreachable!();
+            }
+        }
+    }
+
+    fn buffer_do_compact<X: NP_Value + Default + NP_ValueInto<'a>>(from_ptr: &NP_Ptr<'a, X>, to_ptr: NP_Ptr<'a, NP_Any>) -> Result<(u32, NP_PtrKinds, &'a NP_Schema), NP_Error> where Self: NP_Value + Default {
+
+        if from_ptr.location == 0 {
+            return Ok((0, from_ptr.kind, from_ptr.schema));
+        }
+
+        let to_ptr_list = NP_Any::cast::<NP_Tuple>(to_ptr)?;
+
+        let new_address = to_ptr_list.location;
+
+        match Self::buffer_into(from_ptr.location, from_ptr.kind, from_ptr.schema, from_ptr.memory)? {
+            Some(old_list) => {
+
+                match to_ptr_list.into()? {
+                    Some(new_tuple) => {
+
+                        for mut item in old_list.it().into_iter() {
+
+                            if item.has_value {
+                                let new_ptr = new_tuple.select(item.index as u8)?;
+                                let old_ptr = item.select::<NP_Any>()?;
+                                old_ptr.compact(new_ptr)?;
+                            }
+
+                        }
+
+                        return Ok((new_address, from_ptr.kind, from_ptr.schema));
+                    },
+                    None => {}
+                }
+            },
+            None => { }
+        }
+
+        Ok((0, from_ptr.kind, from_ptr.schema))
     }
 }
 
@@ -224,24 +338,45 @@ impl<'a> Iterator for NP_Tuple_Iterator<'a> {
             return None;
         }
 
-        None
+        let this_index = self.current_index;
+        self.current_index += 1;
+        
+        Some(NP_Tuple_Item {
+            index: this_index,
+            has_value: self.values[this_index as usize] != 0,
+            address: self.values[this_index as usize],
+            memory: self.memory,
+            schema: &self.schemas[this_index as usize]
+        })
     }
 }
 
 pub struct NP_Tuple_Item<'a> { 
-    pub index: u8,
-    pub has_value: (bool, bool),
+    pub index: u16,
+    pub has_value: bool,
     pub address: u32,
-    pub memory: &'a NP_Memory
+    pub memory: &'a NP_Memory,
+    pub schema: &'a NP_Schema,
 }
 
 impl<'a> NP_Tuple_Item<'a> {
 
     pub fn select<T: NP_Value + Default + NP_ValueInto<'a>>(&mut self) -> Result<NP_Ptr<'a, T>, NP_Error> {
-        Err(NP_Error::new(""))
-    }
-    // TODO: same as select, except for deleting the value
-    pub fn delete(&mut self) -> Result<bool, NP_Error> {
-        Ok(false)
+
+        // match type casting
+        if T::type_idx().0 != NP_TypeKeys::Any as i64 && self.schema.type_data.0 != NP_TypeKeys::Any as i64  {
+
+            // not using ANY casting, check type
+            if self.schema.type_data.0 != T::type_idx().0 {
+                let mut err = "TypeError: Attempted to cast type (".to_owned();
+                err.push_str(T::type_idx().1.as_str());
+                err.push_str(") to schema of type (");
+                err.push_str(self.schema.type_data.1.as_str());
+                err.push_str(")");
+                return Err(NP_Error::new(err));
+            }
+        }
+
+        Ok(NP_Ptr::new_standard_ptr(self.address, self.schema, self.memory))
     }
 }

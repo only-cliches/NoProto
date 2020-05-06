@@ -3,7 +3,7 @@
 use crate::pointer::NP_ValueInto;
 use crate::pointer::NP_Value;
 use crate::error::NP_Error;
-use crate::pointer::NP_Ptr;
+use crate::pointer::{any::NP_Any, NP_Ptr};
 use crate::memory::NP_Memory;
 use crate::schema::{NP_TypeKeys, NP_Schema};
 
@@ -55,32 +55,17 @@ impl<'a> NP_Buffer<'a> {
         todo!();
     }
 
-    pub fn compact(self)  {
-        todo!();
-    }
+    pub fn calc_wasted_bytes(&self) -> Result<u32, NP_Error> {
 
-    pub fn calc_wasted_bytes(&self) -> u32 {
+        let root: NP_Ptr<NP_Any> = NP_Ptr::new_standard_ptr(1, &self.root_model, self.memory);
 
-        // let total_bytes = self.memory.borrow().bytes.len() as u32;
-        todo!();
-    }
+        let real_bytes = root.calc_size()? + 1u32;
+        let total_bytes = self.memory.read_bytes().len() as u32;
 
-    pub fn maybe_compact<F>(self, mut callback: F) -> bool 
-        where F: FnMut(f32, f32) -> bool // wasted bytes, percent of waste
-    {
-        todo!();
-        /*
-        let wasted_bytes = self.calc_wasted_bytes() as f32;
-
-        let total_bytes = self.memory.read_bytes().len() as f32;
-
-        let size_without_waste = total_bytes - wasted_bytes;
-
-        if callback(wasted_bytes, (total_bytes / size_without_waste) as f32) {
-            self.compact();
-            true
+        if total_bytes >= real_bytes {
+            return Ok(total_bytes - real_bytes);
         } else {
-            false
-        }*/
+            return Err(NP_Error::new("Error calclating bytes!"));
+        }
     }
 }

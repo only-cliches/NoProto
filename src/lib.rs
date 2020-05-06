@@ -9,7 +9,7 @@
 //! ### TODO: 
 //! - [x] Finish implementing Lists, Tuples & Maps
 //! - [x] Collection Iterator
-//! - [ ] Compaction
+//! - [x] Compaction
 //! - [ ] Documentation
 //! - [ ] Tests
 //! 
@@ -76,7 +76,7 @@
 //! - Buffers are not validated or checked before deserializing.
 //! 
 //! # Quick Example
-//! ```
+//! ```rust
 //! use no_proto::error::NP_Error;
 //! use no_proto::NP_Factory;
 //! use no_proto::NP;
@@ -193,7 +193,6 @@ mod utils;
 
 extern crate alloc;
 
-use core::marker::PhantomData;
 use crate::pointer::NP_Value;
 use crate::json_flex::json_decode;
 use crate::error::NP_Error;
@@ -204,23 +203,23 @@ use alloc::vec::Vec;
 use alloc::vec;
 use alloc::borrow::ToOwned;
 use json_flex::JFObject;
-use pointer::{any::NP_Any, NP_Ptr, NP_ValueInto};
+use pointer::{any::NP_Any, NP_Ptr};
 
 const PROTOCOL_VERSION: u8 = 0;
 
 
 /// Factories allow you to serialize and deserialize buffers.
 /// 
-/// Each factory represents a schema, each factory can be reused for any number of buffers based on the factory's schema.
+/// Each factory represents a single schema, each factory can be reused for any number of buffers based on the factory's schema.
 /// 
 /// # Example
 /// ```
 /// 
 /// 
 /// ```
-pub struct NP_Factory<'a> {
+pub struct NP_Factory {
     schema: NP_Schema,
-    phantom: &'a PhantomData<u8>
+    // _phantom: &'a PhantomData<u8>
 }
 
 pub enum NP {
@@ -229,7 +228,19 @@ pub enum NP {
     new
 }
 
-impl<'a> NP_Factory<'a> {
+impl NP {
+    pub fn str_to_vec<S: AsRef<str>>(string: S) -> Vec<u8> {
+        string.as_ref().as_bytes().to_vec()
+    }
+    pub fn int_to_vec(int: i64) -> Vec<u8> {
+        int.to_be_bytes().to_vec()
+    }
+    pub fn float_to_vec(float: f64) -> Vec<u8> {
+        float.to_be_bytes().to_vec()
+    }
+}
+
+impl NP_Factory {
     pub fn new(json_schema: &str) -> core::result::Result<NP_Factory, NP_Error> {
 
 
@@ -238,8 +249,7 @@ impl<'a> NP_Factory<'a> {
         match parsed {
             Ok(good_parsed) => {
                 Ok(NP_Factory {
-                    schema:  NP_Schema::from_json(good_parsed)?,
-                    phantom: &PhantomData
+                    schema:  NP_Schema::from_json(good_parsed)?
                 })
             },
             Err(_x) => {
@@ -268,9 +278,9 @@ impl<'a> NP_Factory<'a> {
         Ok(bytes.dump())
     }
 
-    pub fn new_buffer(&self, size: Option<usize>) -> Vec<u8> {
+    pub fn new_buffer(&self, capacity: Option<usize>) -> Vec<u8> {
 
-        let use_size = match size {
+        let use_size = match capacity {
             Some(x) => x,
             None => 1024
         };
@@ -283,6 +293,51 @@ impl<'a> NP_Factory<'a> {
         ]); 
 
         new_bytes
+    }
+
+    pub fn maybe_compact<F>(&self, buffer: Vec<u8>, new_capacity: Option<u32>, mut callback: F) -> Result<Vec<u8>, NP_Error> where F: FnMut(u32, u32) -> bool {
+
+        let old_bytes = NP_Memory::new(buffer);
+        let old_root = NP_Ptr::<NP_Any>::new_standard_ptr(1, &self.schema, &old_bytes);
+
+        let wasted_bytes = old_root.calc_size()?;
+
+        let do_compact = callback(wasted_bytes, old_bytes.read_bytes().len() as u32);
+
+        let capacity = match new_capacity {
+            Some(x) => { x as usize },
+            None => old_bytes.read_bytes().len()
+        };
+
+        Ok(if do_compact {
+            let new_vec: Vec<u8> = self.new_buffer(Some(capacity));
+            let new_bytes = NP_Memory::new(new_vec);
+            let new_root = NP_Ptr::<NP_Any>::new_standard_ptr(1, &self.schema, &new_bytes);
+    
+            old_root.compact(new_root)?;
+
+            new_bytes.dump()
+        } else {
+            old_bytes.dump()
+        })
+    }
+
+    pub fn compact(&self, new_capacity: Option<u32>, buffer: Vec<u8>) -> Result<Vec<u8>, NP_Error> {
+
+        let capacity = match new_capacity {
+            Some(x) => { x as usize },
+            None => buffer.len()
+        };
+
+        let old_bytes = NP_Memory::new(buffer);
+        let old_root = NP_Ptr::<NP_Any>::new_standard_ptr(1, &self.schema, &old_bytes);
+
+        let new_bytes = NP_Memory::new(self.new_buffer(Some(capacity)));
+        let new_root = NP_Ptr::<NP_Any>::new_standard_ptr(1, &self.schema, &new_bytes);
+
+        old_root.compact(new_root)?;
+        
+        Ok(new_bytes.dump())
     }
 
     pub fn json_encode(&self, buffer: Vec<u8>) -> (JFObject, Vec<u8>) {
@@ -305,7 +360,7 @@ impl<'a> NP_Factory<'a> {
 
     pub fn set<X: NP_Value + Default, S: AsRef<str>>(&self, buffer: Vec<u8>, path: S, value: X) -> Result<(bool, Vec<u8>), NP_Error> {
         let bytes = NP_Memory::new(buffer);
-
+ 
         let result = {
             let buffer = NP_Buffer::new(&self.schema, &bytes);
 
@@ -331,30 +386,66 @@ impl<'a> NP_Factory<'a> {
 #[cfg(test)]
 mod tests {
 
+    /*
     use crate::pointer::NP_Ptr;
     use crate::collection::table::NP_Table;
+    use collection::{map::NP_Map, list::NP_List};*/
     use super::*;
-    use collection::{map::NP_Map, list::NP_List};
+
 
     #[test]
     fn it_works() -> core::result::Result<(), NP_Error> {
 
+        /*
         let factory: NP_Factory = NP_Factory::new(r#"{
-            "type": "float"
+            "type": "list",
+            "of": {
+                "type": "string"
+            }
         }"#)?;
 
-        /*
+        
         let return_buffer = factory.open(NP::new, |mut buffer| {
 
-            let mut root: NP_Ptr<f32> = buffer.root()?;
+            let root: NP_Ptr<NP_List<String>> = buffer.root()?;
 
-            root.set(1.0)?;
+            let mut list = root.into()?.unwrap();
+
+            
+            list.select(10)?.set("something".to_owned())?;
+            list.select(20)?.set("something2".to_owned())?;
+            // list.select(20)?.set("something crazy here".to_owned())?;
+            
+            // list.select(20)?.clear()?;
+
+            // root.clear()?;
+
+            println!("WASTED BYTES: {}", buffer.calc_wasted_bytes()?);
 
             Ok(())
         })?;
 
-        println!("BYTES: {:?}", return_buffer);
+        println!("BYTES: {}: {:?}", return_buffer.len(), return_buffer);
 
+        let mut compacted = factory.compact(None, return_buffer)?;
+
+        println!("BYTES 2: {}: {:?}", compacted.len(), compacted);
+
+        compacted = factory.open(NP::bytes(compacted), |mut buffer| {
+
+            let root: NP_Ptr<NP_List<String>> = buffer.root()?;
+
+            let mut list = root.into()?.unwrap();
+
+            println!("VALUE LIST: {:?}", list.select(20)?.get()?);
+
+            println!("WASTED BYTES 2: {}", buffer.calc_wasted_bytes()?);
+
+            Ok(())
+        })?;
+
+
+       
         let return_buffer_2 = factory.open(NP::new, |mut buffer| {
 
             let mut root: NP_Ptr<f32> = buffer.root()?;
@@ -373,19 +464,29 @@ mod tests {
             Ok(())
         })?;
 
-        let va = factory.extract(return_buffer_2, |mut buffer| {
-            let mut root: NP_Ptr<f32> = buffer.root()?;
-            Ok((root.get()?, 0f32))
-        });
-
         println!("BYTES: {:?}", return_buffer_2);
 
         println!("GT {:?}", return_buffer_2 < return_buffer);
 
-        let json = factory.json_encode(return_buffer_2);
-        println!("JSON {:?}", json.0.to_json());
+        // let json = factory.json_encode(return_buffer_2);
+        // println!("JSON {:?}", json.0.to_json());
 
    
+        
+        let factory: NP_Factory = NP_Factory::new(r#"{
+            "type": "table",
+            "columns": [
+                ["userID",  {"type": "string"}],
+                ["pass",    {"type": "string"}],
+                ["age",     {"type": "uint16"}],
+                ["colors",  {"type": "list", "of": {
+                    "type": "string"
+                }}],
+                ["meta",    {"type": "map", "value": {"type": "string"}}]
+            ]
+        }"#)?;
+        */
+        /*
 
         let factory: NP_Factory = NP_Factory::new(r#"{
             "type": "table",
@@ -402,7 +503,7 @@ mod tests {
 
         let mut myvalue: Option<String> = None;
 
-        let return_buffer = factory.new_buffer(None, |mut buffer| {
+        let return_buffer = factory.open(NP::new, |mut buffer| {
 
             // buffer.deep_set(".userID", "something".to_owned())?;
 
@@ -414,6 +515,7 @@ mod tests {
 
             let mut x = table.select::<String>("userID")?;
             x.set("username".to_owned())?;
+            // x.set("something else".to_owned())?;
     
             let mut x = table.select::<String>("pass")?;
             x.set("password123 hello".to_owned())?;
@@ -430,19 +532,19 @@ mod tests {
 
             second_test_item.set("orange".to_owned())?;
 
-            // let mut x = table.select::<u16>("age")?;
-            // x.set(1039)?;
+            let mut x = table.select::<u16>("age")?;
+            x.set(1039)?;
 
             let mut meta = table.select::<NP_Map<String>>("meta")?.into()?.unwrap();
+ 
+            meta.select(&NP::str_to_vec("some key"))?.set("some value".to_string())?;
 
-            meta.select(&"some key".to_string().as_bytes().to_vec())?.set("some value".to_string())?;
-
-            // println!("VALUE 0: {:?}", table.select::<u16>("age")?.get()?);
+            println!("VALUE 0: {:?}", meta.select(&NP::str_to_vec("some key"))?.get());
 
             Ok(())
         })?;
 
-        let return_buffer_2 = factory.load_buffer(return_buffer, |mut buffer| {
+        let return_buffer_2 = factory.open(NP::bytes(return_buffer), |mut buffer| {
 
             let root: NP_Ptr<NP_Table> = buffer.root()?;
             
@@ -469,17 +571,17 @@ mod tests {
 
             color.shift()?;
 
-            color.debug(|i, addr, next| {
-                println!("I: {}, ADDR: {}, NEXT: {}", i, addr, next);
-            })?;
+            //color.debug(|i, addr, next| {
+            //    println!("I: {}, ADDR: {}, NEXT: {}", i, addr, next);
+            //})?;
 
             println!("Value 21 GET: {:?}", color.select(21)?.get()?);
             println!("Value 22 GET: {:?}", color.select(22)?.get()?);
             println!("LENGTH: {:?}", color.len());
 
-            let mut meta = table.select::<NP_Map<String>>("meta")?.into()?.unwrap();
+            // let mut meta = table.select::<NP_Map<String>>("meta")?.into()?.unwrap();
 
-            println!("Some Key: {:?}", meta.select(&"some key".to_string().as_bytes().to_vec())?.get()?);
+            // println!("Some Key: {:?}", meta.select(&"some key".to_string().as_bytes().to_vec())?.get()?);
 
             let mut x = table.select::<String>("userID")?;
             println!("VALUE: {:?}", x.get()?);
@@ -489,11 +591,13 @@ mod tests {
 
             println!("VALUE 3: {:?}", table.select::<u16>("age")?.get()?);
 
-            let color2 = color.it();
+            //let color2 = color.it();
 
-            for mut x in color2.into_iter() {
-                println!("Column Loop: {:?} {} {} {}", x.select()?.get()?, x.index, x.has_value.0, x.has_value.1);
-            }
+            //for mut x in color2.into_iter() {
+            //    println!("Column Loop: {:?} {} {} {}", x.select()?.get()?, x.index, x.has_value.0, x.has_value.1);
+            //}
+
+            println!("WASTED BYTES {:?}", buffer.calc_wasted_bytes()?);
 
             Ok(())
         })?;
@@ -506,8 +610,8 @@ mod tests {
 
         let json = factory.json_encode(return_buffer_2);
         println!("JSON {:?}", json.0.to_json());
+        */
 
-        Ok(())*/
         Ok(())
     }
     

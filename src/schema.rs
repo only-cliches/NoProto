@@ -1,8 +1,11 @@
-//! Schemas are JSON used to declare & store the shape of buffer objects.
+//! Schemas are JSON used to declare the shape of buffer objects.
 //! 
-//! No Proto Schemas are JSON objects that describe how the data in an NP_Buffer is stored.
+//! No Proto Schemas are JSON objects that describe how the data in an buffer is stored and what types of data is stored.
 //! 
-//! Every schema object has at least a "type" property that provides the kind of value stored at that part of the schema.  Additional keys are dependent on the type of schema.
+//! Once you create a buffer with a schema, that same schema can be used to safely decode, compact or edit the buffer at a future time.
+//! 
+//! 
+//! 
 //! 
 //! Schemas are validated and sanity checked by the [NP_Factory](../struct.NP_Factory.html) struct upon creation.  You cannot pass an invalid schema into a factory constructor and build/parse buffers with it.
 //! 
@@ -15,10 +18,10 @@
 //!     // used by string & bytes types
 //!     size?: number;
 //!     
-//!     // used by Dec32 and Dec64 types, the number of decimal places each value has
-//!     precision?: number;
+//!     // used by Dec64 type, the number of decimal places every value has
+//!     exp?: number;
 //!     
-//!     // used by table, list & tuple types to indicite bytewise sorting
+//!     // used by tuple to indicite bytewise sorting of children
 //!     sorted?: boolean;
 //!     
 //!     // used by list types
@@ -32,6 +35,9 @@
 //! 
 //!     // used by table types
 //!     columns?: [string, NP_Schema][]
+//! 
+//!     // used by option/enum types
+//!     choices?: string[];
 //! }
 //! ```
 //! 
@@ -105,16 +111,15 @@
 //! | [`option`](#option)                    | [`NP_Option`](../pointer/misc/struct.NP_Option.html)                     |✓                 | 1 byte         | Up to 255 string based options in schema.                                |
 //! | [`bool`](#bool)                        | [`bool`](https://doc.rust-lang.org/std/primitive.bool.html)              |✓                 | 1 byte         |                                                                          |
 //! | [`dec64`](#dec64)                      | [`NP_Dec`](../pointer/misc/struct.NP_Dec.html)                           |✓                 | 8 bytes        | Fixed point decimal number based on i64.                                 |
-//! | [`geo4`](#geo4-geo8-geo16)             | [`NP_Geo`](../pointer/misc/struct.NP_Geo.html)                           |✓ ***             | 4 bytes        | 1.1km resolution (city) geographic coordinate                           |
-//! | [`geo8`](#geo4-geo8-geo16)             | [`NP_Geo`](../pointer/misc/struct.NP_Geo.html)                           |✓ ***             | 8 bytes        | 11mm resolution (marble) geographic coordinate                           |
-//! | [`geo16`](#geo4-geo8-geo16)            | [`NP_Geo`](../pointer/misc/struct.NP_Geo.html)                           |✓ ***             | 16 bytes       | 110 microns resolution (grain of sand) geographic coordinate             |
+//! | [`geo4`](#geo4-geo8-geo16)             | [`NP_Geo`](../pointer/misc/struct.NP_Geo.html)                           |✓                 | 4 bytes        | 1.1km resolution (city) geographic coordinate                           |
+//! | [`geo8`](#geo4-geo8-geo16)             | [`NP_Geo`](../pointer/misc/struct.NP_Geo.html)                           |✓                 | 8 bytes        | 11mm resolution (marble) geographic coordinate                           |
+//! | [`geo16`](#geo4-geo8-geo16)            | [`NP_Geo`](../pointer/misc/struct.NP_Geo.html)                           |✓                 | 16 bytes       | 110 microns resolution (grain of sand) geographic coordinate             |
 //! | [`tid`](#tid)                          | [`NP_TimeID`](../pointer/misc/struct.NP_TimeID.html)                     |✓                 | 16 bytes       | u64 for time with 8 random bytes.                                        |
 //! | [`uuid`](#uuid)                        | [`NP_UUID`](../pointer/misc/struct.NP_UUID.html)                         |✓                 | 16 bytes       | v4 UUID, 2e37 possible UUID v4s                                          |
 //! | [`date`](#date)                        | [`NP_Date`](../pointer/misc/struct.NP_Date.html)                         |✓                 | 8 bytes        | Good to store unix epoch (in seconds) until the year 584,942,417,355     |
 //!  
 //! - \* For some collections to work with bytewise sorting, `sorting` must be set to `true` in the collection schema and other constraints must be met.
 //! - \*\* String & Bytes can be bytewise sorted only if they have a fixed length in the schema
-//! - \*\*\* Geo types cannot be collectively sorted since they contain two values, but the individual lat/lon values can be bytewise sorted
 //! 
 //! # Legend
 //! 
@@ -145,14 +150,14 @@
 //! ## table
 //! Tables represnt a fixed number of named columns, with each column having it's own data type.
 //! 
-//! - **Bytewise Sorting**: Supported if all column types support bytewise sorting and if the same columns are used in every buffer and are set in the same order.
+//! - **Bytewise Sorting**: Unsupported
 //! - **Compaction**: columns without values will be removed from the buffer
 //! - **Mutations**: The ordering of items in the `columns` property must always remain the same.  It's safe to add new columns to the bottom of the column list or rename columns, but never to remove columns.  Column types cannot be changed safely.  If you need to depreciate a column, set it's name to an empty string. 
 //! 
 //! ## list
 //! Lists represent a dynamically growing or shrinking list of items.  The type for every item in the list is identical and the order of entries is mainted in the buffer.  Lists do not have to contain contiguous entries, gaps can safely and efficiently be stored.
 //! 
-//! - **Bytewise Sorting**: Supported if `of` type supports bytewise sorting and if the same indexes are used in every buffer and set in the same order.
+//! - **Bytewise Sorting**: Unsupported
 //! - **Compaction**: Indexes without valuse are removed from the buffer
 //! - **Mutations**: None
 //! 
@@ -160,15 +165,15 @@
 //! A map is a dynamically growing or shrinking list of items where each key is a Vec<u8>.  Every value of a map has the same type.
 //! 
 //! - **Bytewise Sorting**: Unsupported
-//! - **Compaction**: keys without values are removed from the buffer
+//! - **Compaction**: Keys without values are removed from the buffer
 //! - **Mutations**: None
 //! 
 //! ## tuple
 //! A tuple is a fixed size list of items.  Each item has it's own type and index.  Tuples support up to 255 items.
 //! 
 //! - **Bytewise Sorting**: Supported if all children support bytewise sorting and schema `sorted` is set to `true`.  Unlike lists and tables, the ordering of values will be enforced by the tuple based on it's `values` property.
-//! - **Compaction**: Tuples only reduce in size if children are deleted or children with a dyanmic size are updated.
-//! - **Mutations**: It's safe to remove values from a tuple schema of `values`, but never to add new values or update value types.  No mutations are safe if `sorted` is `true`.
+//! - **Compaction**: If `sorted` is true, compaction will not save space.  Otherwise, tuples only reduce in size if children are deleted or children with a dyanmic size are updated.
+//! - **Mutations**: Adding new values to the end of the `values` schema property is safe.
 //! 
 //! ## any
 //! Any types are used to declare that a specific type has no fixed schema but is dynamic.  It's generally not a good idea to use Any types.
@@ -181,14 +186,14 @@
 //! A string is a fixed or dynamically sized collection of utf-8 encoded bytes.
 //! 
 //! - **Bytewise Sorting**: Supported only if `size` property is set in schema.
-//! - **Compaction**: If dynamic/changing size between updates compaction can save space.  If the size is fixed compaction will not reclaim space.
+//! - **Compaction**: If `size` property is set, compaction cannot reclaim space.  Otherwise it might depending on nature of updates.
 //! - **Mutations**: If the `size` property is set it's safe to make it smaller, but not larger.  If the field is being used for bytewise sorting, no mutation is safe.
 //! 
 //! ## bytes
 //! Bytes are fixed or dynimcally sized Vec<u8> collections. 
 //! 
 //! - **Bytewise Sorting**: Supported only if `size` property is set in schema.
-//! - **Compaction**: If dynamic/changing size between updates compaction can save space.  If the size is fixed compaction will not reclaim space.
+//! - **Compaction**: If `size` property is set, compaction cannot reclaim space.  Otherwise it might depending on nature of updates.
 //! - **Mutations**: If the `size` property is set it's safe to make it smaller, but not larger.  If the field is being used for bytewise sorting, no mutation is safe.
 //! 
 //! ## int8, int16, int32, int64
@@ -208,7 +213,7 @@
 //! ## float, double
 //! Allows the storage of floating point numbers of various sizes.  Bytes are stored in big endian format.
 //! 
-//! - **Bytewise Sorting**: Unsupported, use Dec32 or Dec64 types.
+//! - **Bytewise Sorting**: Unsupported, use Dec64 type.
 //! - **Compaction**: Updates are done in place, never use additional space.
 //! - **Mutations**: None
 //! 
@@ -236,7 +241,7 @@
 //! ## geo4, ge8, geo16
 //! Allows you to store geographic coordinates with varying levels of accuracy and space usage.  
 //! 
-//! - **Bytewise Sorting**: Not supported, but the individual lat/lon values can be sorted.
+//! - **Bytewise Sorting**: Not supported.
 //! - **Compaction**: Updates are done in place, never use additional space.
 //! - **Mutations**: None
 //! 
@@ -295,45 +300,12 @@ use alloc::string::ToString;
 pub enum NP_SchemaKinds {
     None,
     Scalar,
+    Enum { choices: Vec<String> },
     Table { columns: Vec<Option<(u8, String, NP_Schema)>> },
     List { of: NP_Schema },
     Map { value: NP_Schema },
-    Enum { choices: Vec<String> },
-    Tuple { values: Vec<NP_Schema>}
+    Tuple { sorted: bool, values: Vec<NP_Schema>}
 }
-
-/*
-#[derive(Debug)]
-pub enum NP_SchemaKinds {
-    None,
-    Utf8String,
-    Bytes,
-    Int8,
-    Int16,
-    Int32,
-    Int64,
-    Uint8,
-    Uint16,
-    Uint32,
-    Uint64,
-    Float,
-    Double,
-    Dec32,
-    Dec64,
-    Boolean,
-    Geo4,
-    Geo8,
-    Geo16,
-    Uuid,
-    Tid,
-    Date,
-    Table { columns: Vec<Option<(u8, String, NP_Schema)>> },
-    List { of: NP_Schema },
-    Map { value: NP_Schema },
-    Enum { choices: Vec<String> },
-    Tuple { values: Vec<NP_Schema>}
-}
-*/
 
 #[derive(Debug)]
 #[doc(hidden)]
@@ -634,8 +606,12 @@ impl NP_Schema {
 
                 let mut schemas: Vec<NP_Schema> = vec![];
 
+                let sorted;
+
                 {
                     let borrowed_schema = json_schema;
+
+                    sorted = borrowed_schema["sorted"].is_true();
 
                     if borrowed_schema["values"].is_null() || borrowed_schema["values"].is_array() == false  {
                         return Err(NP_Error::new("Tuple type requires 'values' property as array of schema objects!"));
@@ -643,12 +619,51 @@ impl NP_Schema {
 
                     for schema in borrowed_schema["values"].into_vec().unwrap().into_iter() {
                         let good_schema = NP_Schema::validate_model(schema)?;
+                        if sorted {
+                            match *good_schema.kind {
+                                NP_SchemaKinds::Scalar => { // scalar string and bytes must have fixed sizes
+
+                                    match NP_TypeKeys::from(good_schema.type_data.0) {
+                                        NP_TypeKeys::UTF8String => {
+                                            if good_schema.type_state == -1 { // no fixed length
+                                                return Err(NP_Error::new("String must have `size` property when child of sorted tuple!"));
+                                            }
+                                        },
+                                        NP_TypeKeys::Bytes => {
+                                            if good_schema.type_state == -1 { // no fixed length
+                                                return Err(NP_Error::new("Bytes must have `size` property when child of sorted tuple!"));
+                                            }
+                                        },
+                                        NP_TypeKeys::Float => {
+                                            return Err(NP_Error::new("Float is not a supported child for sorted tuples!"));
+                                        },
+                                        NP_TypeKeys::Double => {
+                                            return Err(NP_Error::new("Double is not a supported child for sorted tuples!"));
+                                        },
+                                        NP_TypeKeys::Geo => {
+                                            return Err(NP_Error::new("Geo is not a supported child for sorted tuples!"));
+                                        },
+                                        _ => {
+
+                                        }
+                                    }
+                                },
+                                NP_SchemaKinds::Enum { choices: _ } => {
+                 
+                                },
+                                _ => { // table, tuple, list or map
+                                    return Err(NP_Error::new("Sorted tuples cannot have a collection type (List, Tuple, Map or Table) as child!"));
+                                }
+                            }
+                        }
+
                         schemas.push(good_schema);
                     }
                 }
             
                 Ok(NP_Schema {
-                    kind: Box::new(NP_SchemaKinds::Tuple { 
+                    kind: Box::new(NP_SchemaKinds::Tuple {
+                        sorted: sorted,
                         values: schemas
                     }),
                     type_data: NP_Tuple::type_idx(),
@@ -677,8 +692,9 @@ impl NP_Schema {
                 if options.len() > 255 {
                     return Err(NP_Error::new("Cannot have more than 255 choices for option type!"));
                 }
+
                 Ok(NP_Schema {
-                    kind: Box::new(NP_SchemaKinds::Enum { 
+                    kind: Box::new(NP_SchemaKinds::Enum {
                         choices: options
                     }),
                     type_data: NP_Option::type_idx(),

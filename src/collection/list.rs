@@ -1,5 +1,5 @@
 use crate::pointer::NP_ValueInto;
-use crate::{memory::NP_Memory, pointer::{NP_Value, NP_Ptr, NP_PtrKinds}, error::NP_Error, schema::{NP_SchemaKinds, NP_Schema, NP_TypeKeys}, json_flex::JFObject};
+use crate::{memory::NP_Memory, pointer::{NP_Value, NP_Ptr, NP_PtrKinds, any::NP_Any}, error::NP_Error, schema::{NP_SchemaKinds, NP_Schema, NP_TypeKeys}, json_flex::JFObject};
 
 use alloc::string::String;
 use alloc::borrow::ToOwned;
@@ -350,8 +350,8 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_List<'a, T> {
 
         let kind = NP_PtrKinds::ListItem { value: value_address, next: next_address, i: index };
 
-        // try to get the value with "INTO"
-        match T::buffer_get(value_address, &kind, self.of.unwrap(), self.memory.unwrap()) {
+        // try to get the value
+        match T::buffer_into(value_address, kind, self.of.unwrap(), self.memory.unwrap()) {
             Ok(x) => {
                 match x {
                     Some(y) => {
@@ -362,22 +362,8 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_List<'a, T> {
                     }
                 }
             },
-            Err(_e) => { // try into
-                match T::buffer_into(value_address, kind, self.of.unwrap(), self.memory.unwrap()) {
-                    Ok(x) => {
-                        match x {
-                            Some(y) => {
-                                Ok(Some((Some(*y), index)))
-                            },
-                            None => {
-                                Ok(Some((None, index)))
-                            }
-                        }
-                    },
-                    Err(e) => { // ok fine, return error
-                        Err(e)
-                    }
-                }
+            Err(e) => {
+                Err(e)
             }
         }
     }
@@ -524,17 +510,11 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_List<'a, T> {
 }
 
 impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Value for NP_List<'a, T> {
-    fn new<X>() -> Self {
-        unreachable!()
-    }
-    fn is_type( _type_str: &str) -> bool { 
+    fn is_type( _type_str: &str) -> bool { // not needed for collection types
         unreachable!()
     }
     fn type_idx() -> (i64, String) { (NP_TypeKeys::List as i64, "list".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::List as i64, "list".to_owned()) }
-    fn buffer_get(_address: u32, _kind: &NP_PtrKinds, _schema: &NP_Schema, _buffer: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
-        Err(NP_Error::new("Type (list) doesn't support .get()! Use .into() instead."))
-    }
     fn buffer_set(_address: u32, _kind: &NP_PtrKinds, _schema: &NP_Schema, _buffer: &NP_Memory, _value: Box<&Self>) -> core::result::Result<NP_PtrKinds, NP_Error> {
         Err(NP_Error::new("Type (list) doesn't support .set()! Use .into() instead."))
     }
@@ -572,12 +552,51 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_ValueInto<'a> for NP_List<
                 Ok(Some(Box::new(NP_List::<T>::new(addr, u32::from_be_bytes(head), u32::from_be_bytes(tail), buffer, of )?)))
             },
             _ => {
-                Err(NP_Error::new("unreachable"))
+                unreachable!();
+            }
+        }
+    }
+
+    fn buffer_get_size(_address: u32, kind: &'a NP_PtrKinds, schema: &'a NP_Schema, buffer: &'a NP_Memory) -> Result<u32, NP_Error> {
+        let base_size = 8u32; // head + tail;
+
+        match &*schema.kind {
+            NP_SchemaKinds::List { of } => {
+
+                let addr = kind.get_value();
+
+                let head: [u8; 4];
+                let tail: [u8; 4];
+
+                if addr == 0 {
+                    return Ok(0);
+                } else {
+                    // existing head, read value
+                    let a = addr as usize;
+                    head = *buffer.get_4_bytes(a).unwrap_or(&[0; 4]);
+                    tail = *buffer.get_4_bytes(a + 4).unwrap_or(&[0; 4]);
+                }
+
+                let list = NP_List::<T>::new(addr, u32::from_be_bytes(head), u32::from_be_bytes(tail), buffer, of ).unwrap();
+
+                let mut acc_size = 0u32;
+
+                for mut l in list.it().into_iter() {
+                    if l.has_value.1 == true {
+                        let ptr = l.select()?;
+                        acc_size += ptr.calc_size()?;
+                    }
+                }
+
+                Ok(acc_size + base_size)
+            },
+            _ => {
+                unreachable!();
             }
         }
     }
     
-    fn buffer_to_json(address: u32, kind: &NP_PtrKinds, schema: &'a NP_Schema, buffer: &'a NP_Memory) -> JFObject {
+    fn buffer_to_json(_address: u32, kind: &NP_PtrKinds, schema: &'a NP_Schema, buffer: &'a NP_Memory) -> JFObject {
 
         match &*schema.kind {
             NP_SchemaKinds::List { of } => {
@@ -622,6 +641,42 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_ValueInto<'a> for NP_List<
                 unreachable!();
             }
         }
+    }
+
+    fn buffer_do_compact<X: NP_Value + Default + NP_ValueInto<'a>>(from_ptr: &NP_Ptr<'a, X>, to_ptr: NP_Ptr<'a, NP_Any>) -> Result<(u32, NP_PtrKinds, &'a NP_Schema), NP_Error> where Self: NP_Value + Default {
+
+        if from_ptr.location == 0 {
+            return Ok((0, from_ptr.kind, from_ptr.schema));
+        }
+
+        let to_ptr_list = NP_Any::cast::<NP_List<NP_Any>>(to_ptr)?;
+
+        let new_address = to_ptr_list.location;
+
+        match Self::buffer_into(from_ptr.location, from_ptr.kind, from_ptr.schema, from_ptr.memory)? {
+            Some(old_list) => {
+
+                match to_ptr_list.into()? {
+                    Some(mut new_list) => {
+
+                        for mut item in old_list.it().into_iter() {
+                            if item.has_value.0 && item.has_value.1 {
+
+                                let new_ptr = new_list.select(item.index)?;
+                                let old_ptr = item.select()?;
+                                old_ptr.compact(new_ptr)?;
+                            }
+                        }
+
+                        return Ok((new_address, from_ptr.kind, from_ptr.schema));
+                    },
+                    None => {}
+                }
+            },
+            None => { }
+        }
+
+        Ok((0, from_ptr.kind, from_ptr.schema))
     }
 }
 
@@ -716,14 +771,7 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_List_Item<'a, T> {
 
     pub fn select(&mut self) -> Result<NP_Ptr<'a, T>, NP_Error> {
         self.list.select(self.index)
-        
-        /*if self.address == 0 { // no existing pointer here, make one
-            return 
-        } else { // existing pointer
-            return Ok(NP_Ptr::new_list_item_ptr(self.address, self.of, self.memory))
-        }*/
     }
-    // TODO: same as select, except for deleting the value
     pub fn delete(&mut self) -> Result<bool, NP_Error> {
         self.list.delete(self.index)
     }

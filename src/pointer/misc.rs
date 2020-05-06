@@ -4,7 +4,6 @@ use crate::schema::{NP_SchemaKinds, NP_Schema, NP_TypeKeys};
 use crate::pointer::NP_PtrKinds;
 use crate::{memory::NP_Memory, pointer::NP_Value, error::NP_Error, utils::{Rand, to_hex}};
 use core::fmt;
-use core::ops;
 
 use alloc::string::String;
 use alloc::boxed::Box;
@@ -559,10 +558,6 @@ impl Default for NP_Dec {
 
 impl NP_Value for NP_Dec {
 
-    fn new<T: NP_Value + Default>() -> Self {
-        NP_Dec::new(0,0)
-    }
-
     fn is_type( type_str: &str) -> bool {
         "dec64" == type_str
     }
@@ -570,7 +565,8 @@ impl NP_Value for NP_Dec {
     fn type_idx() -> (i64, String) { (NP_TypeKeys::Dec64 as i64, "dec64".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Dec64 as i64, "dec64".to_owned()) }
 
-    fn schema_state(type_string: &str, _json_schema: &JFObject) -> core::result::Result<i64, NP_Error> {
+    fn schema_state(_type_string: &str, _json_schema: &JFObject) -> core::result::Result<i64, NP_Error> {
+
         match _json_schema["exp"].into_i64() {
             Some(x) => {
                 if *x > 255 || *x < 0 {
@@ -582,10 +578,6 @@ impl NP_Value for NP_Dec {
                 return Err(NP_Error::new("Dec64 types must have 'exp' property!"))
             }
         }
-    }
-
-    fn buffer_get(address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
-        NP_Dec::buffer_into(address, *kind, schema, buffer)
     }
 
     fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, memory: &NP_Memory, value: Box<&Self>) -> core::result::Result<NP_PtrKinds, NP_Error> {
@@ -661,6 +653,18 @@ impl<'a> NP_ValueInto<'a> for NP_Dec {
             }
         }
     }
+
+    fn buffer_get_size(_address: u32, kind: &'a NP_PtrKinds, _schema: &'a NP_Schema, _buffer: &'a NP_Memory) -> core::result::Result<u32, NP_Error> {
+        let addr = kind.get_value() as usize;
+
+        if addr == 0 {
+            return Ok(0) 
+        } else {
+            Ok(core::mem::size_of::<i64>() as u32)
+        }
+    }
+
+
 }
 
 
@@ -681,10 +685,6 @@ impl Default for NP_Geo {
 
 impl NP_Value for NP_Geo {
 
-    fn new<T: NP_Value + Default>() -> Self {
-        NP_Geo { lat: 0.0, lon: 0.0 }
-    }
-
     fn is_type( type_str: &str) -> bool {
         "geo4" == type_str || "geo8" == type_str || "geo16" == type_str 
     }
@@ -700,60 +700,6 @@ impl NP_Value for NP_Geo {
 
     fn type_idx() -> (i64, String) { (NP_TypeKeys::Geo as i64, "geo".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Geo as i64, "geo".to_owned()) }
-
-    fn buffer_get(_address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
-
-        let addr = kind.get_value() as usize;
-
-        // empty value
-        if addr == 0 {
-            return Ok(None);
-        }
-
-        Ok(match schema.type_state {
-            4 => {
-
-                let bytes_lat: [u8; 2] = *buffer.get_2_bytes(addr).unwrap_or(&[0; 2]);
-                let bytes_lon: [u8; 2] = *buffer.get_2_bytes(addr + 2).unwrap_or(&[0; 2]);
-
-                let lat = i16::from_be_bytes(bytes_lat) as f64;
-                let lon = i16::from_be_bytes(bytes_lon) as f64;
-
-                let dev = 100f64;
-
-                Some(Box::new(NP_Geo { lat: lat / dev, lon: lon / dev}))
-            },
-            8 => {
-                let bytes_lat: [u8; 4] = *buffer.get_4_bytes(addr).unwrap_or(&[0; 4]);
-                let bytes_lon: [u8; 4] = *buffer.get_4_bytes(addr + 4).unwrap_or(&[0; 4]);
-
-                let lat = i32::from_be_bytes(bytes_lat) as f64;
-                let lon = i32::from_be_bytes(bytes_lon) as f64;
-
-                let dev = 10000000f64;
-
-                Some(Box::new(NP_Geo { lat: lat / dev, lon: lon / dev}))
-            },
-            16 => {
-         
-                
-
-                let bytes_lat: [u8; 8] = *buffer.get_8_bytes(addr).unwrap_or(&[0; 8]);
-                let bytes_lon: [u8; 8] = *buffer.get_8_bytes(addr + 8).unwrap_or(&[0; 8]);
-
-                let lat = i64::from_be_bytes(bytes_lat) as f64;
-                let lon = i64::from_be_bytes(bytes_lon) as f64;
-
-                let dev = 1000000000f64;
-
-                Some(Box::new(NP_Geo { lat: lat / dev, lon: lon / dev}))
-
-            }
-            _ => {
-                unreachable!();
-            }
-        })
-    }
 
     fn buffer_set(address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, memory: &NP_Memory, value: Box<&Self>) -> core::result::Result<NP_PtrKinds, NP_Error> {
 
@@ -857,6 +803,7 @@ impl NP_Value for NP_Geo {
         
     }
 
+    
 
 }
 
@@ -931,6 +878,19 @@ impl<'a> NP_ValueInto<'a> for NP_Geo {
             }
         }
     }
+
+    fn buffer_get_size(_address: u32, kind: &'a NP_PtrKinds, schema: &'a NP_Schema, _buffer: &'a NP_Memory) -> core::result::Result<u32, NP_Error> {
+        let addr = kind.get_value() as usize;
+
+        if addr == 0 {
+            return Ok(0) 
+        } else {
+            Ok(schema.type_state as u32)
+        }
+    }
+
+
+
 }
 
 /// Represents a Time ID type which has a 64 bit timestamp and 64 random bits.
@@ -1024,43 +984,12 @@ impl fmt::Debug for NP_TimeID {
 
 impl NP_Value for NP_TimeID {
 
-    fn new<T: NP_Value + Default>() -> Self {
-        NP_TimeID { id: [0; 8], time: 0 }
-    }
-
     fn is_type( type_str: &str) -> bool {
         "tid" == type_str
     }
 
     fn type_idx() -> (i64, String) { (NP_TypeKeys::Tid as i64, "tid".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Tid as i64, "tid".to_owned()) }
-
-    fn buffer_get(_address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, buffer: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
-
-        let addr = kind.get_value() as usize;
-
-        // empty value
-        if addr == 0 {
-            return Ok(None);
-        }
-
-        let memory = buffer;
-        Ok(match memory.get_16_bytes(addr) {
-            Some(x) => {
-                let mut id_bytes: [u8; 8] = [0; 8];
-                id_bytes.copy_from_slice(&x[0..8]);
-
-                let mut time_bytes: [u8; 8] = [0; 8];
-                time_bytes.copy_from_slice(&x[8..16]);
-
-                Some(Box::new(NP_TimeID {
-                    id: id_bytes,
-                    time: u64::from_be_bytes(time_bytes)
-                }))
-            },
-            None => None
-        })
-    }
 
     fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, memory: &NP_Memory, value: Box<&Self>) -> core::result::Result<NP_PtrKinds, NP_Error> {
 
@@ -1143,6 +1072,18 @@ impl<'a> NP_ValueInto<'a> for NP_TimeID {
             }
         }
     }
+
+    fn buffer_get_size(_address: u32, kind: &'a NP_PtrKinds, _schema: &'a NP_Schema, _buffer: &'a NP_Memory) -> core::result::Result<u32, NP_Error> {
+        let addr = kind.get_value() as usize;
+
+        if addr == 0 {
+            return Ok(0) 
+        } else {
+            Ok(core::mem::size_of::<u64>() as u32)
+        }
+    }
+
+
 }
 
 /// Represents a V4 UUID, good for globally unique identifiers
@@ -1220,37 +1161,12 @@ impl Default for NP_UUID {
 
 impl NP_Value for NP_UUID {
 
-    fn new<T: NP_Value + Default>() -> Self {
-        NP_UUID { value: [0; 16] }
-    }
-
     fn is_type( type_str: &str) -> bool {
         "uuid" == type_str
     }
 
     fn type_idx() -> (i64, String) { (NP_TypeKeys::Uuid as i64, "uuid".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Uuid as i64, "uuid".to_owned()) }
-
-    fn buffer_get(_address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, buffer: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
-
-        let addr = kind.get_value() as usize;
-
-        // empty value
-        if addr == 0 {
-            return Ok(None);
-        }
-
-        let memory = buffer;
-        Ok(match memory.get_16_bytes(addr) {
-            Some(x) => {
-                // copy since we're handing owned value outside the library
-                let mut bytes: [u8; 16] = [0; 16];
-                bytes.copy_from_slice(x);
-                Some(Box::new(NP_UUID { value: bytes}))
-            },
-            None => None
-        })
-    }
 
     fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, memory: &NP_Memory, value: Box<&Self>) -> core::result::Result<NP_PtrKinds, NP_Error> {
 
@@ -1320,6 +1236,18 @@ impl<'a> NP_ValueInto<'a> for NP_UUID {
             }
         }
     }
+
+    fn buffer_get_size(_address: u32, kind: &'a NP_PtrKinds, _schema: &'a NP_Schema, _buffer: &'a NP_Memory) -> core::result::Result<u32, NP_Error> {
+        let addr = kind.get_value() as usize;
+
+        if addr == 0 {
+            return Ok(0) 
+        } else {
+            Ok(16)
+        }
+    }
+
+
 }
 
 pub struct NP_Option {
@@ -1328,54 +1256,12 @@ pub struct NP_Option {
 
 impl NP_Value for NP_Option {
 
-    fn new<T: NP_Value + Default>() -> Self {
-        NP_Option { value: None }
-    }
-
     fn is_type( type_str: &str) -> bool {
         "option" == type_str || "enum" == type_str
     }
 
     fn type_idx() -> (i64, String) { (NP_TypeKeys::Enum as i64, "option".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Enum as i64, "option".to_owned()) }
-
-    fn buffer_get(_address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
-
-        let addr = kind.get_value() as usize;
-
-        // empty value
-        if addr == 0 {
-            return Ok(None);
-        }
-
-        let memory = buffer;
-
-        match &*schema.kind {
-            NP_SchemaKinds::Enum { choices } => {
-
-                Ok(match memory.get_1_byte(addr) {
-                    Some(x) => {
-                        let value_num = u8::from_be_bytes([x]) as usize;
-        
-                        if value_num > choices.len() {
-                            None
-                        } else {
-                            Some(Box::new(NP_Option { value: Some(choices[value_num].clone()) }))
-                        }
-                    },
-                    None => None
-                })
-            },
-            _ => {
-                let mut err = "TypeError: Attempted to cast type (".to_owned();
-                err.push_str("option");
-                err.push_str(") to schema of type (");
-                err.push_str(schema.type_data.1.as_str());
-                err.push_str(")");
-                Err(NP_Error::new(err))
-            }
-        }
-    }
 
     fn buffer_set(address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, memory: &NP_Memory, value: Box<&Self>) -> core::result::Result<NP_PtrKinds, NP_Error> {
 
@@ -1504,14 +1390,22 @@ impl<'a> NP_ValueInto<'a> for NP_Option {
             }
         }
     }
+
+    fn buffer_get_size(_address: u32, kind: &'a NP_PtrKinds, _schema: &'a NP_Schema, _buffer: &'a NP_Memory) -> core::result::Result<u32, NP_Error> {
+        let addr = kind.get_value() as usize;
+
+        if addr == 0 {
+            return Ok(0) 
+        } else {
+            Ok(core::mem::size_of::<u8>() as u32)
+        }
+    }
+
+
 }
 
 
 impl NP_Value for bool {
-
-    fn new<T: NP_Value + Default>() -> Self {
-        false
-    }
 
     fn is_type( type_str: &str) -> bool {
         "bool" == type_str || "boolean" == type_str
@@ -1519,25 +1413,6 @@ impl NP_Value for bool {
 
     fn type_idx() -> (i64, String) { (NP_TypeKeys::Boolean as i64, "bool".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Boolean as i64, "bool".to_owned()) }
-
-    fn buffer_get(_address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, buffer: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
-
-        let addr = kind.get_value() as usize;
-
-        // empty value
-        if addr == 0 {
-            return Ok(None);
-        }
-
-        let memory = buffer;
-
-        Ok(match memory.get_1_byte(addr) {
-            Some(x) => {
-                Some(Box::new(if x == 1 { true } else { false }))
-            },
-            None => None
-        })
-    }
 
     fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, memory: &NP_Memory, value: Box<&Self>) -> core::result::Result<NP_PtrKinds, NP_Error> {
 
@@ -1614,6 +1489,18 @@ impl<'a> NP_ValueInto<'a> for bool {
             }
         }
     }
+
+    fn buffer_get_size(_address: u32, kind: &'a NP_PtrKinds, _schema: &'a NP_Schema, _buffer: &'a NP_Memory) -> core::result::Result<u32, NP_Error> {
+        let addr = kind.get_value() as usize;
+
+        if addr == 0 {
+            return Ok(0) 
+        } else {
+            Ok(core::mem::size_of::<u8>() as u32)
+        }
+    }
+
+
 }
 
 pub struct NP_Date {
@@ -1640,34 +1527,12 @@ impl fmt::Debug for NP_Date {
 
 impl NP_Value for NP_Date {
 
-    fn new<T: NP_Value + Default>() -> Self {
-        NP_Date { value: 0 }
-    }
-
     fn is_type( type_str: &str) -> bool {
         "date" == type_str
     }
 
     fn type_idx() -> (i64, String) { (NP_TypeKeys::Date as i64, "date".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Date as i64, "date".to_owned()) }
-
-    fn buffer_get(_address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, buffer: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
-
-        let addr = kind.get_value() as usize;
-
-        // empty value
-        if addr == 0 {
-            return Ok(None);
-        }
-
-        let memory = buffer;
-        Ok(match memory.get_8_bytes(addr) {
-            Some(x) => {
-                Some(Box::new(NP_Date { value: u64::from_be_bytes(*x) }))
-            },
-            None => None
-        })
-    }
 
     fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, memory: &NP_Memory, value: Box<&Self>) -> core::result::Result<NP_PtrKinds, NP_Error> {
 
@@ -1732,6 +1597,16 @@ impl<'a> NP_ValueInto<'a> for NP_Date {
             Err(_e) => {
                 JFObject::Null
             }
+        }
+    }
+
+    fn buffer_get_size(_address: u32, kind: &'a NP_PtrKinds, _schema: &'a NP_Schema, _buffer: &'a NP_Memory) -> core::result::Result<u32, NP_Error> {
+        let addr = kind.get_value() as usize;
+
+        if addr == 0 {
+            return Ok(0) 
+        } else {
+            Ok(core::mem::size_of::<u64>() as u32)
         }
     }
 }

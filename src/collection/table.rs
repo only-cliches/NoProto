@@ -16,17 +16,11 @@ pub struct NP_Table<'a> {
 }
 
 impl<'a> NP_Value for NP_Table<'a> {
-    fn new<T: NP_Value + Default>() -> Self {
-        unreachable!()
-    }
-    fn is_type( _type_str: &str) -> bool { 
+    fn is_type( _type_str: &str) -> bool {  // not needed for collection types
         unreachable!()
     }
     fn type_idx() -> (i64, String) { (NP_TypeKeys::Table as i64, "table".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Table as i64, "table".to_owned()) }
-    fn buffer_get(_address: u32, _kind: &NP_PtrKinds, _schema: &NP_Schema, _buffer: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
-        Err(NP_Error::new("Type (table) doesn't support .get()! Use .into() instead."))
-    }
     fn buffer_set(_address: u32, _kind: &NP_PtrKinds, _schema: &NP_Schema, _buffer: &NP_Memory, _value: Box<&Self>) -> core::result::Result<NP_PtrKinds, NP_Error> {
         Err(NP_Error::new("Type (table) doesn't support .set()! Use .into() instead."))
     }
@@ -44,8 +38,8 @@ impl<'a> NP_ValueInto<'a> for NP_Table<'a> {
 
                 if addr == 0 {
                     // no table here, make one
-                    addr = buffer.malloc([0 as u8; 4].to_vec())?; // stores HEAD for table
-                    buffer.set_value_address(address, addr, &kind);
+                    addr = buffer.malloc([0 as u8; 4].to_vec())?; // stores HEAD
+                    buffer.set_value_address(address, addr, &kind); // set pointer to new table
                 } else {
                     // existing head, read value
                     let a = addr as usize;
@@ -55,13 +49,68 @@ impl<'a> NP_ValueInto<'a> for NP_Table<'a> {
                 Ok(Some(Box::new(NP_Table::new(addr, u32::from_be_bytes(head), buffer, &columns))))
             },
             _ => {
-                Err(NP_Error::new("Unreachable"))
+                unreachable!();
             }
         }
     }
-    fn buffer_to_json(address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: &'a NP_Memory) -> JFObject {
+
+    fn buffer_get_size(address: u32, kind: &'a NP_PtrKinds, schema: &'a NP_Schema, buffer: &'a NP_Memory) -> Result<u32, NP_Error> {
+        let base_size = 4u32; // head
+        let addr = kind.get_value();
+
+        if addr == 0 {
+            return Ok(0);
+        }
+
         match &*schema.kind {
             NP_SchemaKinds::Table { columns } => {
+
+                let mut acc_size = 0u32;
+
+                match NP_Table::buffer_into(address, *kind, schema, buffer)? {
+                    Some(mut real_table) => {
+
+                        for c in columns {
+                            match c {
+                                Some(x) => {
+                                    let has_value = real_table.has(&*x.1)?;
+
+                                    if has_value.1 {
+                                        let col_ptr = real_table.select::<NP_Any>(x.1.as_str())?;
+                                        let size = col_ptr.calc_size()?;
+                                        acc_size += size;
+                                    }
+                                },
+                                None => {
+                                    
+                                }
+                            }
+                        }
+
+                    },
+                    None => {
+                        
+                    }
+                }
+
+                Ok(base_size + acc_size)
+            },
+            _ => {
+                unreachable!();
+            }
+        }
+    }
+
+    fn buffer_to_json(address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: &'a NP_Memory) -> JFObject {
+        let addr = kind.get_value();
+
+        if addr == 0 {
+            return JFObject::Null;
+        }
+
+        match &*schema.kind {
+            NP_SchemaKinds::Table { columns } => {
+
                 let mut object = JFMap::<JFObject>::new();
 
                 let table = NP_Table::buffer_into(address, *kind, schema, buffer);
@@ -107,6 +156,43 @@ impl<'a> NP_ValueInto<'a> for NP_Table<'a> {
                 JFObject::Null
             }
         }
+    }
+
+    fn buffer_do_compact<X: NP_Value + Default + NP_ValueInto<'a>>(from_ptr: &NP_Ptr<'a, X>, to_ptr: NP_Ptr<'a, NP_Any>) -> Result<(u32, NP_PtrKinds, &'a NP_Schema), NP_Error> where Self: NP_Value + Default {
+
+        if from_ptr.location == 0 {
+            return Ok((0, from_ptr.kind, from_ptr.schema));
+        }
+
+        let to_ptr_list = NP_Any::cast::<NP_Table>(to_ptr)?;
+
+        let new_address = to_ptr_list.location;
+
+        match Self::buffer_into(from_ptr.location, from_ptr.kind, from_ptr.schema, from_ptr.memory)? {
+            Some(old_list) => {
+
+                match to_ptr_list.into()? {
+                    Some(mut new_list) => {
+
+                        for mut item in old_list.it().into_iter() {
+
+                            if item.has_value.0 && item.has_value.1 {
+                                let new_ptr = new_list.select(&item.column)?;
+                                let old_ptr = item.select::<NP_Any>()?;
+                                old_ptr.compact(new_ptr)?;
+                            }
+
+                        }
+
+                        return Ok((new_address, from_ptr.kind, from_ptr.schema));
+                    },
+                    None => {}
+                }
+            },
+            None => { }
+        }
+
+        Ok((0, from_ptr.kind, from_ptr.schema))
     }
 }
 

@@ -1,5 +1,5 @@
 use crate::pointer::NP_PtrKinds;
-use crate::pointer::{NP_ValueInto, NP_Value, NP_Ptr};
+use crate::pointer::{NP_ValueInto, NP_Value, NP_Ptr, any::NP_Any};
 use crate::{memory::NP_Memory, schema::{NP_SchemaKinds, NP_Schema, NP_TypeKeys}, error::NP_Error, json_flex::JFObject};
 
 use alloc::vec::Vec;
@@ -17,17 +17,11 @@ pub struct NP_Map<'a, T> {
 }
 
 impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Value for NP_Map<'a, T> {
-    fn new<X>() -> Self {
-        unreachable!()
-    }
-    fn is_type( _type_str: &str) -> bool { 
+    fn is_type( _type_str: &str) -> bool {  // not needed for collection types
         unreachable!()
     }
     fn type_idx() -> (i64, String) { (NP_TypeKeys::Map as i64, "map".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Map as i64, "map".to_owned()) }
-    fn buffer_get(_address: u32, _kind: &NP_PtrKinds, _schema: &NP_Schema, _buffer: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
-        Err(NP_Error::new("Type (map) doesn't support .get()! Use .into() instead."))
-    }
     fn buffer_set(_address: u32, _kind: &NP_PtrKinds, _schema: &NP_Schema, _buffer: &NP_Memory, _value: Box<&Self>) -> core::result::Result<NP_PtrKinds, NP_Error> {
         Err(NP_Error::new("Type (map) doesn't support .set()! Use .into() instead."))
     }
@@ -72,12 +66,13 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_ValueInto<'a> for NP_Map<'
                 Ok(Some(Box::new(NP_Map::new(addr, u32::from_be_bytes(head), u16::from_be_bytes(size), buffer, value))))
             },
             _ => {
-                Err(NP_Error::new("unreachable"))
+                unreachable!();
             }
         }
     }
 
-    fn buffer_to_json(address: u32, kind: &NP_PtrKinds, schema: &'a NP_Schema, buffer: &'a NP_Memory) -> JFObject {
+    fn buffer_get_size(_address: u32, kind: &'a NP_PtrKinds, schema: &'a NP_Schema, buffer: &'a NP_Memory) -> Result<u32, NP_Error> {
+        let base_size = 6u32; // head + length
 
         match &*schema.kind {
             NP_SchemaKinds::Map { value } => {
@@ -85,7 +80,48 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_ValueInto<'a> for NP_Map<'
                 let addr = kind.get_value();
 
                 let head: [u8; 4];
-                let mut size: [u8; 2] = [0; 2];
+                let size: [u8; 2];
+
+                if addr == 0 {
+                    return Ok(0);
+                } else {
+                    // existing head, read value
+                    let a = addr as usize;
+                    head = *buffer.get_4_bytes(a).unwrap_or(&[0; 4]);
+                    size = *buffer.get_2_bytes(a + 4).unwrap_or(&[0; 2]);
+                }
+
+                let list = NP_Map::<'a, T>::new(addr, u32::from_be_bytes(head), u16::from_be_bytes(size), buffer, value);
+
+                let mut acc_size = 0u32;
+
+                for mut l in list.it().into_iter() {
+
+                    if l.has_value == true {
+                        let ptr = l.select()?;
+                        acc_size += ptr.calc_size()?;
+                        acc_size += l.key.len() as u32 + 4u32; // key + key length bytes
+                    }
+
+                };
+
+                Ok(acc_size + base_size)
+            },
+            _ => {
+                unreachable!();
+            }
+        }
+    }
+
+    fn buffer_to_json(_address: u32, kind: &NP_PtrKinds, schema: &'a NP_Schema, buffer: &'a NP_Memory) -> JFObject {
+
+        match &*schema.kind {
+            NP_SchemaKinds::Map { value } => {
+
+                let addr = kind.get_value();
+
+                let head: [u8; 4];
+                let size: [u8; 2];
 
                 if addr == 0 {
                     return JFObject::Null;
@@ -105,8 +141,8 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_ValueInto<'a> for NP_Map<'
                     let value: JFObject;
 
 
-                    if l.has_value.1 == true {
-                        let ptr = l.select::<T>();
+                    if l.has_value == true {
+                        let ptr = l.select();
                         match ptr {
                             Ok(p) => {
                                 value = p.json_encode();
@@ -132,6 +168,43 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_ValueInto<'a> for NP_Map<'
                 unreachable!();
             }
         }
+    }
+
+    fn buffer_do_compact<X: NP_Value + Default + NP_ValueInto<'a>>(from_ptr: &NP_Ptr<'a, X>, to_ptr: NP_Ptr<'a, NP_Any>) -> Result<(u32, NP_PtrKinds, &'a NP_Schema), NP_Error> where Self: NP_Value + Default {
+
+        if from_ptr.location == 0 {
+            return Ok((0, from_ptr.kind, from_ptr.schema));
+        }
+
+        let to_ptr_list = NP_Any::cast::<NP_Map<NP_Any>>(to_ptr)?;
+
+        let new_address = to_ptr_list.location;
+
+        match Self::buffer_into(from_ptr.location, from_ptr.kind, from_ptr.schema, from_ptr.memory)? {
+            Some(old_list) => {
+
+                match to_ptr_list.into()? {
+                    Some(mut new_list) => {
+
+                        for mut item in old_list.it().into_iter() {
+
+                            if item.has_value {
+                                let new_ptr = new_list.select(&item.key)?;
+                                let old_ptr = item.select()?;
+                                old_ptr.compact(new_ptr)?;
+                            }
+
+                        }
+
+                        return Ok((new_address, from_ptr.kind, from_ptr.schema));
+                    },
+                    None => {}
+                }
+            },
+            None => { }
+        }
+
+        Ok((0, from_ptr.kind, from_ptr.schema))
     }
 }
 
@@ -490,9 +563,9 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> Iterator for NP_Map_Iterator<
         self.current_index += 1;
         return Some(NP_Map_Item {
             index: self.current_index - 1,
-            has_value: (true, value_address != 0),
+            has_value: value_address != 0,
             value: self.value,
-            length: self.length,
+            // length: self.length,
             key: key_vec,
             address: this_address,
             map: NP_Map::new(self.address, self.head, self.length, self.memory, self.value),
@@ -504,17 +577,17 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> Iterator for NP_Map_Iterator<
 pub struct NP_Map_Item<'a, T> { 
     pub index: u16,
     pub key: Vec<u8>,
-    pub has_value: (bool, bool),
+    pub has_value: bool,
     pub value: &'a NP_Schema,
     address: u32,
-    length: u16,
+    // length: u16,
     map: NP_Map<'a, T>,
     memory: &'a NP_Memory
 }
 
 impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Map_Item<'a, T> {
     
-    pub fn select<X: NP_Value + Default + NP_ValueInto<'a>>(&mut self) -> Result<NP_Ptr<'a, X>, NP_Error> {
+    pub fn select(&mut self) -> Result<NP_Ptr<'a, T>, NP_Error> {
         Ok(NP_Ptr::new_map_item_ptr(self.address, self.value, self.memory))
     }
     // TODO: Build a select statement that grabs the current index in place instead of seeking to it.
