@@ -1,12 +1,12 @@
-# NoProto
 ## High Performance Serialization Library
+Runtime Dynamic FlatBuffers/CapNProto
 
 [Github](https://github.com/ClickSimply/NoProto) | [Crates.io](https://crates.io/crates/no_proto) | [Documentation](https://docs.rs/no_proto)
 
 ### TODO: 
 - [x] Finish implementing Lists, Tuples & Maps
 - [x] Collection Iterator
-- [ ] Compaction
+- [x] Compaction
 - [ ] Documentation
 - [ ] Tests
 
@@ -14,19 +14,19 @@
 - Zero dependencies
 - #![no_std] support, WASM ready
 - Supports bytewise sorting of buffers
-- Automatic & instant deserilization
-- Nearly instant serialization
+- Automatic & instant serilization
+- Nearly instant deserialization
 - Schemas are dynamic/flexible at runtime
 - Mutate/Update/Delete values in existing buffers
 - Supports native data types
 - Supports collection types (list, map, table & tuple)
 - Supports deep nesting of collection types
 
-NoProto allows you to store, read & mutate structured data with near zero overhead.  It's like JSON but faster, type safe and allows native types.  It's like Cap'N Proto/Flatbuffers except buffers and schemas are dynamic at runtime instead of requiring compilation. 
+NoProto allows you to store, read & mutate structured data with near zero overhead.  It's like Cap'N Proto/Flatbuffers except buffers and schemas are dynamic at runtime instead of requiring compilation.  It's like JSON but faster, type safe and allows native types.
 
-Bytewise sorting comes in the box and is a first class operation. The result is two NoProto buffers can be compared at the byte level *without serializing* and a correct ordering between the buffer's internal values will be the result.  This is extremely useful for storing ordered keys in databases. 
+Bytewise sorting comes in the box and is a first class operation. The result is two NoProto buffers can be compared at the byte level *without deserializing* and a correct ordering between the buffer's internal values will be the result.  This is extremely useful for storing ordered keys in databases. 
 
-NoProto moves the cost of serialization to the access methods instead of serializing the entire object ahead of time. This makes it a perfect use case for things like database storage or file storage of structured data.
+NoProto moves the cost of deserialization to the access methods instead of deserializing the entire object ahead of time. This makes it a perfect use case for things like database storage or file storage of structured data.
 
 *Compared to FlatBuffers / Cap'N Proto*
 - Schemas are dynamic at runtime, no compilation step
@@ -73,7 +73,7 @@ NoProto moves the cost of serialization to the access methods instead of seriali
 - Buffers are not validated or checked before deserializing.
 
 # Quick Example
-```
+```rust
 use no_proto::error::NP_Error;
 use no_proto::NP_Factory;
 use no_proto::NP;
@@ -93,7 +93,7 @@ let user_factory = NP_Factory::new(r#"{
 }"#)?;
 
 // creating a new buffer from the `user_factory` schema
-// user_buffer contains a deserialized Vec<u8> containing our data
+// user_buffer contains a serialized Vec<u8> containing our data
 
 let user_buffer: Vec<u8> = user_factory.open(NP::new, |mut buffer| {
    
@@ -113,16 +113,15 @@ let user_buffer: Vec<u8> = user_factory.open(NP::new, |mut buffer| {
    // select age column and set it's value
    let mut age = table.select::<u16>("age")?;
    age.set(75)?;
-//!
    // done mutating/reading the buffer
    Ok(())
 })?;
  
 // open the new buffer, `user_buffer`, we just created
-// user_buffer_2 contains the deserialized Vec<u8>
+// user_buffer_2 contains the serialized Vec<u8>
 let user_buffer_2: Vec<u8> = user_factory.open(NP::bytes(user_buffer), |mut buffer| {
 
-   let root: NP_Ptr<NP_Table> = buffer.root()?;
+   let root: NP_Ptr<NP_Table> = buffer.root()?; // open root pointer
         
    // get the table root again
    let mut table = root.into()?.unwrap();
@@ -150,10 +149,10 @@ let user_buffer_2: Vec<u8> = user_factory.open(NP::bytes(user_buffer), |mut buff
 ```
 
 ## Guided Learning / Next Steps:
-1. Schemas - Learn how to build & work with schemas.
-2. Factories - Parsing schemas into something you can work with.
-3. Buffers - How to create, update & compact buffers.
-
+1. [`Schemas`](https://docs.rs/no_proto/latest/no_proto/schema/index.html) - Learn how to build & work with schemas.
+2. [`Factories`](https://docs.rs/no_proto/latest/no_proto/struct.NP_Factory.html) - Parsing schemas into something you can work with.
+3. [`Buffers`](https://docs.rs/no_proto/latest/no_proto/buffer/index.html) - How to create, update & compact buffers.
+4. [`Pointers`](https://docs.rs/no_proto/latest/no_proto/pointer/index.html) - How to add, remove and edit values in a buffer.
 
 ----------------------
 

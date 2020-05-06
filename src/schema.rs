@@ -1,15 +1,14 @@
-//! Schemas are JSON used to declare the shape of buffer objects.
+//! Schemas are JSON used to declare the shape of buffer objects
 //! 
-//! No Proto Schemas are JSON objects that describe how the data in an buffer is stored and what types of data is stored.
+//! No Proto Schemas are JSON objects that describe how the data in a buffer is stored and what types of data is stored.  Schemas are required to create buffers and each buffer is a descendant of the schema that created it.
 //! 
-//! Once you create a buffer with a schema, that same schema can be used to safely decode, compact or edit the buffer at a future time.
+//! Buffers are forever related to the schema that created them, buffers created from a given schema can only later be decoded, edited or compacted by that same schema.
 //! 
+//! Schemas are validated and sanity checked upon creation.  You cannot pass an invalid schema into a factory constructor and build/parse buffers with it.
 //! 
+//! Properties that are not part of the schema are ignored.
 //! 
-//! 
-//! Schemas are validated and sanity checked by the [NP_Factory](../struct.NP_Factory.html) struct upon creation.  You cannot pass an invalid schema into a factory constructor and build/parse buffers with it.
-//! 
-//! If you're familiar with typescript, schemas can be described by this recursive interface:
+//! If you're familiar with Typescript, schemas can be described by this recursive interface:
 //! ```text
 //! interface NP_Schema {
 //!     // table, string, bytes, etc
@@ -53,9 +52,10 @@
 //! {
 //!     "type": "table",
 //!     "columns": [
-//!         ["userID",   {"type": "string"}],
-//!         ["password", {"type": "string"}],
-//!         ["email",    {"type": "string"}]
+//!         ["userID",   {"type": "string"}], // userID column contains a string
+//!         ["password", {"type": "string"}], // password column contains a string
+//!         ["email",    {"type": "string"}], // email column contains a string
+//!         ["age",      {"type": "u8"}]     // age column contains a Uint8 number (0 - 255)
 //!     ]
 //! }
 //! ```
