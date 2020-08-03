@@ -1,11 +1,11 @@
-//! All values in NP_Buffers are accessed and modified through NP_Ptrs
+//! All values in buffers are accessed and modified through pointers
 //! 
 //! NP_Ptr are the primary abstraction to read, update or delete values in a buffer.
 //! Pointers should *never* be created directly, instead the various methods provided by the library to access
 //! the internals of the buffer should be used.
 //! 
-//! Once you have a pointer you can read it's contents if it's a scalar value with '.get()` or convert it to a collection type with `.into()`.
-//! When you attempt to read, update, or convert a pointer the schema is checked for that pointer location.  If the schema conflicts with what you're attempting to do the operation will fail.
+//! Once you have a pointer you can read it's contents if it's a scalar value with '.get()` or convert it to a collection with `.into()`.
+//! When you attempt to read, update, or convert a pointer the schema is checked for that pointer location.  If the schema conflicts with the operation you're attempting it will fail.
 //! As a result, you should be careful to make sure your reads and updates to the buffer line up with the schema you provided.
 //! 
 //! 
@@ -26,7 +26,7 @@ use alloc::boxed::Box;
 use alloc::borrow::ToOwned;
 use alloc::vec::Vec;
 use bytes::NP_Bytes;
-use misc::{NP_Geo, NP_Dec, NP_UUID, NP_TimeID, NP_Date, NP_Option};
+use misc::{NP_Geo, NP_Dec, NP_UUID, NP_ULID, NP_Date, NP_Option};
 use any::NP_Any;
 
 // stores the different kinds of pointers and the details for each pointer
@@ -46,7 +46,7 @@ pub enum NP_PtrKinds {
 
 impl NP_PtrKinds {
 
-    // get the address of the value for this pointer
+    /// Get the address of the value for this pointer
     pub fn get_value(&self) -> u32 {
         match self {
             NP_PtrKinds::None                                                => { 0 },
@@ -57,7 +57,7 @@ impl NP_PtrKinds {
         }
     }
 
-    // get the size of this pointer based it's kind
+    /// Get the size of this pointer based it's kind
     pub fn get_size(&self) -> u32 {
         match self {
             NP_PtrKinds::None                                     =>    { 0u32 },
@@ -70,19 +70,24 @@ impl NP_PtrKinds {
 }
 
 pub trait NP_Value {
-    // check if a specific string "type" in the schema matches this type
+    /// Check if a specific string "type" in the schema matches this data type
+    /// 
     fn is_type(_type_str: &str) -> bool { false }
 
-    // Get the static type information for this type (static)
+    /// Get the static type information for this type (static)
+    /// 
     fn type_idx() -> (i64, String) { (-1, "null".to_owned()) }
 
-    // Get the static type information for this type (instance)
+    /// Get the static type information for this type (instance)
+    /// 
     fn self_type_idx(&self) -> (i64, String) { (-1, "null".to_owned()) }
 
-    // called for each declaration in the schema for a given type, useful for storing configuration details about the schema
+    /// Called for each declaration in the schema for a given type, useful for storing configuration details about the schema
+    /// 
     fn schema_state(_type_string: &str, _json_schema: &JFObject) -> core::result::Result<i64, NP_Error> { Ok(0) }
 
-    // set the pointer to a given scalar value, does not work for collections
+    /// Set the pointer to a given scalar value, does not work for collections
+    /// 
     fn buffer_set(_address: u32, _kind: &NP_PtrKinds, _schema: &NP_Schema, _buffer: &NP_Memory, _value: Box<&Self>) -> core::result::Result<NP_PtrKinds, NP_Error> {
         let mut message = "This type (".to_owned();
         message.push_str(Self::type_idx().1.as_str());
@@ -93,23 +98,27 @@ pub trait NP_Value {
 
 pub trait NP_ValueInto<'a> {
 
-    // convert pointer into scalar value, does not work for collections
+    /// Convert pointer into underlying value
+    /// 
     fn buffer_into(_address: u32, _kind: NP_PtrKinds, _schema: &'a NP_Schema, _buffer: &'a NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
         let message = "This type  doesn't support into!".to_owned();
         Err(NP_Error::new(message.as_str()))
     }
 
-    // convert this pointer into a JSON value (recursive for collections)
+    /// Convert this pointer into a JSON value (recursive for collections)
+    /// 
     fn buffer_to_json(_address: u32, _kind: &'a NP_PtrKinds, _schema: &'a NP_Schema, _buffer: &'a NP_Memory) -> JFObject {
          JFObject::Null
     }
 
     /// Calculate the size of this pointer and it's children (recursive for collections)
+    /// 
     fn buffer_get_size(_address: u32, _kind: &'a NP_PtrKinds, _schema: &'a NP_Schema, _buffer: &'a NP_Memory) -> core::result::Result<u32, NP_Error> {
          Err(NP_Error::new("Size not supported for this type!"))
     }
     
     /// Handle copying from old pointer/buffer to new pointer/buffer (recursive for collections)
+    /// 
     fn buffer_do_compact<X: NP_Value + Default + NP_ValueInto<'a>>(from_ptr: &NP_Ptr<'a, X>, to_ptr: NP_Ptr<'a, NP_Any>) -> Result<(u32, NP_PtrKinds, &'a NP_Schema), NP_Error> where Self: NP_Value + Default {
         if from_ptr.location == 0 {
             return Ok((0, from_ptr.kind, from_ptr.schema));
@@ -127,19 +136,14 @@ pub trait NP_ValueInto<'a> {
     }
 }
 
-/*
-#[derive(Debug)]
-pub struct NP_Ptr_Parts<'a> {
-    location: u32, // pointer location
-    pub kind: NP_PtrKinds,
-    pub schema: &'a NP_Schema
-}
-*/
-
 /// The base data type, all information is stored/retrieved against pointers
 /// 
 /// Each pointer represents at least a 32 bit unsigned integer that is either zero for no value or points to an offset in the buffer.  All pointer addresses are zero based against the beginning of the buffer.
-
+/// 
+/// # Using Scalar Types with Pointers
+/// 
+/// # Using Collection Types with Pointers
+/// 
 #[derive(Debug)]
 pub struct NP_Ptr<'a, T: NP_Value + Default + NP_ValueInto<'a>> {
     pub location: u32, // pointer address in buffer
@@ -291,6 +295,9 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Ptr<'a, T> {
         })
     }
 
+    #[doc(hidden)]
+    /// Used to create a copy of a pointer for compaction
+    /// Should never be called or used by a library end user.
     pub fn clone_ptr(schema: &'a NP_Schema, kind: NP_PtrKinds, memory: &'a NP_Memory) -> Result<NP_Ptr<'a, T>, NP_Error> {
 
         let pointer_size = kind.get_size();
@@ -303,27 +310,26 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Ptr<'a, T> {
 
         let location = memory.malloc(new_pointer_bytes)?;
         
-        let new_ptr: NP_Ptr<T> = match kind {
-            NP_PtrKinds::None                                     =>    { 
+        Ok(match kind {
+            NP_PtrKinds::None                                     => {
                 unreachable!()
             },
-            NP_PtrKinds::Standard  { value: _ }                   =>    {
+            NP_PtrKinds::Standard  { value: _ }                   => {
                 NP_Ptr::new_standard_ptr(location, schema, memory)
             },
-            NP_PtrKinds::MapItem   { value: _, key: _,  next: _ } =>    {
+            NP_PtrKinds::MapItem   { value: _, key: _,  next: _ } => {
                 NP_Ptr::new_map_item_ptr(location, schema, memory)
             },
-            NP_PtrKinds::TableItem { value: _, i:_ ,    next: _ } =>    {
+            NP_PtrKinds::TableItem { value: _, i:_ ,    next: _ } => {
                 NP_Ptr::new_table_item_ptr(location, schema, memory)
             },
-            NP_PtrKinds::ListItem  { value: _, i:_ ,    next: _ } =>    {
+            NP_PtrKinds::ListItem  { value: _, i:_ ,    next: _ } => {
                 NP_Ptr::new_list_item_ptr(location, schema, memory)
             }
-        };
-
-        Ok(new_ptr)
+        })
     }
 
+    
     pub fn set_default(&self) -> Result<(), NP_Error> {
 
         match NP_TypeKeys::from(self.schema.type_data.0) {
@@ -378,8 +384,8 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Ptr<'a, T> {
             NP_TypeKeys::Uuid => {
                 NP_UUID::buffer_set(self.location, &self.kind, self.schema, self.memory, Box::new(&NP_UUID::default()))?;
             },
-            NP_TypeKeys::Tid => {
-                NP_TimeID::buffer_set(self.location, &self.kind, self.schema, self.memory, Box::new(&NP_TimeID::default()))?;
+            NP_TypeKeys::Ulid => {
+                NP_ULID::buffer_set(self.location, &self.kind, self.schema, self.memory, Box::new(&NP_ULID::default()))?;
             },
             NP_TypeKeys::Date => {
                 NP_Date::buffer_set(self.location, &self.kind, self.schema, self.memory, Box::new(&NP_Date::default()))?;
@@ -404,6 +410,10 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Ptr<'a, T> {
         Ok(())
     }
 
+    #[doc(hidden)]
+    /// used to run compaction on this pointer
+    /// should not be called directly by the library user
+    /// Use NP_Factory methods of `compact` and `maybe_compact`.
     pub fn compact(&self, copy_to: NP_Ptr<'a, NP_Any>) -> Result<(u32, NP_PtrKinds, &'a NP_Schema), NP_Error> {
 
         match NP_TypeKeys::from(self.schema.type_data.0) {
@@ -458,8 +468,8 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Ptr<'a, T> {
             NP_TypeKeys::Uuid => {
                 NP_UUID::buffer_do_compact(self, copy_to)
             },
-            NP_TypeKeys::Tid => {
-                NP_TimeID::buffer_do_compact(self, copy_to)
+            NP_TypeKeys::Ulid => {
+                NP_ULID::buffer_do_compact(self, copy_to)
             },
             NP_TypeKeys::Date => {
                 NP_Date::buffer_do_compact(self, copy_to)
@@ -481,6 +491,7 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Ptr<'a, T> {
             }
         }
     }
+
 
     pub fn calc_size(&self) -> Result<u32, NP_Error> {
 
@@ -542,8 +553,8 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Ptr<'a, T> {
             NP_TypeKeys::Uuid => {
                 NP_UUID::buffer_get_size(self.location, &self.kind, self.schema, self.memory)
             },
-            NP_TypeKeys::Tid => {
-                NP_TimeID::buffer_get_size(self.location, &self.kind, self.schema, self.memory)
+            NP_TypeKeys::Ulid => {
+                NP_ULID::buffer_get_size(self.location, &self.kind, self.schema, self.memory)
             },
             NP_TypeKeys::Date => {
                 NP_Date::buffer_get_size(self.location, &self.kind, self.schema, self.memory)
@@ -567,6 +578,7 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Ptr<'a, T> {
 
         Ok(type_size + base_size)
     }
+
 
     pub fn json_encode(&self) -> JFObject {
         if self.location == 0 {
@@ -627,8 +639,8 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Ptr<'a, T> {
             NP_TypeKeys::Uuid => {
                 NP_UUID::buffer_to_json(self.location, &self.kind, self.schema, self.memory)
             },
-            NP_TypeKeys::Tid => {
-                NP_TimeID::buffer_to_json(self.location, &self.kind, self.schema, self.memory)
+            NP_TypeKeys::Ulid => {
+                NP_ULID::buffer_to_json(self.location, &self.kind, self.schema, self.memory)
             },
             NP_TypeKeys::Date => {
                 NP_Date::buffer_to_json(self.location, &self.kind, self.schema, self.memory)

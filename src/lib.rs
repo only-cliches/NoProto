@@ -3,6 +3,7 @@
 #![no_std]
 
 //! ## High Performance Serialization Library
+//! FlatBuffers/CapNProto with Flexible Runtime Schemas
 //! 
 //! [Github](https://github.com/ClickSimply/NoProto) | [Crates.io](https://crates.io/crates/no_proto) | [Documentation](https://docs.rs/no_proto)
 //! 
@@ -13,10 +14,11 @@
 //! - [ ] Documentation
 //! - [ ] Tests
 //! 
-//! ### Features
+//! ### Features  
 //! - Zero dependencies
 //! - #![no_std] support, WASM ready
 //! - Supports bytewise sorting of buffers
+//! - Thorough Documentation
 //! - Automatic & instant serilization
 //! - Nearly instant deserialization
 //! - Schemas are dynamic/flexible at runtime
@@ -25,7 +27,7 @@
 //! - Supports collection types (list, map, table & tuple)
 //! - Supports deep nesting of collection types
 //! 
-//! NoProto allows you to store, read & mutate structured data with near zero overhead.  It's like JSON but faster, type safe and allows native types.  It's like Cap'N Proto/Flatbuffers except buffers and schemas are dynamic at runtime instead of requiring compilation. 
+//! NoProto allows you to store, read & mutate structured data with near zero overhead. It's like Cap'N Proto/Flatbuffers except buffers and schemas are dynamic at runtime instead of requiring compilation.  It's like JSON but faster, type safe and allows native types.
 //! 
 //! Bytewise sorting comes in the box and is a first class operation. The result is two NoProto buffers can be compared at the byte level *without deserializing* and a correct ordering between the buffer's internal values will be the result.  This is extremely useful for storing ordered keys in databases. 
 //! 
@@ -34,7 +36,7 @@
 //! *Compared to FlatBuffers / Cap'N Proto*
 //! - Schemas are dynamic at runtime, no compilation step
 //! - Supports more types and better nested type support
-//! - Bytewise sorting is explicitly supported
+//! - Bytewise sorting is first class operation
 //! - Mutate (add/delete/update) existing/imported buffers
 //! 
 //! *Compared to JSON*
@@ -46,7 +48,7 @@
 //! *Compared to BSON*
 //! - Faster serialization & deserialization
 //! - Has schemas / type safe
-//! - Bytewise sorting is explicitly supported
+//! - Bytewise sorting is first class operation
 //! - Supports much larger documents (4GB vs 16MB)
 //! - Better collection support & more supported types
 //! 
@@ -58,15 +60,14 @@
 //! | Format           | Free De/Serialization | Size Limit | Mutatable | Schemas | Language Agnostic | Runtime Dynamic | Bytewise Sorting |
 //! |------------------|-----------------------|------------|-----------|---------|-------------------|-----------------|------------------|
 //! | JSON             | 𐄂                     | Unlimited  | ✓         | 𐄂       | ✓                 | ✓               | 𐄂                |
-//! | BSON             | 𐄂                     | ~16KB      | ✓         | 𐄂       | ✓                 | ✓               | ✓*               |
-//! | MessagePack      | 𐄂                     | Unlimited  | ✓         | 𐄂       | ✓                 | ✓               | ✓*               |
-//! | FlatBuffers      | ✓                     | ~2GB       | 𐄂         | ✓       | ✓                 | 𐄂               | ✓*               |
-//! | Protocol Buffers | 𐄂                     | ~2GB       | 𐄂         | ✓       | ✓                 | 𐄂               | ✓*               |
-//! | Cap'N Proto      | ✓                     | 2^64 Bytes | 𐄂         | ✓       | ✓                 | 𐄂               | ✓*               |
+//! | BSON             | 𐄂                     | ~16KB      | ✓         | 𐄂       | ✓                 | ✓               | 𐄂                |
+//! | MessagePack      | 𐄂                     | Unlimited  | ✓         | 𐄂       | ✓                 | ✓               | 𐄂                |
+//! | FlatBuffers      | ✓                     | ~2GB       | 𐄂         | ✓       | ✓                 | 𐄂               | 𐄂                |
+//! | Protocol Buffers | 𐄂                     | ~2GB       | 𐄂         | ✓       | ✓                 | 𐄂               | 𐄂                |
+//! | Cap'N Proto      | ✓                     | 2^64 Bytes | 𐄂         | ✓       | ✓                 | 𐄂               | 𐄂                |
 //! | Serde            | 𐄂                     | ?          | ✓         | ✓       | 𐄂                 | 𐄂               | 𐄂                |
 //! | **NoProto**      | ✓                     | ~4GB       | ✓         | ✓       | ✓                 | ✓               | ✓                |
 //! 
-//! \* Bytewise sorting can *technically* be achieved with these libraries.  However, it's not a first class operation and requires extra effort, configuration and care.
 //! 
 //! #### Limitations
 //! - Buffers cannot be larger than 2^32 bytes (~4GB).
@@ -123,7 +124,7 @@
 //!  
 //! // open the new buffer, `user_buffer`, we just created
 //! // user_buffer_2 contains the serialized Vec<u8>
-//! let user_buffer_2: Vec<u8> = user_factory.open(NP::bytes(user_buffer), |mut buffer| {
+//! let user_buffer_2: Vec<u8> = user_factory.open(NP::buffer(user_buffer), |mut buffer| {
 //! 
 //!    let root: NP_Ptr<NP_Table> = buffer.root()?; // open root pointer
 //!         
@@ -208,41 +209,109 @@ use pointer::{any::NP_Any, NP_Ptr};
 const PROTOCOL_VERSION: u8 = 0;
 
 
-/// Factories allow you to serialize and deserialize buffers.
+/// Factories are created from schemas.  Once you have a factory you can use it to decode, encode, edit and compact buffers
 /// 
-/// Each factory represents a single schema, each factory can be reused for any number of buffers based on the factory's schema.
+/// The correct way to create a factory is to pass a JSON string schema into the static `new` method.  [Learn about schemas here.](./schema/index.html)
 /// 
 /// # Example
 /// ```
+/// use no_proto::error::NP_Error;
+/// use no_proto::NP_Factory;
+/// use no_proto::NP;
+/// use no_proto::collection::table::NP_Table;
+/// use no_proto::pointer::NP_Ptr;
 /// 
+/// let user_factory = NP_Factory::new(r#"{
+///     "type": "table",
+///     "columns": [
+///         ["name",   {"type": "string"}],
+///         ["pass",   {"type": "string"}],
+///         ["age",    {"type": "uint16"}]
+///     ]
+/// }"#)?;
 /// 
+/// // user_factory can now be used to make or modify buffers that contain the data in the schema.
+/// 
+/// // create new buffer
+/// let mut user_buffer: Vec<u8> = user_factory.open(NP::new, |mut buffer| {
+/// 
+///     // get the root pointer
+///     // type cast it to the root type in the schema
+///     let root_pointer: NP_Ptr<NP_Table> = buffer.root()?;
+/// 
+///     // collection types must be converted with "into"
+///     // to make changes
+///     let mut root_table: NP_Table = root_pointer.into()?.unwrap();
+/// 
+///     // now that we have the table object we can grab a column
+///     let mut name_column: NP_Ptr<String> = root_table.select("name")?;
+/// 
+///     // set value for name column
+///     name_column.set("Billy".to_owned());
+///     
+///     // read column value
+///     assert_eq!(name_column.get()?, Some("Billy".to_owned()));
+///     
+///     // close buffer
+///     Ok(())
+/// })?;
+/// 
+/// // user_buffer is a Vec<u8> with our data
+/// 
+/// // open buffer and read value
+/// user_buffer = user_factory.open(NP::buffer(user_buffer), |mut buffer| {
+///
+///     let root_pointer: NP_Ptr<NP_Table> = buffer.root()?;
+///     let mut root_table = root_pointer.into()?.unwrap();
+///     let mut name_column = root_table.select::<String>("name")?;
+///
+///     // read column value
+///     assert_eq!(name_column.get()?, Some("Billy".to_owned()));
+/// 
+///     // close buffer
+///     Ok(())
+/// })?;
+/// 
+/// # Ok::<(), NP_Error>(()) 
 /// ```
+/// 
+/// 
+/// 
 pub struct NP_Factory {
     schema: NP_Schema,
     // _phantom: &'a PhantomData<u8>
 }
 
+/// The different options for opening a buffer
+/// 
+/// You can either create a new buffer with no specified capacity (1024 is the deafult),
+/// create a buffer with a specific capcity with the `size` option,
+/// or provide an existing buffer to be opened.
 pub enum NP {
-    bytes(Vec<u8>),
-    size(usize),
+    buffer(Vec<u8>),
+    size(u32),
     new
 }
 
 impl NP {
+    // convert a string into a Vec<u8>, useful for NP_Map keys.
     pub fn str_to_vec<S: AsRef<str>>(string: S) -> Vec<u8> {
         string.as_ref().as_bytes().to_vec()
     }
+    // convert an i64 into a Vec<u8>, useful for NP_Map keys.
     pub fn int_to_vec(int: i64) -> Vec<u8> {
         int.to_be_bytes().to_vec()
     }
+    // convert a float into a Vec<u8>, useful for NP_Map keys.
     pub fn float_to_vec(float: f64) -> Vec<u8> {
         float.to_be_bytes().to_vec()
     }
 }
 
-impl NP_Factory {
-    pub fn new(json_schema: &str) -> core::result::Result<NP_Factory, NP_Error> {
 
+impl NP_Factory {
+
+    pub fn new(json_schema: &str) -> core::result::Result<NP_Factory, NP_Error> {
 
         let parsed = json_decode(json_schema.to_owned());
 
@@ -262,9 +331,9 @@ impl NP_Factory {
         where F: FnMut(NP_Buffer) -> Result<(), NP_Error>
     {   
         let use_buffer = match buffer {
-            NP::bytes(x) => x,
+            NP::buffer(x) => x,
             NP::size(x) => {
-                self.new_buffer(Some(x))
+                self.new_buffer(Some(x as usize))
             }
             NP::new => {
                 self.new_buffer(None)
@@ -278,6 +347,7 @@ impl NP_Factory {
         Ok(bytes.dump())
     }
 
+    #[doc(hidden)]
     pub fn new_buffer(&self, capacity: Option<usize>) -> Vec<u8> {
 
         let use_size = match capacity {
@@ -300,7 +370,7 @@ impl NP_Factory {
         let old_bytes = NP_Memory::new(buffer);
         let old_root = NP_Ptr::<NP_Any>::new_standard_ptr(1, &self.schema, &old_bytes);
 
-        let wasted_bytes = old_root.calc_size()?;
+        let wasted_bytes = NP_Buffer::new(&self.schema, &old_bytes).calc_wasted_bytes()?;
 
         let do_compact = callback(wasted_bytes, old_bytes.read_bytes().len() as u32);
 

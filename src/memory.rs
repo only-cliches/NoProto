@@ -8,7 +8,7 @@ pub struct NP_Memory {
     bytes: UnsafeCell<Vec<u8>>
 }
 
-const MAX_SIZE: u64 = core::u32::MAX as u64;
+const MAX_SIZE: usize = core::u32::MAX as usize;
 
 impl<'a> NP_Memory {
 
@@ -22,15 +22,15 @@ impl<'a> NP_Memory {
 
         let self_bytes = unsafe { &mut *self.bytes.get() };
 
-        let location: u32 = self_bytes.len() as u32;
+        let location = self_bytes.len();
 
         // not enough space left?
-        if (location + bytes.len() as u32) as u64 >= MAX_SIZE {
+        if location + bytes.len() >= MAX_SIZE {
             return Err(NP_Error::new("Out of memory!"))
         }
 
         self_bytes.extend(bytes);
-        Ok(location)
+        Ok(location as u32)
     }
 
     pub fn read_bytes(&self) -> &Vec<u8> {

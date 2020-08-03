@@ -47,77 +47,73 @@ impl NP_Value for NP_Bytes {
 
         let size = value.bytes.len() as u64;
 
-        if size >= core::u32::MAX as u64 { 
-            return Err(NP_Error::new("Bytes too large!"));
-        } else {
+        let mut addr = kind.get_value() as usize;
 
-            let mut addr = kind.get_value() as usize;
+        let write_bytes = memory.write_bytes();
 
-            let write_bytes = memory.write_bytes();
+        if schema.type_state != -1 { // fixed size bytes
+            let mut set_kind = kind.clone();
 
-            if schema.type_state != -1 { // fixed size bytes
-                let mut set_kind = kind.clone();
+            if addr == 0 { // malloc new bytes
 
-                if addr == 0 { // malloc new bytes
-
-                    let mut empty_bytes: Vec<u8> = Vec::with_capacity(schema.type_state as usize);
-                    for _x in 0..(schema.type_state as usize) {
-                        empty_bytes.push(0);
-                    }
-                    
-                    addr = memory.malloc(empty_bytes)? as usize;
-
-                    // set location address
-                    set_kind = memory.set_value_address(address, addr as u32, kind);
+                let mut empty_bytes: Vec<u8> = Vec::with_capacity(schema.type_state as usize);
+                for _x in 0..(schema.type_state as usize) {
+                    empty_bytes.push(0);
                 }
-
-                for x in 0..(schema.type_state as usize) {
-                    if x < value.bytes.len() { // assign values of bytes
-                        write_bytes[(addr + x)] = value.bytes[x];
-                    } else { // rest is zeros
-                        write_bytes[(addr + x)] = 0;
-                    }
-                }
-
-                return Ok(set_kind)
-            }
-
-            // flexible size
-
-            let prev_size: usize = if addr != 0 {
-                let size_bytes: [u8; 4] = *memory.get_4_bytes(addr).unwrap_or(&[0; 4]);
-                u32::from_be_bytes(size_bytes) as usize
-            } else {
-                0 as usize
-            };
-
-            if prev_size >= size as usize { // previous bytes is larger than this one, use existing memory
-        
-                let size_bytes = size.to_be_bytes();
-                // set string size
-                for x in 0..size_bytes.len() {
-                    write_bytes[(addr + x) as usize] = size_bytes[x as usize];
-                }
-
-                // set bytes
-                for x in 0..value.bytes.len() {
-                    write_bytes[(addr + x + 4) as usize] = value.bytes[x as usize];
-                }
-                return Ok(*kind);
-            } else { // not enough space or space has not been allocted yet
                 
+                addr = memory.malloc(empty_bytes)? as usize;
 
-                // first 4 bytes are length
-                addr = memory.malloc((size as u32).to_be_bytes().to_vec())? as usize;
-
-                // then bytes content
-                memory.malloc(value.bytes.to_vec())?;
-
-                return Ok(memory.set_value_address(address, addr as u32, kind));
+                // set location address
+                set_kind = memory.set_value_address(address, addr as u32, kind);
             }
-            
+
+            for x in 0..(schema.type_state as usize) {
+                if x < value.bytes.len() { // assign values of bytes
+                    write_bytes[(addr + x)] = value.bytes[x];
+                } else { // rest is zeros
+                    write_bytes[(addr + x)] = 0;
+                }
+            }
+
+            return Ok(set_kind)
         }
+
+        // flexible size
+
+        let prev_size: usize = if addr != 0 {
+            let size_bytes: [u8; 4] = *memory.get_4_bytes(addr).unwrap_or(&[0; 4]);
+            u32::from_be_bytes(size_bytes) as usize
+        } else {
+            0 as usize
+        };
+
+        if prev_size >= size as usize { // previous bytes is larger than this one, use existing memory
+    
+            let size_bytes = size.to_be_bytes();
+            // set string size
+            for x in 0..size_bytes.len() {
+                write_bytes[(addr + x) as usize] = size_bytes[x as usize];
+            }
+
+            // set bytes
+            for x in 0..value.bytes.len() {
+                write_bytes[(addr + x + 4) as usize] = value.bytes[x as usize];
+            }
+            return Ok(*kind);
+        } else { // not enough space or space has not been allocted yet
+            
+
+            // first 4 bytes are length
+            addr = memory.malloc((size as u32).to_be_bytes().to_vec())? as usize;
+
+            // then bytes content
+            memory.malloc(value.bytes.to_vec())?;
+
+            return Ok(memory.set_value_address(address, addr as u32, kind));
+        }
+        
     }
+    
 
 }
 

@@ -1,6 +1,7 @@
 use core::str;
 use alloc::string::String;
 use alloc::borrow::ToOwned;
+use alloc::vec::Vec;
 
 const KX: u32 = 123456789;
 const KY: u32 = 362436069;
@@ -83,7 +84,7 @@ fn floor(num: f64) -> f64 {
 pub fn to_hex(num: u64, length: i32) -> String {
     let mut result: String = "".to_owned();
 
-    let hex_values = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "a", "b", "c", "d", "e", "f"];
+    let hex_values = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "A", "B", "C", "D", "E", "F"];
 
     let mut i = length - 1;
     while i >= 0 {
@@ -94,4 +95,29 @@ pub fn to_hex(num: u64, length: i32) -> String {
     }
 
     result
+}
+
+pub fn to_base32(num: u128, length: i32) -> String {
+
+    let mut result: Vec<&str> = Vec::with_capacity(length as usize);
+    for _x in 0..length {
+        result.push("");
+    }
+
+    let base_values: [&str; 32] = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "A", "B", "C", "D", "E", "F", "G", "H", "J", "K", "M", "N", "P", "Q", "R", "S", "T", "V", "W", "X", "Y", "Z"];
+
+    let mut value = num;
+    let i = length - 1;
+    for x in 0..i {
+        let modulus = value % 32; 
+        result[(i - x) as usize] = base_values[modulus as usize];
+        value = (value - modulus) / 32;
+    }
+
+    let mut final_string: String = "".to_owned();
+    for x in result {
+        final_string.push_str(x);
+    }
+
+    final_string
 }

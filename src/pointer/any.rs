@@ -17,6 +17,9 @@ pub struct NP_Any {
 
 impl<'a> NP_Any {
 
+    /// Casts a pointer from NP_Any to any other type.
+    /// 
+    /// 
     pub fn cast<T: NP_Value + Default + NP_ValueInto<'a>>(pointer: NP_Ptr<'a, NP_Any>) -> core::result::Result<NP_Ptr<'a, T>, NP_Error> {
 
         // schema is "any" type, all casting permitted

@@ -1,5 +1,5 @@
 ## High Performance Serialization Library
-Runtime Dynamic FlatBuffers/CapNProto
+FlatBuffers/CapNProto with Flexible Runtime Schemas
 
 [Github](https://github.com/ClickSimply/NoProto) | [Crates.io](https://crates.io/crates/no_proto) | [Documentation](https://docs.rs/no_proto)
 
@@ -16,11 +16,11 @@ Runtime Dynamic FlatBuffers/CapNProto
 - Supports bytewise sorting of buffers
 - Automatic & instant serilization
 - Nearly instant deserialization
-- Schemas are dynamic/flexible at runtime
+- Schemas are flexible at runtime
 - Mutate/Update/Delete values in existing buffers
 - Supports native data types
 - Supports collection types (list, map, table & tuple)
-- Supports deep nesting of collection types
+- Supports arbitrary deep nesting of collection types
 
 NoProto allows you to store, read & mutate structured data with near zero overhead.  It's like Cap'N Proto/Flatbuffers except buffers and schemas are dynamic at runtime instead of requiring compilation.  It's like JSON but faster, type safe and allows native types.
 
@@ -55,15 +55,13 @@ NoProto moves the cost of deserialization to the access methods instead of deser
 | Format           | Free De/Serialization | Size Limit | Mutatable | Schemas | Language Agnostic | Runtime Dynamic | Bytewise Sorting |
 |------------------|-----------------------|------------|-----------|---------|-------------------|-----------------|------------------|
 | JSON             | 𐄂                     | Unlimited  | ✓         | 𐄂       | ✓                 | ✓               | 𐄂                |
-| BSON             | 𐄂                     | ~16KB      | ✓         | 𐄂       | ✓                 | ✓               | ✓*               |
-| MessagePack      | 𐄂                     | Unlimited  | ✓         | 𐄂       | ✓                 | ✓               | ✓*               |
-| FlatBuffers      | ✓                     | ~2GB       | 𐄂         | ✓       | ✓                 | 𐄂               | ✓*               |
-| Protocol Buffers | 𐄂                     | ~2GB       | 𐄂         | ✓       | ✓                 | 𐄂               | ✓*               |
-| Cap'N Proto      | ✓                     | 2^64 Bytes | 𐄂         | ✓       | ✓                 | 𐄂               | ✓*               |
+| BSON             | 𐄂                     | ~16KB      | ✓         | 𐄂       | ✓                 | ✓               | 𐄂                |
+| MessagePack      | 𐄂                     | Unlimited  | ✓         | 𐄂       | ✓                 | ✓               | 𐄂                |
+| FlatBuffers      | ✓                     | ~2GB       | 𐄂         | ✓       | ✓                 | 𐄂               | 𐄂                |
+| Protocol Buffers | 𐄂                     | ~2GB       | 𐄂         | ✓       | ✓                 | 𐄂               | 𐄂                |
+| Cap'N Proto      | ✓                     | 2^64 Bytes | 𐄂         | ✓       | ✓                 | 𐄂               | 𐄂                |
 | Serde            | 𐄂                     | ?          | ✓         | ✓       | 𐄂                 | 𐄂               | 𐄂                |
 | **NoProto**      | ✓                     | ~4GB       | ✓         | ✓       | ✓                 | ✓               | ✓                |
-
-\* Bytewise sorting can *technically* be achieved with these libraries.  However, it's not a first class operation and requires extra effort, configuration and care.
 
 #### Limitations
 - Buffers cannot be larger than 2^32 bytes (~4GB).
@@ -113,13 +111,14 @@ let user_buffer: Vec<u8> = user_factory.open(NP::new, |mut buffer| {
    // select age column and set it's value
    let mut age = table.select::<u16>("age")?;
    age.set(75)?;
+
    // done mutating/reading the buffer
    Ok(())
 })?;
  
 // open the new buffer, `user_buffer`, we just created
 // user_buffer_2 contains the serialized Vec<u8>
-let user_buffer_2: Vec<u8> = user_factory.open(NP::bytes(user_buffer), |mut buffer| {
+let user_buffer_2: Vec<u8> = user_factory.open(NP::buffer(user_buffer), |mut buffer| {
 
    let root: NP_Ptr<NP_Table> = buffer.root()?; // open root pointer
         

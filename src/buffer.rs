@@ -1,4 +1,4 @@
-//! Allows buffers to be created and mutated
+//! Top level abstraction for buffer objects
 
 use crate::pointer::NP_ValueInto;
 use crate::pointer::NP_Value;

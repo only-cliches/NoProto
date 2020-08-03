@@ -1,3 +1,4 @@
+use crate::utils::to_base32;
 use crate::json_flex::{JFMap, JFObject};
 use crate::pointer::NP_ValueInto;
 use crate::schema::{NP_SchemaKinds, NP_Schema, NP_TypeKeys};
@@ -31,7 +32,7 @@ use alloc::string::ToString;
 /// 
 /// Essentially, increaseing the `exp` factor decreases the range of possible values that can be stored in exchange for increased decimal precision.
 /// 
-/// `NP_Dec` values can safely be multiplied, added, devided, subtracted or compared with eachother.  However the `exp` value **must be identical** between two NP_Dec values for operations or comparisons to be performed.  You should make sure the `exp` value between two `NP_Dec` is the same using `shift_exp` to match the two `exp` values.  Default behavior exists to match the two values before operations/comparisons but usually aren't desirable.
+/// `NP_Dec` values can safely be multiplied, added, devided, subtracted or compared with eachother.  However the `exp` value **must be identical** between two NP_Dec values for operations or comparisons to be performed.  You should make sure the `exp` value between two `NP_Dec` is the same using `shift_exp` to match the two `exp` values.  Default behavior exists to shift the two values before operations/comparisons but may not act in a way you expect.  It's better if you manually shift the `exp` value between two NP_Dec values before performaing operations or comparison.
 /// 
 /// When `NP_Dec` values are pulled out of a buffer, the `num` property is pulled from the buffer contents and the `exp` property comes from the schema.
 /// 
@@ -88,7 +89,9 @@ impl NP_Dec {
 
     /// Shift the exponent of this NP_Dec to a new value.
     /// 
-    /// If the new `exp` value is lower than the old `exp` value, decimal values will be rounded and result in permenantly lost/destroyed information.
+    /// If the new `exp` value is lower than the old `exp` value, there may be an overflow of the i64 value.
+    /// 
+    /// If the new `exp value is higher than the old one, information will likely be lost as decimal precision is being removed from the number.
     /// 
     /// ```
     /// use no_proto::pointer::misc::NP_Dec;
@@ -105,12 +108,12 @@ impl NP_Dec {
 
         let mut step = i64::abs(diff);
 
-        if diff < 0 { // lowering exp, moving decimal to right
+        if diff < 0 { // moving decimal to right
             while step > 0 {
                 self.num *= 10;
                 step -=1;
             }
-        } else { // raising exp, moving decimal to left
+        } else { // moving decimal to left
             while step > 0 {
                 self.num /= 10;
                 step -=1;
@@ -705,8 +708,6 @@ impl NP_Value for NP_Geo {
 
         let mut addr = kind.get_value();
 
-        
-
         let value_bytes_size = schema.type_state as usize;
 
         if value_bytes_size == 0 {
@@ -893,120 +894,100 @@ impl<'a> NP_ValueInto<'a> for NP_Geo {
 
 }
 
-/// Represents a Time ID type which has a 64 bit timestamp and 64 random bits.
+/// Represents a ULID type which has a 6 byte timestamp and 10 bytes of randomness
 /// 
 /// Useful for storing time stamp data that can't have collisions.
-pub struct NP_TimeID {
-    pub id: [u8; 8],
-    pub time: u64
+pub struct NP_ULID {
+    pub time: u64,
+    pub id: u128
 }
 
-impl NP_TimeID {
+impl NP_ULID {
 
-    pub fn generate(now: u64, random_seed: u32) -> NP_TimeID {
+    /// Creates a new ULID from the timestamp and provided seed.
+    /// 
+    /// The random seed is used to generate the ID, the same seed will always lead to the same random bytes so try to use something actually random for the seed.
+    /// 
+    /// The time should be passed in as the unix epoch in milliseconds.
+    pub fn generate(now_ms: u64, random_seed: u32) -> NP_ULID {
         let mut rng = Rand::new(random_seed);
 
-        let mut id: [u8; 8] = [0; 8];
+        let mut id: [u8; 16] = [0; 16];
 
-        for x in 0..id.len() {
+        for x in 6..id.len() {
             id[x] = rng.gen_range(0, 255) as u8;
         }
 
-        NP_TimeID {
-            time: now,
-            id: id
+        NP_ULID {
+            time: now_ms,
+            id: u128::from_be_bytes(id)
         }
     }
 
-    pub fn generate_with_rand<F>(now: u64, random_fn: F) -> NP_TimeID where F: Fn(u8, u8) -> u8 {
+    /// Generates 
+    pub fn generate_with_rand<F>(now_ms: u64, random_fn: F) -> NP_ULID where F: Fn(u8, u8) -> u8 {
 
-        let mut id: [u8; 8] = [0; 8];
+        let mut id: [u8; 16] = [0; 16];
 
-        for x in 0..id.len() {
-            id[x] = random_fn(0, 255) as u8;
+        for x in 6..id.len() {
+            id[x] = random_fn(0, 255);
         }
 
-        NP_TimeID {
-            time: now,
-            id: id
+        NP_ULID {
+            time: now_ms,
+            id: u128::from_be_bytes(id)
         }
     }
 
-    pub fn to_string(&self, time_padding: Option<u8>) -> String {
+    pub fn to_string(&self) -> String {
         let mut result: String = "".to_owned();
 
-        // u64 can hold up to 20 digits or 584,942,417,355 years of seconds since unix epoch
-        // 14 digits gets us 3,170,979 years of seconds after Unix epoch.  
-        let padding = time_padding.unwrap_or(14) as usize;
-
-        let number_str = self.time.to_string();
-
-        let mut diff = padding - number_str.len();
-
-        if diff < 10 { diff = 10 }
-        if diff > 20 { diff = 20 }
-
-        let mut zeros = "".to_owned();
-
-        for _x in 0..diff {
-            zeros.push_str("0");
-        }
-
-        result.push_str(zeros.as_str());
-        result.push_str(number_str.as_str());
-        result.push_str("-");
-
-        // then id
-        for x in 0..self.id.len() {
-            let value = self.id[x] as u64;
-            if x == 4 {
-                result.push_str("-");
-            }
-            result.push_str(to_hex(value, 2).as_str());
-        }
+        result.push_str(to_base32(self.time as u128, 10).as_str());
+        result.push_str(to_base32(self.id, 16).as_str());
 
         result
     }
 }
 
 
-impl Default for NP_TimeID {
+impl Default for NP_ULID {
     fn default() -> Self { 
-        NP_TimeID { id: [0; 8], time: 0 }
+        NP_ULID { id: 0, time: 0 }
      }
 }
 
-impl fmt::Debug for NP_TimeID {
+impl fmt::Debug for NP_ULID {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.to_string(Some(20)))
+        write!(f, "{}", self.to_string())
     }
 }
 
-impl NP_Value for NP_TimeID {
+impl NP_Value for NP_ULID {
 
     fn is_type( type_str: &str) -> bool {
-        "tid" == type_str
+        "ulid" == type_str
     }
 
-    fn type_idx() -> (i64, String) { (NP_TypeKeys::Tid as i64, "tid".to_owned()) }
-    fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Tid as i64, "tid".to_owned()) }
+    fn type_idx() -> (i64, String) { (NP_TypeKeys::Ulid as i64, "ulid".to_owned()) }
+    fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Ulid as i64, "ulid".to_owned()) }
 
     fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, memory: &NP_Memory, value: Box<&Self>) -> core::result::Result<NP_PtrKinds, NP_Error> {
 
         let mut addr = kind.get_value();
 
-        if addr != 0 { // existing value, replace
+        let timebits: [u8; 8] = value.time.to_be_bytes();
+        let idbits: [u8; 16] = value.id.to_be_bytes();
 
-            let time_bytes = value.time.to_be_bytes();
+        if addr != 0 { // existing value, replace
 
             let write_bytes = memory.write_bytes();
 
             // overwrite existing values in buffer
             for x in 0..16 {
-                if x < 8 {
-                    write_bytes[(addr + x as u32) as usize] = value.id[x as usize];
+                if x < 6 {
+                    write_bytes[(addr + x as u32) as usize] = timebits[x as usize + 2];
                 } else {
-                    write_bytes[(addr + x as u32) as usize] = time_bytes[x as usize - 8];
+                    write_bytes[(addr + x as u32) as usize] = idbits[x as usize];
                 }
             }
 
@@ -1015,13 +996,12 @@ impl NP_Value for NP_TimeID {
         } else { // new value
 
             let mut bytes: [u8; 16] = [0; 16];
-            let time_bytes = value.time.to_be_bytes();
 
             for x in 0..bytes.len() {
-                if x < 8 {
-                    bytes[(addr + x as u32) as usize] = value.id[x as usize];
+                if x < 6 {
+                    bytes[(addr + x as u32) as usize] = timebits[x as usize + 2];
                 } else {
-                    bytes[(addr + x as u32) as usize] = time_bytes[x as usize - 8];
+                    bytes[(addr + x as u32) as usize] = idbits[x as usize];
                 }
             }
 
@@ -1033,7 +1013,7 @@ impl NP_Value for NP_TimeID {
     }
 }
 
-impl<'a> NP_ValueInto<'a> for NP_TimeID {
+impl<'a> NP_ValueInto<'a> for NP_ULID {
     fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: &'a NP_Schema, buffer: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
         let addr = kind.get_value() as usize;
 
@@ -1042,13 +1022,22 @@ impl<'a> NP_ValueInto<'a> for NP_TimeID {
             return Ok(None);
         }
 
-        let id_bytes: [u8; 8] = *buffer.get_8_bytes(addr).unwrap_or(&[0; 8]);
+        let mut time_bytes: [u8; 8] = [0; 8];
+        let mut id_bytes: [u8; 16] = [0; 16];
 
-        let time_bytes: [u8; 8] = *buffer.get_8_bytes(addr + 8).unwrap_or(&[0; 8]);
+        let read_bytes: [u8; 16] = *buffer.get_16_bytes(addr).unwrap_or(&[0; 16]);
 
-        Ok(Some(Box::new(NP_TimeID {
-            id: id_bytes,
-            time: u64::from_be_bytes(time_bytes)
+        for x in 0..read_bytes.len() {
+            if x < 6 {
+                time_bytes[x + 2] = read_bytes[x];
+            } else {
+                id_bytes[x] = read_bytes[x];
+            }
+        }
+
+        Ok(Some(Box::new(NP_ULID {
+            time: u64::from_be_bytes(time_bytes),
+            id: u128::from_be_bytes(id_bytes)
         })))
          
     }
@@ -1060,7 +1049,7 @@ impl<'a> NP_ValueInto<'a> for NP_TimeID {
             Ok(x) => {
                 match x {
                     Some(y) => {
-                        JFObject::String(y.to_string(None))
+                        JFObject::String(y.to_string())
                     },
                     None => {
                         JFObject::Null
@@ -1079,7 +1068,7 @@ impl<'a> NP_ValueInto<'a> for NP_TimeID {
         if addr == 0 {
             return Ok(0) 
         } else {
-            Ok(core::mem::size_of::<u64>() as u32)
+            Ok(16)
         }
     }
 
@@ -1250,6 +1239,7 @@ impl<'a> NP_ValueInto<'a> for NP_UUID {
 
 }
 
+/// Represents the string value of a choice in a schema
 pub struct NP_Option {
     pub value: Option<String>
 }
@@ -1503,6 +1493,7 @@ impl<'a> NP_ValueInto<'a> for bool {
 
 }
 
+/// Stores the current unix epoch in u64
 pub struct NP_Date {
     pub value: u64
 }
