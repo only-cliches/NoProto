@@ -600,10 +600,16 @@ impl NP_Value for NP_Dec {
             for x in 0..bytes.len() {
                 write_bytes[(addr + x as u32) as usize] = bytes[x as usize];
             }
+            write_bytes[(addr + 8 as u32) as usize] = value.exp;
             return Ok(*kind);
         } else { // new value
 
-            let bytes = (((i64_value as i128) + offset) as u64).to_be_bytes();
+            let mut bytes: [u8; 9] = [0; 9];
+            let be_bytes = (((i64_value as i128) + offset) as u64).to_be_bytes();
+            for x in 0..be_bytes.len() {
+                bytes[x] = be_bytes[x];
+            }
+            bytes[8] = value.exp;
             addr = memory.malloc(bytes.to_vec())?;
             return Ok(memory.set_value_address(address, addr as u32, kind));
         }
@@ -663,7 +669,7 @@ impl<'a> NP_ValueInto<'a> for NP_Dec {
         if addr == 0 {
             return Ok(0) 
         } else {
-            Ok(core::mem::size_of::<i64>() as u32)
+            Ok(9)
         }
     }
 
@@ -896,7 +902,7 @@ impl<'a> NP_ValueInto<'a> for NP_Geo {
 
 /// Represents a ULID type which has a 6 byte timestamp and 10 bytes of randomness
 /// 
-/// Useful for storing time stamp data that can't have collisions.
+/// Useful for storing time stamp data that doesn't have collisions.
 pub struct NP_ULID {
     pub time: u64,
     pub id: u128
@@ -1242,6 +1248,24 @@ impl<'a> NP_ValueInto<'a> for NP_UUID {
 /// Represents the string value of a choice in a schema
 pub struct NP_Option {
     pub value: Option<String>
+}
+
+impl NP_Option {
+    pub fn new(value: String) -> NP_Option {
+        NP_Option {
+            value: Some(value)
+        }
+    }
+
+    pub fn empty() -> NP_Option {
+        NP_Option {
+            value: None
+        }
+    }
+    
+    pub fn set(&mut self, value: Option<String>) {
+        self.value = value;
+    }
 }
 
 impl NP_Value for NP_Option {

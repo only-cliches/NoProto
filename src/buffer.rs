@@ -1,13 +1,14 @@
 //! Top level abstraction for buffer objects
 
+use alloc::boxed::Box;
+use alloc::vec::Vec;
 use crate::pointer::NP_ValueInto;
 use crate::pointer::NP_Value;
 use crate::error::NP_Error;
 use crate::pointer::{any::NP_Any, NP_Ptr};
 use crate::memory::NP_Memory;
 use crate::schema::{NP_TypeKeys, NP_Schema};
-
-use alloc::borrow::ToOwned;
+use alloc::{borrow::ToOwned};
 
 
 pub struct NP_Buffer<'a> {
@@ -45,14 +46,16 @@ impl<'a> NP_Buffer<'a> {
         Err(NP_Error::new(err))
     }
 
-    pub fn set_value<X: NP_Value + Default, S: AsRef<str>>(self, _path: S, _value: X) -> Result<bool, NP_Error> {
-        // Ok(false) 
-        todo!();
+    pub fn deep_set<X: NP_Value + Default, S: AsRef<str>>(&mut self, path: S, value: X) -> Result<(), NP_Error> {
+        let vec_path: Vec<&str> = path.as_ref().split(".").filter(|v| { v.len() > 0 }).collect();
+        let pointer: NP_Ptr<NP_Any> = NP_Ptr::new_standard_ptr(1, self.root_model, self.memory);
+        pointer._deep_set::<X>(vec_path, 0, value)
     }
 
-    pub fn get_value<X: NP_Value + Default, S: AsRef<str>>(&self, _path: S) -> Result<Option<X>, NP_Error> {
-        //Ok(Some(X::default()))
-        todo!();
+    pub fn deep_get<X: NP_Value + Default, S: AsRef<str>>(&self, path: S) -> Result<Option<Box<X>>, NP_Error> {
+        let vec_path: Vec<&str> = path.as_ref().split(".").filter(|v| { v.len() > 0 }).collect();
+        let pointer: NP_Ptr<NP_Any> = NP_Ptr::new_standard_ptr(1, self.root_model, self.memory);
+        pointer._deep_get::<X>(vec_path, 0)
     }
 
     pub fn calc_wasted_bytes(&self) -> Result<u32, NP_Error> {

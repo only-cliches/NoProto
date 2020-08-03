@@ -194,6 +194,7 @@ mod utils;
 
 extern crate alloc;
 
+use alloc::boxed::Box;
 use crate::pointer::NP_Value;
 use crate::json_flex::json_decode;
 use crate::error::NP_Error;
@@ -202,7 +203,7 @@ use crate::memory::NP_Memory;
 use buffer::NP_Buffer;
 use alloc::vec::Vec;
 use alloc::vec;
-use alloc::borrow::ToOwned;
+use alloc::{rc::Rc, borrow::ToOwned};
 use json_flex::JFObject;
 use pointer::{any::NP_Any, NP_Ptr};
 
@@ -278,7 +279,7 @@ const PROTOCOL_VERSION: u8 = 0;
 /// 
 /// 
 pub struct NP_Factory {
-    schema: NP_Schema,
+    schema: Rc<NP_Schema>,
     // _phantom: &'a PhantomData<u8>
 }
 
@@ -308,6 +309,12 @@ impl NP {
     }
 }
 
+pub struct NP_Compact_Data {
+    pub old_buffer_size: u32,
+    pub new_buffer_size: u32,
+    pub wasted_bytes: u32
+}
+
 
 impl NP_Factory {
 
@@ -318,7 +325,7 @@ impl NP_Factory {
         match parsed {
             Ok(good_parsed) => {
                 Ok(NP_Factory {
-                    schema:  NP_Schema::from_json(good_parsed)?
+                    schema:  Rc::new(NP_Schema::from_json(good_parsed)?)
                 })
             },
             Err(_x) => {
@@ -365,26 +372,35 @@ impl NP_Factory {
         new_bytes
     }
 
-    pub fn maybe_compact<F>(&self, buffer: Vec<u8>, new_capacity: Option<u32>, mut callback: F) -> Result<Vec<u8>, NP_Error> where F: FnMut(u32, u32) -> bool {
+    pub fn maybe_compact<F>(&self, buffer: Vec<u8>, new_capacity: Option<u32>, mut callback: F) -> Result<Vec<u8>, NP_Error> where F: FnMut(NP_Compact_Data) -> bool {
 
         let old_bytes = NP_Memory::new(buffer);
         let old_root = NP_Ptr::<NP_Any>::new_standard_ptr(1, &self.schema, &old_bytes);
 
         let wasted_bytes = NP_Buffer::new(&self.schema, &old_bytes).calc_wasted_bytes()?;
 
-        let do_compact = callback(wasted_bytes, old_bytes.read_bytes().len() as u32);
+        let old_size = old_bytes.read_bytes().len() as u32;
 
-        let capacity = match new_capacity {
-            Some(x) => { x as usize },
-            None => old_bytes.read_bytes().len()
+        let compact_data = NP_Compact_Data { 
+            old_buffer_size: old_size,
+            new_buffer_size: if old_size > wasted_bytes { old_size - wasted_bytes } else  { 0 },
+            wasted_bytes: wasted_bytes
         };
 
+        let do_compact = callback(compact_data);
+
         Ok(if do_compact {
+
+            let capacity = match new_capacity {
+                Some(x) => { x as usize },
+                None => old_bytes.read_bytes().len()
+            };
+
             let new_vec: Vec<u8> = self.new_buffer(Some(capacity));
             let new_bytes = NP_Memory::new(new_vec);
             let new_root = NP_Ptr::<NP_Any>::new_standard_ptr(1, &self.schema, &new_bytes);
     
-            old_root.compact(new_root)?;
+            old_root._compact(new_root)?;
 
             new_bytes.dump()
         } else {
@@ -405,7 +421,7 @@ impl NP_Factory {
         let new_bytes = NP_Memory::new(self.new_buffer(Some(capacity)));
         let new_root = NP_Ptr::<NP_Any>::new_standard_ptr(1, &self.schema, &new_bytes);
 
-        old_root.compact(new_root)?;
+        old_root._compact(new_root)?;
         
         Ok(new_bytes.dump())
     }
@@ -418,8 +434,8 @@ impl NP_Factory {
         (root.json_encode(), bytes.dump())
     }
 
-    pub fn extract<T, F>(&self, buffer: Vec<u8>, mut callback: F) -> Result<(T, Vec<u8>), NP_Error> 
-        where F: FnMut(NP_Buffer) -> Result<T, NP_Error>
+    pub fn extract<X: NP_Value + Default, F>(&self, buffer: Vec<u8>, mut callback: F) -> Result<(X, Vec<u8>), NP_Error> 
+        where F: FnMut(NP_Buffer) -> Result<X, NP_Error>
     {
         let bytes = NP_Memory::new(buffer);
 
@@ -428,29 +444,26 @@ impl NP_Factory {
         Ok((result, bytes.dump()))
     }
 
-    pub fn set<X: NP_Value + Default, S: AsRef<str>>(&self, buffer: Vec<u8>, path: S, value: X) -> Result<(bool, Vec<u8>), NP_Error> {
+    pub fn deep_set<X: NP_Value + Default, S: AsRef<str>>(&mut self, buffer: Vec<u8>, path: S, value: X) -> Result<Vec<u8>, NP_Error> {
+        
         let bytes = NP_Memory::new(buffer);
+
+        let mut buffer = NP_Buffer::new(&self.schema, &bytes);
+
+        buffer.deep_set(path, value)?;
  
-        let result = {
-            let buffer = NP_Buffer::new(&self.schema, &bytes);
-
-            buffer.set_value(path, value)
-        }?;
-
-        Ok((result, bytes.dump()))
+        Ok(bytes.dump())
     }
 
-    pub fn get<X: NP_Value + Default, S: AsRef<str>>(&self, buffer: Vec<u8>,  path: S) -> Result<(Option<X>, Vec<u8>), NP_Error> {
+    pub fn deep_get<X: NP_Value + Default, S: AsRef<str>>(&self, buffer: Vec<u8>,  path: S) -> Result<(Option<Box<X>>, Vec<u8>), NP_Error> {
         let bytes = NP_Memory::new(buffer);
 
-        let result = {
-            let buffer = NP_Buffer::new(&self.schema, &bytes);
+        let buffer = NP_Buffer::new(&self.schema, &bytes);
 
-            buffer.get_value(path)
-        }?;
-
+        let result = buffer.deep_get(path)?;
+ 
         Ok((result, bytes.dump()))
-    } 
+    }
 }
 
 #[cfg(test)]

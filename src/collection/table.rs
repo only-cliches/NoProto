@@ -179,7 +179,7 @@ impl<'a> NP_ValueInto<'a> for NP_Table<'a> {
                             if item.has_value.0 && item.has_value.1 {
                                 let new_ptr = new_list.select(&item.column)?;
                                 let old_ptr = item.select::<NP_Any>()?;
-                                old_ptr.compact(new_ptr)?;
+                                old_ptr._compact(new_ptr)?;
                             }
 
                         }

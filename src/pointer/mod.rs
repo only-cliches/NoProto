@@ -19,7 +19,7 @@ pub mod numbers;
 use crate::json_flex::JFObject;
 use crate::memory::NP_Memory;
 use crate::NP_Error;
-use crate::{schema::{NP_Schema, NP_TypeKeys}, collection::{map::NP_Map, table::NP_Table, list::NP_List, tuple::NP_Tuple}};
+use crate::{schema::{NP_Schema, NP_TypeKeys}, collection::{map::NP_Map, table::NP_Table, list::NP_List, tuple::NP_Tuple}, utils::print_path};
 
 use alloc::string::String;
 use alloc::boxed::Box;
@@ -92,6 +92,11 @@ pub trait NP_Value {
         let mut message = "This type (".to_owned();
         message.push_str(Self::type_idx().1.as_str());
         message.push_str(") doesn't support .set()!");
+        Err(NP_Error::new(message.as_str()))
+    }
+
+    fn v_buffer_into(_address: u32, _kind: NP_PtrKinds, _schema: &NP_Schema, _buffer: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
+        let message = "This type  doesn't support into!".to_owned();
         Err(NP_Error::new(message.as_str()))
     }
 }
@@ -294,11 +299,11 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Ptr<'a, T> {
             None => None
         })
     }
-
+/*
     #[doc(hidden)]
     /// Used to create a copy of a pointer for compaction
     /// Should never be called or used by a library end user.
-    pub fn clone_ptr(schema: &'a NP_Schema, kind: NP_PtrKinds, memory: &'a NP_Memory) -> Result<NP_Ptr<'a, T>, NP_Error> {
+    pub fn _clone_ptr(schema: &'a NP_Schema, kind: NP_PtrKinds, memory: &'a NP_Memory) -> Result<NP_Ptr<'a, T>, NP_Error> {
 
         let pointer_size = kind.get_size();
 
@@ -328,7 +333,209 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Ptr<'a, T> {
             }
         })
     }
+*/
+    #[doc(hidden)]
+    pub fn _deep_set<X: NP_Value + Default>(self, path: Vec<&str>, path_index: usize, value: X) -> Result<(), NP_Error> {
 
+        if path.len() > path_index + 1 {
+            let mut err = "Error in deep set, ran off the end of the path. \n Path:".to_owned();
+            err.push_str(print_path(&path, path_index).as_str());
+            return Err(NP_Error::new(err));
+        }
+
+        match NP_TypeKeys::from(self.schema.type_data.0) {
+            NP_TypeKeys::Table => {
+
+                let result = NP_Table::buffer_into(self.location, self.kind, self.schema, &self.memory)?;
+                
+                match result {
+                    Some(mut table) => {
+                        let table_key = path[path_index];
+                        let col = table.select::<NP_Any>(table_key)?;
+                        col._deep_set::<X>(path, path_index + 1, value)?;
+                    },
+                    None => {
+                        unreachable!();
+                    }
+                }
+
+                Ok(())
+            },
+            NP_TypeKeys::Map => {
+
+                let result = NP_Map::<NP_Any>::buffer_into(self.location, self.kind, self.schema, &self.memory)?;
+
+                match result {
+                    Some(mut map) => {
+                        let map_key = path[path_index];
+                        let col = map.select(&map_key.as_bytes().to_vec())?;
+                        col._deep_set::<X>(path, path_index + 1, value)?;
+                    },
+                    None => {
+                        unreachable!();
+                    }
+                }
+                
+                Ok(())
+            },
+            NP_TypeKeys::List => {
+                let result = NP_List::<NP_Any>::buffer_into(self.location, self.kind, self.schema, &self.memory)?;
+
+                match result {
+                    Some(mut list) => {
+                        let list_key = path[path_index];
+                        let list_key_int = list_key.parse::<u16>()?;
+                        let col = list.select(list_key_int)?;
+                        col._deep_set::<X>(path, path_index + 1, value)?;
+                    },
+                    None => {
+                        unreachable!();
+                    }
+                }
+                Ok(())
+            },
+            NP_TypeKeys::Tuple => {
+                let result = NP_Tuple::buffer_into(self.location, self.kind, self.schema, &self.memory)?;
+
+                match result {
+                    Some(tuple) => {
+                        let list_key = path[path_index];
+                        let list_key_int = list_key.parse::<u8>()?;
+                        let col = tuple.select::<NP_Any>(list_key_int)?;
+                        col._deep_set::<X>(path, path_index + 1, value)?;
+                    },
+                    None => {
+                        unreachable!();
+                    }
+                }
+                Ok(())
+            },
+            _ => { // scalar type
+                if path.len() - 1 != path_index { // reached scalar value but not at end of path
+                    let mut err = "TypeError: Attempted to deep set into collection but found scalar type (".to_owned();
+                    err.push_str(self.schema.type_data.1.as_str());
+                    err.push_str(")\n Path: ");
+                    err.push_str(print_path(&path, path_index).as_str());
+                    return Err(NP_Error::new(err));
+                }    
+
+                // if schema is ANY then allow any type to set this value
+                // otherwise make sure the schema and type match
+                if self.schema.type_data.0 != NP_Any::type_idx().0 && self.schema.type_data.0 != X::type_idx().0 {
+                    let mut err = "TypeError: Attempted to set value for type (".to_owned();
+                    err.push_str(X::type_idx().1.as_str());
+                    err.push_str(") into schema of type (");
+                    err.push_str(self.schema.type_data.1.as_str());
+                    err.push_str(")\n Path: ");
+                    err.push_str(print_path(&path, path_index).as_str());
+                    return Err(NP_Error::new(err));
+                }
+
+                X::buffer_set(self.location, &self.kind, self.schema, self.memory, Box::new(&value))?;
+
+                Ok(())
+            }
+        }
+    }
+
+    #[doc(hidden)]
+    pub fn _deep_get<X: NP_Value + Default>(self, path: Vec<&str>, path_index: usize) -> Result<Option<Box<X>>, NP_Error> {
+
+        if path.len() > path_index + 1 {
+            let mut err = "Error in deep get, ran off the end of the path. \n Path:".to_owned();
+            err.push_str(print_path(&path, path_index).as_str());
+            return Err(NP_Error::new(err));
+        }
+
+        match NP_TypeKeys::from(self.schema.type_data.0) {
+            NP_TypeKeys::Table => {
+
+                let result = NP_Table::buffer_into(self.location, self.kind, self.schema, &self.memory)?;
+                
+                match result {
+                    Some(mut table) => {
+                        let table_key = path[path_index];
+                        let col = table.select::<NP_Any>(table_key)?;
+                        col._deep_get::<X>(path, path_index + 1)
+                    },
+                    None => {
+                        unreachable!();
+                    }
+                }
+            },
+            NP_TypeKeys::Map => {
+
+                let result = NP_Map::<NP_Any>::buffer_into(self.location, self.kind, self.schema, &self.memory)?;
+
+                match result {
+                    Some(mut map) => {
+                        let map_key = path[path_index];
+                        let col = map.select(&map_key.as_bytes().to_vec())?;
+                        col._deep_get::<X>(path, path_index + 1)
+                    },
+                    None => {
+                        unreachable!();
+                    }
+                }
+            },
+            NP_TypeKeys::List => {
+                let result = NP_List::<NP_Any>::buffer_into(self.location, self.kind, self.schema, &self.memory)?;
+
+                match result {
+                    Some(mut list) => {
+                        let list_key = path[path_index];
+                        let list_key_int = list_key.parse::<u16>()?;
+                        let col = list.select(list_key_int)?;
+                        col._deep_get::<X>(path, path_index + 1)
+                    },
+                    None => {
+                        unreachable!();
+                    }
+                }
+            },
+            NP_TypeKeys::Tuple => {
+                let result = NP_Tuple::buffer_into(self.location, self.kind, self.schema, &self.memory)?;
+
+                match result {
+                    Some(tuple) => {
+                        let list_key = path[path_index];
+                        let list_key_int = list_key.parse::<u8>()?;
+                        let col = tuple.select::<NP_Any>(list_key_int)?;
+                        col._deep_get::<X>(path, path_index + 1)
+                    },
+                    None => {
+                        unreachable!();
+                    }
+                }
+
+            },
+            _ => { // scalar type
+                if path.len() - 1 != path_index { // reached scalar value but not at end of path
+                    let mut err = "TypeError: Attempted to deep get into collection but found scalar type (".to_owned();
+                    err.push_str(self.schema.type_data.1.as_str());
+                    err.push_str(")\n Path: ");
+                    err.push_str(print_path(&path, path_index).as_str());
+                    return Err(NP_Error::new(err));
+                }    
+
+                // if schema is ANY then allow any type to set this value
+                // otherwise make sure the schema and type match
+                if self.schema.type_data.0 != X::type_idx().0 {
+                    let mut err = "TypeError: Attempted to get value for type (".to_owned();
+                    err.push_str(X::type_idx().1.as_str());
+                    err.push_str(") from schema of type (");
+                    err.push_str(self.schema.type_data.1.as_str());
+                    err.push_str(")\n Path: ");
+                    err.push_str(print_path(&path, path_index).as_str());
+                    return Err(NP_Error::new(err));
+                }
+
+                X::v_buffer_into(self.location, self.kind, self.schema, self.memory)
+            }
+        }
+
+        // Ok(None)
+    }
     
     pub fn set_default(&self) -> Result<(), NP_Error> {
 
@@ -414,7 +621,7 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Ptr<'a, T> {
     /// used to run compaction on this pointer
     /// should not be called directly by the library user
     /// Use NP_Factory methods of `compact` and `maybe_compact`.
-    pub fn compact(&self, copy_to: NP_Ptr<'a, NP_Any>) -> Result<(u32, NP_PtrKinds, &'a NP_Schema), NP_Error> {
+    pub fn _compact(&self, copy_to: NP_Ptr<'a, NP_Any>) -> Result<(u32, NP_PtrKinds, &'a NP_Schema), NP_Error> {
 
         match NP_TypeKeys::from(self.schema.type_data.0) {
             NP_TypeKeys::Any => {

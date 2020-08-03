@@ -191,7 +191,7 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_ValueInto<'a> for NP_Map<'
                             if item.has_value {
                                 let new_ptr = new_list.select(&item.key)?;
                                 let old_ptr = item.select()?;
-                                old_ptr.compact(new_ptr)?;
+                                old_ptr._compact(new_ptr)?;
                             }
 
                         }

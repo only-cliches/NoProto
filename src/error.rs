@@ -7,7 +7,7 @@ use alloc::string::ToString;
 
 #[derive(Debug)]
 pub struct NP_Error {
-    message: String
+    pub message: String
 }
 
 impl NP_Error {

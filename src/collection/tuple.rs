@@ -279,7 +279,7 @@ impl<'a> NP_ValueInto<'a> for NP_Tuple<'a> {
                             if item.has_value {
                                 let new_ptr = new_tuple.select(item.index as u8)?;
                                 let old_ptr = item.select::<NP_Any>()?;
-                                old_ptr.compact(new_ptr)?;
+                                old_ptr._compact(new_ptr)?;
                             }
 
                         }

@@ -97,6 +97,23 @@ pub fn to_hex(num: u64, length: i32) -> String {
     result
 }
 
+pub fn print_path(path: &Vec<&str>, path_index: usize) -> String {
+    let mut path_str: String = "".to_owned();
+    let mut ct: usize = 0;
+    path.iter().for_each(|v| {
+        if ct == path_index {
+            path_str.push_str(">");
+        }
+        path_str.push_str(v);
+        if ct == path_index {
+            path_str.push_str("<");
+        }
+        path_str.push_str(" ");
+        ct += 1;
+    });
+    path_str
+}
+
 pub fn to_base32(num: u128, length: i32) -> String {
 
     let mut result: Vec<&str> = Vec::with_capacity(length as usize);
