@@ -409,7 +409,7 @@ impl NP_Factory {
     pub fn deep_clear(&self, buffer: Vec<u8>,  path: &str) -> Result<Vec<u8>, NP_Error> {
         let bytes = Rc::new(NP_Memory::new(buffer));
 
-        let result = {
+        let _result = {
             let buffer = NP_Buffer::new(Rc::clone(&self.schema), Rc::clone(&bytes));
             buffer.deep_clear(path)?
         };
@@ -449,15 +449,13 @@ mod tests {
     use crate::pointer::NP_Ptr;
     use crate::collection::table::NP_Table;
     use collection::{map::NP_Map, list::NP_List};*/
-    use crate::collection::list::NP_List;
     use super::*;
-    use collection::table::NP_Table;
 
 
     #[test]
     fn it_works() -> core::result::Result<(), NP_Error> {
 
-
+/*
         let factory: NP_Factory = NP_Factory::new(r#"{
             "type": "list",
             "of": {
@@ -468,7 +466,7 @@ mod tests {
                 ]
             }
         }"#)?;
-/*
+
         
         let return_buffer = factory.open(NP::new, |mut buffer| {
 
