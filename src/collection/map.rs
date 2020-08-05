@@ -1,34 +1,33 @@
+use alloc::rc::Rc;
 use crate::pointer::NP_PtrKinds;
-use crate::pointer::{NP_ValueInto, NP_Value, NP_Ptr, any::NP_Any};
-use crate::{memory::NP_Memory, schema::{NP_SchemaKinds, NP_Schema, NP_TypeKeys}, error::NP_Error, json_flex::JFObject};
+use crate::pointer::{NP_Value, NP_Ptr, any::NP_Any};
+use crate::{memory::NP_Memory, schema::{NP_SchemaKinds, NP_Schema, NP_TypeKeys}, error::NP_Error, json_flex::NP_JSON};
 
 use alloc::vec::Vec;
 use alloc::string::String;
 use alloc::boxed::Box;
 use alloc::borrow::ToOwned;
 
-pub struct NP_Map<'a, T> {
+pub struct NP_Map<T> {
     address: u32, // pointer location
     head: u32,
     len: u16,
-    memory: Option<&'a NP_Memory>,
-    value: Option<&'a NP_Schema>,
+    memory: Option<Rc<NP_Memory>>,
+    value: Option<Rc<NP_Schema>>,
     _val: T
 }
 
-impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Value for NP_Map<'a, T> {
+impl<T: NP_Value + Default> NP_Value for NP_Map<T> {
     fn is_type( _type_str: &str) -> bool {  // not needed for collection types
         unreachable!()
     }
     fn type_idx() -> (i64, String) { (NP_TypeKeys::Map as i64, "map".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Map as i64, "map".to_owned()) }
-    fn buffer_set(_address: u32, _kind: &NP_PtrKinds, _schema: &NP_Schema, _buffer: &NP_Memory, _value: Box<&Self>) -> core::result::Result<NP_PtrKinds, NP_Error> {
+    fn buffer_set(_address: u32, _kind: &NP_PtrKinds, _schema: Rc<NP_Schema>, _buffer: Rc<NP_Memory>, _value: Box<&Self>) -> core::result::Result<NP_PtrKinds, NP_Error> {
         Err(NP_Error::new("Type (map) doesn't support .set()! Use .into() instead."))
     }
-}
 
-impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_ValueInto<'a> for NP_Map<'a, T> {
-    fn buffer_into(address: u32, kind: NP_PtrKinds, schema: &'a NP_Schema, buffer: &'a NP_Memory) -> core::result::Result<Option<Box<NP_Map<'a, T>>>, NP_Error> {
+    fn buffer_into(address: u32, kind: NP_PtrKinds, schema: Rc<NP_Schema>, buffer: Rc<NP_Memory>) -> core::result::Result<Option<Box<NP_Map<T>>>, NP_Error> {
         
         match &*schema.kind {
             NP_SchemaKinds::Map { value } => {
@@ -63,7 +62,7 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_ValueInto<'a> for NP_Map<'
                     size = *buffer.get_2_bytes(a + 4).unwrap_or(&[0; 2]);
                 }
 
-                Ok(Some(Box::new(NP_Map::new(addr, u32::from_be_bytes(head), u16::from_be_bytes(size), buffer, value))))
+                Ok(Some(Box::new(NP_Map::new(addr, u32::from_be_bytes(head), u16::from_be_bytes(size), buffer, Rc::clone(value)))))
             },
             _ => {
                 unreachable!();
@@ -71,7 +70,7 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_ValueInto<'a> for NP_Map<'
         }
     }
 
-    fn buffer_get_size(_address: u32, kind: &'a NP_PtrKinds, schema: &'a NP_Schema, buffer: &'a NP_Memory) -> Result<u32, NP_Error> {
+    fn buffer_get_size(_address: u32, kind: &NP_PtrKinds, schema: Rc<NP_Schema>, buffer: Rc<NP_Memory>) -> Result<u32, NP_Error> {
         let base_size = 6u32; // head + length
 
         match &*schema.kind {
@@ -91,7 +90,7 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_ValueInto<'a> for NP_Map<'
                     size = *buffer.get_2_bytes(a + 4).unwrap_or(&[0; 2]);
                 }
 
-                let list = NP_Map::<'a, T>::new(addr, u32::from_be_bytes(head), u16::from_be_bytes(size), buffer, value);
+                let list = NP_Map::<T>::new(addr, u32::from_be_bytes(head), u16::from_be_bytes(size), buffer, Rc::clone(value));
 
                 let mut acc_size = 0u32;
 
@@ -113,7 +112,7 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_ValueInto<'a> for NP_Map<'
         }
     }
 
-    fn buffer_to_json(_address: u32, kind: &NP_PtrKinds, schema: &'a NP_Schema, buffer: &'a NP_Memory) -> JFObject {
+    fn buffer_to_json(_address: u32, kind: &NP_PtrKinds, schema: Rc<NP_Schema>, buffer: Rc<NP_Memory>) -> NP_JSON {
 
         match &*schema.kind {
             NP_SchemaKinds::Map { value } => {
@@ -124,7 +123,7 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_ValueInto<'a> for NP_Map<'
                 let size: [u8; 2];
 
                 if addr == 0 {
-                    return JFObject::Null;
+                    return NP_JSON::Null;
                 } else {
                     // existing head, read value
                     let a = addr as usize;
@@ -132,14 +131,13 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_ValueInto<'a> for NP_Map<'
                     size = *buffer.get_2_bytes(a + 4).unwrap_or(&[0; 2]);
                 }
 
-                let list = NP_Map::<'a, T>::new(addr, u32::from_be_bytes(head), u16::from_be_bytes(size), buffer, value);
+                let list = NP_Map::<T>::new(addr, u32::from_be_bytes(head), u16::from_be_bytes(size), buffer, Rc::clone(value));
 
                 let mut json_list = Vec::new();
 
                 for mut l in list.it().into_iter() {
 
-                    let value: JFObject;
-
+                    let value: NP_JSON;
 
                     if l.has_value == true {
                         let ptr = l.select();
@@ -148,21 +146,21 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_ValueInto<'a> for NP_Map<'
                                 value = p.json_encode();
                             },
                             Err (_e) => {
-                                value = JFObject::Null;
+                                value = NP_JSON::Null;
                             }
                         }
                     } else {
-                        value = JFObject::Null;
+                        value = NP_JSON::Null;
                     }
 
                     let mut kv = Vec::new();
-                    kv.push(JFObject::Array(l.key.into_iter().map(|k| JFObject::Integer(k as i64)).collect()));
+                    kv.push(NP_JSON::Array(l.key.into_iter().map(|k| NP_JSON::Integer(k as i64)).collect()));
                     kv.push(value);
 
-                    json_list.push(JFObject::Array(kv));
+                    json_list.push(NP_JSON::Array(kv));
                 }
 
-                JFObject::Array(json_list)
+                NP_JSON::Array(json_list)
             },
             _ => {
                 unreachable!();
@@ -170,17 +168,17 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_ValueInto<'a> for NP_Map<'
         }
     }
 
-    fn buffer_do_compact<X: NP_Value + Default + NP_ValueInto<'a>>(from_ptr: &NP_Ptr<'a, X>, to_ptr: NP_Ptr<'a, NP_Any>) -> Result<(u32, NP_PtrKinds, &'a NP_Schema), NP_Error> where Self: NP_Value + Default {
+    fn buffer_do_compact<X: NP_Value + Default>(from_ptr: &NP_Ptr<X>, to_ptr: NP_Ptr<NP_Any>) -> Result<(u32, NP_PtrKinds, Rc<NP_Schema>), NP_Error> where Self: NP_Value + Default {
 
         if from_ptr.location == 0 {
-            return Ok((0, from_ptr.kind, from_ptr.schema));
+            return Ok((0, from_ptr.kind, Rc::clone(&from_ptr.schema)));
         }
 
         let to_ptr_list = NP_Any::cast::<NP_Map<NP_Any>>(to_ptr)?;
 
         let new_address = to_ptr_list.location;
 
-        match Self::buffer_into(from_ptr.location, from_ptr.kind, from_ptr.schema, from_ptr.memory)? {
+        match Self::buffer_into(from_ptr.location, from_ptr.kind, Rc::clone(&from_ptr.schema), Rc::clone(&from_ptr.memory))? {
             Some(old_list) => {
 
                 match to_ptr_list.into()? {
@@ -196,7 +194,7 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_ValueInto<'a> for NP_Map<'
 
                         }
 
-                        return Ok((new_address, from_ptr.kind, from_ptr.schema));
+                        return Ok((new_address, from_ptr.kind, Rc::clone(&from_ptr.schema)));
                     },
                     None => {}
                 }
@@ -204,21 +202,21 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_ValueInto<'a> for NP_Map<'
             None => { }
         }
 
-        Ok((0, from_ptr.kind, from_ptr.schema))
+        Ok((0, from_ptr.kind, Rc::clone(&from_ptr.schema)))
     }
 }
 
-impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> Default for NP_Map<'a, T> {
+impl<'a, T: NP_Value + Default> Default for NP_Map<T> {
 
     fn default() -> Self {
         NP_Map { address: 0, head: 0, memory: None, value: None, _val: T::default(), len: 0 }
     }
 }
 
-impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Map<'a, T> {
+impl<'a, T: NP_Value + Default> NP_Map<T> {
 
     #[doc(hidden)]
-    pub fn new(address: u32, head: u32, length: u16, memory: &'a NP_Memory, value: &'a NP_Schema) -> Self {
+    pub fn new(address: u32, head: u32, length: u16, memory: Rc<NP_Memory>, value: Rc<NP_Schema>) -> Self {
         NP_Map {
             address,
             head,
@@ -229,13 +227,21 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Map<'a, T> {
         }
     }
 
-    pub fn it(self) -> NP_Map_Iterator<'a, T> {
+    pub fn it(self) -> NP_Map_Iterator<T> {
         NP_Map_Iterator::new(self.address, self.head, self.len, self.memory.unwrap(), self.value.unwrap())
     }
 
-    pub fn select(&mut self, key: &Vec<u8>) -> core::result::Result<NP_Ptr<'a, T>, NP_Error> {
+    pub fn select(&mut self, key: &Vec<u8>) -> core::result::Result<NP_Ptr<T>, NP_Error> {
 
-        let memory = self.memory.unwrap();
+        let memory = match &self.memory {
+            Some(x) => Rc::clone(x),
+            None => unreachable!()
+        };
+
+        let self_schema = match &self.value {
+            Some(x) => Rc::clone(x),
+            None => unreachable!()
+        };
 
         if self.head == 0 { // no values, create one
 
@@ -258,7 +264,7 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Map<'a, T> {
             self.set_len(1);
 
             // provide
-            return Ok(NP_Ptr::new_map_item_ptr(self.head, self.value.unwrap(), &memory));
+            return Ok(NP_Ptr::new_map_item_ptr(self.head, self_schema, memory));
         } else { // values exist, loop through them to see if we have an existing pointer for this column
 
             let mut next_addr = self.head as usize;
@@ -281,7 +287,7 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Map<'a, T> {
 
                 // found our value!
                 if key_vec == *key {
-                    return Ok(NP_Ptr::new_map_item_ptr(next_addr as u32, self.value.unwrap(), &memory));
+                    return Ok(NP_Ptr::new_map_item_ptr(next_addr as u32, self_schema, memory));
                 }
                 
                 // not found yet, get next address
@@ -320,14 +326,18 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Map<'a, T> {
             self.set_len(self.len + 1);
             
             // provide 
-            return Ok(NP_Ptr::new_map_item_ptr(addr, self.value.unwrap(), &memory));
+            return Ok(NP_Ptr::new_map_item_ptr(addr, self_schema, memory));
 
         }
     }
 
     pub fn delete(&mut self, key: &Vec<u8>) -> core::result::Result<bool, NP_Error>{
 
-        let memory = self.memory.unwrap();
+        let memory = match &self.memory {
+            Some(x) => Rc::clone(x),
+            None => unreachable!()
+        };
+
 
         if self.head == 0 { // no values, nothing to delete
             Ok(false)
@@ -409,8 +419,13 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Map<'a, T> {
 
     fn set_len(&mut self, len: u16) {
         self.len = len;
+        let memory = match &self.memory {
+            Some(x) => Rc::clone(x),
+            None => unreachable!()
+        };
 
-        let memory_bytes = self.memory.unwrap().write_bytes();
+
+        let memory_bytes = memory.write_bytes();
        
         let len_bytes = len.to_be_bytes();
 
@@ -421,7 +436,13 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Map<'a, T> {
 
     pub fn empty(self) -> Self {
 
-        let memory_bytes = self.memory.unwrap().write_bytes();
+        let memory = match self.memory {
+            Some(x) => x,
+            None => unreachable!()
+        };
+
+
+        let memory_bytes = memory.write_bytes();
 
         for x in 0..6 {
             memory_bytes[(self.address + x as u32) as usize] = 0;
@@ -430,7 +451,7 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Map<'a, T> {
         NP_Map {
             address: self.address,
             head: 0,
-            memory: self.memory,
+            memory: Some(memory),
             value: self.value,
             _val: T::default(),
             len: 0
@@ -441,7 +462,13 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Map<'a, T> {
 
         self.head = addr;
 
-        let memory_bytes = self.memory.unwrap().write_bytes();
+        let memory = match &self.memory {
+            Some(x) => Rc::clone(x),
+            None => unreachable!()
+        };
+
+
+        let memory_bytes = memory.write_bytes();
        
         let head_bytes = addr.to_be_bytes();
 
@@ -461,7 +488,10 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Map<'a, T> {
 
         let mut has_next = true;
 
-        let memory = self.memory.unwrap();
+        let memory = match &self.memory {
+            Some(x) => Rc::clone(x),
+            None => unreachable!()
+        };
 
         while has_next {
 
@@ -500,39 +530,39 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Map<'a, T> {
 }
 
 
-pub struct NP_Map_Iterator<'a, T> {
+pub struct NP_Map_Iterator<T> {
     current_index: u16,
     address: u32, // pointer location
     head: u32,
-    memory: &'a NP_Memory,
+    memory: Rc<NP_Memory>,
     length: u16,
     current_address: u32,
-    value: &'a NP_Schema,
-    map: NP_Map<'a, T>
+    value: Rc<NP_Schema>,
+    map: NP_Map<T>
 }
 
-impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Map_Iterator<'a, T> {
+impl<T: NP_Value + Default> NP_Map_Iterator<T> {
 
-    pub fn new(address: u32, head: u32, length: u16, memory: &'a NP_Memory, value: &'a NP_Schema) -> Self {
+    pub fn new(address: u32, head: u32, length: u16, memory: Rc<NP_Memory>, value: Rc<NP_Schema>) -> Self {
         NP_Map_Iterator {
             current_index: 0,
             address,
             head,
-            memory: memory,
+            memory: Rc::clone(&memory),
             current_address: head,
-            value,
+            value: Rc::clone(&value),
             length,
             map: NP_Map::new(address, head, length, memory, value)
         }
     }
 
-    pub fn into_map(self) -> NP_Map<'a, T> {
+    pub fn into_map(self) -> NP_Map<T> {
         self.map
     }
 }
 
-impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> Iterator for NP_Map_Iterator<'a, T> {
-    type Item = NP_Map_Item<'a, T>;
+impl<T: NP_Value + Default> Iterator for NP_Map_Iterator<T> {
+    type Item = NP_Map_Item<T>;
 
     fn next(&mut self) -> Option<Self::Item> {
 
@@ -564,31 +594,31 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> Iterator for NP_Map_Iterator<
         return Some(NP_Map_Item {
             index: self.current_index - 1,
             has_value: value_address != 0,
-            value: self.value,
+            value: Rc::clone(&self.value),
             // length: self.length,
             key: key_vec,
             address: this_address,
-            map: NP_Map::new(self.address, self.head, self.length, self.memory, self.value),
-            memory: self.memory
+            map: NP_Map::new(self.address, self.head, self.length, Rc::clone(&self.memory), Rc::clone(&self.value)),
+            memory: Rc::clone(&self.memory)
         });
     }
 }
 
-pub struct NP_Map_Item<'a, T> { 
+pub struct NP_Map_Item<T> { 
     pub index: u16,
     pub key: Vec<u8>,
     pub has_value: bool,
-    pub value: &'a NP_Schema,
+    pub value: Rc<NP_Schema>,
     address: u32,
     // length: u16,
-    map: NP_Map<'a, T>,
-    memory: &'a NP_Memory
+    map: NP_Map<T>,
+    memory: Rc<NP_Memory>
 }
 
-impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Map_Item<'a, T> {
+impl<T: NP_Value + Default> NP_Map_Item<T> {
     
-    pub fn select(&mut self) -> Result<NP_Ptr<'a, T>, NP_Error> {
-        Ok(NP_Ptr::new_map_item_ptr(self.address, self.value, self.memory))
+    pub fn select(&mut self) -> Result<NP_Ptr<T>, NP_Error> {
+        Ok(NP_Ptr::new_map_item_ptr(self.address, Rc::clone(&self.value), Rc::clone(&self.memory)))
     }
     // TODO: Build a select statement that grabs the current index in place instead of seeking to it.
     pub fn delete(&mut self) -> Result<bool, NP_Error> {

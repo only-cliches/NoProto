@@ -1,33 +1,30 @@
-use crate::pointer::NP_ValueInto;
 use crate::pointer::NP_PtrKinds;
-use crate::{memory::NP_Memory, pointer::{NP_Value, NP_Ptr, any::NP_Any}, error::NP_Error, schema::{NP_SchemaKinds, NP_Schema, NP_TypeKeys}, json_flex::{JFMap, JFObject}};
+use crate::{memory::NP_Memory, pointer::{NP_Value, NP_Ptr, any::NP_Any}, error::NP_Error, schema::{NP_SchemaKinds, NP_Schema, NP_TypeKeys}, json_flex::{JSMAP, NP_JSON}};
 
 use alloc::vec::Vec;
 use alloc::string::String;
 use alloc::boxed::Box;
-use alloc::borrow::ToOwned;
+use alloc::{rc::Rc, borrow::ToOwned};
 use core::result::Result;
 
-pub struct NP_Table<'a> {
+pub struct NP_Table {
     address: u32, // pointer location
     head: u32,
-    memory: Option<&'a NP_Memory>,
-    columns: Option<&'a Vec<Option<(u8, String, NP_Schema)>>>
+    memory: Option<Rc<NP_Memory>>,
+    columns: Option<Rc<Vec<Option<(u8, String, Rc<NP_Schema>)>>>>
 }
 
-impl<'a> NP_Value for NP_Table<'a> {
+impl NP_Value for NP_Table {
     fn is_type( _type_str: &str) -> bool {  // not needed for collection types
         unreachable!()
     }
     fn type_idx() -> (i64, String) { (NP_TypeKeys::Table as i64, "table".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Table as i64, "table".to_owned()) }
-    fn buffer_set(_address: u32, _kind: &NP_PtrKinds, _schema: &NP_Schema, _buffer: &NP_Memory, _value: Box<&Self>) -> core::result::Result<NP_PtrKinds, NP_Error> {
+    fn buffer_set(_address: u32, _kind: &NP_PtrKinds, _schema: Rc<NP_Schema>, _buffer: Rc<NP_Memory>, _value: Box<&Self>) -> core::result::Result<NP_PtrKinds, NP_Error> {
         Err(NP_Error::new("Type (table) doesn't support .set()! Use .into() instead."))
     }
-}
 
-impl<'a> NP_ValueInto<'a> for NP_Table<'a> {
-    fn buffer_into(address: u32, kind: NP_PtrKinds, schema: &'a NP_Schema, buffer: &'a NP_Memory) -> core::result::Result<Option<Box<NP_Table<'a>>>, NP_Error> {
+    fn buffer_into(address: u32, kind: NP_PtrKinds, schema: Rc<NP_Schema>, buffer: Rc<NP_Memory>) -> core::result::Result<Option<Box<Self>>, NP_Error> {
         
         match &*schema.kind {
             NP_SchemaKinds::Table { columns } => {
@@ -46,15 +43,15 @@ impl<'a> NP_ValueInto<'a> for NP_Table<'a> {
                     head = *buffer.get_4_bytes(a).unwrap_or(&[0; 4]);
                 }
 
-                Ok(Some(Box::new(NP_Table::new(addr, u32::from_be_bytes(head), buffer, &columns))))
+                Ok(Some(Box::new(NP_Table::new(addr, u32::from_be_bytes(head), buffer, Rc::clone(&columns)))))
             },
             _ => {
                 unreachable!();
             }
         }
     }
-
-    fn buffer_get_size(address: u32, kind: &'a NP_PtrKinds, schema: &'a NP_Schema, buffer: &'a NP_Memory) -> Result<u32, NP_Error> {
+ 
+    fn buffer_get_size(address: u32, kind: &NP_PtrKinds, schema: Rc<NP_Schema>, buffer: Rc<NP_Memory>) -> Result<u32, NP_Error> {
         let base_size = 4u32; // head
         let addr = kind.get_value();
 
@@ -67,10 +64,10 @@ impl<'a> NP_ValueInto<'a> for NP_Table<'a> {
 
                 let mut acc_size = 0u32;
 
-                match NP_Table::buffer_into(address, *kind, schema, buffer)? {
+                match NP_Table::buffer_into(address, *kind, Rc::clone(&schema), buffer)? {
                     Some(mut real_table) => {
 
-                        for c in columns {
+                        for c in columns.as_ref() {
                             match c {
                                 Some(x) => {
                                     let has_value = real_table.has(&*x.1)?;
@@ -101,26 +98,26 @@ impl<'a> NP_ValueInto<'a> for NP_Table<'a> {
         }
     }
 
-    fn buffer_to_json(address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: &'a NP_Memory) -> JFObject {
+    fn buffer_to_json(address: u32, kind: &NP_PtrKinds, schema: Rc<NP_Schema>, buffer: Rc<NP_Memory>) -> NP_JSON {
         let addr = kind.get_value();
 
         if addr == 0 {
-            return JFObject::Null;
+            return NP_JSON::Null;
         }
 
         match &*schema.kind {
             NP_SchemaKinds::Table { columns } => {
 
-                let mut object = JFMap::<JFObject>::new();
+                let mut object = JSMAP::<NP_JSON>::new();
 
-                let table = NP_Table::buffer_into(address, *kind, schema, buffer);
+                let table = NP_Table::buffer_into(address, *kind, Rc::clone(&schema), buffer);
 
                 match table {
                     Ok(good_table) => {
                         match good_table {
                             Some(mut real_table) => {
 
-                                for c in columns {
+                                for c in columns.as_ref() {
                                     match c {
                                         Some(x) => {
                                             let col_ptr = real_table.select::<NP_Any>(x.1.as_str());
@@ -129,7 +126,7 @@ impl<'a> NP_ValueInto<'a> for NP_Table<'a> {
                                                     object.insert(x.1.to_owned(), ptr.json_encode());
                                                 },
                                                 Err(_e) => {
-                                                    object.insert(x.1.to_owned(), JFObject::Null);
+                                                    object.insert(x.1.to_owned(), NP_JSON::Null);
                                                 }
                                             }
                                         },
@@ -141,34 +138,34 @@ impl<'a> NP_ValueInto<'a> for NP_Table<'a> {
 
                             },
                             None => {
-                                return JFObject::Null;
+                                return NP_JSON::Null;
                             }
                         }
                     },
                     Err(_e) => {
-                        return JFObject::Null;
+                        return NP_JSON::Null;
                     }
                 }
 
-                JFObject::Dictionary(object)
+                NP_JSON::Dictionary(object)
             },
             _ => {
-                JFObject::Null
+                NP_JSON::Null
             }
         }
     }
 
-    fn buffer_do_compact<X: NP_Value + Default + NP_ValueInto<'a>>(from_ptr: &NP_Ptr<'a, X>, to_ptr: NP_Ptr<'a, NP_Any>) -> Result<(u32, NP_PtrKinds, &'a NP_Schema), NP_Error> where Self: NP_Value + Default {
+    fn buffer_do_compact<'b, X: NP_Value + Default>(from_ptr: &'b NP_Ptr<X>, to_ptr: NP_Ptr<NP_Any>) -> Result<(u32, NP_PtrKinds, Rc<NP_Schema>), NP_Error> where Self: NP_Value + Default {
 
         if from_ptr.location == 0 {
-            return Ok((0, from_ptr.kind, from_ptr.schema));
+            return Ok((0, from_ptr.kind, Rc::clone(&from_ptr.schema)));
         }
 
         let to_ptr_list = NP_Any::cast::<NP_Table>(to_ptr)?;
 
         let new_address = to_ptr_list.location;
 
-        match Self::buffer_into(from_ptr.location, from_ptr.kind, from_ptr.schema, from_ptr.memory)? {
+        match Self::buffer_into(from_ptr.location, from_ptr.kind, Rc::clone(&from_ptr.schema), Rc::clone(&from_ptr.memory))? {
             Some(old_list) => {
 
                 match to_ptr_list.into()? {
@@ -184,7 +181,7 @@ impl<'a> NP_ValueInto<'a> for NP_Table<'a> {
 
                         }
 
-                        return Ok((new_address, from_ptr.kind, from_ptr.schema));
+                        return Ok((new_address, from_ptr.kind, Rc::clone(&from_ptr.schema)));
                     },
                     None => {}
                 }
@@ -192,21 +189,21 @@ impl<'a> NP_ValueInto<'a> for NP_Table<'a> {
             None => { }
         }
 
-        Ok((0, from_ptr.kind, from_ptr.schema))
+        Ok((0, from_ptr.kind, Rc::clone(&from_ptr.schema)))
     }
 }
 
-impl<'a> Default for NP_Table<'a> {
+impl Default for NP_Table {
 
     fn default() -> Self {
         NP_Table { address: 0, head: 0, memory: None, columns: None}
     }
 }
 
-impl<'a> NP_Table<'a> {
+impl NP_Table {
 
     #[doc(hidden)]
-    pub fn new(address: u32, head: u32, memory: &'a NP_Memory, columns: &'a Vec<Option<(u8, String, NP_Schema)>>) -> Self {
+    pub fn new(address: u32, head: u32, memory: Rc<NP_Memory>, columns: Rc<Vec<Option<(u8, String, Rc<NP_Schema>)>>>) -> Self {
         NP_Table {
             address,
             head,
@@ -215,19 +212,24 @@ impl<'a> NP_Table<'a> {
         }
     }
 
-    pub fn it(self) -> NP_Table_Iterator<'a> {
+    pub fn it(self) -> NP_Table_Iterator {
         NP_Table_Iterator::new(self.address, self.head, self.memory.unwrap(), self.columns.unwrap())
     }
 
-    pub fn select<X: NP_Value + Default + NP_ValueInto<'a>>(&mut self, column: &str) -> core::result::Result<NP_Ptr<'a, X>, NP_Error> {
+    pub fn select<X: NP_Value + Default>(&mut self, column: &str) -> core::result::Result<NP_Ptr<X>, NP_Error> {
 
-        let mut column_schema: Option<&NP_Schema> = None;
+        let mut column_schema: Option<Rc<NP_Schema>> = None;
 
-        let column_index = &self.columns.unwrap().iter().fold(0u8, |prev, cur| {
+        let cols = match &self.columns {
+            Some(x) => x,
+            None => unreachable!()
+        };
+
+        let column_index = cols.iter().fold(0u8, |prev, cur| {
             match cur {
                 Some(x) => {
                     if x.1 == column { 
-                        column_schema = Some(&x.2);
+                        column_schema = Some(Rc::clone(&x.2));
                         return x.0; 
                     }
                     prev
@@ -236,12 +238,15 @@ impl<'a> NP_Table<'a> {
                     prev
                 }
             }
-        }) as &u8;
+        }) as u8;
 
         match column_schema {
             Some(some_column_schema) => {
 
-                let memory = self.memory.unwrap();
+                let memory = match &self.memory {
+                    Some(x) => Rc::clone(x),
+                    None => unreachable!()
+                };
 
                 // make sure the type we're casting to isn't ANY or the cast itself isn't ANY
                 if X::type_idx().0 != NP_TypeKeys::Any as i64 && some_column_schema.type_data.0 != NP_TypeKeys::Any as i64  {
@@ -262,7 +267,7 @@ impl<'a> NP_Table<'a> {
                     let mut ptr_bytes: [u8; 9] = [0; 9];
     
                     // set column index in pointer
-                    ptr_bytes[8] = *column_index;
+                    ptr_bytes[8] = column_index;
         
                     let addr = memory.malloc(ptr_bytes.to_vec())?;
                     
@@ -270,7 +275,7 @@ impl<'a> NP_Table<'a> {
                     self.set_head(addr);
 
                     // provide
-                    return Ok(NP_Ptr::new_table_item_ptr(self.head, some_column_schema, &memory));
+                    return Ok(NP_Ptr::new_table_item_ptr(self.head, Rc::clone(&some_column_schema), Rc::clone(&memory)));
                 } else { // values exist, loop through them to see if we have an existing pointer for this column
 
                     let mut next_addr = self.head as usize;
@@ -284,8 +289,8 @@ impl<'a> NP_Table<'a> {
                         index = memory.read_bytes()[(next_addr + 8)];
                         
                         // found our value!
-                        if index == *column_index {
-                            return Ok(NP_Ptr::new_table_item_ptr(next_addr as u32, some_column_schema, &memory))
+                        if index == column_index {
+                            return Ok(NP_Ptr::new_table_item_ptr(next_addr as u32, Rc::clone(&some_column_schema), Rc::clone(&memory)))
                         }
                         
                         // not found yet, get next address
@@ -305,21 +310,19 @@ impl<'a> NP_Table<'a> {
                     let mut ptr_bytes: [u8; 9] = [0; 9];
     
                     // set column index in pointer
-                    ptr_bytes[8] = *column_index;
-
-                    let mem_bytes = self.memory.unwrap();
+                    ptr_bytes[8] = column_index;
             
-                    let addr = mem_bytes.malloc(ptr_bytes.to_vec())?;
+                    let addr = memory.malloc(ptr_bytes.to_vec())?;
 
                     // set previouse pointer's "next" value to this new pointer
                     let addr_bytes = addr.to_be_bytes();
-                    let write_bytes = mem_bytes.write_bytes();
+                    let write_bytes = memory.write_bytes();
                     for x in 0..addr_bytes.len() {
                         write_bytes[(next_addr + 4 + x)] = addr_bytes[x];
                     }
                     
                     // provide 
-                    return Ok(NP_Ptr::new_table_item_ptr(addr, some_column_schema, &mem_bytes));
+                    return Ok(NP_Ptr::new_table_item_ptr(addr, Rc::clone(&some_column_schema), memory));
 
                 }
             },
@@ -335,9 +338,17 @@ impl<'a> NP_Table<'a> {
 
     pub fn delete(&mut self, column: &str) -> Result<bool, NP_Error> {
 
-        let memory = self.memory.unwrap();
+        let memory = match &self.memory {
+            Some(x) => Rc::clone(x),
+            None => unreachable!()
+        };
 
-        let column_index = &self.columns.unwrap().iter().fold(0u8, |prev, cur| {
+        let cols = match &self.columns {
+            Some(x) => x,
+            None => unreachable!()
+        };
+
+        let column_index = &cols.iter().fold(0u8, |prev, cur| {
             match cur {
                 Some(x) => {
                     if x.1 == column {
@@ -416,7 +427,12 @@ impl<'a> NP_Table<'a> {
 
     pub fn empty(self) -> Self {
 
-        let memory_bytes = self.memory.unwrap().write_bytes();
+        let memory = match &self.memory {
+            Some(x) => Rc::clone(x),
+            None => unreachable!()
+        };
+
+        let memory_bytes = memory.write_bytes();
        
         let head_bytes = 0u32.to_be_bytes();
 
@@ -436,7 +452,12 @@ impl<'a> NP_Table<'a> {
 
         self.head = addr;
 
-        let memory_bytes = self.memory.unwrap().write_bytes();
+        let memory = match &self.memory {
+            Some(x) => Rc::clone(x),
+            None => unreachable!()
+        };
+
+        let memory_bytes = memory.write_bytes();
        
         let addr_bytes = addr.to_be_bytes();
 
@@ -453,7 +474,17 @@ impl<'a> NP_Table<'a> {
            return Ok((false, false));
         }
 
-        let column_index = &self.columns.unwrap().iter().fold(0, |prev, cur| {
+        let memory = match &self.memory {
+            Some(x) => Rc::clone(x),
+            None => unreachable!()
+        };
+
+        let cols = match &self.columns {
+            Some(x) => x,
+            None => unreachable!()
+        };
+
+        let column_index = &cols.iter().fold(0, |prev, cur| {
             match cur {
                 Some(x) => {
                     if x.1.as_str() == column { 
@@ -476,7 +507,6 @@ impl<'a> NP_Table<'a> {
         let mut next_addr = self.head as usize;
 
         let mut has_next = true;
-        let memory = self.memory.unwrap();
 
         while has_next {
 
@@ -508,35 +538,35 @@ impl<'a> NP_Table<'a> {
 
 }
 
-pub struct NP_Table_Iterator<'a> {
+pub struct NP_Table_Iterator {
     address: u32, // pointer location
     head: u32,
-    memory: &'a NP_Memory,
-    columns: &'a Vec<Option<(u8, String, NP_Schema)>>,
+    memory: Rc<NP_Memory>,
+    columns: Rc<Vec<Option<(u8, String, Rc<NP_Schema>)>>>,
     column_index: u8,
-    table: NP_Table<'a>
+    table: NP_Table
 }
 
-impl<'a> NP_Table_Iterator<'a> {
+impl NP_Table_Iterator {
 
-    pub fn new(address: u32, head: u32, memory: &'a NP_Memory, columns: &'a Vec<Option<(u8, String, NP_Schema)>>) -> Self {
+    pub fn new(address: u32, head: u32, memory: Rc<NP_Memory>, columns: Rc<Vec<Option<(u8, String, Rc<NP_Schema>)>>>) -> Self {
         NP_Table_Iterator {
             address,
             head,
-            memory: memory,
-            columns: columns,
+            memory: Rc::clone(&memory),
+            columns: Rc::clone(&columns),
             column_index: 0,
             table: NP_Table::new(address, head, memory, columns)
         }
     }
 
-    pub fn into_table(self) -> NP_Table<'a> {
+    pub fn into_table(self) -> NP_Table {
         self.table
     }
 }
 
-impl<'a> Iterator for NP_Table_Iterator<'a> {
-    type Item = NP_Table_Item<'a>;
+impl Iterator for NP_Table_Iterator {
+    type Item = NP_Table_Item;
 
     fn next(&mut self) -> Option<Self::Item> {
         if (self.column_index as usize) < self.columns.len() {
@@ -556,8 +586,8 @@ impl<'a> Iterator for NP_Table_Iterator<'a> {
                             index: x.0,
                             column: x.1.clone(),
                             has_value: exists,
-                            schema: &x.2,
-                            table: NP_Table::new(self.address, self.head, self.memory, self.columns)
+                            schema: Rc::clone(&x.2),
+                            table: NP_Table::new(self.address, self.head, Rc::clone(&self.memory), Rc::clone(&self.columns))
                         });
                     },
                     None => {
@@ -571,17 +601,17 @@ impl<'a> Iterator for NP_Table_Iterator<'a> {
     }
 }
 
-pub struct NP_Table_Item<'a> { 
+pub struct NP_Table_Item { 
     pub index: u8,
     pub column: String,
     pub has_value: (bool, bool),
-    pub schema: &'a NP_Schema,
-    table: NP_Table<'a>
+    pub schema: Rc<NP_Schema>,
+    table: NP_Table
 }
 
-impl<'a> NP_Table_Item<'a> {
+impl NP_Table_Item {
     // TODO: Build a select statement that grabs the current index in place instead of seeking to it.
-    pub fn select<X: NP_Value + Default + NP_ValueInto<'a>>(&mut self) -> Result<NP_Ptr<'a, X>, NP_Error> {
+    pub fn select<X: NP_Value + Default>(&mut self) -> Result<NP_Ptr<X>, NP_Error> {
         self.table.select(&self.column)
     }
     // TODO: Same as select for delete

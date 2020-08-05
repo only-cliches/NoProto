@@ -17,7 +17,7 @@
 //!     // used by string & bytes types
 //!     size?: number;
 //!     
-//!     // used by Dec64 type, the number of decimal places every value has
+//!     // used by decimal type, the number of decimal places every value has
 //!     exp?: number;
 //!     
 //!     // used by tuple to indicite bytewise sorting of children
@@ -37,6 +37,9 @@
 //! 
 //!     // used by option/enum types
 //!     choices?: string[];
+//! 
+//!     // default value for this item
+//!     default?: any;
 //! }
 //! ```
 //! 
@@ -110,11 +113,11 @@
 //! | [`double`](#float-double)              | [`f64`](https://doc.rust-lang.org/std/primitive.f64.html)                |𐄂                 | 8 bytes        | -1.7e308 to 1.7e308                                                      |
 //! | [`option`](#option)                    | [`NP_Option`](../pointer/misc/struct.NP_Option.html)                     |✓                 | 1 byte         | Up to 255 string based options in schema.                                |
 //! | [`bool`](#bool)                        | [`bool`](https://doc.rust-lang.org/std/primitive.bool.html)              |✓                 | 1 byte         |                                                                          |
-//! | [`dec64`](#dec64)                      | [`NP_Dec`](../pointer/misc/struct.NP_Dec.html)                           |✓                 | 8 bytes        | Fixed point decimal number based on i64.                                 |
+//! | [`decimal`](#decimal)                  | [`NP_Dec`](../pointer/misc/struct.NP_Dec.html)                           |✓                 | 8 bytes        | Fixed point decimal number based on i64.                                 |
 //! | [`geo4`](#geo4-geo8-geo16)             | [`NP_Geo`](../pointer/misc/struct.NP_Geo.html)                           |✓                 | 4 bytes        | 1.1km resolution (city) geographic coordinate                           |
 //! | [`geo8`](#geo4-geo8-geo16)             | [`NP_Geo`](../pointer/misc/struct.NP_Geo.html)                           |✓                 | 8 bytes        | 11mm resolution (marble) geographic coordinate                           |
 //! | [`geo16`](#geo4-geo8-geo16)            | [`NP_Geo`](../pointer/misc/struct.NP_Geo.html)                           |✓                 | 16 bytes       | 110 microns resolution (grain of sand) geographic coordinate             |
-//! | [`tid`](#tid)                          | [`NP_ULID`](../pointer/misc/struct.NP_ULID.html)                     |✓                 | 16 bytes       | u64 for time with 8 random bytes.                                        |
+//! | [`ulid`](#ulid)                        | [`NP_ULID`](../pointer/misc/struct.NP_ULID.html)                         |✓                 | 16 bytes       | u64 for time with 8 random bytes.                                        |
 //! | [`uuid`](#uuid)                        | [`NP_UUID`](../pointer/misc/struct.NP_UUID.html)                         |✓                 | 16 bytes       | v4 UUID, 2e37 possible UUIDs                                          |
 //! | [`date`](#date)                        | [`NP_Date`](../pointer/misc/struct.NP_Date.html)                         |✓                 | 8 bytes        | Good to store unix epoch (in seconds) until the year 584,942,417,355     |
 //!  
@@ -169,7 +172,7 @@
 //!     "columns": [ // can have between 1 and 255 columns
 //!         ["column name",  {"type": "data type for this column"}],
 //!         ["name",         {"type": "string"}],
-//!         ["tags",         {"type": "list", of: { // nested list of strings
+//!         ["tags",         {"type": "list", "of": { // nested list of strings
 //!             "type": "string"
 //!         }}],
 //!         ["age",          {"type": "u8"}], // Uint8 number
@@ -186,7 +189,7 @@
 //! - [Using collection values with pointers](../pointer/struct.NP_Ptr.html#using-collection-types-with-pointers)
 //! 
 //! ## list
-//! Lists represent a dynamically growing or shrinking list of items.  The type for every item in the list is identical and the order of entries is mainted in the buffer.  Lists do not have to contain contiguous entries, gaps can safely and efficiently be stored.
+//! Lists represent a dynamically sized list of items.  The type for every item in the list is identical and the order of entries is mainted in the buffer.  Lists do not have to contain contiguous entries, gaps can safely and efficiently be stored.
 //! 
 //! - **Bytewise Sorting**: Unsupported
 //! - **Compaction**: Indexes without valuse are removed from the buffer.  If a specific index never had a value, it occupies *zero* space.
@@ -216,7 +219,7 @@
 //! - [Using collection values with pointers](../pointer/struct.NP_Ptr.html#using-collection-types-with-pointers)
 //! 
 //! ## map
-//! A map is a dynamically growing or shrinking list of items where each key is a Vec<u8>.  Every value of a map has the same type.
+//! A map is a dynamically sized list of items where each key is a Vec<u8>.  Every value of a map has the same type.
 //! 
 //! - **Bytewise Sorting**: Unsupported
 //! - **Compaction**: Keys without values are removed from the buffer
@@ -227,7 +230,7 @@
 //! If you expect to have fixed, predictable keys then use a `table` instead.  
 //! 
 //! ```text
-//! // a map where every value is a string
+//! // a map where every values are strings
 //! {
 //!     "type": "map",
 //!     "value": {
@@ -283,7 +286,7 @@
 //! ## any
 //! Any types are used to declare that a specific type has no fixed schema but is dynamic.  It's generally not a good idea to use Any types.
 //! 
-//! When you set `any` in the schema that value can safely be type casted to *anything*, so you can use these to store any type of data.  However, there is no way to conserve the data through compaction.
+//! When you set `any` in the schema that value can safely be type casted to *anything*, so you can use these to store any type of data.  **However, there is no way to conserve the data through compaction.**
 //! 
 //! - **Bytewise Sorting**: Unsupported
 //! - **Compaction**: Any types are always compacted out of the buffer, data stored behind an `any` schema will be lost after compaction.
@@ -379,7 +382,7 @@
 //! ## float, double
 //! Allows the storage of floating point numbers of various sizes.  Bytes are stored in big endian format.
 //! 
-//! - **Bytewise Sorting**: Unsupported, use Dec64 type.
+//! - **Bytewise Sorting**: Unsupported, use decimal type.
 //! - **Compaction**: Updates are done in place, never use additional space.
 //! - **Schema Mutations**: None
 //! 
@@ -397,7 +400,7 @@
 //! 
 //! - **Bytewise Sorting**: Supported
 //! - **Compaction**: Updates are done in place, never use additional space.
-//! - **Schema Mutations**: You can safely add new choices to the end of the list or update the existing choices in place.  If you need to delete a choice, make it an empty string.  Changing the order of the choices is destructive as this type only stores the index of the choice it's set to.
+//! - **Schema Mutations**: You can safely add new choices to the end of the list or update the existing choices in place.  If you need to delete a choice, just make it an empty string.  Changing the order of the choices is destructive as this type only stores the index of the choice it's set to.
 //! 
 //! There is one required property of this schema called `choices`.  The property should contain an array of strings that represent all possible choices of the option.
 //! 
@@ -428,7 +431,7 @@
 //! More Details:
 //! - [Using scalar values with pointers](../pointer/struct.NP_Ptr.html#using-scalar-types-with-pointers)
 //! 
-//! ## dec64
+//! ## decimal
 //! Allows you to store fixed point decimal numbers.  The number of decimal places must be declared in the schema as `exp` property and will be used for every value.
 //! 
 //! - **Bytewise Sorting**: Supported
@@ -439,7 +442,7 @@
 //! 
 //! ```text
 //! {
-//!     "type": "dec64",
+//!     "type": "decimal",
 //!     "exp": 3
 //! }
 //! ```
@@ -457,11 +460,11 @@
 //! 
 //! Larger geo values take up more space, but allow greater resolution.
 //! 
-//! | Type  | Bytes | Earth Resolution                       | Decimal Places |
-//! |-------|-------|----------------------------------------|----------------|
-//! | geo4  | 4     | 1.1km resolution (city)                | 2              |
-//! | geo8  | 8     | 11mm resolution (marble)               | 7              |
-//! | geo16 | 16    | 110 microns resolution (grain of sand) | 9              |
+//! | Type  | Bytes | Earth Resolution                       |
+//! |-------|-------|----------------------------------------|
+//! | geo4  | 4     | 1.1km resolution (city)                |
+//! | geo8  | 8     | 11mm resolution (marble)               |
+//! | geo16 | 16    | 110 microns resolution (grain of sand) |
 //! 
 //! ```text
 //! {
@@ -473,7 +476,7 @@
 //! - [Using NP_Geo data type](../pointer/misc/struct.NP_Geo.html)
 //! - [Using scalar values with pointers](../pointer/struct.NP_Ptr.html#using-scalar-types-with-pointers)
 //! 
-//! ## tid
+//! ## ulid
 //! Allows you to store a unique ID with a timestamp.
 //! 
 //! - **Bytewise Sorting**: Supported, orders by timestamp. Order is random if timestamp is identical between two values.
@@ -482,7 +485,7 @@
 //! 
 //! ```text
 //! {
-//!     "type": "tid"
+//!     "type": "ulid"
 //! }
 //! ```
 //! 
@@ -524,8 +527,7 @@
 //! - [Using NP_Date data type](../pointer/misc/struct.NP_Date.html)
 //! - [Using scalar values with pointers](../pointer/struct.NP_Ptr.html#using-scalar-types-with-pointers)
 //!  
-use crate::json_flex::JFObject;
-use crate::pointer::NP_ValueInto;
+use crate::json_flex::NP_JSON;
 use crate::pointer::any::NP_Any;
 use crate::pointer::misc::NP_Date;
 use crate::pointer::misc::NP_UUID;
@@ -542,7 +544,7 @@ use alloc::vec;
 use alloc::string::String;
 use alloc::boxed::Box;
 use alloc::borrow::ToOwned;
-use alloc::string::ToString;
+use alloc::{rc::Rc, string::ToString};
 
 /// Stores the kind of each schema and any property details related to the schema.  Users of the library should never need to create or manipulate this data type.
 #[derive(Debug)]
@@ -550,10 +552,10 @@ pub enum NP_SchemaKinds {
     None,
     Scalar,
     Enum { choices: Vec<String> },
-    Table { columns: Vec<Option<(u8, String, NP_Schema)>> },
-    List { of: NP_Schema },
-    Map { value: NP_Schema },
-    Tuple { sorted: bool, values: Vec<NP_Schema>}
+    Table { columns: Rc<Vec<Option<(u8, String, Rc<NP_Schema>)>>> },
+    List { of: Rc<NP_Schema> },
+    Map { value: Rc<NP_Schema> },
+    Tuple { sorted: bool, values: Rc<Vec<Rc<NP_Schema>>>}
 }
 
 #[derive(Debug)]
@@ -574,7 +576,7 @@ pub enum NP_TypeKeys {
     Uint64 = 10,
     Float = 11,
     Double = 12,
-    Dec64 = 13,
+    Decimal = 13,
     Boolean = 14,
     Geo = 15,
     Uuid = 16,
@@ -584,7 +586,8 @@ pub enum NP_TypeKeys {
     Table = 20,
     Map = 21, 
     List = 22,
-    Tuple = 23
+    Tuple = 23,
+    JSON = 24
 }
 
 impl From<i64> for NP_TypeKeys {
@@ -602,7 +605,7 @@ impl From<i64> for NP_TypeKeys {
         if value == NP_TypeKeys::Uint64 as i64 { return NP_TypeKeys::Uint64 }
         if value == NP_TypeKeys::Float as i64 { return NP_TypeKeys::Float }
         if value == NP_TypeKeys::Double as i64 { return NP_TypeKeys::Double }
-        if value == NP_TypeKeys::Dec64 as i64 { return NP_TypeKeys::Dec64 }
+        if value == NP_TypeKeys::Decimal as i64 { return NP_TypeKeys::Decimal }
         if value == NP_TypeKeys::Boolean as i64 { return NP_TypeKeys::Boolean }
         if value == NP_TypeKeys::Geo as i64 { return NP_TypeKeys::Geo }
         if value == NP_TypeKeys::Uuid as i64 { return NP_TypeKeys::Uuid }
@@ -613,6 +616,7 @@ impl From<i64> for NP_TypeKeys {
         if value == NP_TypeKeys::Map as i64 { return NP_TypeKeys::Map }
         if value == NP_TypeKeys::List as i64 { return NP_TypeKeys::List }
         if value == NP_TypeKeys::Tuple as i64 { return NP_TypeKeys::Tuple }
+        if value == NP_TypeKeys::JSON as i64 { return NP_TypeKeys::JSON }
         NP_TypeKeys::Any
     }
 }
@@ -625,26 +629,28 @@ impl From<i64> for NP_TypeKeys {
 pub struct NP_Schema {
     pub kind: Box<NP_SchemaKinds>,
     pub type_data: (i64, String),
-    pub type_state: i64
+    pub type_state: i64,
+    pub default: Option<NP_JSON>
 }
 
 #[doc(hidden)]
 pub struct NP_Types { }
 
 impl<'a> NP_Types {
-    pub fn do_check<T: NP_Value + Default + NP_ValueInto<'a>>(type_string: &str, json_schema: &JFObject)-> core::result::Result<Option<NP_Schema>, NP_Error>{
+    pub fn do_check<T: NP_Value + Default>(type_string: &str, json_schema: &NP_JSON)-> Result<Option<NP_Schema>, NP_Error>{
         if T::is_type(type_string) {
             Ok(Some(NP_Schema { 
                 kind: Box::new(NP_SchemaKinds::Scalar),
                 type_data: T::type_idx(),
-                type_state: T::schema_state(type_string, json_schema)?
+                type_state: T::schema_state(type_string, json_schema)?,
+                default: Some(json_schema["default"].clone())
             }))
         } else {
             Ok(None)
         }
     }
 
-    pub fn get_type(type_string: &str, json_schema: &JFObject)-> core::result::Result<NP_Schema, NP_Error> {
+    pub fn get_type(type_string: &str, json_schema: &NP_JSON)-> Result<NP_Schema, NP_Error> {
 
         let check = NP_Types::do_check::<NP_Any>(type_string, json_schema)?;
         match check { Some(x) => return Ok(x), None => {} };
@@ -716,15 +722,16 @@ impl NP_Schema {
         NP_Schema {
             kind: Box::new(NP_SchemaKinds::None),
             type_data: (-1, "".to_owned()),
-            type_state: 0
+            type_state: 0,
+            default: None
         }
     }
 
-    pub fn from_json(json: Box<JFObject>) -> core::result::Result<Self, NP_Error> {
+    pub fn from_json(json: Box<NP_JSON>) -> Result<Self, NP_Error> {
         NP_Schema::validate_model(&*json)
     }
 
-    pub fn validate_model(json_schema: &JFObject) -> core::result::Result<Self, NP_Error> {
+    pub fn validate_model(json_schema: &NP_JSON) -> Result<Self, NP_Error> {
 
         if json_schema.is_dictionary() == false {
             return Err(NP_Error::new("Object not found at root of schema!"));
@@ -746,7 +753,7 @@ impl NP_Schema {
         match type_string {
             "table" => {
                 
-                let mut columns: Vec<Option<(u8, String, NP_Schema)>> = vec![];
+                let mut columns: Vec<Option<(u8, String, Rc<NP_Schema>)>> = vec![];
 
                 for _x in 0..255 {
                     columns.push(None);
@@ -784,7 +791,7 @@ impl NP_Schema {
                         let use_index = match this_col_obj.get("i") {
                             Some(obj) => {
                                 match obj {
-                                    JFObject::Integer(x) => {
+                                    NP_JSON::Integer(x) => {
                                         *x as usize
                                     },
                                     _ => index as usize
@@ -803,7 +810,7 @@ impl NP_Schema {
                                 return Err(NP_Error::new("Table column index numbering conflict!"));
                             },
                             None => {
-                                columns[use_index] = Some((use_index as u8, column_name.to_string(), good_schema));
+                                columns[use_index] = Some((use_index as u8, column_name.to_string(), Rc::new(good_schema)));
                             }
                         };
 
@@ -813,10 +820,11 @@ impl NP_Schema {
 
                 Ok(NP_Schema {
                     kind: Box::new(NP_SchemaKinds::Table { 
-                        columns: columns 
+                        columns: Rc::new(columns) 
                     }),
                     type_data: NP_Table::type_idx(),
-                    type_state: 0
+                    type_state: 0,
+                    default: None
                 })
             },
             "list" => {
@@ -830,10 +838,11 @@ impl NP_Schema {
 
                 Ok(NP_Schema {
                     kind: Box::new(NP_SchemaKinds::List { 
-                        of: NP_Schema::validate_model(&json_schema["of"])? 
+                        of: Rc::new(NP_Schema::validate_model(&json_schema["of"])?) 
                     }),
                     type_data: NP_List::<NP_Any>::type_idx(),
-                    type_state: 0
+                    type_state: 0,
+                    default: None
                 })
             },
             "map" => {
@@ -847,15 +856,16 @@ impl NP_Schema {
                 }
                 Ok(NP_Schema {
                     kind: Box::new(NP_SchemaKinds::Map { 
-                        value: NP_Schema::validate_model(&json_schema["value"])?
+                        value: Rc::new(NP_Schema::validate_model(&json_schema["value"])?)
                     }),
                     type_data: NP_Map::<NP_Any>::type_idx(),
-                    type_state: 0
+                    type_state: 0,
+                    default: None
                 })
             },
             "tuple" => {
 
-                let mut schemas: Vec<NP_Schema> = vec![];
+                let mut schemas: Vec<Rc<NP_Schema>> = vec![];
 
                 let sorted;
 
@@ -908,17 +918,18 @@ impl NP_Schema {
                             }
                         }
 
-                        schemas.push(good_schema);
+                        schemas.push(Rc::new(good_schema));
                     }
                 }
             
                 Ok(NP_Schema {
                     kind: Box::new(NP_SchemaKinds::Tuple {
                         sorted: sorted,
-                        values: schemas
+                        values: Rc::new(schemas)
                     }),
                     type_data: NP_Tuple::type_idx(),
-                    type_state: 0
+                    type_state: 0,
+                    default: None
                 })
             },
             "option" => { 
@@ -949,7 +960,8 @@ impl NP_Schema {
                         choices: options
                     }),
                     type_data: NP_Option::type_idx(),
-                    type_state: 0
+                    type_state: 0,
+                    default: Some(json_schema["default"].clone())
                 })
             },
             _ => {

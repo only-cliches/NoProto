@@ -58,7 +58,7 @@ impl<'a> NP_Memory {
                 NP_PtrKinds::None
             }
             NP_PtrKinds::Standard { value: _ } => {
-                NP_PtrKinds::Standard { value: val}
+                NP_PtrKinds::Standard { value: val }
             },
             NP_PtrKinds::MapItem { value: _, key,  next  } => {
                 NP_PtrKinds::MapItem { value: val, key: *key, next: *next }

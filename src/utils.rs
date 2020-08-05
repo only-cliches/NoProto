@@ -2,6 +2,7 @@ use core::str;
 use alloc::string::String;
 use alloc::borrow::ToOwned;
 use alloc::vec::Vec;
+use crate::error::NP_Error;
 
 const KX: u32 = 123456789;
 const KY: u32 = 362436069;
@@ -95,6 +96,33 @@ pub fn to_hex(num: u64, length: i32) -> String {
     }
 
     result
+}
+
+pub fn overflow_error(kind: &str, path: &Vec<&str>, path_index: usize) -> Result<(), NP_Error> {
+
+    if path.len() > 0 && (path.len() - 1) < path_index {
+        let mut err = "Error in ".to_owned();
+        err.push_str(kind);
+        err.push_str(", this method does not work for collection types. Path: ");
+        err.push_str(print_path(&path, path_index).as_str());
+        return Err(NP_Error::new(err));
+    }
+
+    Ok(())
+}
+
+pub fn type_error(schema_type: &(i64, String), casting_type: &(i64, String), path: &Vec<&str>, path_index: usize) -> Result<(), NP_Error> {
+    if schema_type.0 != casting_type.0 {
+        let mut err = "TypeError: Attempted to get value for type (".to_owned();
+        err.push_str(casting_type.1.as_str());
+        err.push_str(") from schema of type (");
+        err.push_str(schema_type.1.as_str());
+        err.push_str(") Path: ");
+        err.push_str(print_path(&path, path_index).as_str());
+        return Err(NP_Error::new(err));
+    }
+
+    Ok(())
 }
 
 pub fn print_path(path: &Vec<&str>, path_index: usize) -> String {

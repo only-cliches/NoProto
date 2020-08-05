@@ -1,14 +1,14 @@
 use crate::schema::NP_Schema;
 use crate::error::NP_Error;
 use crate::memory::NP_Memory;
-use crate::{schema::NP_TypeKeys, pointer::NP_Value, json_flex::JFObject};
-use super::{NP_ValueInto, NP_PtrKinds};
+use crate::{schema::NP_TypeKeys, pointer::NP_Value, json_flex::NP_JSON};
+use super::{NP_PtrKinds};
 
 use alloc::vec::Vec;
 use alloc::vec;
 use alloc::string::String;
 use alloc::boxed::Box;
-use alloc::borrow::ToOwned;
+use alloc::{rc::Rc, borrow::ToOwned};
 
 pub struct NP_Bytes {
     pub bytes: Vec<u8>
@@ -20,6 +20,13 @@ impl NP_Bytes {
     }
 }
 
+
+impl Default for NP_Bytes {
+    fn default() -> Self { 
+        NP_Bytes { bytes: vec![] }
+     }
+}
+
 impl NP_Value for NP_Bytes {
 
     fn is_type( type_str: &str) -> bool {
@@ -29,7 +36,39 @@ impl NP_Value for NP_Bytes {
     fn type_idx() -> (i64, String) { (NP_TypeKeys::Bytes as i64, "bytes".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Bytes as i64, "bytes".to_owned()) }
 
-    fn schema_state(_type_string: &str, json_schema: &JFObject) -> core::result::Result<i64, NP_Error> {
+    fn schema_default(schema: Rc<NP_Schema>) -> Option<Box<Self>> {
+        match &schema.default {
+            Some(x) => {
+                match x {
+                    NP_JSON::Array(value) => {
+
+                        let mut vector = Vec::new();
+
+                        for x in value {
+                            match x {
+                                NP_JSON::Integer(y) => {
+                                    vector.push(*y as u8);
+                                },
+                                _ => {
+                                    vector.push(0);
+                                }
+                            }
+                        };
+
+                        Some(Box::new(NP_Bytes { bytes: vector }))
+                    },
+                    _ => {
+                        None
+                    }
+                }
+            },
+            None => {
+                None
+            }
+        }
+    }
+
+    fn schema_state(_type_string: &str, json_schema: &NP_JSON) -> Result<i64, NP_Error> {
         match json_schema["size"].into_i64() {
             Some(x) => {
                 if *x > 0 && *x < (u32::MAX as i64) {
@@ -43,7 +82,7 @@ impl NP_Value for NP_Bytes {
         }
     }
 
-    fn buffer_set(address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, memory: &NP_Memory, value: Box<&Self>) -> core::result::Result<NP_PtrKinds, NP_Error> {
+    fn buffer_set(address: u32, kind: &NP_PtrKinds, schema: Rc<NP_Schema>, memory: Rc<NP_Memory>, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
 
         let size = value.bytes.len() as u64;
 
@@ -114,17 +153,7 @@ impl NP_Value for NP_Bytes {
         
     }
     
-
-}
-
-impl Default for NP_Bytes {
-    fn default() -> Self { 
-        NP_Bytes { bytes: vec![] }
-     }
-}
-
-impl<'a> NP_ValueInto<'a> for NP_Bytes {
-    fn buffer_into(_address: u32, kind: NP_PtrKinds, schema: &'a NP_Schema, buffer: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
+    fn buffer_into(_address: u32, kind: NP_PtrKinds, schema: Rc<NP_Schema>, buffer: Rc<NP_Memory>) -> Result<Option<Box<Self>>, NP_Error> {
         let value = kind.get_value();
 
         // empty value
@@ -157,30 +186,33 @@ impl<'a> NP_ValueInto<'a> for NP_Bytes {
         }
     }
 
-    fn buffer_to_json(address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: &NP_Memory) -> JFObject {
-        let this_bytes = Self::buffer_into(address, *kind, schema, buffer);
+    fn buffer_to_json(address: u32, kind: &NP_PtrKinds, schema: Rc<NP_Schema>, buffer: Rc<NP_Memory>) -> NP_JSON {
+        let this_bytes = Self::buffer_into(address, *kind, Rc::clone(&schema), buffer);
 
         match this_bytes {
             Ok(x) => {
                 match x {
                     Some(y) => {
 
-                        let bytes = y.bytes.into_iter().map(|x| JFObject::Integer(x as i64)).collect();
+                        let bytes = y.bytes.into_iter().map(|x| NP_JSON::Integer(x as i64)).collect();
 
-                        JFObject::Array(bytes)
+                        NP_JSON::Array(bytes)
                     },
                     None => {
-                        JFObject::Null
+                        match &schema.default {
+                            Some(x) => x.clone(),
+                            None => NP_JSON::Null
+                        }
                     }
                 }
             },
             Err(_e) => {
-                JFObject::Null
+                NP_JSON::Null
             }
         }
     }
 
-    fn buffer_get_size(_address: u32, kind: &'a NP_PtrKinds, schema: &'a NP_Schema, buffer: &'a NP_Memory) -> core::result::Result<u32, NP_Error> {
+    fn buffer_get_size(_address: u32, kind: &NP_PtrKinds, schema: Rc<NP_Schema>, buffer: Rc<NP_Memory>) -> Result<u32, NP_Error> {
         let value = kind.get_value();
 
         // empty value

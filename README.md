@@ -10,19 +10,20 @@ FlatBuffers/CapNProto with Flexible Runtime Schemas
 - [ ] Documentation
 - [ ] Tests
 
-### Features
+### Features  
 - Zero dependencies
 - #![no_std] support, WASM ready
 - Supports bytewise sorting of buffers
+- Thorough Documentation
 - Automatic & instant serilization
 - Nearly instant deserialization
-- Schemas are flexible at runtime
+- Schemas are dynamic/flexible at runtime
 - Mutate/Update/Delete values in existing buffers
 - Supports native data types
 - Supports collection types (list, map, table & tuple)
-- Supports arbitrary deep nesting of collection types
+- Supports deep nesting of collection types
 
-NoProto allows you to store, read & mutate structured data with near zero overhead.  It's like Cap'N Proto/Flatbuffers except buffers and schemas are dynamic at runtime instead of requiring compilation.  It's like JSON but faster, type safe and allows native types.
+NoProto allows you to store, read & mutate structured data with near zero overhead. It's like Cap'N Proto/Flatbuffers except buffers and schemas are dynamic at runtime instead of requiring compilation.  It's like JSON but faster, type safe and allows native types.
 
 Bytewise sorting comes in the box and is a first class operation. The result is two NoProto buffers can be compared at the byte level *without deserializing* and a correct ordering between the buffer's internal values will be the result.  This is extremely useful for storing ordered keys in databases. 
 
@@ -31,7 +32,7 @@ NoProto moves the cost of deserialization to the access methods instead of deser
 *Compared to FlatBuffers / Cap'N Proto*
 - Schemas are dynamic at runtime, no compilation step
 - Supports more types and better nested type support
-- Bytewise sorting is explicitly supported
+- Bytewise sorting is first class operation
 - Mutate (add/delete/update) existing/imported buffers
 
 *Compared to JSON*
@@ -43,7 +44,7 @@ NoProto moves the cost of deserialization to the access methods instead of deser
 *Compared to BSON*
 - Faster serialization & deserialization
 - Has schemas / type safe
-- Bytewise sorting is explicitly supported
+- Bytewise sorting is first class operation
 - Supports much larger documents (4GB vs 16MB)
 - Better collection support & more supported types
 
@@ -54,6 +55,7 @@ NoProto moves the cost of deserialization to the access methods instead of deser
 
 | Format           | Free De/Serialization | Size Limit | Mutatable | Schemas | Language Agnostic | Runtime Dynamic | Bytewise Sorting |
 |------------------|-----------------------|------------|-----------|---------|-------------------|-----------------|------------------|
+| **NoProto**      | ✓                     | ~4GB       | ✓         | ✓       | ✓                 | ✓               | ✓                |
 | JSON             | 𐄂                     | Unlimited  | ✓         | 𐄂       | ✓                 | ✓               | 𐄂                |
 | BSON             | 𐄂                     | ~16KB      | ✓         | 𐄂       | ✓                 | ✓               | 𐄂                |
 | MessagePack      | 𐄂                     | Unlimited  | ✓         | 𐄂       | ✓                 | ✓               | 𐄂                |
@@ -61,7 +63,8 @@ NoProto moves the cost of deserialization to the access methods instead of deser
 | Protocol Buffers | 𐄂                     | ~2GB       | 𐄂         | ✓       | ✓                 | 𐄂               | 𐄂                |
 | Cap'N Proto      | ✓                     | 2^64 Bytes | 𐄂         | ✓       | ✓                 | 𐄂               | 𐄂                |
 | Serde            | 𐄂                     | ?          | ✓         | ✓       | 𐄂                 | 𐄂               | 𐄂                |
-| **NoProto**      | ✓                     | ~4GB       | ✓         | ✓       | ✓                 | ✓               | ✓                |
+
+
 
 #### Limitations
 - Buffers cannot be larger than 2^32 bytes (~4GB).
@@ -93,58 +96,40 @@ let user_factory = NP_Factory::new(r#"{
 // creating a new buffer from the `user_factory` schema
 // user_buffer contains a serialized Vec<u8> containing our data
 
-let user_buffer: Vec<u8> = user_factory.open(NP::new, |mut buffer| {
-   
-    // open the buffer to read or update values
-    let root: NP_Ptr<NP_Table> = buffer.root()?;  // <- type cast the root
-        
-   // the root of our schema is a collection type (NP_Table), 
-   // so we have to collapse the root pointer into the collection type.
-   let mut table: NP_Table = root.into()?.unwrap();
+let user_vec: Vec<u8> = user_factory.open(NP::new, |mut buffer| {
+    
+    // set "name" column to "some name"
+    buffer.deep_set("name", "some name".to_owned())?;
 
-   // Select a column and type cast it. Selected columns can be mutated or read from.
-   let mut user_name = table.select::<String>("name")?;
-
-   // set value of name column
-   user_name.set("some name".to_owned())?;
-
-   // select age column and set it's value
-   let mut age = table.select::<u16>("age")?;
-   age.set(75)?;
-
-   // done mutating/reading the buffer
-   Ok(())
-})?;
- 
-// open the new buffer, `user_buffer`, we just created
-// user_buffer_2 contains the serialized Vec<u8>
-let user_buffer_2: Vec<u8> = user_factory.open(NP::buffer(user_buffer), |mut buffer| {
-
-   let root: NP_Ptr<NP_Table> = buffer.root()?; // open root pointer
-        
-   // get the table root again
-   let mut table = root.into()?.unwrap();
-
-   // read the name column
-   let mut user_name = table.select::<String>("name")?;
-   assert_eq!(user_name.get()?, Some(String::from("some name")));
-
-   // password value will be None since we haven't set it.
-   let mut password = table.select::<String>("pass")?;
-   assert_eq!(password.get()?, None);
-
-   // read age value    
-   let mut age = table.select::<u16>("age")?;
-   assert_eq!(age.get()?, Some(75));    
+    // set "age" column to 75
+    buffer.deep_set("age", 75u16)?;
 
    // done with the buffer
-   Ok(())
+   Ok(buffer)
+})?;
+ 
+// open the new buffer, `user_vec`, we just created
+// user_vec_2 contains the serialized Vec<u8>
+let user_vec_2: Vec<u8> = user_factory.open(NP::buffer(user_vec), |mut buffer| {
+
+   // read the name column
+   let mut user_name = buffer.deep_get::<String>("name")?;
+   assert_eq!(user_name, Some(Box::new(String::from("some name"))));
+
+   // password value will be None since we haven't set it.
+   let mut password = buffer.deep_get::<String>("pass")?;
+   assert_eq!(password, None);
+
+   // read age value    
+   let mut age = buffer.deep_get::<u16>("age")?;
+   assert_eq!(age, Some(Box::new(75)));    
+
+   // done with the buffer
+   Ok(buffer)
 })?;
 
-// we can now save user_buffer_2 to disk, 
+// we can now save user_vec_2 to disk, 
 // send it over the network, or whatever else is needed with the data
-
-# Ok::<(), NP_Error>(()) 
 ```
 
 ## Guided Learning / Next Steps:

@@ -1,23 +1,22 @@
-use crate::pointer::NP_ValueInto;
-use crate::{memory::NP_Memory, pointer::{NP_Value, NP_Ptr, NP_PtrKinds, any::NP_Any}, error::NP_Error, schema::{NP_SchemaKinds, NP_Schema, NP_TypeKeys}, json_flex::JFObject};
+use crate::{memory::NP_Memory, pointer::{NP_Value, NP_Ptr, NP_PtrKinds, any::NP_Any}, error::NP_Error, schema::{NP_SchemaKinds, NP_Schema, NP_TypeKeys}, json_flex::NP_JSON};
 
 use alloc::string::String;
 use alloc::borrow::ToOwned;
 use alloc::boxed::Box;
-use alloc::vec::*;
-pub struct NP_List<'a, T> {
+use alloc::{rc::Rc, vec::*};
+pub struct NP_List<T> {
     address: u32, // pointer location
     head: u32,
     tail: u32,
-    memory: Option<&'a NP_Memory>,
-    of: Option<&'a NP_Schema>,
+    memory: Option<Rc<NP_Memory>>,
+    of: Option<Rc<NP_Schema>>,
     _value: T
 }
 
-impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_List<'a, T> {
+impl<T: NP_Value + Default> NP_List<T> {
 
     #[doc(hidden)]
-    pub fn new(address: u32, head: u32, tail:u32,  memory: &'a NP_Memory, of: &'a NP_Schema) -> Result<Self, NP_Error> {
+    pub fn new(address: u32, head: u32, tail:u32,  memory: Rc<NP_Memory>, of: Rc<NP_Schema>) -> Result<Self, NP_Error> {
 
         // make sure the type we're casting to isn't ANY or the cast itself isn't ANY
         if T::type_idx().0 != NP_TypeKeys::Any as i64 && of.type_data.0 != NP_TypeKeys::Any as i64  {
@@ -43,16 +42,24 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_List<'a, T> {
         })
     }
 
-    pub fn it(self) -> NP_List_Iterator<'a, T> {
+    pub fn it(self) -> NP_List_Iterator<T> {
         NP_List_Iterator::new(self.address, self.head, self.tail, self.memory.unwrap(), self.of.unwrap())
     }
 
-    pub fn select(&mut self, index: u16) -> core::result::Result<NP_Ptr<'a, T>, NP_Error> {
+    pub fn select(&mut self, index: u16) -> core::result::Result<NP_Ptr<T>, NP_Error> {
+
+        let memory = match &self.memory {
+            Some(x) => Rc::clone(x),
+            None => unreachable!()
+        };
+
+        let list_of = match &self.of {
+            Some(x) => Rc::clone(x),
+            None => unreachable!()
+        };
 
         if self.head == 0 { // no values, create one
 
-
-            let memory = self.memory.unwrap();
 
             let mut ptr_bytes: [u8; 10] = [0; 10]; // List item pointer
 
@@ -70,7 +77,7 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_List<'a, T> {
             self.set_tail(addr);
             
             // provide 
-            return Ok(NP_Ptr::new_list_item_ptr(self.head, self.of.unwrap(), &memory));
+            return Ok(NP_Ptr::new_list_item_ptr(self.head, list_of, memory));
 
         } else { // values exist, loop through them to see if we have an existing pointer for this column
 
@@ -78,8 +85,6 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_List<'a, T> {
             let mut prev_addr = 0;
 
             let mut do_continue = true;
-
-            let memory = self.memory.unwrap();
 
             while do_continue {
 
@@ -100,7 +105,7 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_List<'a, T> {
 
                 // found our value!
                 if ptr_index == index {
-                    return Ok(NP_Ptr::new_list_item_ptr(curr_addr as u32, self.of.unwrap(), &memory));
+                    return Ok(NP_Ptr::new_list_item_ptr(curr_addr as u32, list_of, memory));
                 }
 
                 // we've found an existing value above the requested index
@@ -140,7 +145,7 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_List<'a, T> {
                         }
                     }
 
-                    return Ok(NP_Ptr::new_list_item_ptr(new_addr as u32, self.of.unwrap(), &memory));
+                    return Ok(NP_Ptr::new_list_item_ptr(new_addr as u32, list_of, memory));
                 } else {
                     // not found yet, get next address
 
@@ -181,7 +186,7 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_List<'a, T> {
             self.set_tail(addr);
 
             // provide 
-            return Ok(NP_Ptr::new_list_item_ptr(addr as u32, self.of.unwrap(), &memory));
+            return Ok(NP_Ptr::new_list_item_ptr(addr as u32, list_of, memory));
         }
     }
 
@@ -192,7 +197,10 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_List<'a, T> {
 
         let mut do_continue = true;
 
-        let memory = self.memory.unwrap();
+        let memory = match &self.memory {
+            Some(x) => Rc::clone(x),
+            None => unreachable!()
+        };
 
         while do_continue {
 
@@ -240,7 +248,10 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_List<'a, T> {
 
             let mut do_continue = true;
 
-            let memory = self.memory.unwrap();
+            let memory = match &self.memory {
+                Some(x) => Rc::clone(x),
+                None => unreachable!()
+            };
 
             while do_continue {
 
@@ -315,8 +326,13 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_List<'a, T> {
 
     pub fn len(&self) -> u16 {
         if self.tail == 0 { return 0u16; }
-        
-        let tail_index = *self.memory.unwrap().get_2_bytes((self.tail + 8) as usize).unwrap_or(&[0; 2]);
+
+        let memory = match &self.memory {
+            Some(x) => Rc::clone(x),
+            None => unreachable!()
+        };
+
+        let tail_index = *memory.get_2_bytes((self.tail + 8) as usize).unwrap_or(&[0; 2]);
 
         u16::from_be_bytes(tail_index)
     }
@@ -324,7 +340,15 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_List<'a, T> {
 
     pub fn shift(&mut self) -> Result<Option<(Option<T>, u16)>, NP_Error> {
 
-        let memory = self.memory.unwrap();
+        let memory = match &self.memory {
+            Some(x) => Rc::clone(x),
+            None => unreachable!()
+        };
+
+        let list_of = match &self.of {
+            Some(x) => Rc::clone(x),
+            None => unreachable!()
+        };
 
         // no more values in this list
         if self.head == 0 { return Ok(None) }
@@ -351,7 +375,7 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_List<'a, T> {
         let kind = NP_PtrKinds::ListItem { value: value_address, next: next_address, i: index };
 
         // try to get the value
-        match T::buffer_into(value_address, kind, self.of.unwrap(), self.memory.unwrap()) {
+        match T::buffer_into(value_address, kind, list_of, memory) {
             Ok(x) => {
                 match x {
                     Some(y) => {
@@ -368,9 +392,17 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_List<'a, T> {
         }
     }
 
-    pub fn push(&mut self) -> core::result::Result<(NP_Ptr<'a, T>, u16), NP_Error> {
+    pub fn push(&mut self) -> core::result::Result<(NP_Ptr<T>, u16), NP_Error> {
 
-        let memory = self.memory.unwrap();
+        let memory = match &self.memory {
+            Some(x) => Rc::clone(x),
+            None => unreachable!()
+        };
+
+        let list_of = match &self.of {
+            Some(x) => Rc::clone(x),
+            None => unreachable!()
+        };
 
         if self.tail == 0 { // no values, create one
        
@@ -390,7 +422,7 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_List<'a, T> {
             self.set_tail(addr);
             
             // provide 
-            return Ok((NP_Ptr::new_list_item_ptr(self.head, self.of.unwrap(), &memory), 0));
+            return Ok((NP_Ptr::new_list_item_ptr(self.head, list_of, memory), 0));
 
         } else { 
  
@@ -425,7 +457,7 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_List<'a, T> {
 
             self.set_tail(addr);
 
-            return Ok((NP_Ptr::new_list_item_ptr(addr, self.of.unwrap(), &memory), new_index));
+            return Ok((NP_Ptr::new_list_item_ptr(addr, list_of, memory), new_index));
         }
     }
 
@@ -439,7 +471,10 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_List<'a, T> {
 
             let mut do_continue = true;
 
-            let memory = self.memory.unwrap();
+            let memory = match &self.memory {
+                Some(x) => Rc::clone(x),
+                None => unreachable!()
+            };
 
             while do_continue {
 
@@ -482,7 +517,10 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_List<'a, T> {
 
         self.head = addr;
 
-        let memory = self.memory.unwrap();
+        let memory = match &self.memory {
+            Some(x) => Rc::clone(x),
+            None => unreachable!()
+        };
 
         let addr_bytes = addr.to_be_bytes();
 
@@ -497,7 +535,10 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_List<'a, T> {
 
         self.tail = addr;
 
-        let memory = self.memory.unwrap();
+        let memory = match &self.memory {
+            Some(x) => Rc::clone(x),
+            None => unreachable!()
+        };
 
         let addr_bytes = addr.to_be_bytes();
 
@@ -509,26 +550,24 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_List<'a, T> {
     }
 }
 
-impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_Value for NP_List<'a, T> {
-    fn is_type( _type_str: &str) -> bool { // not needed for collection types
-        unreachable!()
-    }
-    fn type_idx() -> (i64, String) { (NP_TypeKeys::List as i64, "list".to_owned()) }
-    fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::List as i64, "list".to_owned()) }
-    fn buffer_set(_address: u32, _kind: &NP_PtrKinds, _schema: &NP_Schema, _buffer: &NP_Memory, _value: Box<&Self>) -> core::result::Result<NP_PtrKinds, NP_Error> {
-        Err(NP_Error::new("Type (list) doesn't support .set()! Use .into() instead."))
-    }
-}
-
-impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> Default for NP_List<'a, T> {
+impl<T: NP_Value + Default> Default for NP_List<T> {
 
     fn default() -> Self {
         NP_List { address: 0, head: 0, tail: 0, memory: None, of: None, _value: T::default()}
     }
 }
 
-impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_ValueInto<'a> for NP_List<'a, T> {
-    fn buffer_into(address: u32, kind: NP_PtrKinds, schema: &'a NP_Schema, buffer: &'a NP_Memory) -> core::result::Result<Option<Box<NP_List<'a, T>>>, NP_Error> {
+impl<T: NP_Value + Default> NP_Value for NP_List<T> {
+    fn is_type( _type_str: &str) -> bool { // not needed for collection types
+        unreachable!()
+    }
+    fn type_idx() -> (i64, String) { (NP_TypeKeys::List as i64, "list".to_owned()) }
+    fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::List as i64, "list".to_owned()) }
+    fn buffer_set(_address: u32, _kind: &NP_PtrKinds, _schema: Rc<NP_Schema>, _buffer: Rc<NP_Memory>, _value: Box<&Self>) -> core::result::Result<NP_PtrKinds, NP_Error> {
+        Err(NP_Error::new("Type (list) doesn't support .set()! Use .into() instead."))
+    }
+
+    fn buffer_into(address: u32, kind: NP_PtrKinds, schema: Rc<NP_Schema>, buffer: Rc<NP_Memory>) -> core::result::Result<Option<Box<NP_List<T>>>, NP_Error> {
         
         match &*schema.kind {
             NP_SchemaKinds::List { of } => {
@@ -549,7 +588,7 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_ValueInto<'a> for NP_List<
                     tail = *buffer.get_4_bytes(a + 4).unwrap_or(&[0; 4]);
                 }
 
-                Ok(Some(Box::new(NP_List::<T>::new(addr, u32::from_be_bytes(head), u32::from_be_bytes(tail), buffer, of )?)))
+                Ok(Some(Box::new(NP_List::<T>::new(addr, u32::from_be_bytes(head), u32::from_be_bytes(tail), buffer, Rc::clone(of ))?)))
             },
             _ => {
                 unreachable!();
@@ -557,7 +596,7 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_ValueInto<'a> for NP_List<
         }
     }
 
-    fn buffer_get_size(_address: u32, kind: &'a NP_PtrKinds, schema: &'a NP_Schema, buffer: &'a NP_Memory) -> Result<u32, NP_Error> {
+    fn buffer_get_size(_address: u32, kind: &NP_PtrKinds, schema: Rc<NP_Schema>, buffer: Rc<NP_Memory>) -> Result<u32, NP_Error> {
         let base_size = 8u32; // head + tail;
 
         match &*schema.kind {
@@ -577,7 +616,7 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_ValueInto<'a> for NP_List<
                     tail = *buffer.get_4_bytes(a + 4).unwrap_or(&[0; 4]);
                 }
 
-                let list = NP_List::<T>::new(addr, u32::from_be_bytes(head), u32::from_be_bytes(tail), buffer, of ).unwrap();
+                let list = NP_List::<T>::new(addr, u32::from_be_bytes(head), u32::from_be_bytes(tail), buffer, Rc::clone(of) ).unwrap();
 
                 let mut acc_size = 0u32;
 
@@ -596,7 +635,7 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_ValueInto<'a> for NP_List<
         }
     }
     
-    fn buffer_to_json(_address: u32, kind: &NP_PtrKinds, schema: &'a NP_Schema, buffer: &'a NP_Memory) -> JFObject {
+    fn buffer_to_json(_address: u32, kind: &NP_PtrKinds, schema: Rc<NP_Schema>, buffer: Rc<NP_Memory>) -> NP_JSON {
 
         match &*schema.kind {
             NP_SchemaKinds::List { of } => {
@@ -607,7 +646,7 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_ValueInto<'a> for NP_List<
                 let tail: [u8; 4];
 
                 if addr == 0 {
-                    return JFObject::Null;
+                    return NP_JSON::Null;
                 } else {
                     // existing head, read value
                     let a = addr as usize;
@@ -615,27 +654,42 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_ValueInto<'a> for NP_List<
                     tail = *buffer.get_4_bytes(a + 4).unwrap_or(&[0; 4]);
                 }
 
-                let list = NP_List::<T>::new(addr, u32::from_be_bytes(head), u32::from_be_bytes(tail), buffer, of ).unwrap();
+                let list = NP_List::<T>::new(addr, u32::from_be_bytes(head), u32::from_be_bytes(tail), buffer, Rc::clone(of) ).unwrap_or(NP_List::default());
 
                 let mut json_list = Vec::new();
 
                 for mut l in list.it().into_iter() {
-                    if l.has_value.1 == true {
+                    if l.has_value.1 == true && l.has_value.0 == true {
                         let ptr = l.select();
                         match ptr {
                             Ok(p) => {
                                 json_list.push(p.json_encode());
                             },
                             Err (_e) => {
-                                json_list.push(JFObject::Null);
+                                json_list.push(NP_JSON::Null);
                             }
                         }
                     } else {
-                        json_list.push(JFObject::Null);
+                        json_list.push(NP_JSON::Null);
+                        
+                        /*match &schema.default.as_ref().unwrap_or(&NP_JSON::Null) {
+                            NP_JSON::True => {
+                                match ptr {
+                                    Ok(x) => {
+                                        json_list.push(x.json_encode());
+                                    },
+                                    _ => {}
+                                };
+                            },
+                            _ => {
+                                json_list.push(NP_JSON::Null);
+                            }
+                        }*/
+                        
                     }
                 }
 
-                JFObject::Array(json_list)
+                NP_JSON::Array(json_list)
             },
             _ => {
                 unreachable!();
@@ -643,17 +697,17 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_ValueInto<'a> for NP_List<
         }
     }
 
-    fn buffer_do_compact<X: NP_Value + Default + NP_ValueInto<'a>>(from_ptr: &NP_Ptr<'a, X>, to_ptr: NP_Ptr<'a, NP_Any>) -> Result<(u32, NP_PtrKinds, &'a NP_Schema), NP_Error> where Self: NP_Value + Default {
+    fn buffer_do_compact<X: NP_Value + Default + >(from_ptr: &NP_Ptr<X>, to_ptr: NP_Ptr<NP_Any>) -> Result<(u32, NP_PtrKinds, Rc<NP_Schema>), NP_Error> where Self: NP_Value + Default {
 
         if from_ptr.location == 0 {
-            return Ok((0, from_ptr.kind, from_ptr.schema));
+            return Ok((0, from_ptr.kind, Rc::clone(&from_ptr.schema)));
         }
 
         let to_ptr_list = NP_Any::cast::<NP_List<NP_Any>>(to_ptr)?;
 
         let new_address = to_ptr_list.location;
 
-        match Self::buffer_into(from_ptr.location, from_ptr.kind, from_ptr.schema, from_ptr.memory)? {
+        match Self::buffer_into(from_ptr.location, from_ptr.kind, Rc::clone(&from_ptr.schema), Rc::clone(&from_ptr.memory))? {
             Some(old_list) => {
 
                 match to_ptr_list.into()? {
@@ -668,7 +722,7 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_ValueInto<'a> for NP_List<
                             }
                         }
 
-                        return Ok((new_address, from_ptr.kind, from_ptr.schema));
+                        return Ok((new_address, from_ptr.kind, Rc::clone(&from_ptr.schema)));
                     },
                     None => {}
                 }
@@ -676,44 +730,44 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_ValueInto<'a> for NP_List<
             None => { }
         }
 
-        Ok((0, from_ptr.kind, from_ptr.schema))
+        Ok((0, from_ptr.kind, Rc::clone(&from_ptr.schema)))
     }
 }
 
 
-pub struct NP_List_Iterator<'a, T> {
+pub struct NP_List_Iterator<T> {
     address: u32, // pointer location
     head: u32,
     tail: u32,
-    memory: &'a NP_Memory,
-    of: &'a NP_Schema,
+    memory: Rc<NP_Memory>,
+    of: Rc<NP_Schema>,
     current_index: u16,
     current_address: u32,
-    list: NP_List<'a, T>
+    list: NP_List<T>
 }
 
-impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_List_Iterator<'a, T> {
+impl<T: NP_Value + Default + > NP_List_Iterator<T> {
 
-    pub fn new(address: u32, head: u32, tail: u32, memory: &'a NP_Memory, of: &'a NP_Schema) -> Self {
+    pub fn new(address: u32, head: u32, tail: u32, memory: Rc<NP_Memory>, of: Rc<NP_Schema>) -> Self {
         NP_List_Iterator {
             address,
             head,
             tail,
-            memory: memory,
-            of: of,
+            memory: Rc::clone(&memory),
+            of: Rc::clone(&of),
             current_index: 0,
             current_address: head,
             list: NP_List::new(address, head, tail, memory, of).unwrap()
         }
     }
 
-    pub fn into_list(self) -> NP_List<'a, T> {
+    pub fn into_list(self) -> NP_List<T> {
         self.list
     }
 }
 
-impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> Iterator for NP_List_Iterator<'a, T> {
-    type Item = NP_List_Item<'a, T>;
+impl<T: NP_Value + Default + > Iterator for NP_List_Iterator<T> {
+    type Item = NP_List_Item<T>;
 
     fn next(&mut self) -> Option<Self::Item> {
 
@@ -736,10 +790,10 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> Iterator for NP_List_Iterator
             return Some(NP_List_Item {
                 index: self.current_index - 1,
                 has_value: (true, value_address != 0),
-                of: self.of,
+                of: Rc::clone(&self.of),
                 address: this_address,
-                list: NP_List::new(self.address, self.head, self.tail, self.memory, self.of).unwrap(),
-                memory: self.memory
+                list: NP_List::new(self.address, self.head, self.tail, Rc::clone(&self.memory), Rc::clone(&self.of)).unwrap(),
+                memory: Rc::clone(&self.memory)
             });
 
         } else if ptr_index > self.current_index { // pointer is above current index, loop through empty values
@@ -747,10 +801,10 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> Iterator for NP_List_Iterator
             return Some(NP_List_Item {
                 index: self.current_index - 1,
                 has_value: (false, false),
-                of: self.of,
+                of: Rc::clone(&self.of),
                 address: 0,
-                list: NP_List::new(self.address, self.head, self.tail, self.memory, self.of).unwrap(),
-                memory: self.memory
+                list: NP_List::new(self.address, self.head, self.tail, Rc::clone(&self.memory), Rc::clone(&self.of)).unwrap(),
+                memory: Rc::clone(&self.memory)
             });
         }
 
@@ -758,18 +812,18 @@ impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> Iterator for NP_List_Iterator
     }
 }
 
-pub struct NP_List_Item<'a, T> { 
+pub struct NP_List_Item<T> { 
     pub index: u16,
     pub has_value: (bool, bool),
-    pub of: &'a NP_Schema,
+    pub of: Rc<NP_Schema>,
     pub address: u32,
-    list: NP_List<'a, T>,
-    pub memory: &'a NP_Memory
+    list: NP_List<T>,
+    pub memory: Rc<NP_Memory>
 }
 
-impl<'a, T: NP_Value + Default + NP_ValueInto<'a>> NP_List_Item<'a, T> {
+impl<T: NP_Value + Default + > NP_List_Item<T> {
 
-    pub fn select(&mut self) -> Result<NP_Ptr<'a, T>, NP_Error> {
+    pub fn select(&mut self) -> Result<NP_Ptr<T>, NP_Error> {
         self.list.select(self.index)
     }
     pub fn delete(&mut self) -> Result<bool, NP_Error> {

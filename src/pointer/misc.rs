@@ -1,6 +1,5 @@
 use crate::utils::to_base32;
-use crate::json_flex::{JFMap, JFObject};
-use crate::pointer::NP_ValueInto;
+use crate::json_flex::{JSMAP, NP_JSON};
 use crate::schema::{NP_SchemaKinds, NP_Schema, NP_TypeKeys};
 use crate::pointer::NP_PtrKinds;
 use crate::{memory::NP_Memory, pointer::NP_Value, error::NP_Error, utils::{Rand, to_hex}};
@@ -9,7 +8,7 @@ use core::fmt;
 use alloc::string::String;
 use alloc::boxed::Box;
 use alloc::borrow::ToOwned;
-use alloc::string::ToString;
+use alloc::{rc::Rc, string::ToString};
 
 /// Represents a fixed point decimal number.
 /// 
@@ -21,7 +20,7 @@ use alloc::string::ToString;
 ///     1. The actual number value (`num`)
 ///     2. The position of the decimal point from the right (`exp`)
 /// 
-/// A value of "2039.756" could be stored as `NP_Dec {num: 2039756, exp: 3}`.  This would also be valid and have the same end value: `NP_Dec {num: 203975600, exp: 5}`.
+/// A value of "2039.756" could be stored as `NP_Dec {num: 2039756, exp: 3}`.  It could also be stored as: `NP_Dec {num: 203975600, exp: 5}`.
 /// 
 /// The range of possible floating point values depends on the `exp` value.  The `num` property is an i64 variable so it can safely store 9.22e18 to -9.22e18.  
 /// 
@@ -30,9 +29,9 @@ use alloc::string::ToString;
 /// For every increase in `exp` by 1, the maximum range of possible values decreases by a power of 10.  For example at `exp = 1` the range drops to 9.22e17 to -9.22e17. 
 /// However, each increase in `exp` provides a decimal point of precision.  In another example, at `exp = 5` you have 5 decimal points of precision and a max range of 9.22e13 to -9.22e13.
 /// 
-/// Essentially, increaseing the `exp` factor decreases the range of possible values that can be stored in exchange for increased decimal precision.
+/// Essentially, increaseing the `exp` factor decreases the maximum range of possible values that can be stored in exchange for increased decimal precision.
 /// 
-/// `NP_Dec` values can safely be multiplied, added, devided, subtracted or compared with eachother.  However the `exp` value **must be identical** between two NP_Dec values for operations or comparisons to be performed.  You should make sure the `exp` value between two `NP_Dec` is the same using `shift_exp` to match the two `exp` values.  Default behavior exists to shift the two values before operations/comparisons but may not act in a way you expect.  It's better if you manually shift the `exp` value between two NP_Dec values before performaing operations or comparison.
+/// `NP_Dec` values can safely be multiplied, added, devided, subtracted or compared with eachother.  It's a good idea to manually shift the `exp` values of two `NP_Dec` to match before performing any operation between them, otherwise the operation might not do what you expect.
 /// 
 /// When `NP_Dec` values are pulled out of a buffer, the `num` property is pulled from the buffer contents and the `exp` property comes from the schema.
 /// 
@@ -89,9 +88,9 @@ impl NP_Dec {
 
     /// Shift the exponent of this NP_Dec to a new value.
     /// 
-    /// If the new `exp` value is lower than the old `exp` value, there may be an overflow of the i64 value.
+    /// If the new `exp` value is higher than the old `exp` value, there may be an overflow of the i64 value.
     /// 
-    /// If the new `exp value is higher than the old one, information will likely be lost as decimal precision is being removed from the number.
+    /// If the new `exp` value is lower than the old one, information will likely be lost as decimal precision is being removed from the number.
     /// 
     /// ```
     /// use no_proto::pointer::misc::NP_Dec;
@@ -107,6 +106,8 @@ impl NP_Dec {
         let diff = self.exp as i64 - new_exp as i64;
 
         let mut step = i64::abs(diff);
+
+        if self.exp == new_exp { return *self }
 
         if diff < 0 { // moving decimal to right
             while step > 0 {
@@ -155,13 +156,9 @@ impl NP_Dec {
         NP_Dec { num, exp }
     }
 
-    /// Given another NP_Dec value, match the `exp` value of this NP_Dec and the other one.  Returns a copy of the other NP_Dec.
+    /// Given another NP_Dec value, match the `exp` value of this NP_Dec to the other one.  Returns a copy of the other NP_Dec.
     /// 
-    /// This will figure out the lowest `exp` between the two NP_Dec (self and other), and modify either NP_Dec to match the new, lowest `exp`.
-    /// 
-    /// This possibly **mutates** self to match the `exp` of the other NP_Dec, possible/probably data loss here.
-    /// 
-    /// It's better if you use `shift_exp` to manually match two NP_Dec `exp` values, and not this method.
+    /// This creates a copy of the other NP_Dec then shifts it's `exp` value to whatever self is, then returns that copy.
     /// 
     /// ```
     /// use no_proto::pointer::misc::NP_Dec;
@@ -170,33 +167,24 @@ impl NP_Dec {
     /// 
     /// let other_num = NP_Dec::new(50, 1); // value is 5.0
     /// 
-    /// let matched_dec = my_num.match_exp(other_num);
-    /// // `exp` values match now! They're both 1.
+    /// let matched_dec = my_num.match_exp(&other_num);
+    /// // `exp` values match now! They're both 3.
     /// assert_eq!(matched_dec.exp, my_num.exp);
-    /// 
-    /// // however, we've lost two decimal points of data in `my_num` in the process
-    /// assert_eq!(my_num.to_float(), 2.2f64);
     /// ```
     /// 
-    pub fn match_exp(&mut self, other: NP_Dec) -> NP_Dec {
+    pub fn match_exp(&self, other: &NP_Dec) -> NP_Dec {
         let mut other_copy = other.clone();
 
         if other_copy.exp == self.exp {
-            return other_copy;
+            return other_copy
         }
 
-        let new_exp = u8::min(self.exp, other.exp);
+        other_copy.shift_exp(self.exp);
 
-        if new_exp != self.exp {
-            self.shift_exp(new_exp);
-        } else {
-            other_copy.shift_exp(new_exp);
-        }
-
-        return other_copy;
+        other_copy
     }
 
-    /// Export NP_Dec to it's parts.
+    /// Export NP_Dec to it's component parts.
     /// 
     /// ```
     /// use no_proto::pointer::misc::NP_Dec;
@@ -212,7 +200,7 @@ impl NP_Dec {
 
 /// Check if two NP_Dec are equal or not equal
 /// 
-/// If the two `exp` values are not identical, unexpected results may occur due to rounding
+/// If the two `exp` values are not identical, unexpected results may occur due to rounding.
 /// 
 /// ```
 /// use no_proto::pointer::misc::NP_Dec;
@@ -272,6 +260,9 @@ impl core::cmp::PartialEq for NP_Dec {
 /// 
 /// let result = NP_Dec::new(20201, 2) > NP_Dec::new(202, 0);
 /// assert_eq!(result, true);
+/// 
+/// let result = NP_Dec::new(20201, 2) == NP_Dec::new(2020100, 4);
+/// assert_eq!(result, true);
 /// ```
 impl core::cmp::PartialOrd for NP_Dec {
 
@@ -279,12 +270,8 @@ impl core::cmp::PartialOrd for NP_Dec {
         if self.exp == other.exp {
             return self.num < other.num;
         } else {
-
-            let new_exp = u8::max(self.exp, other.exp);
-            let new_self = if new_exp == self.exp { *self } else { self.clone().shift_exp(new_exp) };
-            let new_other = if new_exp == other.exp { *other } else { other.clone().shift_exp(new_exp) };
-
-            return new_self.num < new_other.num;
+            let new_other = self.match_exp(other);
+            return self.num < new_other.num;
         }
     }
 
@@ -292,12 +279,8 @@ impl core::cmp::PartialOrd for NP_Dec {
         if self.exp == other.exp {
             return self.num <= other.num;
         } else {
-
-            let new_exp = u8::max(self.exp, other.exp);
-            let new_self = if new_exp == self.exp { *self } else { self.clone().shift_exp(new_exp) };
-            let new_other = if new_exp == other.exp { *other } else { other.clone().shift_exp(new_exp) };
-
-            return new_self.num <= new_other.num;
+            let new_other = self.match_exp(other);
+            return self.num <= new_other.num;
         }
     }
 
@@ -305,12 +288,8 @@ impl core::cmp::PartialOrd for NP_Dec {
         if self.exp == other.exp {
             return self.num > other.num;
         } else {
-
-            let new_exp = u8::max(self.exp, other.exp);
-            let new_self = if new_exp == self.exp { *self } else { self.clone().shift_exp(new_exp) };
-            let new_other = if new_exp == other.exp { *other } else { other.clone().shift_exp(new_exp) };
-
-            return new_self.num > new_other.num;
+            let new_other = self.match_exp(other);
+            return self.num > new_other.num;
         }
     }
 
@@ -318,27 +297,18 @@ impl core::cmp::PartialOrd for NP_Dec {
         if self.exp == other.exp {
             return self.num >= other.num;
         } else {
-
-            let new_exp = u8::max(self.exp, other.exp);
-            let new_self = if new_exp == self.exp { *self } else { self.clone().shift_exp(new_exp) };
-            let new_other = if new_exp == other.exp { *other } else { other.clone().shift_exp(new_exp) };
-
-            return new_self.num >= new_other.num;
+            let new_other = self.match_exp(other);
+            return self.num >= new_other.num;
         }
     }
 
     fn partial_cmp(&self, other: &NP_Dec) -> Option<core::cmp::Ordering> { 
-        
-        
+
         let (a, b) = if self.exp == other.exp {
             (self.num, other.num)
         } else {
-
-            let new_exp = u8::max(self.exp, other.exp);
-            let new_self = if new_exp == self.exp { *self } else { self.clone().shift_exp(new_exp) };
-            let new_other = if new_exp == other.exp { *other } else { other.clone().shift_exp(new_exp) };
-
-            (new_self.num, new_other.num)
+            let new_other = self.match_exp(other);
+            (self.num, new_other.num)
         };
 
         if a > b {
@@ -353,7 +323,45 @@ impl core::cmp::PartialOrd for NP_Dec {
     }
 }
 
-/// Converts a Dec64 into an Int64, rounds to nearest whole number
+
+/// Converts an NP_Dec into an Int32, rounds to nearest whole number
+/// ```
+/// use no_proto::pointer::misc::NP_Dec;
+/// 
+/// let x = NP_Dec::new(10123, 2);
+/// let y: i32 = x.into();
+/// 
+/// assert_eq!(y, 101i32);
+/// ```
+impl Into<i32> for NP_Dec {
+    fn into(self) -> i32 { 
+        let mut change_value = self.num;
+        let mut loop_val = self.exp;
+        while loop_val > 0 {
+            change_value /= 10;
+            loop_val -= 1;
+        }
+        change_value as i32
+    }
+}
+
+/// Converts an Int32 into a NP_Dec
+/// ```
+/// use no_proto::pointer::misc::NP_Dec;
+/// 
+/// let x = 101i32;
+/// let y: NP_Dec = x.into();
+/// 
+/// assert_eq!(y.num as i32, x);
+/// ```
+impl Into<NP_Dec> for i32 {
+    fn into(self) -> NP_Dec { 
+        NP_Dec::new(self as i64, 0)
+    }
+}
+
+
+/// Converts an NP_Dec into an Int64, rounds to nearest whole number
 /// ```
 /// use no_proto::pointer::misc::NP_Dec;
 /// 
@@ -374,7 +382,7 @@ impl Into<i64> for NP_Dec {
     }
 }
 
-/// Converts an Int64 into a Dec64
+/// Converts an Int64 into a NP_Dec
 /// ```
 /// use no_proto::pointer::misc::NP_Dec;
 /// 
@@ -389,20 +397,7 @@ impl Into<NP_Dec> for i64 {
     }
 }
 
-/// Converts a Dec64 into a Float64
-/// ```
-/// use no_proto::pointer::misc::NP_Dec;
-/// 
-/// let x = NP_Dec::new(10023, 2);
-/// let y: f64 = x.into();
-/// 
-/// assert_eq!(y, x.to_float());
-/// ```
-impl Into<f64> for NP_Dec {
-    fn into(self) -> f64 { 
-        self.to_float()
-    }
-}
+
 
 fn round_f64(n: f64) -> f64 {
     let value = if n < 0.0 { n - 0.5 } else { n + 0.5 };
@@ -410,6 +405,14 @@ fn round_f64(n: f64) -> f64 {
     let bounds_value = value.max(core::i64::MIN as f64).min(core::i64::MAX as f64);
 
     (bounds_value as i64) as f64
+}
+
+fn round_f32(n: f32) -> f32 {
+    let value = if n < 0.0 { n - 0.5 } else { n + 0.5 };
+
+    let bounds_value = value.max(core::i64::MIN as f32).min(core::i64::MAX as f32);
+
+    (bounds_value as i64) as f32
 }
 
 fn round(n: f64, precision: u32) -> f64 {
@@ -425,7 +428,35 @@ fn precision(x: f64) -> Option<u32> {
     None
 }
 
-/// Converts an Float64 into a Dec64
+fn round32(n: f32, precision: u32) -> f32 {
+    round_f32(n * 10_u32.pow(precision) as f32) / 10_i32.pow(precision) as f32
+}
+
+fn precision32(x: f32) -> Option<u32> {
+    for digits in 0..core::f64::DIGITS {
+        if round32(x, digits) == x {
+            return Some(digits);
+        }
+    }
+    None
+}
+
+/// Converts a NP_Dec into a Float64
+/// ```
+/// use no_proto::pointer::misc::NP_Dec;
+/// 
+/// let x = NP_Dec::new(10023, 2);
+/// let y: f64 = x.into();
+/// 
+/// assert_eq!(y, x.to_float());
+/// ```
+impl Into<f64> for NP_Dec {
+    fn into(self) -> f64 { 
+        self.to_float()
+    }
+}
+
+/// Converts a Float64 into a NP_Dec
 /// ```
 /// use no_proto::pointer::misc::NP_Dec;
 /// 
@@ -456,10 +487,56 @@ impl Into<NP_Dec> for f64 {
     }
 }
 
+/// Converts a NP_Dec into a Float32
+/// ```
+/// use no_proto::pointer::misc::NP_Dec;
+/// 
+/// let x = NP_Dec::new(10023, 2);
+/// let y: f32 = x.into();
+/// 
+/// assert_eq!(y, x.to_float() as f32);
+/// ```
+impl Into<f32> for NP_Dec {
+    fn into(self) -> f32 { 
+        self.to_float() as f32
+    }
+}
+
+/// Converts a Float32 into a NP_Dec
+/// ```
+/// use no_proto::pointer::misc::NP_Dec;
+/// 
+/// let x = 100.238f32;
+/// let y: NP_Dec = x.into();
+/// 
+/// assert_eq!(y.to_float() as f32, x);
+/// ```
+impl Into<NP_Dec> for f32 {
+    fn into(self) -> NP_Dec { 
+        match precision32(self) {
+            Some(x) => {
+                let max_decimal_places = u32::min(x, 18);
+                let mut new_self = self.clone();
+                let mut loop_exp = max_decimal_places;
+                while loop_exp > 0 {
+                    new_self *= 10f32;
+                    loop_exp -= 1;
+                }
+                let value = round_f32(new_self) as i64;
+                return NP_Dec::new(value, max_decimal_places as u8);
+            },
+            None => { // this should be impossible, but just incase
+                let value = round_f32(self) as i64;
+                return NP_Dec::new(value, 0);
+            }
+        }
+    }
+}
+
 impl core::ops::DivAssign for NP_Dec { // a /= b
     fn div_assign(&mut self, other: NP_Dec) { 
         if self.exp != other.exp {
-            let other_copy = self.match_exp(other);
+            let other_copy = self.match_exp(&other);
             self.num = self.num / other_copy.num;
         } else {
             self.num = self.num / other.num;
@@ -471,7 +548,7 @@ impl core::ops::Div for NP_Dec { // a / b
     type Output = NP_Dec;
     fn div(mut self, other: NP_Dec) -> <Self as core::ops::Sub<NP_Dec>>::Output { 
         if self.exp != other.exp {
-            let other_copy = self.match_exp(other);
+            let other_copy = self.match_exp(&other);
             self.num = self.num / other_copy.num;
         } else {
             self.num = self.num / other.num;
@@ -483,7 +560,7 @@ impl core::ops::Div for NP_Dec { // a / b
 impl core::ops::SubAssign for NP_Dec { // a -= b
     fn sub_assign(&mut self, other: NP_Dec) { 
         if self.exp != other.exp {
-            let other_copy = self.match_exp(other);
+            let other_copy = self.match_exp(&other);
             self.num = self.num - other_copy.num;
         } else {
             self.num = self.num - other.num;
@@ -495,7 +572,7 @@ impl core::ops::Sub for NP_Dec { // a - b
     type Output = NP_Dec;
     fn sub(mut self, other: NP_Dec) -> <Self as core::ops::Sub<NP_Dec>>::Output { 
         if self.exp != other.exp {
-            let other_copy = self.match_exp(other);
+            let other_copy = self.match_exp(&other);
             self.num = self.num - other_copy.num;
         } else {
             self.num = self.num - other.num;
@@ -507,7 +584,7 @@ impl core::ops::Sub for NP_Dec { // a - b
 impl core::ops::AddAssign for NP_Dec { // a += b
     fn add_assign(&mut self, other: NP_Dec) { 
         if self.exp != other.exp {
-            let other_copy = self.match_exp(other);
+            let other_copy = self.match_exp(&other);
             self.num = self.num + other_copy.num;
         } else {
             self.num = self.num + other.num;
@@ -519,7 +596,7 @@ impl core::ops::Add for NP_Dec { // a + b
     type Output = NP_Dec;
     fn add(mut self, other: NP_Dec) -> <Self as core::ops::Add<NP_Dec>>::Output { 
         if self.exp != other.exp {
-            let other_copy = self.match_exp(other);
+            let other_copy = self.match_exp(&other);
             self.num = self.num + other_copy.num;
         } else {
             self.num = self.num + other.num;
@@ -531,7 +608,7 @@ impl core::ops::Add for NP_Dec { // a + b
 impl core::ops::MulAssign for NP_Dec { // a *= b
     fn mul_assign(&mut self, other: NP_Dec) { 
         if self.exp != other.exp {
-            let other_copy = self.match_exp(other);
+            let other_copy = self.match_exp(&other);
             self.num = self.num * other_copy.num;
         } else {
             self.num = self.num * other.num;
@@ -544,7 +621,7 @@ impl core::ops::Mul for NP_Dec { // a * b
     fn mul(mut self, other: NP_Dec) -> <Self as core::ops::Mul<NP_Dec>>::Output { 
 
         if self.exp != other.exp {
-            let other_copy = self.match_exp(other);
+            let other_copy = self.match_exp(&other);
             self.num = self.num * other_copy.num;
         } else {
             self.num = self.num * other.num;
@@ -562,32 +639,96 @@ impl Default for NP_Dec {
 impl NP_Value for NP_Dec {
 
     fn is_type( type_str: &str) -> bool {
-        "dec64" == type_str
+        "decimal" == type_str
     }
 
-    fn type_idx() -> (i64, String) { (NP_TypeKeys::Dec64 as i64, "dec64".to_owned()) }
-    fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Dec64 as i64, "dec64".to_owned()) }
+    fn type_idx() -> (i64, String) { (NP_TypeKeys::Decimal as i64, "decimal".to_owned()) }
+    fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Decimal as i64, "decimal".to_owned()) }
 
-    fn schema_state(_type_string: &str, _json_schema: &JFObject) -> core::result::Result<i64, NP_Error> {
+    fn schema_state(_type_string: &str, _json_schema: &NP_JSON) -> Result<i64, NP_Error> {
 
         match _json_schema["exp"].into_i64() {
             Some(x) => {
                 if *x > 255 || *x < 0 {
-                    return Err(NP_Error::new("Dec64 'exp' property must be between 0 and 255"));
+                    return Err(NP_Error::new("Decimal 'exp' property must be between 0 and 255"));
                 }
                 return Ok(*x);
             },
             None => {
-                return Err(NP_Error::new("Dec64 types must have 'exp' property!"))
+                return Err(NP_Error::new("Decimal types must have 'exp' property!"))
             }
         }
     }
 
-    fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, memory: &NP_Memory, value: Box<&Self>) -> core::result::Result<NP_PtrKinds, NP_Error> {
+    fn schema_default(schema: Rc<NP_Schema>) -> Option<Box<Self>> {
+        match &schema.default {
+            Some(x) => {
+                match x {
+                    NP_JSON::Integer(x) => {
+                        let mut y: NP_Dec = (*x).into();
+                        y.shift_exp(*&schema.type_state as u8);
+                        Some(Box::new(y))
+                    }
+                    NP_JSON::Float(x) => {
+                        let mut y: NP_Dec = (*x).into();
+                        y.shift_exp(*&schema.type_state as u8);
+                        Some(Box::new(y))
+                    },
+                    NP_JSON::Dictionary(value) => {
+                        let num = value.get("num").unwrap_or(&NP_JSON::Null);
+                        let exp = value.get("exp").unwrap_or(&NP_JSON::Null);
+                        
+                        let get_value = |json: &NP_JSON| -> i64 {
+                            match json {
+                                NP_JSON::Integer(x) => {
+                                    *x as i64
+                                },
+                                NP_JSON::Float(x) => {
+                                    *x as i64
+                                },
+                                _ => {
+                                    0
+                                }
+                            }
+                        };
+
+                        let has_num_exp = {
+                            match num {
+                                NP_JSON::Null => false,
+                                _ => {
+                                    match exp {
+                                        NP_JSON::Null => false,
+                                        _ => true
+                                    }
+                                }
+                            }
+                        };
+
+                        if has_num_exp {
+                            return Some(Box::new(NP_Dec::new(get_value(num), get_value(exp) as u8)));
+                        }
+
+                        None
+                    },
+                    _ => {
+                        None
+                    }
+                }
+            },
+            None => {
+                None
+            }
+        }
+    }
+
+    fn buffer_set(address: u32, kind: &NP_PtrKinds, schema: Rc<NP_Schema>, memory: Rc<NP_Memory>, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
 
         let mut addr = kind.get_value();
 
-        let i64_value = value.num;
+        let mut cloned_value = (*value).clone();
+        cloned_value.shift_exp(schema.type_state as u8);
+
+        let i64_value = cloned_value.num;
 
         let offset = core::i64::MAX as i128;
 
@@ -600,24 +741,20 @@ impl NP_Value for NP_Dec {
             for x in 0..bytes.len() {
                 write_bytes[(addr + x as u32) as usize] = bytes[x as usize];
             }
-            write_bytes[(addr + 8 as u32) as usize] = value.exp;
             return Ok(*kind);
         } else { // new value
 
-            let mut bytes: [u8; 9] = [0; 9];
+            let mut bytes: [u8; 8] = [0; 8];
             let be_bytes = (((i64_value as i128) + offset) as u64).to_be_bytes();
             for x in 0..be_bytes.len() {
                 bytes[x] = be_bytes[x];
             }
-            bytes[8] = value.exp;
             addr = memory.malloc(bytes.to_vec())?;
             return Ok(memory.set_value_address(address, addr as u32, kind));
         }
     }
-}
 
-impl<'a> NP_ValueInto<'a> for NP_Dec {
-    fn buffer_into(_address: u32, kind: NP_PtrKinds, schema: &'a NP_Schema, buffer: &'a NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
+    fn buffer_into(_address: u32, kind: NP_PtrKinds, schema: Rc<NP_Schema>, buffer: Rc<NP_Memory>) -> Result<Option<Box<Self>>, NP_Error> {
         let addr = kind.get_value() as usize;
 
         // empty value
@@ -638,38 +775,43 @@ impl<'a> NP_ValueInto<'a> for NP_Dec {
         })
     }
 
-    fn buffer_to_json(address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: &NP_Memory) -> JFObject {
-        let this_string = Self::buffer_into(address, *kind, schema, buffer);
+    fn buffer_to_json(address: u32, kind: &NP_PtrKinds, schema: Rc<NP_Schema>, buffer: Rc<NP_Memory>) -> NP_JSON {
+        let this_string = Self::buffer_into(address, *kind, Rc::clone(&schema), buffer);
+
+        let schema_clone = Rc::clone(&schema);
 
         match this_string {
             Ok(x) => {
                 match x {
                     Some(y) => {
-                        let mut object = JFMap::<JFObject>::new();
+                        let mut object = JSMAP::<NP_JSON>::new();
 
-                        object.insert("num".to_owned(), JFObject::Integer(y.num));
-                        object.insert("exp".to_owned(), JFObject::Integer(schema.type_state));
+                        object.insert("num".to_owned(), NP_JSON::Integer(y.num));
+                        object.insert("exp".to_owned(), NP_JSON::Integer(schema_clone.type_state));
                         
-                        JFObject::Dictionary(object)
+                        NP_JSON::Dictionary(object)
                     },
                     None => {
-                        JFObject::Null
+                        match &schema.default {
+                            Some(x) => x.clone(),
+                            None => NP_JSON::Null
+                        }
                     }
                 }
             },
             Err(_e) => {
-                JFObject::Null
+                NP_JSON::Null
             }
         }
     }
 
-    fn buffer_get_size(_address: u32, kind: &'a NP_PtrKinds, _schema: &'a NP_Schema, _buffer: &'a NP_Memory) -> core::result::Result<u32, NP_Error> {
+    fn buffer_get_size(_address: u32, kind: &NP_PtrKinds, _schema: Rc<NP_Schema>, _buffer: Rc<NP_Memory>) -> Result<u32, NP_Error> {
         let addr = kind.get_value() as usize;
 
         if addr == 0 {
             return Ok(0) 
         } else {
-            Ok(9)
+            Ok(8)
         }
     }
 
@@ -683,12 +825,12 @@ impl<'a> NP_ValueInto<'a> for NP_Dec {
 #[derive(Debug)]
 pub struct NP_Geo {
     pub lat: f64,
-    pub lon: f64
+    pub lng: f64
 }
 
 impl Default for NP_Geo {
     fn default() -> Self { 
-        NP_Geo { lat: 0.0, lon: 0.0 }
+        NP_Geo { lat: 0.0, lng: 0.0 }
      }
 }
 
@@ -698,7 +840,7 @@ impl NP_Value for NP_Geo {
         "geo4" == type_str || "geo8" == type_str || "geo16" == type_str 
     }
 
-    fn schema_state(type_string: &str, _json_schema: &JFObject) -> core::result::Result<i64, NP_Error> {
+    fn schema_state(type_string: &str, _json_schema: &NP_JSON) -> Result<i64, NP_Error> {
         Ok(match type_string {
             "geo4" => 4,
             "geo8" => 8,
@@ -707,10 +849,61 @@ impl NP_Value for NP_Geo {
         })
     }
 
+    fn schema_default(schema: Rc<NP_Schema>) -> Option<Box<Self>> {
+        match &schema.default {
+            Some(x) => {
+                match x {
+                    NP_JSON::Dictionary(value) => {
+                        let lat = value.get("lat").unwrap_or(&NP_JSON::Null);
+                        let lon = value.get("lng").unwrap_or(&NP_JSON::Null);
+                        
+                        let get_value = |json: &NP_JSON| -> f64 {
+                            match json {
+                                NP_JSON::Integer(x) => {
+                                    *x as f64
+                                },
+                                NP_JSON::Float(x) => {
+                                    *x
+                                },
+                                _ => {
+                                    0.0
+                                }
+                            }
+                        };
+
+                        let has_lat_lon = {
+                            match lat {
+                                NP_JSON::Null => false,
+                                _ => {
+                                    match lon {
+                                        NP_JSON::Null => false,
+                                        _ => true
+                                    }
+                                }
+                            }
+                        };
+
+                        if has_lat_lon {
+                            return Some(Box::new(NP_Geo { lat: get_value(lat), lng: get_value(lon) }));
+                        }
+
+                        None
+                    },
+                    _ => {
+                        None
+                    }
+                }
+            },
+            None => {
+                None
+            }
+        }
+    }
+
     fn type_idx() -> (i64, String) { (NP_TypeKeys::Geo as i64, "geo".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Geo as i64, "geo".to_owned()) }
 
-    fn buffer_set(address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, memory: &NP_Memory, value: Box<&Self>) -> core::result::Result<NP_PtrKinds, NP_Error> {
+    fn buffer_set(address: u32, kind: &NP_PtrKinds, schema: Rc<NP_Schema>, memory: Rc<NP_Memory>, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
 
         let mut addr = kind.get_value();
 
@@ -728,9 +921,10 @@ impl NP_Value for NP_Geo {
         let value_bytes = match schema.type_state {
             16 => {
                 let dev = 1000000000f64;
+
                 let mut v_bytes: [u8; 16] = [0; 16];
                 let lat_bytes = ((value.lat * dev) as i64).to_be_bytes();
-                let lon_bytes = ((value.lon * dev) as i64).to_be_bytes();
+                let lon_bytes = ((value.lng * dev) as i64).to_be_bytes();
 
                 for x in 0..value_bytes_size {
                     if x < half_value_bytes {
@@ -746,7 +940,7 @@ impl NP_Value for NP_Geo {
 
                 let mut v_bytes: [u8; 16] = [0; 16];
                 let lat_bytes = ((value.lat * dev) as i32).to_be_bytes();
-                let lon_bytes = ((value.lon * dev) as i32).to_be_bytes();
+                let lon_bytes = ((value.lng * dev) as i32).to_be_bytes();
 
                 for x in 0..value_bytes_size {
                     if x < half_value_bytes {
@@ -762,7 +956,7 @@ impl NP_Value for NP_Geo {
 
                 let mut v_bytes: [u8; 16] = [0; 16];
                 let lat_bytes = ((value.lat * dev) as i16).to_be_bytes();
-                let lon_bytes = ((value.lon * dev) as i16).to_be_bytes();
+                let lon_bytes = ((value.lng * dev) as i16).to_be_bytes();
 
                 for x in 0..value_bytes_size {
                     if x < half_value_bytes {
@@ -810,12 +1004,7 @@ impl NP_Value for NP_Geo {
         
     }
 
-    
-
-}
-
-impl<'a> NP_ValueInto<'a> for NP_Geo {
-    fn buffer_into(_address: u32, kind: NP_PtrKinds, schema: &'a NP_Schema, buffer: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
+    fn buffer_into(_address: u32, kind: NP_PtrKinds, schema: Rc<NP_Schema>, buffer: Rc<NP_Memory>) -> Result<Option<Box<Self>>, NP_Error> {
 
         let addr = kind.get_value() as usize;
 
@@ -825,16 +1014,18 @@ impl<'a> NP_ValueInto<'a> for NP_Geo {
         }
 
         Ok(match schema.type_state {
-            4 => {
-                let bytes_lat: [u8; 2] = *buffer.get_2_bytes(addr).unwrap_or(&[0; 2]);
-                let bytes_lon: [u8; 2] = *buffer.get_2_bytes(addr + 2).unwrap_or(&[0; 2]);
+            16 => {
+         
+                let bytes_lat: [u8; 8] = *buffer.get_8_bytes(addr).unwrap_or(&[0; 8]);
+                let bytes_lon: [u8; 8] = *buffer.get_8_bytes(addr + 8).unwrap_or(&[0; 8]);
 
-                let lat = i16::from_be_bytes(bytes_lat) as f64;
-                let lon = i16::from_be_bytes(bytes_lon) as f64;
+                let lat = i64::from_be_bytes(bytes_lat) as f64;
+                let lon = i64::from_be_bytes(bytes_lon) as f64;
 
-                let dev = 100f64;
+                let dev = 1000000000f64;
 
-                Some(Box::new(NP_Geo { lat: lat / dev, lon: lon / dev}))
+                Some(Box::new(NP_Geo { lat: lat / dev, lng: lon / dev}))
+
             },
             8 => {
                 let bytes_lat: [u8; 4] = *buffer.get_4_bytes(addr).unwrap_or(&[0; 4]);
@@ -845,48 +1036,54 @@ impl<'a> NP_ValueInto<'a> for NP_Geo {
 
                 let dev = 10000000f64;
 
-                Some(Box::new(NP_Geo { lat: lat / dev, lon: lon / dev}))
+                Some(Box::new(NP_Geo { lat: lat / dev, lng: lon / dev}))
             },
-            16 => {
-         
-                let bytes_lat: [u8; 8] = *buffer.get_8_bytes(addr).unwrap_or(&[0; 8]);
-                let bytes_lon: [u8; 8] = *buffer.get_8_bytes(addr + 8).unwrap_or(&[0; 8]);
+            4 => {
+                let bytes_lat: [u8; 2] = *buffer.get_2_bytes(addr).unwrap_or(&[0; 2]);
+                let bytes_lon: [u8; 2] = *buffer.get_2_bytes(addr + 2).unwrap_or(&[0; 2]);
 
-                Some(Box::new(NP_Geo { lat: f64::from_be_bytes(bytes_lat), lon: f64::from_be_bytes(bytes_lon)}))
+                let lat = i16::from_be_bytes(bytes_lat) as f64;
+                let lon = i16::from_be_bytes(bytes_lon) as f64;
 
-            }
+                let dev = 100f64;
+
+                Some(Box::new(NP_Geo { lat: lat / dev, lng: lon / dev}))
+            },
             _ => {
                 unreachable!();
             }
         })
     }
 
-    fn buffer_to_json(address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: &NP_Memory) -> JFObject {
-        let this_string = Self::buffer_into(address, *kind, schema, buffer);
+    fn buffer_to_json(address: u32, kind: &NP_PtrKinds, schema: Rc<NP_Schema>, buffer: Rc<NP_Memory>) -> NP_JSON {
+        let this_string = Self::buffer_into(address, *kind, Rc::clone(&schema), buffer);
 
         match this_string {
             Ok(x) => {
                 match x {
                     Some(y) => {
-                        let mut object = JFMap::<JFObject>::new();
+                        let mut object = JSMAP::<NP_JSON>::new();
 
-                        object.insert("lat".to_owned(), JFObject::Float(y.lat));
-                        object.insert("lon".to_owned(), JFObject::Float(y.lon));
+                        object.insert("lat".to_owned(), NP_JSON::Float(y.lat));
+                        object.insert("lng".to_owned(), NP_JSON::Float(y.lng));
                         
-                        JFObject::Dictionary(object)
+                        NP_JSON::Dictionary(object)
                     },
                     None => {
-                        JFObject::Null
+                        match &schema.default {
+                            Some(x) => x.clone(),
+                            None => NP_JSON::Null
+                        }
                     }
                 }
             },
             Err(_e) => {
-                JFObject::Null
+                NP_JSON::Null
             }
         }
     }
 
-    fn buffer_get_size(_address: u32, kind: &'a NP_PtrKinds, schema: &'a NP_Schema, _buffer: &'a NP_Memory) -> core::result::Result<u32, NP_Error> {
+    fn buffer_get_size(_address: u32, kind: &NP_PtrKinds, schema: Rc<NP_Schema>, _buffer: Rc<NP_Memory>) -> Result<u32, NP_Error> {
         let addr = kind.get_value() as usize;
 
         if addr == 0 {
@@ -977,7 +1174,7 @@ impl NP_Value for NP_ULID {
     fn type_idx() -> (i64, String) { (NP_TypeKeys::Ulid as i64, "ulid".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Ulid as i64, "ulid".to_owned()) }
 
-    fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, memory: &NP_Memory, value: Box<&Self>) -> core::result::Result<NP_PtrKinds, NP_Error> {
+    fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: Rc<NP_Schema>, memory: Rc<NP_Memory>, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
 
         let mut addr = kind.get_value();
 
@@ -1017,10 +1214,8 @@ impl NP_Value for NP_ULID {
         }                    
         
     }
-}
 
-impl<'a> NP_ValueInto<'a> for NP_ULID {
-    fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: &'a NP_Schema, buffer: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
+    fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: Rc<NP_Schema>, buffer: Rc<NP_Memory>) -> Result<Option<Box<Self>>, NP_Error> {
         let addr = kind.get_value() as usize;
 
         // empty value
@@ -1048,27 +1243,30 @@ impl<'a> NP_ValueInto<'a> for NP_ULID {
          
     }
 
-    fn buffer_to_json(address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: &NP_Memory) -> JFObject {
-        let this_string = Self::buffer_into(address, *kind, schema, buffer);
+    fn buffer_to_json(address: u32, kind: &NP_PtrKinds, schema: Rc<NP_Schema>, buffer: Rc<NP_Memory>) -> NP_JSON {
+        let this_string = Self::buffer_into(address, *kind, Rc::clone(&schema), buffer);
 
         match this_string {
             Ok(x) => {
                 match x {
                     Some(y) => {
-                        JFObject::String(y.to_string())
+                        NP_JSON::String(y.to_string())
                     },
                     None => {
-                        JFObject::Null
+                        match &schema.default {
+                            Some(x) => x.clone(),
+                            None => NP_JSON::Null
+                        }
                     }
                 }
             },
             Err(_e) => {
-                JFObject::Null
+                NP_JSON::Null
             }
         }
     }
 
-    fn buffer_get_size(_address: u32, kind: &'a NP_PtrKinds, _schema: &'a NP_Schema, _buffer: &'a NP_Memory) -> core::result::Result<u32, NP_Error> {
+    fn buffer_get_size(_address: u32, kind: &NP_PtrKinds, _schema: Rc<NP_Schema>, _buffer: Rc<NP_Memory>) -> Result<u32, NP_Error> {
         let addr = kind.get_value() as usize;
 
         if addr == 0 {
@@ -1163,7 +1361,7 @@ impl NP_Value for NP_UUID {
     fn type_idx() -> (i64, String) { (NP_TypeKeys::Uuid as i64, "uuid".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Uuid as i64, "uuid".to_owned()) }
 
-    fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, memory: &NP_Memory, value: Box<&Self>) -> core::result::Result<NP_PtrKinds, NP_Error> {
+    fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: Rc<NP_Schema>, memory: Rc<NP_Memory>, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
 
         let mut addr = kind.get_value();
 
@@ -1188,11 +1386,7 @@ impl NP_Value for NP_UUID {
         
     }
 
-
-}
-
-impl<'a> NP_ValueInto<'a> for NP_UUID {
-    fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: &'a NP_Schema, buffer: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
+    fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: Rc<NP_Schema>, buffer: Rc<NP_Memory>) -> Result<Option<Box<Self>>, NP_Error> {
         let addr = kind.get_value() as usize;
 
         // empty value
@@ -1212,27 +1406,30 @@ impl<'a> NP_ValueInto<'a> for NP_UUID {
         })
     }
 
-    fn buffer_to_json(address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: &NP_Memory) -> JFObject {
-        let this_string = Self::buffer_into(address, *kind, schema, buffer);
+    fn buffer_to_json(address: u32, kind: &NP_PtrKinds, schema: Rc<NP_Schema>, buffer: Rc<NP_Memory>) -> NP_JSON {
+        let this_string = Self::buffer_into(address, *kind, Rc::clone(&schema), buffer);
 
         match this_string {
             Ok(x) => {
                 match x {
                     Some(y) => {
-                        JFObject::String(y.to_string())
+                        NP_JSON::String(y.to_string())
                     },
                     None => {
-                        JFObject::Null
+                        match &schema.default {
+                            Some(x) => x.clone(),
+                            None => NP_JSON::Null
+                        }
                     }
                 }
             },
             Err(_e) => {
-                JFObject::Null
+                NP_JSON::Null
             }
         }
     }
 
-    fn buffer_get_size(_address: u32, kind: &'a NP_PtrKinds, _schema: &'a NP_Schema, _buffer: &'a NP_Memory) -> core::result::Result<u32, NP_Error> {
+    fn buffer_get_size(_address: u32, kind: &NP_PtrKinds, _schema: Rc<NP_Schema>, _buffer: Rc<NP_Memory>) -> Result<u32, NP_Error> {
         let addr = kind.get_value() as usize;
 
         if addr == 0 {
@@ -1268,6 +1465,12 @@ impl NP_Option {
     }
 }
 
+impl Default for NP_Option {
+    fn default() -> Self { 
+        NP_Option { value: None }
+     }
+}
+
 impl NP_Value for NP_Option {
 
     fn is_type( type_str: &str) -> bool {
@@ -1277,7 +1480,45 @@ impl NP_Value for NP_Option {
     fn type_idx() -> (i64, String) { (NP_TypeKeys::Enum as i64, "option".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Enum as i64, "option".to_owned()) }
 
-    fn buffer_set(address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, memory: &NP_Memory, value: Box<&Self>) -> core::result::Result<NP_PtrKinds, NP_Error> {
+    fn schema_default(schema: Rc<NP_Schema>) -> Option<Box<Self>> {
+        match &schema.default {
+            Some(x) => {
+                match x {
+                    NP_JSON::Integer(x) => {
+                        match &*schema.kind {
+                            NP_SchemaKinds::Enum { choices } => {
+                                let mut str_value: String = "".to_owned();
+                                let mut ct: i64 = 0;
+
+                                for opt in choices {
+                                    if ct == *x {
+                                        str_value = opt.clone();
+                                    }
+                                    ct += 1;
+                                };
+
+                                Some(Box::new(NP_Option::new(str_value)))
+                            },
+                            _ => {
+                                None
+                            }
+                        }
+                    },
+                    NP_JSON::String(x) => {
+                        Some(Box::new(NP_Option::new(x.clone())))
+                    },
+                    _ => {
+                        None
+                    }
+                }
+            },
+            None => {
+                None
+            }
+        }
+    }
+
+    fn buffer_set(address: u32, kind: &NP_PtrKinds, schema: Rc<NP_Schema>, memory: Rc<NP_Memory>, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
 
         let mut addr = kind.get_value();
         
@@ -1333,17 +1574,7 @@ impl NP_Value for NP_Option {
         }
     }
 
-
-}
-
-impl Default for NP_Option {
-    fn default() -> Self { 
-        NP_Option { value: None }
-     }
-}
-
-impl<'a> NP_ValueInto<'a> for NP_Option {
-    fn buffer_into(_address: u32, kind: NP_PtrKinds, schema: &'a NP_Schema, buffer: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
+    fn buffer_into(_address: u32, kind: NP_PtrKinds, schema: Rc<NP_Schema>, buffer: Rc<NP_Memory>) -> Result<Option<Box<Self>>, NP_Error> {
         let addr = kind.get_value() as usize;
 
         // empty value
@@ -1380,8 +1611,8 @@ impl<'a> NP_ValueInto<'a> for NP_Option {
         }
     }
 
-    fn buffer_to_json(address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: &NP_Memory) -> JFObject {
-        let this_string = Self::buffer_into(address, *kind, schema, buffer);
+    fn buffer_to_json(address: u32, kind: &NP_PtrKinds, schema: Rc<NP_Schema>, buffer: Rc<NP_Memory>) -> NP_JSON {
+        let this_string = Self::buffer_into(address, *kind, Rc::clone(&schema), buffer);
 
         match this_string {
             Ok(x) => {
@@ -1389,23 +1620,31 @@ impl<'a> NP_ValueInto<'a> for NP_Option {
                     Some(y) => {
                         match y.value {
                             Some(str_value) => {
-                                JFObject::String(str_value)
+                                NP_JSON::String(str_value)
                             },
-                            None => JFObject::Null
+                            None => {
+                                match &schema.default {
+                                    Some(x) => x.clone(),
+                                    None => NP_JSON::Null
+                                }
+                            }
                         }
                     },
                     None => {
-                        JFObject::Null
+                        match &schema.default {
+                            Some(x) => x.clone(),
+                            None => NP_JSON::Null
+                        }
                     }
                 }
             },
             Err(_e) => {
-                JFObject::Null
+                NP_JSON::Null
             }
         }
     }
 
-    fn buffer_get_size(_address: u32, kind: &'a NP_PtrKinds, _schema: &'a NP_Schema, _buffer: &'a NP_Memory) -> core::result::Result<u32, NP_Error> {
+    fn buffer_get_size(_address: u32, kind: &NP_PtrKinds, _schema: Rc<NP_Schema>, _buffer: Rc<NP_Memory>) -> Result<u32, NP_Error> {
         let addr = kind.get_value() as usize;
 
         if addr == 0 {
@@ -1428,7 +1667,28 @@ impl NP_Value for bool {
     fn type_idx() -> (i64, String) { (NP_TypeKeys::Boolean as i64, "bool".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Boolean as i64, "bool".to_owned()) }
 
-    fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, memory: &NP_Memory, value: Box<&Self>) -> core::result::Result<NP_PtrKinds, NP_Error> {
+    fn schema_default(schema: Rc<NP_Schema>) -> Option<Box<Self>> {
+        match &schema.default {
+            Some(x) => {
+                match x {
+                    NP_JSON::True => {
+                        Some(Box::new(true))
+                    },
+                    NP_JSON::False => {
+                        Some(Box::new(false))
+                    },
+                    _ => {
+                        None
+                    }
+                }
+            },
+            None => {
+                None
+            }
+        }
+    }
+
+    fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: Rc<NP_Schema>, memory: Rc<NP_Memory>, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
 
         let mut addr = kind.get_value();
 
@@ -1458,11 +1718,7 @@ impl NP_Value for bool {
         
     }
 
-
-}
-
-impl<'a> NP_ValueInto<'a> for bool {
-    fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: &'a NP_Schema, buffer: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
+    fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: Rc<NP_Schema>, buffer: Rc<NP_Memory>) -> Result<Option<Box<Self>>, NP_Error> {
         let addr = kind.get_value() as usize;
 
         // empty value
@@ -1480,31 +1736,34 @@ impl<'a> NP_ValueInto<'a> for bool {
         })
     }
 
-    fn buffer_to_json(address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: &NP_Memory) -> JFObject {
-        let this_string = Self::buffer_into(address, *kind, schema, buffer);
+    fn buffer_to_json(address: u32, kind: &NP_PtrKinds, schema: Rc<NP_Schema>, buffer: Rc<NP_Memory>) -> NP_JSON {
+        let this_string = Self::buffer_into(address, *kind, Rc::clone(&schema), buffer);
 
         match this_string {
             Ok(x) => {
                 match x {
                     Some(y) => {
                         if *y == true {
-                            JFObject::True
+                            NP_JSON::True
                         } else {
-                            JFObject::False
+                            NP_JSON::False
                         }
                     },
                     None => {
-                        JFObject::Null
+                        match &schema.default {
+                            Some(x) => x.clone(),
+                            None => NP_JSON::Null
+                        }
                     }
                 }
             },
             Err(_e) => {
-                JFObject::Null
+                NP_JSON::Null
             }
         }
     }
 
-    fn buffer_get_size(_address: u32, kind: &'a NP_PtrKinds, _schema: &'a NP_Schema, _buffer: &'a NP_Memory) -> core::result::Result<u32, NP_Error> {
+    fn buffer_get_size(_address: u32, kind: &NP_PtrKinds, _schema: Rc<NP_Schema>, _buffer: Rc<NP_Memory>) -> Result<u32, NP_Error> {
         let addr = kind.get_value() as usize;
 
         if addr == 0 {
@@ -1549,7 +1808,28 @@ impl NP_Value for NP_Date {
     fn type_idx() -> (i64, String) { (NP_TypeKeys::Date as i64, "date".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Date as i64, "date".to_owned()) }
 
-    fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: &NP_Schema, memory: &NP_Memory, value: Box<&Self>) -> core::result::Result<NP_PtrKinds, NP_Error> {
+    fn schema_default(schema: Rc<NP_Schema>) -> Option<Box<Self>> {
+        match &schema.default {
+            Some(x) => {
+                match x {
+                    NP_JSON::Float(value) => {
+                        Some(Box::new(NP_Date::new(*value as u64)))
+                    },
+                    NP_JSON::Integer(value) => {
+                        Some(Box::new(NP_Date::new(*value as u64)))
+                    },
+                    _ => {
+                        None
+                    }
+                }
+            },
+            None => {
+                None
+            }
+        }
+    }
+
+    fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: Rc<NP_Schema>, memory: Rc<NP_Memory>, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
 
         let mut addr = kind.get_value();
 
@@ -1574,11 +1854,7 @@ impl NP_Value for NP_Date {
         
     }
 
-
-}
-
-impl<'a> NP_ValueInto<'a> for NP_Date {
-    fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: &'a NP_Schema, buffer: &NP_Memory) -> core::result::Result<Option<Box<Self>>, NP_Error> {
+    fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: Rc<NP_Schema>, buffer: Rc<NP_Memory>) -> Result<Option<Box<Self>>, NP_Error> {
         let addr = kind.get_value() as usize;
 
         // empty value
@@ -1595,27 +1871,30 @@ impl<'a> NP_ValueInto<'a> for NP_Date {
         })
     }
 
-    fn buffer_to_json(address: u32, kind: &NP_PtrKinds, schema: &NP_Schema, buffer: &NP_Memory) -> JFObject {
-        let this_string = Self::buffer_into(address, *kind, schema, buffer);
+    fn buffer_to_json(address: u32, kind: &NP_PtrKinds, schema: Rc<NP_Schema>, buffer: Rc<NP_Memory>) -> NP_JSON {
+        let this_string = Self::buffer_into(address, *kind, Rc::clone(&schema), buffer);
 
         match this_string {
             Ok(x) => {
                 match x {
                     Some(y) => {
-                        JFObject::Float(y.value as f64)
+                        NP_JSON::Float(y.value as f64)
                     },
                     None => {
-                        JFObject::Null
+                        match &schema.default {
+                            Some(x) => x.clone(),
+                            None => NP_JSON::Null
+                        }
                     }
                 }
             },
             Err(_e) => {
-                JFObject::Null
+                NP_JSON::Null
             }
         }
     }
 
-    fn buffer_get_size(_address: u32, kind: &'a NP_PtrKinds, _schema: &'a NP_Schema, _buffer: &'a NP_Memory) -> core::result::Result<u32, NP_Error> {
+    fn buffer_get_size(_address: u32, kind: &NP_PtrKinds, _schema: Rc<NP_Schema>, _buffer: Rc<NP_Memory>) -> Result<u32, NP_Error> {
         let addr = kind.get_value() as usize;
 
         if addr == 0 {

@@ -99,55 +99,39 @@
 //! // creating a new buffer from the `user_factory` schema
 //! // user_buffer contains a serialized Vec<u8> containing our data
 //! 
-//! let user_buffer: Vec<u8> = user_factory.open(NP::new, |mut buffer| {
-//!    
-//!     // open the buffer to read or update values
-//!     let root: NP_Ptr<NP_Table> = buffer.root()?;  // <- type cast the root
-//!         
-//!    // the root of our schema is a collection type (NP_Table), 
-//!    // so we have to collapse the root pointer into the collection type.
-//!    let mut table: NP_Table = root.into()?.unwrap();
+//! let user_vec: Vec<u8> = user_factory.open(NP::new, |mut buffer| {
+//!     
+//!     // set "name" column to "some name"
+//!     buffer.deep_set("name", "some name".to_owned())?;
 //! 
-//!    // Select a column and type cast it. Selected columns can be mutated or read from.
-//!    let mut user_name = table.select::<String>("name")?;
-//! 
-//!    // set value of name column
-//!    user_name.set("some name".to_owned())?;
-//! 
-//!    // select age column and set it's value
-//!    let mut age = table.select::<u16>("age")?;
-//!    age.set(75)?;
-//!
-//!    // done mutating/reading the buffer
-//!    Ok(())
-//! })?;
-//!  
-//! // open the new buffer, `user_buffer`, we just created
-//! // user_buffer_2 contains the serialized Vec<u8>
-//! let user_buffer_2: Vec<u8> = user_factory.open(NP::buffer(user_buffer), |mut buffer| {
-//! 
-//!    let root: NP_Ptr<NP_Table> = buffer.root()?; // open root pointer
-//!         
-//!    // get the table root again
-//!    let mut table = root.into()?.unwrap();
-//! 
-//!    // read the name column
-//!    let mut user_name = table.select::<String>("name")?;
-//!    assert_eq!(user_name.get()?, Some(String::from("some name")));
-//! 
-//!    // password value will be None since we haven't set it.
-//!    let mut password = table.select::<String>("pass")?;
-//!    assert_eq!(password.get()?, None);
-//! 
-//!    // read age value    
-//!    let mut age = table.select::<u16>("age")?;
-//!    assert_eq!(age.get()?, Some(75));    
+//!     // set "age" column to 75
+//!     buffer.deep_set("age", 75u16)?;
 //! 
 //!    // done with the buffer
-//!    Ok(())
+//!    Ok(buffer)
+//! })?;
+//!  
+//! // open the new buffer, `user_vec`, we just created
+//! // user_vec_2 contains the serialized Vec<u8>
+//! let user_vec_2: Vec<u8> = user_factory.open(NP::buffer(user_vec), |mut buffer| {
+//! 
+//!    // read the name column
+//!    let mut user_name = buffer.deep_get::<String>("name")?;
+//!    assert_eq!(user_name, Some(Box::new(String::from("some name"))));
+//! 
+//!    // password value will be None since we haven't set it.
+//!    let mut password = buffer.deep_get::<String>("pass")?;
+//!    assert_eq!(password, None);
+//! 
+//!    // read age value    
+//!    let mut age = buffer.deep_get::<u16>("age")?;
+//!    assert_eq!(age, Some(Box::new(75)));    
+//! 
+//!    // done with the buffer
+//!    Ok(buffer)
 //! })?;
 //! 
-//! // we can now save user_buffer_2 to disk, 
+//! // we can now save user_vec_2 to disk, 
 //! // send it over the network, or whatever else is needed with the data
 //! 
 //! # Ok::<(), NP_Error>(()) 
@@ -200,14 +184,15 @@ use crate::json_flex::json_decode;
 use crate::error::NP_Error;
 use crate::schema::NP_Schema;
 use crate::memory::NP_Memory;
-use buffer::NP_Buffer;
+use buffer::{NP_Compact_Data, NP_Buffer};
 use alloc::vec::Vec;
 use alloc::vec;
 use alloc::{rc::Rc, borrow::ToOwned};
-use json_flex::JFObject;
+use json_flex::NP_JSON;
 use pointer::{any::NP_Any, NP_Ptr};
+use schema::NP_TypeKeys;
 
-const PROTOCOL_VERSION: u8 = 0;
+const PROTOCOL_VERSION: u8 = 1;
 
 
 /// Factories are created from schemas.  Once you have a factory you can use it to decode, encode, edit and compact buffers
@@ -227,50 +212,40 @@ const PROTOCOL_VERSION: u8 = 0;
 ///     "columns": [
 ///         ["name",   {"type": "string"}],
 ///         ["pass",   {"type": "string"}],
-///         ["age",    {"type": "uint16"}]
+///         ["age",    {"type": "uint16"}],
+///         ["todos",  {"type": "list", "of": {"type": "string"}}]
 ///     ]
 /// }"#)?;
 /// 
 /// // user_factory can now be used to make or modify buffers that contain the data in the schema.
 /// 
 /// // create new buffer
-/// let mut user_buffer: Vec<u8> = user_factory.open(NP::new, |mut buffer| {
+/// let mut user_vec: Vec<u8> = user_factory.open(NP::new, |mut buffer| {
+///     
+///     // set the "name" column of the table
+///     buffer.deep_set("name", "Billy".to_owned())?;
 /// 
-///     // get the root pointer
-///     // type cast it to the root type in the schema
-///     let root_pointer: NP_Ptr<NP_Table> = buffer.root()?;
-/// 
-///     // collection types must be converted with "into"
-///     // to make changes
-///     let mut root_table: NP_Table = root_pointer.into()?.unwrap();
-/// 
-///     // now that we have the table object we can grab a column
-///     let mut name_column: NP_Ptr<String> = root_table.select("name")?;
-/// 
-///     // set value for name column
-///     name_column.set("Billy".to_owned());
+///     // set the first todo
+///     buffer.deep_set("todos.0", "Write a rust library.".to_owned())?;
 ///     
 ///     // read column value
-///     assert_eq!(name_column.get()?, Some("Billy".to_owned()));
+///     let name_column = buffer.deep_get::<String>("name")?;
+///     assert_eq!(name_column, Some(Box::new("Billy".to_owned())));
 ///     
 ///     // close buffer
-///     Ok(())
+///     Ok(buffer)
 /// })?;
 /// 
-/// // user_buffer is a Vec<u8> with our data
+/// // user_vec is a Vec<u8> with our data
 /// 
 /// // open buffer and read value
-/// user_buffer = user_factory.open(NP::buffer(user_buffer), |mut buffer| {
+/// user_vec = user_factory.open(NP::buffer(user_vec), |mut buffer| {
 ///
-///     let root_pointer: NP_Ptr<NP_Table> = buffer.root()?;
-///     let mut root_table = root_pointer.into()?.unwrap();
-///     let mut name_column = root_table.select::<String>("name")?;
-///
-///     // read column value
-///     assert_eq!(name_column.get()?, Some("Billy".to_owned()));
+///     let name_column = buffer.deep_get::<String>("name")?;
+///     assert_eq!(name_column, Some(Box::new("Billy".to_owned())));
 /// 
 ///     // close buffer
-///     Ok(())
+///     Ok(buffer)
 /// })?;
 /// 
 /// # Ok::<(), NP_Error>(()) 
@@ -309,12 +284,6 @@ impl NP {
     }
 }
 
-pub struct NP_Compact_Data {
-    pub old_buffer_size: u32,
-    pub new_buffer_size: u32,
-    pub wasted_bytes: u32
-}
-
 
 impl NP_Factory {
 
@@ -335,27 +304,33 @@ impl NP_Factory {
     }
 
     pub fn open<F>(&self, buffer: NP, mut callback: F) -> Result<Vec<u8>, NP_Error>
-        where F: FnMut(NP_Buffer) -> Result<(), NP_Error>
+        where F: FnMut(NP_Buffer) -> Result<NP_Buffer, NP_Error>
     {   
-        let use_buffer = match buffer {
-            NP::buffer(x) => x,
-            NP::size(x) => {
-                self.new_buffer(Some(x as usize))
-            }
-            NP::new => {
-                self.new_buffer(None)
-            }
+
+        let bytes = {
+
+            let use_buffer = match buffer {
+                NP::buffer(x) => x,
+                NP::size(x) => {
+                    NP_Factory::new_buffer(Some(x as usize))
+                }
+                NP::new => {
+                    NP_Factory::new_buffer(None)
+                }
+            };
+    
+            let bytes = Rc::new(NP_Memory::new(use_buffer));
+    
+            let buffer = callback(NP_Buffer::new(Rc::clone(&self.schema), Rc::clone(&bytes)))?;
+
+            buffer
         };
 
-        let bytes = NP_Memory::new(use_buffer);
-
-        callback(NP_Buffer::new(&self.schema, &bytes))?;
-
-        Ok(bytes.dump())
+        Ok(Rc::try_unwrap(bytes.memory).unwrap().dump())
     }
 
     #[doc(hidden)]
-    pub fn new_buffer(&self, capacity: Option<usize>) -> Vec<u8> {
+    pub fn new_buffer(capacity: Option<usize>) -> Vec<u8> {
 
         let use_size = match capacity {
             Some(x) => x,
@@ -372,98 +347,99 @@ impl NP_Factory {
         new_bytes
     }
 
-    pub fn maybe_compact<F>(&self, buffer: Vec<u8>, new_capacity: Option<u32>, mut callback: F) -> Result<Vec<u8>, NP_Error> where F: FnMut(NP_Compact_Data) -> bool {
+    pub fn maybe_compact<F>(&self, buffer: Vec<u8>, new_capacity: Option<u32>, callback: F) -> Result<Vec<u8>, NP_Error> where F: FnMut(NP_Compact_Data) -> bool {
 
-        let old_bytes = NP_Memory::new(buffer);
-        let old_root = NP_Ptr::<NP_Any>::new_standard_ptr(1, &self.schema, &old_bytes);
+        let result = {
+            let bytes = Rc::new(NP_Memory::new(buffer));
 
-        let wasted_bytes = NP_Buffer::new(&self.schema, &old_bytes).calc_wasted_bytes()?;
-
-        let old_size = old_bytes.read_bytes().len() as u32;
-
-        let compact_data = NP_Compact_Data { 
-            old_buffer_size: old_size,
-            new_buffer_size: if old_size > wasted_bytes { old_size - wasted_bytes } else  { 0 },
-            wasted_bytes: wasted_bytes
+            let buffer = NP_Buffer::new(Rc::clone(&self.schema), bytes);
+    
+            buffer.maybe_compact(new_capacity, callback)?
         };
 
-        let do_compact = callback(compact_data);
-
-        Ok(if do_compact {
-
-            let capacity = match new_capacity {
-                Some(x) => { x as usize },
-                None => old_bytes.read_bytes().len()
-            };
-
-            let new_vec: Vec<u8> = self.new_buffer(Some(capacity));
-            let new_bytes = NP_Memory::new(new_vec);
-            let new_root = NP_Ptr::<NP_Any>::new_standard_ptr(1, &self.schema, &new_bytes);
-    
-            old_root._compact(new_root)?;
-
-            new_bytes.dump()
-        } else {
-            old_bytes.dump()
-        })
+        let bytes = Rc::try_unwrap(result.memory).unwrap().dump();
+        Ok(bytes)
     }
 
     pub fn compact(&self, new_capacity: Option<u32>, buffer: Vec<u8>) -> Result<Vec<u8>, NP_Error> {
 
-        let capacity = match new_capacity {
-            Some(x) => { x as usize },
-            None => buffer.len()
+        let result = {
+            let bytes = Rc::new(NP_Memory::new(buffer));
+
+            let buffer = NP_Buffer::new(Rc::clone(&self.schema), bytes);
+    
+            buffer.compact(new_capacity)?
         };
 
-        let old_bytes = NP_Memory::new(buffer);
-        let old_root = NP_Ptr::<NP_Any>::new_standard_ptr(1, &self.schema, &old_bytes);
-
-        let new_bytes = NP_Memory::new(self.new_buffer(Some(capacity)));
-        let new_root = NP_Ptr::<NP_Any>::new_standard_ptr(1, &self.schema, &new_bytes);
-
-        old_root._compact(new_root)?;
-        
-        Ok(new_bytes.dump())
+        let bytes = Rc::try_unwrap(result.memory).unwrap().dump();
+        Ok(bytes)
     }
 
-    pub fn json_encode(&self, buffer: Vec<u8>) -> (JFObject, Vec<u8>) {
-        let bytes = NP_Memory::new(buffer);
+    pub fn json_encode(&self, buffer: Vec<u8>) -> (NP_JSON, Vec<u8>) {
+        let bytes = Rc::new(NP_Memory::new(buffer));
 
-        let root = NP_Ptr::<NP_Any>::new_standard_ptr(1, &self.schema, &bytes);
+        let json_data = {
+            let root = NP_Ptr::<NP_Any>::new_standard_ptr(1, Rc::clone(&self.schema), Rc::clone(&bytes));
+            root.json_encode()
+        };
 
-        (root.json_encode(), bytes.dump())
+        (json_data, Rc::try_unwrap(bytes).unwrap().dump())
     }
 
-    pub fn extract<X: NP_Value + Default, F>(&self, buffer: Vec<u8>, mut callback: F) -> Result<(X, Vec<u8>), NP_Error> 
+    pub fn extract_scalar<X: NP_Value + Default, F>(&self, buffer: Vec<u8>, mut callback: F) -> Result<(X, Vec<u8>), NP_Error> 
         where F: FnMut(NP_Buffer) -> Result<X, NP_Error>
     {
-        let bytes = NP_Memory::new(buffer);
 
-        let result = callback(NP_Buffer::new(&self.schema, &bytes))?;
+        match NP_TypeKeys::from(X::type_idx().0) {
+            NP_TypeKeys::Table => { Err(NP_Error::new("Can't extract table type!")) },
+            NP_TypeKeys::Map => { Err(NP_Error::new("Can't extract map type!")) },
+            NP_TypeKeys::List => { Err(NP_Error::new("Can't extract list type!")) },
+            NP_TypeKeys::Tuple => { Err(NP_Error::new("Can't extract tuple type!")) },
+            _ => {
+                let bytes = Rc::new(NP_Memory::new(buffer));
+                let result = {
+                    callback(NP_Buffer::new(Rc::clone(&self.schema), Rc::clone(&bytes)))?
+                };
+                Ok((result, Rc::try_unwrap(bytes).unwrap().dump()))
+            }
+        }
 
-        Ok((result, bytes.dump()))
     }
 
-    pub fn deep_set<X: NP_Value + Default, S: AsRef<str>>(&mut self, buffer: Vec<u8>, path: S, value: X) -> Result<Vec<u8>, NP_Error> {
+    pub fn deep_clear(&self, buffer: Vec<u8>,  path: &str) -> Result<Vec<u8>, NP_Error> {
+        let bytes = Rc::new(NP_Memory::new(buffer));
+
+        let result = {
+            let buffer = NP_Buffer::new(Rc::clone(&self.schema), Rc::clone(&bytes));
+            buffer.deep_clear(path)?
+        };
+ 
+        Ok(Rc::try_unwrap(bytes).unwrap().dump())
+    }
+    
+    pub fn deep_set<X: NP_Value + Default>(&self, buffer: Vec<u8>, path: &str, value: X) -> Result<Vec<u8>, NP_Error> {
         
-        let bytes = NP_Memory::new(buffer);
+        let bytes = Rc::new(NP_Memory::new(buffer));
 
-        let mut buffer = NP_Buffer::new(&self.schema, &bytes);
-
-        buffer.deep_set(path, value)?;
+        {
+            let mut buffer = NP_Buffer::new(Rc::clone(&self.schema), Rc::clone(&bytes));
+            buffer._deep_set_scalar(path, value)?;
+        }
  
-        Ok(bytes.dump())
+        Ok(Rc::try_unwrap(bytes).unwrap().dump())
     }
 
-    pub fn deep_get<X: NP_Value + Default, S: AsRef<str>>(&self, buffer: Vec<u8>,  path: S) -> Result<(Option<Box<X>>, Vec<u8>), NP_Error> {
-        let bytes = NP_Memory::new(buffer);
+    pub fn deep_get<X: NP_Value + Default>(&self, buffer: Vec<u8>,  path: &str) -> Result<(Option<Box<X>>, Vec<u8>), NP_Error> {
+        let bytes = Rc::new(NP_Memory::new(buffer));
 
-        let buffer = NP_Buffer::new(&self.schema, &bytes);
-
-        let result = buffer.deep_get(path)?;
+        let result = {
+            let buffer = NP_Buffer::new(Rc::clone(&self.schema), Rc::clone(&bytes));
+            buffer._deep_get_scalar(path)?
+        };
  
-        Ok((result, bytes.dump()))
+        Ok((result, Rc::try_unwrap(bytes).unwrap().dump()))
     }
+    
 }
 
 #[cfg(test)]
@@ -473,24 +449,30 @@ mod tests {
     use crate::pointer::NP_Ptr;
     use crate::collection::table::NP_Table;
     use collection::{map::NP_Map, list::NP_List};*/
+    use crate::collection::list::NP_List;
     use super::*;
+    use collection::table::NP_Table;
 
 
     #[test]
     fn it_works() -> core::result::Result<(), NP_Error> {
 
-        /*
+
         let factory: NP_Factory = NP_Factory::new(r#"{
             "type": "list",
             "of": {
-                "type": "string"
+                "type": "table",
+                "columns": [
+                    ["name", {"type": "string", "default": "no name"}],
+                    ["age",  {"type": "u16", "default": 10}]
+                ]
             }
         }"#)?;
-
+/*
         
         let return_buffer = factory.open(NP::new, |mut buffer| {
 
-            let root: NP_Ptr<NP_List<String>> = buffer.root()?;
+            /*let root: NP_Ptr<NP_List<String>> = buffer.root()?;
 
             let mut list = root.into()?.unwrap();
 
@@ -505,9 +487,41 @@ mod tests {
 
             println!("WASTED BYTES: {}", buffer.calc_wasted_bytes()?);
 
-            Ok(())
+            Ok(())*/
+            buffer.deep_set("10.name", "something".to_owned())?;
+            buffer.deep_set("10.name", "someth\"ing22".to_owned())?;
+            buffer.deep_set("9.age", 45u16)?;
+            println!("Size: {}", buffer.calc_wasted_bytes()?);
+            let mut buffer = buffer.compact(None)?;
+
+            let root = buffer.root::<NP_List<NP_Table>>()?;
+
+            println!("JSON: {}", root.json_encode().to_string());
+
+            // println!("JSON: {:?}", json.get::<NP_JSON>()?);
+
+            // let list = buffer.deep_get::<String>("2.name")?.unwrap();
+
+            // let mut table = list.select::<u16>("age")?.into()?.unwrap();
+
+            // let column = table.select::<String>("name")?;
+            // println!("VALUE: {}", list);
+
+            // buffer.deep_set("20", "something2".to_owned())?;
+            Ok(buffer)
         })?;
 
+        let (value, buffer) = factory.deep_get::<NP_JSON>(return_buffer, "10")?;
+
+        println!("name: {} {:?}", value.unwrap().to_string(), buffer);
+
+        // let buffer2 = factory.deep_set::<String>(return_buffer, "15", "hello, world".to_owned())?;
+
+        // println!("value {:?}", factory.deep_get::<String>(return_buffer, "10.name")?);
+
+*/
+
+        /*
         println!("BYTES: {}: {:?}", return_buffer.len(), return_buffer);
 
         let mut compacted = factory.compact(None, return_buffer)?;

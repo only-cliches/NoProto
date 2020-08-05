@@ -7,6 +7,7 @@
 //! Changes:
 //! - Library has been converted & stripped for no_std use
 //! - All code paths that can panic have been replaced with proper error handling
+//! - Additions that are needed for this librarie's use case
 //! - Some minor optimizations
 //! 
 //! The MIT License (MIT)
@@ -33,6 +34,7 @@
 //! SOFTWARE.
 
 
+use alloc::rc::Rc;
 use alloc::vec::Vec;
 use alloc::string::String;
 use alloc::boxed::Box;
@@ -40,54 +42,54 @@ use alloc::borrow::ToOwned;
 use alloc::string::ToString;
 use core::str::FromStr;
 use core::ops::Index;
-use crate::error::NP_Error;
+use crate::{pointer::{NP_PtrKinds, NP_Value, NP_Ptr, any::NP_Any}, error::NP_Error, schema::{NP_TypeKeys, NP_Schema}, memory::NP_Memory};
 
 #[derive(Debug)]
-pub struct JFMap<T> {
-    pub data: Vec<(String, T)>
+pub struct JSMAP<T> {
+    pub values: Vec<(String, T)>
 }
 
-impl<T> JFMap<T> {
+impl<T> JSMAP<T> {
 
     pub fn new() -> Self {
-        JFMap { data: Vec::new() }
+        JSMAP { values: Vec::new() }
     }
 
     pub fn insert(&mut self, key: String, value: T) -> usize {
 
-        for x in 0..self.data.len() {
-            if self.data[x].0 == key {
-                self.data[x] = (key, value);
+        for x in 0..self.values.len() {
+            if self.values[x].0 == key {
+                self.values[x] = (key, value);
                 return x;
             }
         }
 
-        self.data.push((key, value));
+        self.values.push((key, value));
 
-        self.data.len()
+        self.values.len()
     }
 
     pub fn get_mut(&mut self, key: &str) -> Option<&mut T> {
-        for x in 0..self.data.len() {
-            if self.data[x].0 == *key {
-                return Some(&mut self.data[x].1);
+        for x in 0..self.values.len() {
+            if self.values[x].0 == *key {
+                return Some(&mut self.values[x].1);
             }
         }
         None
     }
 
     pub fn get(&self, key: &str) -> Option<&T> {
-        for x in 0..self.data.len() {
-            if self.data[x].0 == *key {
-                return Some(&self.data[x].1);
+        for x in 0..self.values.len() {
+            if self.values[x].0 == *key {
+                return Some(&self.values[x].1);
             }
         }
         None
     }
 
     pub fn has(&self, key: &str) -> bool {
-        for x in 0..self.data.len() {
-            if self.data[x].0 == *key {
+        for x in 0..self.values.len() {
+            if self.values[x].0 == *key {
                 return true;
             }
         }
@@ -96,141 +98,202 @@ impl<T> JFMap<T> {
 }
 
 #[derive(Debug)]
-pub enum JFObject {
+pub enum NP_JSON {
     String(String),
     Integer(i64),
     Float(f64),
-    Dictionary(JFMap<JFObject>),
-    Array(Vec<JFObject>),
+    Dictionary(JSMAP<NP_JSON>),
+    Array(Vec<NP_JSON>),
     Null,
     False,
     True,
 }
 
-impl JFObject {
+impl NP_Value for NP_JSON {
+    fn type_idx() -> (i64, String) { (NP_TypeKeys::JSON as i64, "json".to_owned()) }
+    fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::JSON as i64, "json".to_owned()) }
+    fn buffer_into(address: u32, _kind: NP_PtrKinds, schema: Rc<NP_Schema>, buffer: Rc<NP_Memory>) -> Result<Option<Box<Self>>, NP_Error> {
+        let root = NP_Ptr::<NP_Any>::new_standard_ptr(address, Rc::clone(&schema), Rc::clone(&buffer));
+        Ok(Some(Box::new(root.json_encode())))
+    }
+}
+
+impl Default for NP_JSON { 
+    fn default() -> Self { 
+        NP_JSON::Null
+     }
+}
+
+
+impl NP_JSON {
+    pub fn clone(&self) -> NP_JSON {
+
+        match self {
+            NP_JSON::Dictionary(map) => {
+                let mut new_map = JSMAP::<NP_JSON>::new();
+
+                for item in &map.values {
+                    let cloned = {
+                        (
+                            item.0.clone(),
+                            item.1.clone()
+                        )
+                    };
+                    new_map.values.push(cloned);
+                }
+
+                NP_JSON::Dictionary(new_map)
+            },
+            NP_JSON::Array(list) => {
+                let mut array = Vec::new();
+                for item in list {
+                    array.push(item.clone());
+                }
+                NP_JSON::Array(array)
+            },
+            NP_JSON::String(strng) => {
+                NP_JSON::String(strng.clone())
+            },
+            NP_JSON::Integer(int) => {
+                NP_JSON::Integer(*int)
+            },
+            NP_JSON::Float(num) => {
+                NP_JSON::Float(*num)
+            },
+            NP_JSON::Null => {
+                NP_JSON::Null
+            },
+            NP_JSON::False => {
+                NP_JSON::False
+            },
+            NP_JSON::True => {
+                NP_JSON::True
+            },
+        }
+    }
     pub fn into_string(&self) -> Option<&String> {
         match self {
-            &JFObject::String(ref v) => Some(v),
+            &NP_JSON::String(ref v) => Some(v),
             _ => None,
         }
     }
     pub fn into_i64(&self) -> Option<&i64> {
         match self {
-            &JFObject::Integer(ref v) => Some(v),
+            &NP_JSON::Integer(ref v) => Some(v),
             _ => None,
         }
     }
     pub fn into_f64(&self) -> Option<&f64> {
         match self {
-            &JFObject::Float(ref v) => Some(v),
+            &NP_JSON::Float(ref v) => Some(v),
             _ => None,
         }
     }
-    pub fn into_hashmap(&self) -> Option<&JFMap<JFObject>> {
+    pub fn into_hashmap(&self) -> Option<&JSMAP<NP_JSON>> {
         match self {
-            &JFObject::Dictionary(ref v) => Some(v),
+            &NP_JSON::Dictionary(ref v) => Some(v),
             _ => None,
         }
     }
-    pub fn into_vec(&self) -> Option<&Vec<JFObject>> {
+    pub fn into_vec(&self) -> Option<&Vec<NP_JSON>> {
         match self {
-            &JFObject::Array(ref v) => Some(v),
+            &NP_JSON::Array(ref v) => Some(v),
             _ => None,
         }
     }
     pub fn is_null(&self) -> bool {
         match self {
-            &JFObject::Null => true,
+            &NP_JSON::Null => true,
             _ => false,
         }
     }
     pub fn is_true(&self) -> bool {
         match self {
-            &JFObject::True => true,
+            &NP_JSON::True => true,
             _ => false,
         }
     }
     pub fn is_false(&self) -> bool {
         match self {
-            &JFObject::False => true,
+            &NP_JSON::False => true,
             _ => false,
         }
     }
     pub fn is_array(&self) -> bool {
         match self {
-            &JFObject::Array(_) => true,
+            &NP_JSON::Array(_) => true,
             _ => false,
         }
     }
     pub fn is_dictionary(&self) -> bool {
         match self {
-            &JFObject::Dictionary(_) => true,
+            &NP_JSON::Dictionary(_) => true,
             _ => false,
         }
     }
     pub fn is_string(&self) -> bool {
         match self {
-            &JFObject::String(_) => true,
+            &NP_JSON::String(_) => true,
             _ => false,
         }
     }
     pub fn is_integer(&self) -> bool {
         match self {
-            &JFObject::Integer(_) => true,
+            &NP_JSON::Integer(_) => true,
             _ => false,
         }
     }
     pub fn is_float(&self) -> bool {
         match self {
-            &JFObject::Float(_) => true,
+            &NP_JSON::Float(_) => true,
             _ => false,
         }
     }
     pub fn unwrap_string(&self) -> Option<&String> {
         match self {
-            &JFObject::String(ref v) => Some(v),
+            &NP_JSON::String(ref v) => Some(v),
             _ => None,
         }
     }
     pub fn unwrap_i64(&self) -> Option<&i64> {
         match self {
-            &JFObject::Integer(ref v) => Some(v),
+            &NP_JSON::Integer(ref v) => Some(v),
             _ => None,
         }
     }
     pub fn unwrap_f64(&self) -> Option<&f64> {
         match self {
-            &JFObject::Float(ref v) => Some(v),
+            &NP_JSON::Float(ref v) => Some(v),
             _ => None,
         }
     }
-    pub fn unwrap_hashmap(&self) -> Option<&JFMap<JFObject>> {
+    pub fn unwrap_hashmap(&self) -> Option<&JSMAP<NP_JSON>> {
         match self {
-            &JFObject::Dictionary(ref v) => Some(v),
+            &NP_JSON::Dictionary(ref v) => Some(v),
             _ => None,
         }
     }
-    pub fn unwrap_vec(&self) -> Option<&Vec<JFObject>> {
+    pub fn unwrap_vec(&self) -> Option<&Vec<NP_JSON>> {
         match self {
-            &JFObject::Array(ref v) => Some(v),
+            &NP_JSON::Array(ref v) => Some(v),
             _ => None,
         }
     }
 
-    pub fn to_json(&self) -> String {
+    pub fn to_string(&self) -> String {
         match self {
-            &JFObject::String(ref v) => {
+            &NP_JSON::String(ref v) => {
                 let mut string: String = "\"".to_owned();
-                string.push_str(v);
+                string.push_str(v.replace("\"", "\\\"").as_str());
                 string.push_str("\"");
                 string
             },
-            &JFObject::Integer(ref v) => v.to_string(),
-            &JFObject::Float(ref v) => v.to_string(),
-            &JFObject::Dictionary(ref v) => {
+            &NP_JSON::Integer(ref v) => v.to_string(),
+            &NP_JSON::Float(ref v) => v.to_string(),
+            &NP_JSON::Dictionary(ref v) => {
                 let mut string: String = "{".to_owned();
                 let mut is_first = true;
-                for (k, v) in &v.data {
+                for (k, v) in &v.values {
                     if is_first {
                         is_first = false;
                     } else {
@@ -240,12 +303,12 @@ impl JFObject {
                     substring.push_str(k);
                     substring.push_str("\":");
                     string.push_str(substring.as_str());
-                    string.push_str(&v.to_json());
+                    string.push_str(&v.to_string());
                 }
                 string.push_str("}");
                 string
             }
-            &JFObject::Array(ref v) => {
+            &NP_JSON::Array(ref v) => {
                 let mut string: String = "".to_owned();
                 let mut is_first = true;
                 for i in v {
@@ -254,74 +317,74 @@ impl JFObject {
                     } else {
                         string.push(',');
                     }
-                    string.push_str(&i.to_json());
+                    string.push_str(&i.to_string());
                 }
                 let mut return_string = "[".to_owned();
                 return_string.push_str(string.as_str());
                 return_string.push_str("]");
                 return_string
             }
-            &JFObject::Null => "null".to_owned(),
-            &JFObject::False => "false".to_owned(),
-            &JFObject::True => "true".to_owned(),
+            &NP_JSON::Null => "null".to_owned(),
+            &NP_JSON::False => "false".to_owned(),
+            &NP_JSON::True => "true".to_owned(),
         }
     }
 }
 
-impl Index<usize> for JFObject {
-    type Output = JFObject;
+impl Index<usize> for NP_JSON {
+    type Output = NP_JSON;
     fn index<'a>(&'a self, id: usize) -> &'a Self::Output {
         match self.into_vec() {
             Some(x) => {
                 match x.get(id) {
                     Some(y) => y,
-                    None => &JFObject::Null
+                    None => &NP_JSON::Null
                 }
             },
-            None => &JFObject::Null
+            None => &NP_JSON::Null
         }
     }
 }
 
-impl Index<String> for JFObject {
-    type Output = JFObject;
+impl Index<String> for NP_JSON {
+    type Output = NP_JSON;
     fn index<'a>(&'a self, id: String) -> &'a Self::Output {
         match self.into_hashmap() {
             Some(x) => {
                 match x.get(id.as_str()) {
                     Some(y) => y,
-                    None => &JFObject::Null
+                    None => &NP_JSON::Null
                 }
             },
-            None => &JFObject::Null
+            None => &NP_JSON::Null
         }
     }
 }
 
-impl<'a> Index<&'a str> for JFObject {
-    type Output = JFObject;
+impl<'a> Index<&'a str> for NP_JSON {
+    type Output = NP_JSON;
     fn index<'b>(&'b self, id: &str) -> &'b Self::Output {
         match self.into_hashmap() {
             Some(x) => {
                 match x.get(&id.to_owned()) {
                     Some(y) => y,
-                    None => &JFObject::Null
+                    None => &NP_JSON::Null
                 }
             },
-            None => &JFObject::Null
+            None => &NP_JSON::Null
         }
     }
 }
 
 
-fn recursive(v: &mut JFObject,
+fn recursive(v: &mut NP_JSON,
              a_chain: Vec<i64>,
              d_chain: Vec<String>,
              mut a_nest: i64,
              mut d_nest: i64,
              last_chain: char,
              last_c: char,
-             func: fn(&mut JFObject,
+             func: fn(&mut NP_JSON,
                       Option<String>,
                       Vec<i64>,
                       Vec<String>,
@@ -335,7 +398,7 @@ fn recursive(v: &mut JFObject,
 
     let is_find = match *v {
 
-        JFObject::Array(ref mut vvz) => {
+        NP_JSON::Array(ref mut vvz) => {
             let i = *NP_Error::unwrap(a_chain.get(a_nest as usize))?;
             let is_find: bool = {
                 let vvv = vvz.get_mut(i as usize);
@@ -364,11 +427,11 @@ fn recursive(v: &mut JFObject,
             is_find
         }
 
-        JFObject::Dictionary(ref mut vv) => {
+        NP_JSON::Dictionary(ref mut vv) => {
             let o_key = d_chain.get(d_nest as usize);
             match o_key {
                 Some(ref key) => {
-                    let vvv: Option<&mut JFObject> = vv.get_mut(*key);              
+                    let vvv: Option<&mut NP_JSON> = vv.get_mut(*key);              
 
                     let is_find: bool = match vvv {
                         Some(mut vvvv) => {
@@ -408,9 +471,9 @@ fn recursive(v: &mut JFObject,
     Ok(is_find)
 }
 
-pub fn json_decode(text: String) -> Result<Box<JFObject>, NP_Error> {
+pub fn json_decode(text: String) -> Result<Box<NP_JSON>, NP_Error> {
 
-    let mut ret = Box::new(JFObject::Null);
+    let mut ret = Box::new(NP_JSON::Null);
 
     let mut pos: usize = 0;
 
@@ -474,8 +537,8 @@ pub fn json_decode(text: String) -> Result<Box<JFObject>, NP_Error> {
 
                         let is_root = match *ret {
 
-                            JFObject::Null => {
-                                *ret = JFObject::Array(Vec::new());
+                            NP_JSON::Null => {
+                                *ret = NP_JSON::Array(Vec::new());
                                 true
                             }
 
@@ -486,7 +549,7 @@ pub fn json_decode(text: String) -> Result<Box<JFObject>, NP_Error> {
                             let a_nest = 0i64;
                             let d_nest = 0i64;
                             let log: String = "".to_owned();
-                            fn func(v: &mut JFObject,
+                            fn func(v: &mut NP_JSON,
                                     _: Option<String>,
                                     _: Vec<i64>,
                                     d_chain: Vec<String>,
@@ -494,12 +557,12 @@ pub fn json_decode(text: String) -> Result<Box<JFObject>, NP_Error> {
                                     _: i64,
                                     _: char) -> Result<(), NP_Error> {
                                 match *v {
-                                    JFObject::Array(ref mut vv) => {
-                                        vv.push(JFObject::Array(Vec::new()));
+                                    NP_JSON::Array(ref mut vv) => {
+                                        vv.push(NP_JSON::Array(Vec::new()));
                                     }
-                                    JFObject::Dictionary(ref mut vv) => {
+                                    NP_JSON::Dictionary(ref mut vv) => {
                                         let key = NP_Error::unwrap(d_chain.last())?.clone();
-                                        vv.insert(key, JFObject::Array(Vec::new()));
+                                        vv.insert(key, NP_JSON::Array(Vec::new()));
                                     }
                                     _ => {}
                                 };
@@ -537,7 +600,7 @@ pub fn json_decode(text: String) -> Result<Box<JFObject>, NP_Error> {
                         let a_nest = 0i64;
                         let d_nest = 0i64;
                         let log: String = "".to_owned();
-                        fn func(v: &mut JFObject,
+                        fn func(v: &mut NP_JSON,
                                 _: Option<String>,
                                 _: Vec<i64>,
                                 _: Vec<String>,
@@ -545,8 +608,8 @@ pub fn json_decode(text: String) -> Result<Box<JFObject>, NP_Error> {
                                 _: i64,
                                 _: char) -> Result<(), NP_Error> {
                             match *v {
-                                JFObject::Array(ref mut vv) => {
-                                    vv.push(JFObject::True);
+                                NP_JSON::Array(ref mut vv) => {
+                                    vv.push(NP_JSON::True);
                                 }
                                 _ => {}
                             };
@@ -581,7 +644,7 @@ pub fn json_decode(text: String) -> Result<Box<JFObject>, NP_Error> {
                         let a_nest = 0i64;
                         let d_nest = 0i64;
                         let log: String = "".to_owned();
-                        fn func(v: &mut JFObject,
+                        fn func(v: &mut NP_JSON,
                                 _: Option<String>,
                                 _: Vec<i64>,
                                 _: Vec<String>,
@@ -589,8 +652,8 @@ pub fn json_decode(text: String) -> Result<Box<JFObject>, NP_Error> {
                                 _: i64,
                                 _: char) -> Result<(), NP_Error> {
                             match *v {
-                                JFObject::Array(ref mut vv) => {
-                                    vv.push(JFObject::False);
+                                NP_JSON::Array(ref mut vv) => {
+                                    vv.push(NP_JSON::False);
                                 }
                                 _ => {}
                             };
@@ -626,7 +689,7 @@ pub fn json_decode(text: String) -> Result<Box<JFObject>, NP_Error> {
                         let a_nest = 0i64;
                         let d_nest = 0i64;
                         let log: String = "".to_owned();
-                        fn func(v: &mut JFObject,
+                        fn func(v: &mut NP_JSON,
                                 _: Option<String>,
                                 _: Vec<i64>,
                                 _: Vec<String>,
@@ -634,8 +697,8 @@ pub fn json_decode(text: String) -> Result<Box<JFObject>, NP_Error> {
                                 _: i64,
                                 _: char) -> Result<(), NP_Error> {
                             match *v {
-                                JFObject::Array(ref mut vv) => {
-                                    vv.push(JFObject::Null);
+                                NP_JSON::Array(ref mut vv) => {
+                                    vv.push(NP_JSON::Null);
                                 }
                                 _ => {}
                             };
@@ -666,7 +729,7 @@ pub fn json_decode(text: String) -> Result<Box<JFObject>, NP_Error> {
                         let a_nest = 0i64;
                         let d_nest = 0i64;
                         let log: String = "".to_owned();
-                        fn func(v: &mut JFObject,
+                        fn func(v: &mut NP_JSON,
                                 value: Option<String>,
                                 _: Vec<i64>,
                                 _: Vec<String>,
@@ -674,15 +737,15 @@ pub fn json_decode(text: String) -> Result<Box<JFObject>, NP_Error> {
                                 _: i64,
                                 _: char) -> Result<(), NP_Error> {
                             match *v {
-                                JFObject::Array(ref mut vv) => {
+                                NP_JSON::Array(ref mut vv) => {
 
                                     let mut new_num = NP_Error::unwrap(value)?;
                                     NP_Error::unwrap(new_num.pop())?;
                                     new_num = new_num.trim().to_string();
 
                                     match new_num.find('.') {
-                                        Some(_) => vv.push( JFObject::Float(f64::from_str(&new_num.clone())?) ),
-                                        None    => vv.push( JFObject::Integer(i64::from_str(&new_num.clone())?) ),
+                                        Some(_) => vv.push( NP_JSON::Float(f64::from_str(&new_num.clone())?) ),
+                                        None    => vv.push( NP_JSON::Integer(i64::from_str(&new_num.clone())?) ),
                                     };
                                 }
                                 _ => {}
@@ -717,7 +780,7 @@ pub fn json_decode(text: String) -> Result<Box<JFObject>, NP_Error> {
                             let a_nest = 0i64;
                             let d_nest = 0i64;
                             let log: String = "".to_owned();
-                            fn func(v: &mut JFObject,
+                            fn func(v: &mut NP_JSON,
                                     _: Option<String>,
                                     _: Vec<i64>,
                                     _: Vec<String>,
@@ -725,8 +788,8 @@ pub fn json_decode(text: String) -> Result<Box<JFObject>, NP_Error> {
                                     _: i64,
                                     _: char) -> Result<(), NP_Error> {
                                 match *v {
-                                    JFObject::Array(ref mut vv) => {
-                                        vv.push(JFObject::Null);
+                                    NP_JSON::Array(ref mut vv) => {
+                                        vv.push(NP_JSON::Null);
                                     }
                                     _ => {}
                                 };
@@ -774,7 +837,7 @@ pub fn json_decode(text: String) -> Result<Box<JFObject>, NP_Error> {
                         let d_nest = 0i64;
                         let log: String = "".to_owned();
 
-                        fn func(v: &mut JFObject,
+                        fn func(v: &mut NP_JSON,
                                 _: Option<String>,
                                 _: Vec<i64>,
                                 d_chain: Vec<String>,
@@ -782,12 +845,12 @@ pub fn json_decode(text: String) -> Result<Box<JFObject>, NP_Error> {
                                 _: i64,
                                 _: char) -> Result<(), NP_Error> {
                             match *v {
-                                JFObject::Array(ref mut vv) => {
-                                    vv.push(JFObject::Dictionary(JFMap::new()));
+                                NP_JSON::Array(ref mut vv) => {
+                                    vv.push(NP_JSON::Dictionary(JSMAP::new()));
                                 }
-                                JFObject::Dictionary(ref mut vv) => {
+                                NP_JSON::Dictionary(ref mut vv) => {
                                     let key = NP_Error::unwrap(d_chain.last())?.clone();
-                                    vv.insert(key, JFObject::Dictionary(JFMap::new()));
+                                    vv.insert(key, NP_JSON::Dictionary(JSMAP::new()));
                                 }
                                 _ => {}
                             };
@@ -814,8 +877,8 @@ pub fn json_decode(text: String) -> Result<Box<JFObject>, NP_Error> {
 
 
                         let is_root = match *ret {
-                            JFObject::Null => {
-                                *ret = JFObject::Dictionary(JFMap::new());
+                            NP_JSON::Null => {
+                                *ret = NP_JSON::Dictionary(JSMAP::new());
                                 true
                             }
                             _ => false,
@@ -825,7 +888,7 @@ pub fn json_decode(text: String) -> Result<Box<JFObject>, NP_Error> {
                             let a_nest = 0i64;
                             let d_nest = 0i64;
                             let log: String = "".to_owned();
-                            fn func(v: &mut JFObject,
+                            fn func(v: &mut NP_JSON,
                                     _: Option<String>,
                                     _: Vec<i64>,
                                     d_chain: Vec<String>,
@@ -833,12 +896,12 @@ pub fn json_decode(text: String) -> Result<Box<JFObject>, NP_Error> {
                                     _: i64,
                                     _: char) -> Result<(), NP_Error> {
                                 match *v {
-                                    JFObject::Array(ref mut vv) => {
-                                        vv.push(JFObject::Dictionary(JFMap::new()));
+                                    NP_JSON::Array(ref mut vv) => {
+                                        vv.push(NP_JSON::Dictionary(JSMAP::new()));
                                     }
-                                    JFObject::Dictionary(ref mut vv) => {
+                                    NP_JSON::Dictionary(ref mut vv) => {
                                         let key = NP_Error::unwrap(d_chain.last())?.clone();
-                                        vv.insert(key, JFObject::Dictionary(JFMap::new()));
+                                        vv.insert(key, NP_JSON::Dictionary(JSMAP::new()));
                                     }
                                     _ => {}
                                 };
@@ -884,7 +947,7 @@ pub fn json_decode(text: String) -> Result<Box<JFObject>, NP_Error> {
                             let a_nest = 0i64;
                             let d_nest = 0i64;
                             let log: String = "".to_owned();
-                            fn func(v: &mut JFObject,
+                            fn func(v: &mut NP_JSON,
                                     _: Option<String>,
                                     _: Vec<i64>,
                                     d_chain: Vec<String>,
@@ -893,9 +956,9 @@ pub fn json_decode(text: String) -> Result<Box<JFObject>, NP_Error> {
                                     _: char) -> Result<(), NP_Error> {
 
                                 match *v {
-                                    JFObject::Dictionary(ref mut vv) => {
+                                    NP_JSON::Dictionary(ref mut vv) => {
                                         let key = NP_Error::unwrap(d_chain.last())?.clone();
-                                        vv.insert(key, JFObject::True);
+                                        vv.insert(key, NP_JSON::True);
                                     }
                                     _ => {}
                                 };
@@ -935,7 +998,7 @@ pub fn json_decode(text: String) -> Result<Box<JFObject>, NP_Error> {
                             let a_nest = 0i64;
                             let d_nest = 0i64;
                             let log: String = "".to_owned();
-                            fn func(v: &mut JFObject,
+                            fn func(v: &mut NP_JSON,
                                     _: Option<String>,
                                     _: Vec<i64>,
                                     d_chain: Vec<String>,
@@ -944,9 +1007,9 @@ pub fn json_decode(text: String) -> Result<Box<JFObject>, NP_Error> {
                                     _: char) -> Result<(), NP_Error> {
 
                                 match *v {
-                                    JFObject::Dictionary(ref mut vv) => {
+                                    NP_JSON::Dictionary(ref mut vv) => {
                                         let key = NP_Error::unwrap(d_chain.last())?.clone();
-                                        vv.insert(key, JFObject::False);
+                                        vv.insert(key, NP_JSON::False);
                                     }
                                     _ => {}
                                 };
@@ -988,7 +1051,7 @@ pub fn json_decode(text: String) -> Result<Box<JFObject>, NP_Error> {
                             let a_nest = 0i64;
                             let d_nest = 0i64;
                             let log: String = "".to_owned();
-                            fn func(v: &mut JFObject,
+                            fn func(v: &mut NP_JSON,
                                     _: Option<String>,
                                     _: Vec<i64>,
                                     d_chain: Vec<String>,
@@ -997,9 +1060,9 @@ pub fn json_decode(text: String) -> Result<Box<JFObject>, NP_Error> {
                                     _: char) -> Result<(), NP_Error> {
 
                                 match *v {
-                                    JFObject::Dictionary(ref mut vv) => {
+                                    NP_JSON::Dictionary(ref mut vv) => {
                                         let key = NP_Error::unwrap(d_chain.last())?.clone();
-                                        vv.insert(key, JFObject::Null);
+                                        vv.insert(key, NP_JSON::Null);
                                     }
                                     _ => {}
                                 };
@@ -1033,7 +1096,7 @@ pub fn json_decode(text: String) -> Result<Box<JFObject>, NP_Error> {
                             let a_nest = 0i64;
                             let d_nest = 0i64;
                             let log: String = "".to_owned();
-                            fn func(v: &mut JFObject,
+                            fn func(v: &mut NP_JSON,
                                     value: Option<String>,
                                     _: Vec<i64>,
                                     d_chain: Vec<String>,
@@ -1042,14 +1105,14 @@ pub fn json_decode(text: String) -> Result<Box<JFObject>, NP_Error> {
                                     _: char) -> Result<(), NP_Error> {
 
                                 match *v {
-                                    JFObject::Dictionary(ref mut vv) => {
+                                    NP_JSON::Dictionary(ref mut vv) => {
                                         let key = NP_Error::unwrap(d_chain.last())?.clone();
                                         let mut value = NP_Error::unwrap(value)?;
                                         NP_Error::unwrap(value.pop())?;
                                         value = value.trim().to_string();
                                         match value.find('.') {
-                                            Some(_) => vv.insert(key, JFObject::Float(f64::from_str(&value.clone())?)) ,
-                                            None    => vv.insert(key, JFObject::Integer(i64::from_str(&value.clone())?)),
+                                            Some(_) => vv.insert(key, NP_JSON::Float(f64::from_str(&value.clone())?)) ,
+                                            None    => vv.insert(key, NP_JSON::Integer(i64::from_str(&value.clone())?)),
                                         };
                                     }
                                     _ => {}
@@ -1136,7 +1199,7 @@ pub fn json_decode(text: String) -> Result<Box<JFObject>, NP_Error> {
                             let a_nest = 0i64;
                             let d_nest = 0i64;
                             let log: String = "".to_owned();
-                            fn func(v: &mut JFObject,
+                            fn func(v: &mut NP_JSON,
                                     _: Option<String>,
                                     _: Vec<i64>,
                                     d_chain: Vec<String>,
@@ -1144,14 +1207,14 @@ pub fn json_decode(text: String) -> Result<Box<JFObject>, NP_Error> {
                                     _: i64,
                                     _: char) -> Result<(), NP_Error> {
                                 match *v {
-                                    JFObject::Array(ref mut vv) => {
-                                        vv.push(JFObject::True);
+                                    NP_JSON::Array(ref mut vv) => {
+                                        vv.push(NP_JSON::True);
                                     }
-                                    JFObject::Dictionary(ref mut vv) => {
+                                    NP_JSON::Dictionary(ref mut vv) => {
 
                                         let key = NP_Error::unwrap(d_chain.last())?.clone();
 
-                                        vv.insert(key, JFObject::True);
+                                        vv.insert(key, NP_JSON::True);
 
                                     }
                                     _ => {}
@@ -1198,7 +1261,7 @@ pub fn json_decode(text: String) -> Result<Box<JFObject>, NP_Error> {
                             let a_nest = 0i64;
                             let d_nest = 0i64;
                             let log: String = "".to_owned();
-                            fn func(v: &mut JFObject,
+                            fn func(v: &mut NP_JSON,
                                     _: Option<String>,
                                     _: Vec<i64>,
                                     d_chain: Vec<String>,
@@ -1206,14 +1269,14 @@ pub fn json_decode(text: String) -> Result<Box<JFObject>, NP_Error> {
                                     _: i64,
                                     _: char) -> Result<(), NP_Error> {
                                 match *v {
-                                    JFObject::Array(ref mut vv) => {
-                                        vv.push(JFObject::False);
+                                    NP_JSON::Array(ref mut vv) => {
+                                        vv.push(NP_JSON::False);
                                     }
-                                    JFObject::Dictionary(ref mut vv) => {
+                                    NP_JSON::Dictionary(ref mut vv) => {
 
                                         let key = NP_Error::unwrap(d_chain.last())?.clone();
 
-                                        vv.insert(key, JFObject::False);
+                                        vv.insert(key, NP_JSON::False);
 
                                     }
                                     _ => {}
@@ -1260,7 +1323,7 @@ pub fn json_decode(text: String) -> Result<Box<JFObject>, NP_Error> {
                             let a_nest = 0i64;
                             let d_nest = 0i64;
                             let log: String = "".to_owned();
-                            fn func(v: &mut JFObject,
+                            fn func(v: &mut NP_JSON,
                                     _: Option<String>,
                                     _: Vec<i64>,
                                     d_chain: Vec<String>,
@@ -1268,12 +1331,12 @@ pub fn json_decode(text: String) -> Result<Box<JFObject>, NP_Error> {
                                     _: i64,
                                     _: char) -> Result<(), NP_Error> {
                                 match *v {
-                                    JFObject::Array(ref mut vv) => {
-                                        vv.push(JFObject::Null);
+                                    NP_JSON::Array(ref mut vv) => {
+                                        vv.push(NP_JSON::Null);
                                     }
-                                    JFObject::Dictionary(ref mut vv) => {
+                                    NP_JSON::Dictionary(ref mut vv) => {
                                         let key = NP_Error::unwrap(d_chain.last())?.clone();
-                                        vv.insert(key, JFObject::Null);
+                                        vv.insert(key, NP_JSON::Null);
                                     }
                                     _ => {}
                                 };
@@ -1313,7 +1376,7 @@ pub fn json_decode(text: String) -> Result<Box<JFObject>, NP_Error> {
                             let a_nest = 0i64;
                             let d_nest = 0i64;
                             let log: String = "".to_owned();
-                            fn func(v: &mut JFObject,
+                            fn func(v: &mut NP_JSON,
                                     _: Option<String>,
                                     _: Vec<i64>,
                                     _: Vec<String>,
@@ -1321,8 +1384,8 @@ pub fn json_decode(text: String) -> Result<Box<JFObject>, NP_Error> {
                                     _: i64,
                                     _: char) -> Result<(), NP_Error> {
                                 match *v {
-                                    JFObject::Array(ref mut vv) => {
-                                        vv.push(JFObject::Null);
+                                    NP_JSON::Array(ref mut vv) => {
+                                        vv.push(NP_JSON::Null);
                                     }
                                     _ => {}
                                 };
@@ -1346,7 +1409,7 @@ pub fn json_decode(text: String) -> Result<Box<JFObject>, NP_Error> {
                         let a_nest = 0i64;
                         let d_nest = 0i64;
                         let log: String = "".to_owned();
-                        fn func(v: &mut JFObject,
+                        fn func(v: &mut NP_JSON,
                                 value: Option<String>,
                                 _: Vec<i64>,
                                 d_chain: Vec<String>,
@@ -1354,22 +1417,22 @@ pub fn json_decode(text: String) -> Result<Box<JFObject>, NP_Error> {
                                 _: i64,
                                 _: char) -> Result<(), NP_Error> {
                             match *v {
-                                JFObject::Array(ref mut vv) => {
+                                NP_JSON::Array(ref mut vv) => {
                                     let mut new_num = NP_Error::unwrap(value)?.clone();
                                     NP_Error::unwrap(new_num.pop())?;
                                     new_num = new_num.trim().to_string();
 
                                     match new_num.find('.') {
                                         Some(_) => {
-                                            vv.push(JFObject::Float(f64::from_str(&new_num)?))
+                                            vv.push(NP_JSON::Float(f64::from_str(&new_num)?))
                                         }
                                         None => {
-                                            vv.push(JFObject::Integer(i64::from_str(&new_num)?))
+                                            vv.push(NP_JSON::Integer(i64::from_str(&new_num)?))
                                         }
                                     };
 
                                 }
-                                JFObject::Dictionary(ref mut vv) => {
+                                NP_JSON::Dictionary(ref mut vv) => {
 
                                     let key = NP_Error::unwrap(d_chain.last())?.clone();
 
@@ -1380,11 +1443,11 @@ pub fn json_decode(text: String) -> Result<Box<JFObject>, NP_Error> {
                                     match new_num.find('.') {
                                         Some(_) => {
                                             vv.insert(key,
-                                                      JFObject::Float(f64::from_str(&new_num)?))
+                                                      NP_JSON::Float(f64::from_str(&new_num)?))
                                         }
                                         None => {
                                             vv.insert(key,
-                                                      JFObject::Integer(i64::from_str(&new_num)?))
+                                                      NP_JSON::Integer(i64::from_str(&new_num)?))
                                         }
                                     };
 
@@ -1448,7 +1511,7 @@ pub fn json_decode(text: String) -> Result<Box<JFObject>, NP_Error> {
                                 let a_nest = 0i64;
                                 let d_nest = 0i64;
                                 let log: String = "".to_owned();
-                                fn func(v: &mut JFObject,
+                                fn func(v: &mut NP_JSON,
                                         value: Option<String>,
                                         _: Vec<i64>,
                                         d_chain: Vec<String>,
@@ -1457,11 +1520,11 @@ pub fn json_decode(text: String) -> Result<Box<JFObject>, NP_Error> {
                                         _: char) -> Result<(), NP_Error> {
 
                                     match *v {
-                                        JFObject::Dictionary(ref mut vv) => {
+                                        NP_JSON::Dictionary(ref mut vv) => {
                                             let key = NP_Error::unwrap(d_chain.last())?.clone();
                                             let mut value = NP_Error::unwrap(value)?;
                                             NP_Error::unwrap(value.pop())?;
-                                            vv.insert(key, JFObject::String(value.clone()));
+                                            vv.insert(key, NP_JSON::String(value.clone()));
                                         }
                                         _ => {}
                                     };
@@ -1481,8 +1544,8 @@ pub fn json_decode(text: String) -> Result<Box<JFObject>, NP_Error> {
                             } else if last_chain != 'd' {
                                 NP_Error::unwrap(string.pop())?;
                                 let is_root = match *ret {
-                                    JFObject::Null => {
-                                        *ret = JFObject::String(string.clone());
+                                    NP_JSON::Null => {
+                                        *ret = NP_JSON::String(string.clone());
                                         true
                                     }
                                     _ => false,
@@ -1492,7 +1555,7 @@ pub fn json_decode(text: String) -> Result<Box<JFObject>, NP_Error> {
                                     let a_nest = 0i64;
                                     let d_nest = 0i64;
                                     let log: String = "".to_owned();
-                                    fn func(v: &mut JFObject,
+                                    fn func(v: &mut NP_JSON,
                                             value: Option<String>,
                                             _: Vec<i64>,
                                             _: Vec<String>,
@@ -1500,8 +1563,8 @@ pub fn json_decode(text: String) -> Result<Box<JFObject>, NP_Error> {
                                             _: i64,
                                             _: char) -> Result<(), NP_Error> {
                                         match *v {
-                                            JFObject::Array(ref mut vv) => {
-                                                vv.push(JFObject::String(NP_Error::unwrap(value)?
+                                            NP_JSON::Array(ref mut vv) => {
+                                                vv.push(NP_JSON::String(NP_Error::unwrap(value)?
                                                                               .clone()));
                                             }
                                             _ => {}
@@ -1547,7 +1610,7 @@ pub fn json_decode(text: String) -> Result<Box<JFObject>, NP_Error> {
                                 let a_nest = 0i64;
                                 let d_nest = 0i64;
                                 let log: String = "".to_owned();
-                                fn func(v: &mut JFObject,
+                                fn func(v: &mut NP_JSON,
                                         value: Option<String>,
                                         _: Vec<i64>,
                                         d_chain: Vec<String>,
@@ -1556,11 +1619,11 @@ pub fn json_decode(text: String) -> Result<Box<JFObject>, NP_Error> {
                                         _: char) -> Result<(), NP_Error> {
 
                                     match *v {
-                                        JFObject::Dictionary(ref mut vv) => {
+                                        NP_JSON::Dictionary(ref mut vv) => {
                                             let key = NP_Error::unwrap(d_chain.last())?.clone();
                                             let mut value = NP_Error::unwrap(value)?;
                                             NP_Error::unwrap(value.pop())?;
-                                            vv.insert(key, JFObject::String(value.clone()));
+                                            vv.insert(key, NP_JSON::String(value.clone()));
                                         }
                                         _ => {}
                                     };
@@ -1581,8 +1644,8 @@ pub fn json_decode(text: String) -> Result<Box<JFObject>, NP_Error> {
                             } else {
                                 NP_Error::unwrap(string.pop())?;
                                 let is_root = match *ret {
-                                    JFObject::Null => {
-                                        *ret = JFObject::String(string.clone());
+                                    NP_JSON::Null => {
+                                        *ret = NP_JSON::String(string.clone());
                                         true
                                     }
                                     _ => false,
@@ -1592,7 +1655,7 @@ pub fn json_decode(text: String) -> Result<Box<JFObject>, NP_Error> {
                                     let a_nest = 0i64;
                                     let d_nest = 0i64;
                                     let log: String = "".to_owned();
-                                    fn func(v: &mut JFObject,
+                                    fn func(v: &mut NP_JSON,
                                             value: Option<String>,
                                             _: Vec<i64>,
                                             _: Vec<String>,
@@ -1600,8 +1663,8 @@ pub fn json_decode(text: String) -> Result<Box<JFObject>, NP_Error> {
                                             _: i64,
                                             _: char) -> Result<(), NP_Error> {
                                         match *v {
-                                            JFObject::Array(ref mut vv) => {
-                                                vv.push(JFObject::String(NP_Error::unwrap(value)?
+                                            NP_JSON::Array(ref mut vv) => {
+                                                vv.push(NP_JSON::String(NP_Error::unwrap(value)?
                                                                               .clone()));
                                             }
                                             _ => {}
