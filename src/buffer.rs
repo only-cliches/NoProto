@@ -133,7 +133,7 @@ impl NP_Buffer {
 
         let old_root = NP_Ptr::<NP_Any>::new_standard_ptr(1, Rc::clone(&self.schema), self.memory);
 
-        let new_bytes = Rc::new(NP_Memory::new(NP_Factory::new_buffer(Some(capacity))));
+        let new_bytes = Rc::new(NP_Memory::new(NP_Factory::_blank_buffer(Some(capacity))));
         let new_root = NP_Ptr::<NP_Any>::new_standard_ptr(1, Rc::clone(&self.schema), Rc::clone(&new_bytes));
 
         old_root._compact(new_root)?;

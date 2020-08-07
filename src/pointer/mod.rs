@@ -389,9 +389,17 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
                 match result {
                     Some(mut list) => {
                         let list_key = path[path_index];
-                        let list_key_int = list_key.parse::<u16>()?;
-                        let col = list.select(list_key_int)?;
-                        col._deep_clear(path, path_index + 1)
+                        let list_key_int = list_key.parse::<u16>();
+                        match list_key_int {
+                            Ok(x) => {
+                                let col = list.select(x)?;
+                                col._deep_clear(path, path_index + 1)
+                            },
+                            Err(_e) => {
+                                Err(NP_Error::new("Can't query list with string, need number!".to_owned()))
+                            }
+                        }
+
                     },
                     None => {
                         unreachable!();
@@ -405,9 +413,17 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
                 match result {
                     Some(tuple) => {
                         let list_key = path[path_index];
-                        let list_key_int = list_key.parse::<u8>()?;
-                        let col = tuple.select::<NP_Any>(list_key_int)?;
-                        col._deep_clear(path, path_index + 1)
+                        let list_key_int = list_key.parse::<u8>();
+                        match list_key_int {
+                            Ok(x) => {
+                                let col = tuple.select::<NP_Any>(x)?;
+                                col._deep_clear(path, path_index + 1)
+                            },
+                            Err(_e) => {
+                                Err(NP_Error::new("Can't query tuple with string, need number!".to_owned()))
+                            }
+                        }
+
                     },
                     None => {
                         unreachable!();
@@ -479,9 +495,16 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
                 match result {
                     Some(mut list) => {
                         let list_key = path[path_index];
-                        let list_key_int = list_key.parse::<u16>()?;
-                        let col = list.select(list_key_int)?;
-                        col._deep_set::<X>(req_type, path, path_index + 1, value)?;
+                        let list_key_int = list_key.parse::<u16>();
+                        match list_key_int {
+                            Ok(x) => {
+                                let col = list.select(x)?;
+                                col._deep_set::<X>(req_type, path, path_index + 1, value)?;
+                            },
+                            Err(_e) => {
+                                return Err(NP_Error::new("Can't query list with string, need number!".to_owned()))
+                            }
+                        }
                     },
                     None => {
                         unreachable!();
@@ -499,9 +522,17 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
                 match result {
                     Some(tuple) => {
                         let list_key = path[path_index];
-                        let list_key_int = list_key.parse::<u8>()?;
-                        let col = tuple.select::<NP_Any>(list_key_int)?;
-                        col._deep_set::<X>(req_type,path, path_index + 1, value)?;
+                        let list_key_int = list_key.parse::<u8>();
+                        match list_key_int {
+                            Ok(x) => {
+                                let col = tuple.select::<NP_Any>(x)?;
+                                col._deep_set::<X>(req_type,path, path_index + 1, value)?;
+                            },
+                            Err(_e) => {
+                                return Err(NP_Error::new("Can't query tuple with string, need number!".to_owned()))
+                            }
+                        }
+
                     },
                     None => {
                         unreachable!();
@@ -618,9 +649,17 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
                             X::buffer_into(self.location, self.kind, self.schema, self.memory)
                         } else {
                             let list_key = path[path_index];
-                            let list_key_int = list_key.parse::<u16>()?;
-                            let col = list.select(list_key_int)?;
-                            col._deep_get::<X>(req_type, path, path_index + 1)
+                            let list_key_int = list_key.parse::<u16>();
+                            match list_key_int {
+                                Ok(x) => {
+                                    let col = list.select(x)?;
+                                    col._deep_get::<X>(req_type, path, path_index + 1)
+                                },
+                                Err(_e) => {
+                                    Err(NP_Error::new("Can't query list with string, need number!".to_owned()))
+                                }
+                            }
+
                         }
                     },
                     None => {
@@ -644,9 +683,17 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
                             X::buffer_into(self.location, self.kind, self.schema, self.memory)
                         } else {
                             let list_key = path[path_index];
-                            let list_key_int = list_key.parse::<u8>()?;
-                            let col = tuple.select::<NP_Any>(list_key_int)?;
-                            col._deep_get::<X>(req_type, path, path_index + 1)
+                            let list_key_int = list_key.parse::<u8>();
+                            match list_key_int {
+                                Ok(x) => {
+                                    let col = tuple.select::<NP_Any>(x)?;
+                                    col._deep_get::<X>(req_type, path, path_index + 1)
+                                },
+                                Err(_e) => {
+                                    Err(NP_Error::new("Can't query tuple with string, need number!".to_owned()))
+                                }
+                            }
+
                         }
                     },
                     None => {

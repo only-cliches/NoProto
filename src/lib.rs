@@ -3,7 +3,7 @@
 #![no_std]
 
 //! ## High Performance Serialization Library
-//! FlatBuffers/CapNProto with Flexible Runtime Schemas
+//! Faster JSON with Schemas and Native Types
 //! 
 //! [Github](https://github.com/ClickSimply/NoProto) | [Crates.io](https://crates.io/crates/no_proto) | [Documentation](https://docs.rs/no_proto)
 //! 
@@ -91,47 +91,31 @@
 //!     "type": "table",
 //!     "columns": [
 //!         ["name",   {"type": "string"}],
-//!         ["pass",   {"type": "string"}],
-//!         ["age",    {"type": "uint16"}]
+//!         ["age",    {"type": "u16", default: 0}],
+//!         ["tags",   {"type": "list", "of": {
+//!             "type": "string"
+//!         }}]
 //!     ]
 //! }"#)?;
 //! 
-//! // creating a new buffer from the `user_factory` schema
-//! // user_buffer contains a serialized Vec<u8> containing our data
 //! 
-//! let user_vec: Vec<u8> = user_factory.open(NP::new, |mut buffer| {
-//!     
-//!     // set "name" column to "some name"
-//!     buffer.deep_set("name", "some name".to_owned())?;
+//! // create a new empty buffer
+//! let mut user_vec: Vec<u8> = user_factory.empty_buffer(None); // optional capacity 
 //! 
-//!     // set "age" column to 75
-//!     buffer.deep_set("age", 75u16)?;
+//! // set an internal value of the buffer, set the  "name" column
+//! user_vec = user_factory.deep_set(user_vec, "name", "Billy Joel".to_owned())?;
 //! 
-//!    // done with the buffer
-//!    Ok(buffer)
-//! })?;
-//!  
-//! // open the new buffer, `user_vec`, we just created
-//! // user_vec_2 contains the serialized Vec<u8>
-//! let user_vec_2: Vec<u8> = user_factory.open(NP::buffer(user_vec), |mut buffer| {
+//! // assign nested internal values
+//! user_vec = user_factory.deep_set(user_vec, "tags.0", "first tag".to_owned())?;
 //! 
-//!    // read the name column
-//!    let mut user_name = buffer.deep_get::<String>("name")?;
-//!    assert_eq!(user_name, Some(Box::new(String::from("some name"))));
+//! // get an internal value of the buffer from the "name" column
+//! let (name, user_vec) = user_factory.deep_get::<String>(user_vec, "name")?;
+//! assert_eq!(name, Some(Box::new(String::from("Billy Joel"))));
 //! 
-//!    // password value will be None since we haven't set it.
-//!    let mut password = buffer.deep_get::<String>("pass")?;
-//!    assert_eq!(password, None);
+//! let (tag, user_vec) = user_factory.deep_get::<String>(user_vec, "tags.0")?;
+//! assert_eq!(tag, Some(Box::new(String::from("first tag"))));
 //! 
-//!    // read age value    
-//!    let mut age = buffer.deep_get::<u16>("age")?;
-//!    assert_eq!(age, Some(Box::new(75)));    
-//! 
-//!    // done with the buffer
-//!    Ok(buffer)
-//! })?;
-//! 
-//! // we can now save user_vec_2 to disk, 
+//! // we can now save user_vec to disk, 
 //! // send it over the network, or whatever else is needed with the data
 //! 
 //! # Ok::<(), NP_Error>(()) 
@@ -178,11 +162,11 @@ mod utils;
 
 extern crate alloc;
 
+use crate::schema::NP_Schema;
 use alloc::boxed::Box;
 use crate::pointer::NP_Value;
 use crate::json_flex::json_decode;
 use crate::error::NP_Error;
-use crate::schema::NP_Schema;
 use crate::memory::NP_Memory;
 use buffer::{NP_Compact_Data, NP_Buffer};
 use alloc::vec::Vec;
@@ -286,7 +270,8 @@ impl NP {
 
 
 impl NP_Factory {
-
+    
+    /// Generate a new factory from the given schema.
     pub fn new(json_schema: &str) -> core::result::Result<NP_Factory, NP_Error> {
 
         let parsed = json_decode(json_schema.to_owned());
@@ -303,6 +288,7 @@ impl NP_Factory {
         }
     }
 
+    /// Open a buffer to perform mutations and reads.  Allows you to eiter include an existing buffer to open or to create a new one.
     pub fn open<F>(&self, buffer: NP, mut callback: F) -> Result<Vec<u8>, NP_Error>
         where F: FnMut(NP_Buffer) -> Result<NP_Buffer, NP_Error>
     {   
@@ -312,10 +298,10 @@ impl NP_Factory {
             let use_buffer = match buffer {
                 NP::buffer(x) => x,
                 NP::size(x) => {
-                    NP_Factory::new_buffer(Some(x as usize))
+                    self.empty_buffer(Some(x as usize))
                 }
                 NP::new => {
-                    NP_Factory::new_buffer(None)
+                    self.empty_buffer(None)
                 }
             };
     
@@ -330,8 +316,7 @@ impl NP_Factory {
     }
 
     #[doc(hidden)]
-    pub fn new_buffer(capacity: Option<usize>) -> Vec<u8> {
-
+    pub fn _blank_buffer(capacity: Option<usize>) -> Vec<u8> {
         let use_size = match capacity {
             Some(x) => x,
             None => 1024
@@ -347,6 +332,13 @@ impl NP_Factory {
         new_bytes
     }
 
+    /// Generate a new empty buffer from this factory
+    pub fn empty_buffer(&self, capacity: Option<usize>) -> Vec<u8> {
+        NP_Factory::_blank_buffer(capacity)
+    }
+
+    /// This performs a compaction if the closure provided as the second argument returns `true`, otherwise it just returns the original buffer.
+    /// The closure is provided an argument that contains the original size of the buffer, how many bytes could be saved by compaction, and how large the new buffer would be after compaction.
     pub fn maybe_compact<F>(&self, buffer: Vec<u8>, new_capacity: Option<u32>, callback: F) -> Result<Vec<u8>, NP_Error> where F: FnMut(NP_Compact_Data) -> bool {
 
         let result = {
@@ -361,6 +353,8 @@ impl NP_Factory {
         Ok(bytes)
     }
 
+    /// Compacts a buffer to remove an unused bytes or free space after a mutation.
+    /// This is a pretty expensive operation so should be done sparingly.
     pub fn compact(&self, new_capacity: Option<u32>, buffer: Vec<u8>) -> Result<Vec<u8>, NP_Error> {
 
         let result = {
@@ -375,6 +369,8 @@ impl NP_Factory {
         Ok(bytes)
     }
 
+    /// Copy the entire buffer into a JSON object
+    /// 
     pub fn json_encode(&self, buffer: Vec<u8>) -> (NP_JSON, Vec<u8>) {
         let bytes = Rc::new(NP_Memory::new(buffer));
 
@@ -386,7 +382,11 @@ impl NP_Factory {
         (json_data, Rc::try_unwrap(bytes).unwrap().dump())
     }
 
-    pub fn extract_scalar<X: NP_Value + Default, F>(&self, buffer: Vec<u8>, mut callback: F) -> Result<(X, Vec<u8>), NP_Error> 
+    /// Extract a value from the buffer.  Unlike deep set, this requires you to open the buffer with a closure but you can return any value you'd like from the closure to get it out of the buffer.
+    /// 
+    /// If you attempt to extract a collection type this function will fail.  You can  only extract scalar types.
+    /// 
+    pub fn extract<X: NP_Value + Default, F>(&self, buffer: Vec<u8>, mut callback: F) -> Result<(X, Vec<u8>), NP_Error> 
         where F: FnMut(NP_Buffer) -> Result<X, NP_Error>
     {
 
@@ -406,6 +406,9 @@ impl NP_Factory {
 
     }
 
+    /// Clear a value from the buffer without opening it.
+    /// This will work with any type, including collections.  
+    /// 
     pub fn deep_clear(&self, buffer: Vec<u8>,  path: &str) -> Result<Vec<u8>, NP_Error> {
         let bytes = Rc::new(NP_Memory::new(buffer));
 
@@ -417,27 +420,58 @@ impl NP_Factory {
         Ok(Rc::try_unwrap(bytes).unwrap().dump())
     }
     
+    /// Used to deep set values into the buffer without opening it.
+    /// This only works for scalar types, if you attempt to set a collection type this will fail.
+    /// 
+    /// deep_set cannot be used with collection types, even if you call it against the buffer directly
+    /// 
     pub fn deep_set<X: NP_Value + Default>(&self, buffer: Vec<u8>, path: &str, value: X) -> Result<Vec<u8>, NP_Error> {
         
-        let bytes = Rc::new(NP_Memory::new(buffer));
+        match NP_TypeKeys::from(X::type_idx().0) {
+            NP_TypeKeys::JSON => { Err(NP_Error::new("Can't deep set with JSON type!")) },
+            NP_TypeKeys::Table => { Err(NP_Error::new("Can't deep set table type!")) },
+            NP_TypeKeys::Map => { Err(NP_Error::new("Can't deep set map type!")) },
+            NP_TypeKeys::List => { Err(NP_Error::new("Can't deep set list type!")) },
+            NP_TypeKeys::Tuple => { Err(NP_Error::new("Can't deep set tuple type!")) },
+            _ => {
+                let bytes = Rc::new(NP_Memory::new(buffer));
 
-        {
-            let mut buffer = NP_Buffer::new(Rc::clone(&self.schema), Rc::clone(&bytes));
-            buffer._deep_set_scalar(path, value)?;
+                {
+                    let mut buffer = NP_Buffer::new(Rc::clone(&self.schema), Rc::clone(&bytes));
+                    buffer._deep_set_scalar(path, value)?;
+                }
+         
+                Ok(Rc::try_unwrap(bytes).unwrap().dump())
+            }
         }
- 
-        Ok(Rc::try_unwrap(bytes).unwrap().dump())
     }
 
+    /// Used to get values from inside the buffer without opening it.
+    /// This only works for scalar types, if you attempt to get a collection type this will fail.
+    /// 
+    /// You can use this to grab JSON versions of the data at any point in the buffer. Just pass `NP_JSON` as the type.
+    /// 
+    /// If you need to deep_get a collection type, you **must** open the buffer and call `deep_get` on the buffer itself.
+    /// 
     pub fn deep_get<X: NP_Value + Default>(&self, buffer: Vec<u8>,  path: &str) -> Result<(Option<Box<X>>, Vec<u8>), NP_Error> {
-        let bytes = Rc::new(NP_Memory::new(buffer));
+        
+        match NP_TypeKeys::from(X::type_idx().0) {
+            NP_TypeKeys::Table => { Err(NP_Error::new("Can't deep get table type from here!")) },
+            NP_TypeKeys::Map => { Err(NP_Error::new("Can't deep get map type from here!")) },
+            NP_TypeKeys::List => { Err(NP_Error::new("Can't deep get list type from here!")) },
+            NP_TypeKeys::Tuple => { Err(NP_Error::new("Can't deep get tuple type from here!")) },
+            _ => {
+                let bytes = Rc::new(NP_Memory::new(buffer));
 
-        let result = {
-            let buffer = NP_Buffer::new(Rc::clone(&self.schema), Rc::clone(&bytes));
-            buffer._deep_get_scalar(path)?
-        };
- 
-        Ok((result, Rc::try_unwrap(bytes).unwrap().dump()))
+                let result = {
+                    let buffer = NP_Buffer::new(Rc::clone(&self.schema), Rc::clone(&bytes));
+                    buffer._deep_get_scalar(path)?
+                };
+         
+                Ok((result, Rc::try_unwrap(bytes).unwrap().dump()))
+            }
+        }
+
     }
     
 }
