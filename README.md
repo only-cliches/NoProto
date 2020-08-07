@@ -1,5 +1,5 @@
 ## High Performance Serialization Library
-FlatBuffers/CapNProto with Flexible Runtime Schemas
+Faster than JSON with Schemas and Native Types.  Protocol Buffers you can update without compiling.
 
 [Github](https://github.com/ClickSimply/NoProto) | [Crates.io](https://crates.io/crates/no_proto) | [Documentation](https://docs.rs/no_proto)
 
@@ -65,7 +65,6 @@ NoProto moves the cost of deserialization to the access methods instead of deser
 | Serde            | 𐄂                     | ?          | ✓         | ✓       | 𐄂                 | 𐄂               | 𐄂                |
 
 
-
 #### Limitations
 - Buffers cannot be larger than 2^32 bytes (~4GB).
 - Tables & List collections cannot have more than 2^16 items (~16k).
@@ -88,48 +87,44 @@ let user_factory = NP_Factory::new(r#"{
     "type": "table",
     "columns": [
         ["name",   {"type": "string"}],
-        ["pass",   {"type": "string"}],
-        ["age",    {"type": "uint16"}]
+        ["age",    {"type": "u16", "default": 0}],
+        ["tags",   {"type": "list", "of": {
+            "type": "string"
+        }}]
     ]
 }"#)?;
 
-// creating a new buffer from the `user_factory` schema
-// user_buffer contains a serialized Vec<u8> containing our data
 
-let user_vec: Vec<u8> = user_factory.open(NP::new, |mut buffer| {
-    
-    // set "name" column to "some name"
-    buffer.deep_set("name", "some name".to_owned())?;
+// create a new empty buffer
+let mut user_buffer = user_factory.empty_buffer(None); // optional capacity
 
-    // set "age" column to 75
-    buffer.deep_set("age", 75u16)?;
+// set an internal value of the buffer, set the  "name" column
+user_buffer.deep_set("name", String::from("Billy Joel"))?;
 
-   // done with the buffer
-   Ok(buffer)
-})?;
- 
-// open the new buffer, `user_vec`, we just created
-// user_vec_2 contains the serialized Vec<u8>
-let user_vec_2: Vec<u8> = user_factory.open(NP::buffer(user_vec), |mut buffer| {
+// assign nested internal values, sets the first tag element
+user_buffer.deep_set("tags.0", String::from("first tag"))?;
 
-   // read the name column
-   let mut user_name = buffer.deep_get::<String>("name")?;
-   assert_eq!(user_name, Some(Box::new(String::from("some name"))));
+// get an internal value of the buffer from the "name" column
+let name = user_buffer.deep_get::<String>("name")?;
+assert_eq!(name, Some(Box::new(String::from("Billy Joel"))));
 
-   // password value will be None since we haven't set it.
-   let mut password = buffer.deep_get::<String>("pass")?;
-   assert_eq!(password, None);
+// close buffer and get internal bytes
+let user_bytes: Vec<u8> = user_buffer.close();
 
-   // read age value    
-   let mut age = buffer.deep_get::<u16>("age")?;
-   assert_eq!(age, Some(Box::new(75)));    
+// open the buffer again
+let user_buffer_2 = user_factory.open_buffer(user_bytes);
 
-   // done with the buffer
-   Ok(buffer)
-})?;
+// get nested internal value, first tag from the tag list
+let tag = user_buffer_2.deep_get::<String>("tags.0")?;
+assert_eq!(tag, Some(Box::new(String::from("first tag"))));
 
-// we can now save user_vec_2 to disk, 
+// close again
+let user_bytes: Vec<u8> = user_buffer_2.close();
+
+// we can now save user_bytes to disk, 
 // send it over the network, or whatever else is needed with the data
+
+# Ok::<(), NP_Error>(()) 
 ```
 
 ## Guided Learning / Next Steps:
