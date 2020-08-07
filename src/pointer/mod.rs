@@ -156,11 +156,6 @@ pub struct NP_Ptr<T: NP_Value + Default> {
     pub value: T // a static invocation of the pointer type
 }
 
-pub enum DeepType {
-    Scalar,
-    All
-}
-
 impl<T: NP_Value + Default> NP_Ptr<T> {
 
     /// Retrieves the value at this pointer, only useful for scalar values (not collections).
@@ -341,6 +336,46 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
         })
     }
 
+    /// Used to set scalar values inside the buffer, the path only works with dot notation.
+    /// This does not work with collection types or `NP_JSON`.
+    /// 
+    /// The type that you cast the request to will be compared to the schema, if it doesn't match the schema the request will fail.
+    pub fn deep_set<X: NP_Value + Default>(&mut self, path: &str, value: X) -> Result<(), NP_Error> {
+
+        match NP_TypeKeys::from(X::type_idx().0) {
+            NP_TypeKeys::JSON => { Err(NP_Error::new("Can't deep set with JSON type!")) },
+            NP_TypeKeys::Table => { Err(NP_Error::new("Can't deep set table type!")) },
+            NP_TypeKeys::Map => { Err(NP_Error::new("Can't deep set map type!")) },
+            NP_TypeKeys::List => { Err(NP_Error::new("Can't deep set list type!")) },
+            NP_TypeKeys::Tuple => { Err(NP_Error::new("Can't deep set tuple type!")) },
+            _ => {
+                let vec_path: Vec<&str> = path.split(".").filter(|v| { v.len() > 0 }).collect();
+                let pointer: NP_Ptr<NP_Any> = NP_Ptr::new_standard_ptr(self.location, Rc::clone(&self.schema), Rc::clone(&self.memory));
+                pointer._deep_set::<X>(vec_path, 0, value)
+            }
+        }
+    }
+
+    /// Clear an inner value from the buffer.  The path only works with dot notation.
+    /// This can also be used to clear deeply nested collection objects.
+    /// 
+    pub fn deep_clear(&self, path: &str) -> Result<(), NP_Error> {
+        let vec_path: Vec<&str> = path.split(".").filter(|v| { v.len() > 0 }).collect();
+        let pointer: NP_Ptr<NP_Any> = NP_Ptr::new_standard_ptr(self.location, Rc::clone(&self.schema), Rc::clone(&self.memory));
+        pointer._deep_clear(vec_path, 0)
+    }
+  
+    /// Retrieve an inner value from the buffer.  The path only works with dot notation.
+    /// You can also use this to get JSON by casting the request type to `NP_JSON`.
+    /// This can also be used to retrieve deeply nested collection objects.
+    /// 
+    /// The type that you cast the request to will be compared to the schema, if it doesn't match the schema the request will fail.
+    pub fn deep_get<X: NP_Value + Default>(&self, path: &str) -> Result<Option<Box<X>>, NP_Error> {
+        let vec_path: Vec<&str> = path.split(".").filter(|v| { v.len() > 0 }).collect();
+        let pointer: NP_Ptr<NP_Any> = NP_Ptr::new_standard_ptr(self.location, Rc::clone(&self.schema), Rc::clone(&self.memory));
+        pointer._deep_get::<X>(vec_path, 0)
+    }
+
     #[doc(hidden)]
     pub fn _deep_clear(self, path: Vec<&str>, path_index: usize) -> Result<(), NP_Error> {
 
@@ -440,7 +475,7 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
     }
 
     #[doc(hidden)]
-    pub fn _deep_set<X: NP_Value + Default>(self, req_type: DeepType, path: Vec<&str>, path_index: usize, value: X) -> Result<(), NP_Error> {
+    pub fn _deep_set<X: NP_Value + Default>(self, path: Vec<&str>, path_index: usize, value: X) -> Result<(), NP_Error> {
 
         match NP_TypeKeys::from(X::type_idx().0) {
             NP_TypeKeys::JSON => { return Err(NP_Error::new("Can't set with JSON Object!")) },
@@ -458,7 +493,7 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
                     Some(mut table) => {
                         let table_key = path[path_index];
                         let col = table.select::<NP_Any>(table_key)?;
-                        col._deep_set::<X>(req_type, path, path_index + 1, value)?;
+                        col._deep_set::<X>(path, path_index + 1, value)?;
                     },
                     None => {
                         unreachable!();
@@ -477,7 +512,7 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
                     Some(mut map) => {
                         let map_key = path[path_index];
                         let col = map.select(&map_key.as_bytes().to_vec())?;
-                        col._deep_set::<X>(req_type, path, path_index + 1, value)?;
+                        col._deep_set::<X>(path, path_index + 1, value)?;
                     },
                     None => {
                         unreachable!();
@@ -499,7 +534,7 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
                         match list_key_int {
                             Ok(x) => {
                                 let col = list.select(x)?;
-                                col._deep_set::<X>(req_type, path, path_index + 1, value)?;
+                                col._deep_set::<X>(path, path_index + 1, value)?;
                             },
                             Err(_e) => {
                                 return Err(NP_Error::new("Can't query list with string, need number!".to_owned()))
@@ -526,7 +561,7 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
                         match list_key_int {
                             Ok(x) => {
                                 let col = tuple.select::<NP_Any>(x)?;
-                                col._deep_set::<X>(req_type,path, path_index + 1, value)?;
+                                col._deep_set::<X>(path, path_index + 1, value)?;
                             },
                             Err(_e) => {
                                 return Err(NP_Error::new("Can't query tuple with string, need number!".to_owned()))
@@ -570,7 +605,7 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
     }
 
     #[doc(hidden)]
-    pub fn _deep_get<X: NP_Value + Default>(self, req_type: DeepType, path: Vec<&str>, path_index: usize) -> Result<Option<Box<X>>, NP_Error> {
+    pub fn _deep_get<X: NP_Value + Default>(self, path: Vec<&str>, path_index: usize) -> Result<Option<Box<X>>, NP_Error> {
 
 
         let is_json_req = match NP_TypeKeys::from(X::type_idx().0) {
@@ -578,15 +613,10 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
             _ => false
         };
 
-        let can_get_collections = match req_type {
-            DeepType::Scalar => { if is_json_req { true } else { false } },
-            _ => { true }
-        };
-
         match NP_TypeKeys::from(self.schema.type_data.0) {
             NP_TypeKeys::Table => {
 
-                if can_get_collections == false && is_json_req == false {
+                if is_json_req == false {
                     overflow_error("deep get", &path, path_index)?;
                 }
 
@@ -594,14 +624,14 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
                 
                 match result {
                     Some(mut table) => {
-                        if path.len() == path_index && can_get_collections {
+                        if path.len() == path_index && is_json_req {
                             // make sure the schema and type match
                             if is_json_req == false { type_error(&self.schema.type_data, &X::type_idx(), &path, path_index)?; };
                             X::buffer_into(self.location, self.kind, self.schema, self.memory)
                         } else {
                             let table_key = path[path_index];
                             let col = table.select::<NP_Any>(table_key)?;
-                            col._deep_get::<X>(req_type, path, path_index + 1)
+                            col._deep_get::<X>(path, path_index + 1)
                         }
                     },
                     None => {
@@ -611,21 +641,21 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
             },
             NP_TypeKeys::Map => {
 
-                if can_get_collections == false && is_json_req == false {
+                if is_json_req == false {
                     overflow_error("deep get", &path, path_index)?;
                 }
                 let result = NP_Map::<NP_Any>::buffer_into(self.location, self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory))?;
 
                 match result {
                     Some(mut map) => {
-                        if path.len() == path_index && can_get_collections {
+                        if path.len() == path_index {
                             // make sure the schema and type match
                             if is_json_req == false { type_error(&self.schema.type_data, &X::type_idx(), &path, path_index)?; };
                             X::buffer_into(self.location, self.kind, self.schema, self.memory)
                         } else {
                             let map_key = path[path_index];
                             let col = map.select(&map_key.as_bytes().to_vec())?;
-                            col._deep_get::<X>(req_type, path, path_index + 1)
+                            col._deep_get::<X>(path, path_index + 1)
                         }
                     },
                     None => {
@@ -635,7 +665,7 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
             },
             NP_TypeKeys::List => {
 
-                if can_get_collections == false && is_json_req == false {
+                if is_json_req == false {
                     overflow_error("deep get", &path, path_index)?;
                 }
 
@@ -643,7 +673,7 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
 
                 match result {
                     Some(mut list) => {
-                        if path.len() == path_index && can_get_collections {
+                        if path.len() == path_index {
                             // make sure the schema and type match
                             if is_json_req == false { type_error(&self.schema.type_data, &X::type_idx(), &path, path_index)?; };
                             X::buffer_into(self.location, self.kind, self.schema, self.memory)
@@ -653,7 +683,7 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
                             match list_key_int {
                                 Ok(x) => {
                                     let col = list.select(x)?;
-                                    col._deep_get::<X>(req_type, path, path_index + 1)
+                                    col._deep_get::<X>(path, path_index + 1)
                                 },
                                 Err(_e) => {
                                     Err(NP_Error::new("Can't query list with string, need number!".to_owned()))
@@ -669,7 +699,7 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
             },
             NP_TypeKeys::Tuple => {
                 
-                if can_get_collections == false && is_json_req == false {
+                if is_json_req == false {
                     overflow_error("deep get", &path, path_index)?;
                 }
 
@@ -677,7 +707,7 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
 
                 match result {
                     Some(tuple) => {
-                        if path.len() == path_index && can_get_collections {
+                        if path.len() == path_index {
                             // make sure the schema and type match
                             if is_json_req == false { type_error(&self.schema.type_data, &X::type_idx(), &path, path_index)?; };
                             X::buffer_into(self.location, self.kind, self.schema, self.memory)
@@ -687,7 +717,7 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
                             match list_key_int {
                                 Ok(x) => {
                                     let col = tuple.select::<NP_Any>(x)?;
-                                    col._deep_get::<X>(req_type, path, path_index + 1)
+                                    col._deep_get::<X>(path, path_index + 1)
                                 },
                                 Err(_e) => {
                                     Err(NP_Error::new("Can't query tuple with string, need number!".to_owned()))

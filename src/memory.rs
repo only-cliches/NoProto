@@ -1,5 +1,5 @@
 use crate::pointer::NP_PtrKinds;
-use crate::error::NP_Error;
+use crate::{PROTOCOL_VERSION, error::NP_Error};
 use core::cell::UnsafeCell;
 use alloc::vec::Vec;
 
@@ -12,9 +12,28 @@ const MAX_SIZE: usize = core::u32::MAX as usize;
 
 impl<'a> NP_Memory {
 
-    pub fn new(bytes: Vec<u8>) -> Self {
+    pub fn existing(bytes: Vec<u8>) -> Self {
         NP_Memory {
             bytes: UnsafeCell::new(bytes)
+        }
+    }
+
+    pub fn new(capacity: Option<usize>) -> Self {
+        let use_size = match capacity {
+            Some(x) => x,
+            None => 1024
+        };
+
+        let mut new_bytes = Vec::with_capacity(use_size);
+
+        new_bytes.push(PROTOCOL_VERSION); // Protocol version (for breaking changes if needed later)
+        new_bytes.push(0); // u32 HEAD for root pointer (starts at zero)
+        new_bytes.push(0);
+        new_bytes.push(0);
+        new_bytes.push(0);
+
+        NP_Memory {
+            bytes: UnsafeCell::new(new_bytes)
         }
     }
 
