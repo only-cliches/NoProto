@@ -1,5 +1,5 @@
 use crate::pointer::NP_PtrKinds;
-use crate::{memory::NP_Memory, pointer::{NP_Value, NP_Ptr, any::NP_Any}, error::NP_Error, schema::{NP_SchemaKinds, NP_Schema, NP_TypeKeys}, json_flex::{JSMAP, NP_JSON}};
+use crate::{memory::{NP_Size, NP_Memory}, pointer::{NP_Value, NP_Ptr, any::NP_Any}, error::NP_Error, schema::{NP_SchemaKinds, NP_Schema, NP_TypeKeys}, json_flex::{JSMAP, NP_JSON}};
 
 use alloc::vec::Vec;
 use alloc::string::String;
@@ -7,6 +7,8 @@ use alloc::boxed::Box;
 use alloc::{rc::Rc, borrow::ToOwned};
 use core::result::Result;
 
+/// The data type for tables in NoProto buffers. [Using collections with pointers](../pointer/struct.NP_Ptr.html#using-collection-types-with-pointers).
+#[derive(Debug)]
 pub struct NP_Table {
     address: u32, // pointer location
     head: u32,
@@ -29,21 +31,44 @@ impl NP_Value for NP_Table {
         match &*schema.kind {
             NP_SchemaKinds::Table { columns } => {
 
-                let mut addr = kind.get_value();
+                match &buffer.size {
+                    NP_Size::U16 => {
+                        let mut addr = kind.get_value_addr();
 
-                let mut head: [u8; 4] = [0; 4];
+                        let mut head: [u8; 2] = [0; 2];
+        
+                        if addr == 0 {
+                            // no table here, make one
+                            addr = buffer.malloc([0 as u8; 2].to_vec())?; // stores HEAD
+                            buffer.set_value_address(address, addr, &kind); // set pointer to new table
+                        } else {
+                            // existing head, read value
+                            let a = addr as usize;
+                            head = *buffer.get_2_bytes(a).unwrap_or(&[0; 2]);
+                        }
+        
+                        Ok(Some(Box::new(NP_Table::new(addr, u16::from_be_bytes(head) as u32, buffer, Rc::clone(&columns)))))
+                    },
+                    NP_Size::U32 => {
+                        let mut addr = kind.get_value_addr();
 
-                if addr == 0 {
-                    // no table here, make one
-                    addr = buffer.malloc([0 as u8; 4].to_vec())?; // stores HEAD
-                    buffer.set_value_address(address, addr, &kind); // set pointer to new table
-                } else {
-                    // existing head, read value
-                    let a = addr as usize;
-                    head = *buffer.get_4_bytes(a).unwrap_or(&[0; 4]);
+                        let mut head: [u8; 4] = [0; 4];
+        
+                        if addr == 0 {
+                            // no table here, make one
+                            addr = buffer.malloc([0 as u8; 4].to_vec())?; // stores HEAD
+                            buffer.set_value_address(address, addr, &kind); // set pointer to new table
+                        } else {
+                            // existing head, read value
+                            let a = addr as usize;
+                            head = *buffer.get_4_bytes(a).unwrap_or(&[0; 4]);
+                        }
+        
+                        Ok(Some(Box::new(NP_Table::new(addr, u32::from_be_bytes(head), buffer, Rc::clone(&columns)))))
+                    }
                 }
 
-                Ok(Some(Box::new(NP_Table::new(addr, u32::from_be_bytes(head), buffer, Rc::clone(&columns)))))
+
             },
             _ => {
                 unreachable!();
@@ -52,12 +77,17 @@ impl NP_Value for NP_Table {
     }
  
     fn buffer_get_size(address: u32, kind: &NP_PtrKinds, schema: Rc<NP_Schema>, buffer: Rc<NP_Memory>) -> Result<u32, NP_Error> {
-        let base_size = 4u32; // head
-        let addr = kind.get_value();
+
+        let addr = kind.get_value_addr();
 
         if addr == 0 {
             return Ok(0);
         }
+
+        let base_size = match &buffer.size {
+            NP_Size::U16 => 2u32,
+            NP_Size::U32 => 4u32
+        };
 
         match &*schema.kind {
             NP_SchemaKinds::Table { columns } => {
@@ -99,7 +129,7 @@ impl NP_Value for NP_Table {
     }
 
     fn buffer_to_json(address: u32, kind: &NP_PtrKinds, schema: Rc<NP_Schema>, buffer: Rc<NP_Memory>) -> NP_JSON {
-        let addr = kind.get_value();
+        let addr = kind.get_value_addr();
 
         if addr == 0 {
             return NP_JSON::Null;
@@ -212,10 +242,16 @@ impl NP_Table {
         }
     }
 
+    /// Convert the table into an iterator.  Allows you to loop through all the values present in the table.
+    /// 
     pub fn it(self) -> NP_Table_Iterator {
         NP_Table_Iterator::new(self.address, self.head, self.memory.unwrap(), self.columns.unwrap())
     }
 
+    /// Select a specific column from the table.  If there is no value for the column you selected, you'll get an empty pointer back.
+    /// 
+    /// If the column does not exist this operation will fail.
+    /// 
     pub fn select<X: NP_Value + Default>(&mut self, column: &str) -> core::result::Result<NP_Ptr<X>, NP_Error> {
 
         let mut column_schema: Option<Rc<NP_Schema>> = None;
@@ -264,10 +300,17 @@ impl NP_Table {
 
                 if self.head == 0 { // no values, create one
 
-                    let mut ptr_bytes: [u8; 9] = [0; 9];
+                    let mut ptr_bytes: Vec<u8> = memory.blank_ptr_bytes(&NP_PtrKinds::TableItem { addr: 0, i: 0, next: 0 }); // Map item pointer
     
                     // set column index in pointer
-                    ptr_bytes[8] = column_index;
+                    match &memory.size {
+                        NP_Size::U16 => { 
+                            ptr_bytes[4] = column_index;
+                        },
+                        NP_Size::U32 => {
+                            ptr_bytes[8] = column_index;
+                        }
+                    }
         
                     let addr = memory.malloc(ptr_bytes.to_vec())?;
                     
@@ -275,7 +318,7 @@ impl NP_Table {
                     self.set_head(addr);
 
                     // provide
-                    return Ok(NP_Ptr::new_table_item_ptr(self.head, Rc::clone(&some_column_schema), Rc::clone(&memory)));
+                    return Ok(NP_Ptr::_new_table_item_ptr(self.head, Rc::clone(&some_column_schema), Rc::clone(&memory)));
                 } else { // values exist, loop through them to see if we have an existing pointer for this column
 
                     let mut next_addr = self.head as usize;
@@ -284,19 +327,21 @@ impl NP_Table {
 
                     while has_next {
 
-                        let index;
-                     
-                        index = memory.read_bytes()[(next_addr + 8)];
+                        let index = match &memory.size {
+                            NP_Size::U16 => { memory.read_bytes()[(next_addr + 4)] },
+                            NP_Size::U32 => { memory.read_bytes()[(next_addr + 8)] }
+                        };
                         
                         // found our value!
                         if index == column_index {
-                            return Ok(NP_Ptr::new_table_item_ptr(next_addr as u32, Rc::clone(&some_column_schema), Rc::clone(&memory)))
+                            return Ok(NP_Ptr::_new_table_item_ptr(next_addr as u32, Rc::clone(&some_column_schema), Rc::clone(&memory)))
                         }
                         
                         // not found yet, get next address
-                        let next: [u8; 4] = *memory.get_4_bytes(next_addr + 4).unwrap_or(&[0; 4]);
-
-                        let next_ptr = u32::from_be_bytes(next) as usize;
+                        let next_ptr = match memory.size {
+                            NP_Size::U16 => u16::from_be_bytes(*memory.get_2_bytes(next_addr + 2).unwrap_or(&[0; 2])) as usize,
+                            NP_Size::U32 => u32::from_be_bytes(*memory.get_4_bytes(next_addr + 4).unwrap_or(&[0; 4])) as usize
+                        };
                         if next_ptr == 0 {
                             has_next = false;
                         } else {
@@ -307,22 +352,40 @@ impl NP_Table {
                     // ran out of pointers to check, make one!
 
                     
-                    let mut ptr_bytes: [u8; 9] = [0; 9];
+                    let mut ptr_bytes: Vec<u8> = memory.blank_ptr_bytes(&NP_PtrKinds::TableItem { addr: 0, i: 0, next: 0 }); // Map item pointer
     
                     // set column index in pointer
-                    ptr_bytes[8] = column_index;
+                    match &memory.size {
+                        NP_Size::U16 => { 
+                            ptr_bytes[4] = column_index;
+                        },
+                        NP_Size::U32 => {
+                            ptr_bytes[8] = column_index;
+                        }
+                    }
             
                     let addr = memory.malloc(ptr_bytes.to_vec())?;
 
-                    // set previouse pointer's "next" value to this new pointer
-                    let addr_bytes = addr.to_be_bytes();
                     let write_bytes = memory.write_bytes();
-                    for x in 0..addr_bytes.len() {
-                        write_bytes[(next_addr + 4 + x)] = addr_bytes[x];
+
+                    // set previouse pointer's "next" value to this new pointer
+                    match &memory.size {
+                        NP_Size::U16 => { 
+                            let addr_bytes = (addr as u16).to_be_bytes();
+                            for x in 0..addr_bytes.len() {
+                                write_bytes[(next_addr + 2 + x)] = addr_bytes[x];
+                            }
+                        },
+                        NP_Size::U32 => {
+                            let addr_bytes = addr.to_be_bytes();
+                            for x in 0..addr_bytes.len() {
+                                write_bytes[(next_addr + 4 + x)] = addr_bytes[x];
+                            }
+                        }
                     }
                     
                     // provide 
-                    return Ok(NP_Ptr::new_table_item_ptr(addr, Rc::clone(&some_column_schema), memory));
+                    return Ok(NP_Ptr::_new_table_item_ptr(addr, Rc::clone(&some_column_schema), memory));
 
                 }
             },
@@ -336,6 +399,8 @@ impl NP_Table {
     }
 
 
+    /// Delets a specific column value from this table.  If the column value doesn't exist or the table is empty this does nothing.
+    /// 
     pub fn delete(&mut self, column: &str) -> Result<bool, NP_Error> {
 
         let memory = match &self.memory {
@@ -373,32 +438,64 @@ impl NP_Table {
 
             while has_next {
 
-                let index;
-                     
-                index = memory.read_bytes()[(curr_addr + 8)];
+                let index = match &memory.size {
+                    NP_Size::U16 => { memory.read_bytes()[(curr_addr + 4)] },
+                    NP_Size::U32 => { memory.read_bytes()[(curr_addr + 8)] }
+                };
                 
                 // found our value!
                 if index == *column_index {
 
-                    let next_pointer_bytes: [u8; 4];
 
-                    match memory.get_4_bytes(curr_addr + 4) {
-                        Some(x) => {
-                            next_pointer_bytes = *x;
+
+                    let next_pointer: u32 = match &memory.size {
+                        NP_Size::U16 => { 
+                            let next_pointer_bytes: [u8; 2];
+
+                            match memory.get_2_bytes(curr_addr + 2) {
+                                Some(x) => {
+                                    next_pointer_bytes = *x;
+                                },
+                                None => {
+                                    return Err(NP_Error::new("Out of range request"));
+                                }
+                            }
+                            u16::from_be_bytes(next_pointer_bytes) as u32
                         },
-                        None => {
-                            return Err(NP_Error::new("Out of range request"));
+                        NP_Size::U32 => { 
+                            let next_pointer_bytes: [u8; 4];
+
+                            match memory.get_4_bytes(curr_addr + 4) {
+                                Some(x) => {
+                                    next_pointer_bytes = *x;
+                                },
+                                None => {
+                                    return Err(NP_Error::new("Out of range request"));
+                                }
+                            }
+                            u32::from_be_bytes(next_pointer_bytes)
                         }
-                    }
+                    };
 
                     if curr_addr == self.head as usize { // item is HEAD, just set head to following pointer
-                        self.set_head(u32::from_be_bytes(next_pointer_bytes));
+                        self.set_head(next_pointer);
                     } else { // item is NOT head, set previous pointer's NEXT value to the pointer following this one
                 
                         let memory_bytes = memory.write_bytes();
-                
-                        for x in 0..next_pointer_bytes.len() {
-                            memory_bytes[(prev_addr + x as u32 + 4) as usize] = next_pointer_bytes[x as usize];
+
+                        match &memory.size {
+                            NP_Size::U16 => {
+                                let next_pointer_bytes = (next_pointer as u16).to_be_bytes();
+                                for x in 0..next_pointer_bytes.len() {
+                                    memory_bytes[(prev_addr + x as u32 + 2) as usize] = next_pointer_bytes[x as usize];
+                                };
+                            },
+                            NP_Size::U32 => {
+                                let next_pointer_bytes = next_pointer.to_be_bytes();
+                                for x in 0..next_pointer_bytes.len() {
+                                    memory_bytes[(prev_addr + x as u32 + 4) as usize] = next_pointer_bytes[x as usize];
+                                };
+                            }
                         }
                     }
 
@@ -406,9 +503,10 @@ impl NP_Table {
                 }
                 
                 // not found yet, get next address
-                let next: [u8; 4] = *memory.get_4_bytes(curr_addr + 4).unwrap_or(&[0; 4]);
-
-                let next_ptr = u32::from_be_bytes(next) as usize;
+                let next_ptr = match memory.size {
+                    NP_Size::U16 => u16::from_be_bytes(*memory.get_2_bytes(curr_addr + 2).unwrap_or(&[0; 2])) as usize,
+                    NP_Size::U32 => u32::from_be_bytes(*memory.get_4_bytes(curr_addr + 4).unwrap_or(&[0; 4])) as usize
+                };
                 if next_ptr == 0 {
                     has_next = false;
                 } else {
@@ -425,6 +523,8 @@ impl NP_Table {
         }
     }
 
+    /// Clear all column values from this table.
+    /// 
     pub fn empty(self) -> Self {
 
         let memory = match &self.memory {
@@ -434,7 +534,10 @@ impl NP_Table {
 
         let memory_bytes = memory.write_bytes();
        
-        let head_bytes = 0u32.to_be_bytes();
+        let head_bytes = match memory.size {
+            NP_Size::U16 => { 0u16.to_be_bytes().to_vec() },
+            NP_Size::U32 => { 0u32.to_be_bytes().to_vec() }
+        };
 
         for x in 0..head_bytes.len() {
             memory_bytes[(self.address + x as u32) as usize] = head_bytes[x as usize];
@@ -459,7 +562,10 @@ impl NP_Table {
 
         let memory_bytes = memory.write_bytes();
        
-        let addr_bytes = addr.to_be_bytes();
+        let addr_bytes = match memory.size {
+            NP_Size::U16 => { (addr as u16).to_be_bytes().to_vec() },
+            NP_Size::U32 => { addr.to_be_bytes().to_vec() }
+        };
 
         for x in 0..addr_bytes.len() {
             memory_bytes[(self.address + x as u32) as usize] = addr_bytes[x as usize];
@@ -467,6 +573,10 @@ impl NP_Table {
       
     }
 
+    /// Check to see if a specific column value has been set in this table.
+    /// 
+    /// The first bool is if a pointer exists for this column, the second bool is if there is a value set on that pointer.
+    /// 
     pub fn has(&self, column: &str) -> core::result::Result<(bool, bool), NP_Error> {
         let mut found = false;
 
@@ -510,23 +620,28 @@ impl NP_Table {
 
         while has_next {
 
-            let index;
-
-        
-            index = memory.read_bytes()[(next_addr + 8)];
+            let index = match &memory.size {
+                NP_Size::U16 => { memory.read_bytes()[(next_addr + 4)] },
+                NP_Size::U32 => { memory.read_bytes()[(next_addr + 8)] }
+            };
 
             // found our value!
             if index == *column_index {
-                let value: [u8; 4] = *memory.get_4_bytes(next_addr).unwrap_or(&[0; 4]);
-                let value_addr = u32::from_be_bytes(value);
+                let value_addr = match &memory.size {
+                    NP_Size::U16 => { u16::from_be_bytes(*memory.get_2_bytes(next_addr).unwrap_or(&[0; 2])) as u32 },
+                    NP_Size::U32 => { u32::from_be_bytes(*memory.get_4_bytes(next_addr).unwrap_or(&[0; 4])) }
+                };
                 return Ok((true, value_addr != 0));
             }
 
             
             // not found yet, get next address
-            let next: [u8; 4] = *memory.get_4_bytes(next_addr + 4).unwrap_or(&[0; 4]);
             
-            next_addr = u32::from_be_bytes(next) as usize;
+            next_addr = match &memory.size {
+                NP_Size::U16 => { u16::from_be_bytes(*memory.get_2_bytes(next_addr + 2).unwrap_or(&[0; 2])) as usize },
+                NP_Size::U32 => { u32::from_be_bytes(*memory.get_4_bytes(next_addr + 4).unwrap_or(&[0; 4])) as usize }
+            };
+
             if next_addr== 0 {
                 has_next = false;
             }
@@ -538,6 +653,8 @@ impl NP_Table {
 
 }
 
+/// Iterator over table column values
+#[derive(Debug)]
 pub struct NP_Table_Iterator {
     address: u32, // pointer location
     head: u32,
@@ -549,6 +666,7 @@ pub struct NP_Table_Iterator {
 
 impl NP_Table_Iterator {
 
+    #[doc(hidden)]
     pub fn new(address: u32, head: u32, memory: Rc<NP_Memory>, columns: Rc<Vec<Option<(u8, String, Rc<NP_Schema>)>>>) -> Self {
         NP_Table_Iterator {
             address,
@@ -560,6 +678,7 @@ impl NP_Table_Iterator {
         }
     }
 
+    /// Convert the iterator back into a table.
     pub fn into_table(self) -> NP_Table {
         self.table
     }
@@ -601,19 +720,26 @@ impl Iterator for NP_Table_Iterator {
     }
 }
 
+///  A single item of the table iterator.
+#[derive(Debug)]
 pub struct NP_Table_Item { 
+    /// The index of this item in the table
     pub index: u8,
+    /// The column string name for this index
     pub column: String,
+    /// (has pointer at this index, his value at this index)
     pub has_value: (bool, bool),
-    pub schema: Rc<NP_Schema>,
+    schema: Rc<NP_Schema>,
     table: NP_Table
 }
 
 impl NP_Table_Item {
+    /// Select the pointer at this iterator
     // TODO: Build a select statement that grabs the current index in place instead of seeking to it.
     pub fn select<X: NP_Value + Default>(&mut self) -> Result<NP_Ptr<X>, NP_Error> {
         self.table.select(&self.column)
     }
+    /// Delete the value and it's pointer at this iterator
     // TODO: Same as select for delete
     pub fn delete(&mut self) -> Result<bool, NP_Error> {
         self.table.delete(&self.column)

@@ -3,22 +3,46 @@ use crate::{PROTOCOL_VERSION, error::NP_Error};
 use core::cell::UnsafeCell;
 use alloc::vec::Vec;
 
-#[derive(Debug)]
-pub struct NP_Memory {
-    bytes: UnsafeCell<Vec<u8>>
+#[derive(Debug, Copy, Clone)]
+pub enum NP_Size {
+    U32,
+    U16
 }
 
-const MAX_SIZE: usize = core::u32::MAX as usize;
+#[derive(Debug)]
+pub struct NP_Memory {
+    bytes: UnsafeCell<Vec<u8>>,
+    pub size: NP_Size
+}
+
+const MAX_SIZE_LARGE: usize = core::u32::MAX as usize;
+const MAX_SIZE_SMALL: usize = core::u16::MAX as usize;
+
 
 impl<'a> NP_Memory {
 
     pub fn existing(bytes: Vec<u8>) -> Self {
+
+        let size = bytes[1];
+        
         NP_Memory {
-            bytes: UnsafeCell::new(bytes)
+            bytes: UnsafeCell::new(bytes),
+            size: if size == 0 {
+                NP_Size::U32
+            } else {
+                NP_Size::U16
+            }
         }
     }
 
-    pub fn new(capacity: Option<usize>) -> Self {
+    pub fn addr_size(&self) -> usize {
+        match &self.size {
+            NP_Size::U32 => MAX_SIZE_LARGE,
+            NP_Size::U16 => MAX_SIZE_SMALL
+        }
+    }
+
+    pub fn new(capacity: Option<usize>, size: NP_Size) -> Self {
         let use_size = match capacity {
             Some(x) => x,
             None => 1024
@@ -27,13 +51,21 @@ impl<'a> NP_Memory {
         let mut new_bytes = Vec::with_capacity(use_size);
 
         new_bytes.push(PROTOCOL_VERSION); // Protocol version (for breaking changes if needed later)
-        new_bytes.push(0); // u32 HEAD for root pointer (starts at zero)
-        new_bytes.push(0);
-        new_bytes.push(0);
-        new_bytes.push(0);
+        match &size {
+            NP_Size::U32 => {
+                new_bytes.push(0); // size key (0 for U32)
+                new_bytes.extend(0u32.to_be_bytes().to_vec()); // u32 HEAD for root pointer (starts at zero)
+            },
+            NP_Size::U16 => {
+                new_bytes.push(1); // size key (1 for U16)
+                new_bytes.extend(0u16.to_be_bytes().to_vec()); // u16 HEAD for root pointer (starts at zero)
+            }
+        }
+
 
         NP_Memory {
-            bytes: UnsafeCell::new(new_bytes)
+            bytes: UnsafeCell::new(new_bytes),
+            size: size
         }
     }
 
@@ -43,9 +75,14 @@ impl<'a> NP_Memory {
 
         let location = self_bytes.len();
 
+        let max_sze = match self.size {
+            NP_Size::U16 => { MAX_SIZE_SMALL },
+            NP_Size::U32 => { MAX_SIZE_LARGE }
+        };
+
         // not enough space left?
-        if location + bytes.len() >= MAX_SIZE {
-            return Err(NP_Error::new("Out of memory!"))
+        if location + bytes.len() >= max_sze {
+            return Err(NP_Error::new("Not enough space available in buffer!"))
         }
 
         self_bytes.extend(bytes);
@@ -62,9 +99,45 @@ impl<'a> NP_Memory {
         self_bytes
     }
 
+    pub fn ptr_size(&self, ptr: &NP_PtrKinds) -> u32 {
+        // Get the size of this pointer based it's kind
+        match self.size {
+            NP_Size::U32 => {
+                match ptr {
+                    NP_PtrKinds::None                                     =>   { 0u32 },
+                    NP_PtrKinds::Standard  { addr: _ }                   =>    { 4u32 },
+                    NP_PtrKinds::MapItem   { addr: _, key: _,  next: _ } =>    { 12u32 },
+                    NP_PtrKinds::TableItem { addr: _, i:_ ,    next: _ } =>    { 9u32 },
+                    NP_PtrKinds::ListItem  { addr: _, i:_ ,    next: _ } =>    { 10u32 }
+                }
+            },
+            NP_Size::U16 => {
+                match ptr {
+                    NP_PtrKinds::None                                     =>   { 0u32 },
+                    NP_PtrKinds::Standard  { addr: _ }                   =>    { 2u32 },
+                    NP_PtrKinds::MapItem   { addr: _, key: _,  next: _ } =>    { 6u32 },
+                    NP_PtrKinds::TableItem { addr: _, i:_ ,    next: _ } =>    { 5u32 },
+                    NP_PtrKinds::ListItem  { addr: _, i:_ ,    next: _ } =>    { 6u32 }
+                }
+            }
+        }
+    }
+
+    pub fn blank_ptr_bytes(&self, ptr: &NP_PtrKinds) -> Vec<u8> {
+        let size = self.ptr_size(ptr);
+        let mut empty_bytes = Vec::with_capacity(size as usize);
+        for _x in 0..size {
+            empty_bytes.push(0);
+        }
+        empty_bytes
+    }
+
     pub fn set_value_address(&self, address: u32, val: u32, kind: &NP_PtrKinds) -> NP_PtrKinds {
 
-        let addr_bytes = val.to_be_bytes();
+        let addr_bytes = match self.size {
+            NP_Size::U32 => val.to_be_bytes().to_vec(),
+            NP_Size::U16 => (val as u16).to_be_bytes().to_vec()
+        };
 
         let self_bytes = unsafe { &mut *self.bytes.get() };
     
@@ -76,17 +149,17 @@ impl<'a> NP_Memory {
             NP_PtrKinds::None => {
                 NP_PtrKinds::None
             }
-            NP_PtrKinds::Standard { value: _ } => {
-                NP_PtrKinds::Standard { value: val }
+            NP_PtrKinds::Standard { addr: _ } => {
+                NP_PtrKinds::Standard { addr: val }
             },
-            NP_PtrKinds::MapItem { value: _, key,  next  } => {
-                NP_PtrKinds::MapItem { value: val, key: *key, next: *next }
+            NP_PtrKinds::MapItem { addr: _, key,  next  } => {
+                NP_PtrKinds::MapItem { addr: val, key: *key, next: *next }
             },
-            NP_PtrKinds::TableItem { value: _, i, next  } => {
-                NP_PtrKinds::TableItem { value: val, i: *i, next: *next }
+            NP_PtrKinds::TableItem { addr: _, i, next  } => {
+                NP_PtrKinds::TableItem { addr: val, i: *i, next: *next }
             },
-            NP_PtrKinds::ListItem { value: _, i, next  } => {
-                NP_PtrKinds::ListItem { value: val, i: *i, next: *next }
+            NP_PtrKinds::ListItem { addr: _, i, next  } => {
+                NP_PtrKinds::ListItem { addr: val, i: *i, next: *next }
             }
         }
     }

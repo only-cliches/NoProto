@@ -1,13 +1,15 @@
 use alloc::rc::Rc;
 use crate::pointer::NP_PtrKinds;
 use crate::pointer::{NP_Value, NP_Ptr, any::NP_Any};
-use crate::{memory::NP_Memory, schema::{NP_SchemaKinds, NP_Schema, NP_TypeKeys}, error::NP_Error, json_flex::NP_JSON};
+use crate::{memory::{NP_Size, NP_Memory}, schema::{NP_SchemaKinds, NP_Schema, NP_TypeKeys}, error::NP_Error, json_flex::NP_JSON};
 
 use alloc::vec::Vec;
 use alloc::string::String;
 use alloc::boxed::Box;
 use alloc::borrow::ToOwned;
 
+/// The map type [Using collections with pointers](../pointer/struct.NP_Ptr.html#using-collection-types-with-pointers).
+#[derive(Debug)]
 pub struct NP_Map<T> {
     address: u32, // pointer location
     head: u32,
@@ -46,23 +48,43 @@ impl<T: NP_Value + Default> NP_Value for NP_Map<T> {
                     }
                 }
 
-                let mut addr = kind.get_value();
+                let mut addr = kind.get_value_addr();
 
-                let mut head: [u8; 4] = [0; 4];
-                let mut size: [u8; 2] = [0; 2];
+                let a = addr as usize;
+
+                let head = if addr == 0 {
+                    0u32
+                } else { 
+                    match &buffer.size {
+                        NP_Size::U16 => {
+                            u16::from_be_bytes(*buffer.get_2_bytes(a).unwrap_or(&[0; 2])) as u32
+                        },
+                        NP_Size::U32 => {
+                            u32::from_be_bytes(*buffer.get_4_bytes(a).unwrap_or(&[0; 4]))
+                        }
+                }};
+                let size = if addr == 0 { 0u16 } else {
+                    match &buffer.size {
+                        NP_Size::U16 => {
+                            u16::from_be_bytes(*buffer.get_2_bytes(a + 2).unwrap_or(&[0; 2]))
+                        },
+                        NP_Size::U32 => {
+                            u16::from_be_bytes(*buffer.get_2_bytes(a + 4).unwrap_or(&[0; 2]))
+                        }
+                    }
+                };
 
                 if addr == 0 {
                     // no map here, make one
-                    addr = buffer.malloc([0 as u8; 6].to_vec())?; // stores HEAD & LENGTH for map
+                    let bytes = match &buffer.size {
+                        NP_Size::U16 => { [0u8; 4].to_vec() },
+                        NP_Size::U32 => { [0u8; 6].to_vec() }
+                    };
+                    addr = buffer.malloc(bytes)?; // stores HEAD & LENGTH for map
                     buffer.set_value_address(address, addr, &kind);
-                } else {
-                    // existing head, read value
-                    let a = addr as usize;
-                    head = *buffer.get_4_bytes(a).unwrap_or(&[0; 4]);
-                    size = *buffer.get_2_bytes(a + 4).unwrap_or(&[0; 2]);
                 }
 
-                Ok(Some(Box::new(NP_Map::new(addr, u32::from_be_bytes(head), u16::from_be_bytes(size), buffer, Rc::clone(value)))))
+                Ok(Some(Box::new(NP_Map::new(addr, head, size, buffer, Rc::clone(value)))))
             },
             _ => {
                 unreachable!();
@@ -76,21 +98,38 @@ impl<T: NP_Value + Default> NP_Value for NP_Map<T> {
         match &*schema.kind {
             NP_SchemaKinds::Map { value } => {
 
-                let addr = kind.get_value();
-
-                let head: [u8; 4];
-                let size: [u8; 2];
+                let addr = kind.get_value_addr();
 
                 if addr == 0 {
                     return Ok(0);
-                } else {
-                    // existing head, read value
-                    let a = addr as usize;
-                    head = *buffer.get_4_bytes(a).unwrap_or(&[0; 4]);
-                    size = *buffer.get_2_bytes(a + 4).unwrap_or(&[0; 2]);
                 }
 
-                let list = NP_Map::<T>::new(addr, u32::from_be_bytes(head), u16::from_be_bytes(size), buffer, Rc::clone(value));
+                let a = addr as usize;
+
+                let head = if addr == 0 {
+                    0u32
+                } else { 
+                    match &buffer.size {
+                        NP_Size::U16 => {
+                            u16::from_be_bytes(*buffer.get_2_bytes(a).unwrap_or(&[0; 2])) as u32
+                        },
+                        NP_Size::U32 => {
+                            u32::from_be_bytes(*buffer.get_4_bytes(a).unwrap_or(&[0; 4]))
+                        }
+                }};
+                let size = if addr == 0 { 0u16 } else {
+                    match &buffer.size {
+                        NP_Size::U16 => {
+                            u16::from_be_bytes(*buffer.get_2_bytes(a + 2).unwrap_or(&[0; 2]))
+                        },
+                        NP_Size::U32 => {
+                            u16::from_be_bytes(*buffer.get_2_bytes(a + 4).unwrap_or(&[0; 2]))
+                        }
+                    }
+                };
+                
+
+                let list = NP_Map::<T>::new(addr, head, size, Rc::clone(&buffer), Rc::clone(value));
 
                 let mut acc_size = 0u32;
 
@@ -99,7 +138,15 @@ impl<T: NP_Value + Default> NP_Value for NP_Map<T> {
                     if l.has_value == true {
                         let ptr = l.select()?;
                         acc_size += ptr.calc_size()?;
-                        acc_size += l.key.len() as u32 + 4u32; // key + key length bytes
+                        match &buffer.size {
+                            NP_Size::U16 => {
+                                acc_size += l.key.len() as u32 + 2u32; // key + key length bytes
+                            },
+                            NP_Size::U32 => {
+                                acc_size += l.key.len() as u32 + 4u32; // key + key length bytes
+                            }
+                        }
+                        
                     }
 
                 };
@@ -117,21 +164,37 @@ impl<T: NP_Value + Default> NP_Value for NP_Map<T> {
         match &*schema.kind {
             NP_SchemaKinds::Map { value } => {
 
-                let addr = kind.get_value();
-
-                let head: [u8; 4];
-                let size: [u8; 2];
+                let addr = kind.get_value_addr();
 
                 if addr == 0 {
                     return NP_JSON::Null;
-                } else {
-                    // existing head, read value
-                    let a = addr as usize;
-                    head = *buffer.get_4_bytes(a).unwrap_or(&[0; 4]);
-                    size = *buffer.get_2_bytes(a + 4).unwrap_or(&[0; 2]);
                 }
 
-                let list = NP_Map::<T>::new(addr, u32::from_be_bytes(head), u16::from_be_bytes(size), buffer, Rc::clone(value));
+                let a = addr as usize;
+
+                let head = if addr == 0 {
+                    0u32
+                } else { 
+                    match &buffer.size {
+                        NP_Size::U16 => {
+                            u16::from_be_bytes(*buffer.get_2_bytes(a).unwrap_or(&[0; 2])) as u32
+                        },
+                        NP_Size::U32 => {
+                            u32::from_be_bytes(*buffer.get_4_bytes(a).unwrap_or(&[0; 4]))
+                        }
+                }};
+                let size = if addr == 0 { 0u16 } else {
+                    match &buffer.size {
+                        NP_Size::U16 => {
+                            u16::from_be_bytes(*buffer.get_2_bytes(a + 2).unwrap_or(&[0; 2]))
+                        },
+                        NP_Size::U32 => {
+                            u16::from_be_bytes(*buffer.get_2_bytes(a + 4).unwrap_or(&[0; 2]))
+                        }
+                    }
+                };
+
+                let list = NP_Map::<T>::new(addr, head, size, buffer, Rc::clone(value));
 
                 let mut json_list = Vec::new();
 
@@ -227,10 +290,12 @@ impl<'a, T: NP_Value + Default> NP_Map<T> {
         }
     }
 
+    /// Convert this map into an iterator
     pub fn it(self) -> NP_Map_Iterator<T> {
         NP_Map_Iterator::new(self.address, self.head, self.len, self.memory.unwrap(), self.value.unwrap())
     }
 
+    /// Select a specific value at the given key
     pub fn select(&mut self, key: &Vec<u8>) -> core::result::Result<NP_Ptr<T>, NP_Error> {
 
         let memory = match &self.memory {
@@ -245,17 +310,31 @@ impl<'a, T: NP_Value + Default> NP_Map<T> {
 
         if self.head == 0 { // no values, create one
 
-            let mut ptr_bytes: [u8; 12] = [0; 12]; // map item pointer
+            let mut ptr_bytes: Vec<u8> = memory.blank_ptr_bytes(&NP_PtrKinds::MapItem { addr: 0, key: 0, next: 0 }); // Map item pointer
+
+            let key_bytes = match memory.size {
+                NP_Size::U16 => (key.len() as u16).to_be_bytes().to_vec(),
+                NP_Size::U32 => (key.len() as u32).to_be_bytes().to_vec()
+            };
 
             // key length, then key data
-            let key_addr = memory.malloc((key.len() as u32).to_be_bytes().to_vec())?;
+            let key_addr = memory.malloc(key_bytes)?;
             memory.malloc(key.clone())?;
 
-            let key_addr_bytes = key_addr.to_be_bytes();
-
-            for x in 0..key_addr_bytes.len() {
-                ptr_bytes[8 + x] = key_addr_bytes[x];
-            }
+            match memory.size {
+                NP_Size::U16 => {
+                    let key_addr_bytes = (key_addr as u16).to_be_bytes();
+                    for x in 0..key_addr_bytes.len() {
+                        ptr_bytes[4 + x] = key_addr_bytes[x];
+                    };
+                },
+                NP_Size::U32 => {
+                    let key_addr_bytes = key_addr.to_be_bytes();
+                    for x in 0..key_addr_bytes.len() {
+                        ptr_bytes[8 + x] = key_addr_bytes[x];
+                    };
+                }
+            };
 
             let addr = memory.malloc(ptr_bytes.to_vec())?;
             
@@ -264,7 +343,7 @@ impl<'a, T: NP_Value + Default> NP_Map<T> {
             self.set_len(1);
 
             // provide
-            return Ok(NP_Ptr::new_map_item_ptr(self.head, self_schema, memory));
+            return Ok(NP_Ptr::_new_map_item_ptr(self.head, self_schema, memory));
         } else { // values exist, loop through them to see if we have an existing pointer for this column
 
             let mut next_addr = self.head as usize;
@@ -273,27 +352,34 @@ impl<'a, T: NP_Value + Default> NP_Map<T> {
 
             while has_next {
 
-                let key_bytes_addr = *memory.get_4_bytes(next_addr + 8).unwrap_or(&[0; 4]);
 
-                let key_addr = u32::from_be_bytes(key_bytes_addr) as usize;
+                let key_addr:usize =  match memory.size {
+                    NP_Size::U16 => u16::from_be_bytes(*memory.get_2_bytes(next_addr + 4).unwrap_or(&[0; 2])) as usize,
+                    NP_Size::U32 => u32::from_be_bytes(*memory.get_4_bytes(next_addr + 8).unwrap_or(&[0; 4])) as usize
+                };
 
-                let key_bytes_length = *memory.get_4_bytes(key_addr).unwrap_or(&[0; 4]);
+                let bytes_size:usize =  match memory.size {
+                    NP_Size::U16 => u16::from_be_bytes(*memory.get_2_bytes(key_addr).unwrap_or(&[0; 2])) as usize,
+                    NP_Size::U32 => u32::from_be_bytes(*memory.get_4_bytes(key_addr).unwrap_or(&[0; 4])) as usize
+                };
 
-                let bytes_size = u32::from_be_bytes(key_bytes_length) as usize;
-
-                let key_bytes: &[u8] = &memory.read_bytes()[(key_addr+4)..(key_addr+4+bytes_size)];
+                let key_bytes: &[u8] = match memory.size {
+                    NP_Size::U16 => &memory.read_bytes()[(key_addr+2)..(key_addr+2+bytes_size)],
+                    NP_Size::U32 => &memory.read_bytes()[(key_addr+4)..(key_addr+4+bytes_size)]
+                };
 
                 let key_vec = key_bytes.to_vec();
 
                 // found our value!
                 if key_vec == *key {
-                    return Ok(NP_Ptr::new_map_item_ptr(next_addr as u32, self_schema, memory));
+                    return Ok(NP_Ptr::_new_map_item_ptr(next_addr as u32, self_schema, memory));
                 }
                 
                 // not found yet, get next address
-                let next: [u8; 4] = *memory.get_4_bytes(next_addr + 4).unwrap_or(&[0; 4]);
-
-                let next_ptr = u32::from_be_bytes(next) as usize;
+                let next_ptr = match memory.size {
+                    NP_Size::U16 => u16::from_be_bytes(*memory.get_2_bytes(next_addr + 2).unwrap_or(&[0; 2])) as usize,
+                    NP_Size::U32 => u32::from_be_bytes(*memory.get_4_bytes(next_addr + 4).unwrap_or(&[0; 4])) as usize
+                };
                 if next_ptr == 0 {
                     has_next = false;
                 } else {
@@ -302,35 +388,63 @@ impl<'a, T: NP_Value + Default> NP_Map<T> {
             }
 
             // ran out of pointers to check, make one!
-            let mut ptr_bytes: [u8; 12] = [0; 12];
+            let mut ptr_bytes: Vec<u8> = memory.blank_ptr_bytes(&NP_PtrKinds::MapItem { addr: 0, key: 0, next: 0 }); // Map item pointer
+
+            let key_bytes = match memory.size {
+                NP_Size::U16 => (key.len() as u16).to_be_bytes().to_vec(),
+                NP_Size::U32 => (key.len() as u32).to_be_bytes().to_vec()
+            };
 
             // key length, then key data
-            let key_addr = memory.malloc((key.len() as u32).to_be_bytes().to_vec())?;
+            let key_addr = memory.malloc(key_bytes)?;
             memory.malloc(key.clone())?;
 
-            let key_addr_bytes = key_addr.to_be_bytes();
-
-            for x in 0..key_addr_bytes.len() {
-                ptr_bytes[8 + x] = key_addr_bytes[x];
-            }
+            match memory.size {
+                NP_Size::U16 => {
+                    let key_addr_bytes = (key_addr as u16).to_be_bytes();
+                    for x in 0..key_addr_bytes.len() {
+                        ptr_bytes[4 + x] = key_addr_bytes[x];
+                    };
+                },
+                NP_Size::U32 => {
+                    let key_addr_bytes = key_addr.to_be_bytes();
+                    for x in 0..key_addr_bytes.len() {
+                        ptr_bytes[8 + x] = key_addr_bytes[x];
+                    };
+                }
+            };
 
             let addr = memory.malloc(ptr_bytes.to_vec())?;
 
             // set previouse pointer's "next" value to this new pointer
-            let addr_bytes = addr.to_be_bytes();
-            let write_bytes = memory.write_bytes();
-            for x in 0..addr_bytes.len() {
-                write_bytes[(next_addr + 4 + x)] = addr_bytes[x];
-            }
+
+            match memory.size {
+                NP_Size::U16 => {
+                    let addr_bytes = (addr as u16).to_be_bytes();
+                    let write_bytes = memory.write_bytes();
+                    for x in 0..addr_bytes.len() {
+                        write_bytes[(next_addr + 2 + x)] = addr_bytes[x];
+                    };
+                },
+                NP_Size::U32 => {
+                    let addr_bytes = addr.to_be_bytes();
+                    let write_bytes = memory.write_bytes();
+                    for x in 0..addr_bytes.len() {
+                        write_bytes[(next_addr + 4 + x)] = addr_bytes[x];
+                    };
+                }
+            };
+
 
             self.set_len(self.len + 1);
             
             // provide 
-            return Ok(NP_Ptr::new_map_item_ptr(addr, self_schema, memory));
+            return Ok(NP_Ptr::_new_map_item_ptr(addr, self_schema, memory));
 
         }
     }
 
+    /// Delete a value at the given key
     pub fn delete(&mut self, key: &Vec<u8>) -> core::result::Result<bool, NP_Error>{
 
         let memory = match &self.memory {
@@ -350,42 +464,76 @@ impl<'a, T: NP_Value + Default> NP_Map<T> {
 
             while has_next {
 
-                let key_bytes_addr = *memory.get_4_bytes(curr_addr + 8).unwrap_or(&[0; 4]);
+                let key_addr:usize =  match memory.size {
+                    NP_Size::U16 => u16::from_be_bytes(*memory.get_2_bytes(curr_addr + 4).unwrap_or(&[0; 2])) as usize,
+                    NP_Size::U32 => u32::from_be_bytes(*memory.get_4_bytes(curr_addr + 8).unwrap_or(&[0; 4])) as usize
+                };
 
-                let key_addr = u32::from_be_bytes(key_bytes_addr) as usize;
+                let bytes_size:usize =  match memory.size {
+                    NP_Size::U16 => u16::from_be_bytes(*memory.get_2_bytes(key_addr).unwrap_or(&[0; 2])) as usize,
+                    NP_Size::U32 => u32::from_be_bytes(*memory.get_4_bytes(key_addr).unwrap_or(&[0; 4])) as usize
+                };
 
-                let key_bytes_length = *memory.get_4_bytes(key_addr).unwrap_or(&[0; 4]);
-
-                let bytes_size = u32::from_be_bytes(key_bytes_length) as usize;
-
-                let key_bytes: &[u8] = &memory.read_bytes()[(key_addr+4)..(key_addr+4+bytes_size)];
+                let key_bytes: &[u8] = match memory.size {
+                    NP_Size::U16 => &memory.read_bytes()[(key_addr+2)..(key_addr+2+bytes_size)],
+                    NP_Size::U32 => &memory.read_bytes()[(key_addr+4)..(key_addr+4+bytes_size)]
+                };
 
                 let key_vec = key_bytes.to_vec();
 
                 // found our value!
                 if key_vec == *key {
 
-                    let next_pointer_bytes: [u8; 4];
+                    match memory.size {
+                        NP_Size::U16 => {
+                            let next_pointer_bytes: [u8; 2];
 
-                    match memory.get_4_bytes(curr_addr + 4) {
-                        Some(x) => {
-                            next_pointer_bytes = *x;
+                            match memory.get_2_bytes(curr_addr + 2) {
+                                Some(x) => {
+                                    next_pointer_bytes = *x;
+                                },
+                                None => {
+                                    return Err(NP_Error::new("Out of range request"));
+                                }
+                            }
+        
+                            if curr_addr == self.head as usize { // item is HEAD
+                                self.set_head(u16::from_be_bytes(next_pointer_bytes) as u32);
+                            } else { // item is NOT head
+                        
+                                let memory_bytes = memory.write_bytes();
+                        
+                                for x in 0..next_pointer_bytes.len() {
+                                    memory_bytes[(prev_addr + x as u32 + 2) as usize] = next_pointer_bytes[x as usize];
+                                }
+                            }
                         },
-                        None => {
-                            return Err(NP_Error::new("Out of range request"));
-                        }
-                    }
+                        NP_Size::U32 => {
+                            let next_pointer_bytes: [u8; 4];
 
-                    if curr_addr == self.head as usize { // item is HEAD
-                        self.set_head(u32::from_be_bytes(next_pointer_bytes));
-                    } else { // item is NOT head
-                
-                        let memory_bytes = memory.write_bytes();
-                
-                        for x in 0..next_pointer_bytes.len() {
-                            memory_bytes[(prev_addr + x as u32 + 4) as usize] = next_pointer_bytes[x as usize];
+                            match memory.get_4_bytes(curr_addr + 4) {
+                                Some(x) => {
+                                    next_pointer_bytes = *x;
+                                },
+                                None => {
+                                    return Err(NP_Error::new("Out of range request"));
+                                }
+                            }
+        
+                            if curr_addr == self.head as usize { // item is HEAD
+                                self.set_head(u32::from_be_bytes(next_pointer_bytes));
+                            } else { // item is NOT head
+                        
+                                let memory_bytes = memory.write_bytes();
+                        
+                                for x in 0..next_pointer_bytes.len() {
+                                    memory_bytes[(prev_addr + x as u32 + 4) as usize] = next_pointer_bytes[x as usize];
+                                }
+                            }
                         }
-                    }
+                    };
+
+
 
                     // set length
                     self.set_len(self.len - 1);
@@ -394,9 +542,11 @@ impl<'a, T: NP_Value + Default> NP_Map<T> {
                 }
                 
                 // not found yet, get next address
-                let next: [u8; 4] = *memory.get_4_bytes(curr_addr + 4).unwrap_or(&[0; 4]);
+                let next_ptr: usize = match memory.size {
+                    NP_Size::U16 => u16::from_be_bytes(*memory.get_2_bytes(curr_addr + 2).unwrap_or(&[0; 2])) as usize,
+                    NP_Size::U32 => u32::from_be_bytes(*memory.get_4_bytes(curr_addr + 4).unwrap_or(&[0; 4])) as usize
+                };
 
-                let next_ptr = u32::from_be_bytes(next) as usize;
                 if next_ptr == 0 {
                     has_next = false;
                 } else {
@@ -413,6 +563,7 @@ impl<'a, T: NP_Value + Default> NP_Map<T> {
         }
     }
 
+    /// Get the number of items in this map
     pub fn len(&self) -> u16 {
         self.len
     }
@@ -424,16 +575,26 @@ impl<'a, T: NP_Value + Default> NP_Map<T> {
             None => unreachable!()
         };
 
-
         let memory_bytes = memory.write_bytes();
-       
+
         let len_bytes = len.to_be_bytes();
 
-        for x in 0..len_bytes.len() {
-            memory_bytes[(self.address + (x as u32) + 4) as usize] = len_bytes[x as usize];
-        }
+        match memory.size {
+            NP_Size::U16 => {
+                for x in 0..len_bytes.len() {
+                    memory_bytes[(self.address + (x as u32) + 2) as usize] = len_bytes[x as usize];
+                }
+            },
+            NP_Size::U32 => {
+                for x in 0..len_bytes.len() {
+                    memory_bytes[(self.address + (x as u32) + 4) as usize] = len_bytes[x as usize];
+                }
+            }
+        };
+
     }
 
+    /// Remove all keys/values from this map
     pub fn empty(self) -> Self {
 
         let memory = match self.memory {
@@ -444,8 +605,17 @@ impl<'a, T: NP_Value + Default> NP_Map<T> {
 
         let memory_bytes = memory.write_bytes();
 
-        for x in 0..6 {
-            memory_bytes[(self.address + x as u32) as usize] = 0;
+        match &memory.size {
+            NP_Size::U32 => { 
+                for x in 0..6 {
+                    memory_bytes[(self.address + x as u32) as usize] = 0;
+                }
+            },
+            NP_Size::U16 => {
+                for x in 0..4 {
+                    memory_bytes[(self.address + x as u32) as usize] = 0;
+                }
+            }
         }
 
         NP_Map {
@@ -469,15 +639,26 @@ impl<'a, T: NP_Value + Default> NP_Map<T> {
 
 
         let memory_bytes = memory.write_bytes();
-       
-        let head_bytes = addr.to_be_bytes();
 
-        for x in 0..head_bytes.len() {
-            memory_bytes[(self.address + x as u32) as usize] = head_bytes[x as usize];
+        match &memory.size {
+            NP_Size::U32 => { 
+                let head_bytes = addr.to_be_bytes();
+
+                for x in 0..head_bytes.len() {
+                    memory_bytes[(self.address + x as u32) as usize] = head_bytes[x as usize];
+                }
+            },
+            NP_Size::U16 => {
+                let head_bytes = (addr as u16).to_be_bytes();
+
+                for x in 0..head_bytes.len() {
+                    memory_bytes[(self.address + x as u32) as usize] = head_bytes[x as usize];
+                }
+            }
         }
-      
     }
 
+    /// Check to see if a key exists in this map
     pub fn has(&self, key: &Vec<u8>) -> core::result::Result<bool, NP_Error> {
 
         if self.head == 0 { // no values in this table
@@ -495,15 +676,20 @@ impl<'a, T: NP_Value + Default> NP_Map<T> {
 
         while has_next {
 
-            let key_bytes_addr = *memory.get_4_bytes(next_addr + 8).unwrap_or(&[0; 4]);
+            let key_addr:usize =  match memory.size {
+                NP_Size::U16 => u16::from_be_bytes(*memory.get_2_bytes(next_addr + 4).unwrap_or(&[0; 2])) as usize,
+                NP_Size::U32 => u32::from_be_bytes(*memory.get_4_bytes(next_addr + 8).unwrap_or(&[0; 4])) as usize
+            };
 
-            let key_addr = u32::from_be_bytes(key_bytes_addr) as usize;
+            let bytes_size:usize =  match memory.size {
+                NP_Size::U16 => u16::from_be_bytes(*memory.get_2_bytes(key_addr).unwrap_or(&[0; 2])) as usize,
+                NP_Size::U32 => u32::from_be_bytes(*memory.get_4_bytes(key_addr).unwrap_or(&[0; 4])) as usize
+            };
 
-            let key_bytes_length = *memory.get_4_bytes(key_addr).unwrap_or(&[0; 4]);
-
-            let bytes_size = u32::from_be_bytes(key_bytes_length) as usize;
-
-            let key_bytes: &[u8] = &memory.read_bytes()[(key_addr+4)..(key_addr+4+bytes_size)];
+            let key_bytes: &[u8] = match memory.size {
+                NP_Size::U16 => &memory.read_bytes()[(key_addr+2)..(key_addr+2+bytes_size)],
+                NP_Size::U32 => &memory.read_bytes()[(key_addr+4)..(key_addr+4+bytes_size)]
+            };
 
             let key_vec = key_bytes.to_vec();
 
@@ -513,9 +699,11 @@ impl<'a, T: NP_Value + Default> NP_Map<T> {
             }
             
             // not found yet, get next address
-            let next: [u8; 4] = *memory.get_4_bytes(next_addr + 4).unwrap_or(&[0; 4]);
 
-            let next_ptr = u32::from_be_bytes(next) as usize;
+            let next_ptr: usize = match memory.size {
+                NP_Size::U16 => u16::from_be_bytes(*memory.get_2_bytes(next_addr + 2).unwrap_or(&[0; 2])) as usize,
+                NP_Size::U32 => u32::from_be_bytes(*memory.get_4_bytes(next_addr + 4).unwrap_or(&[0; 4])) as usize
+            };
             if next_ptr == 0 {
                 has_next = false;
             } else {
@@ -529,7 +717,8 @@ impl<'a, T: NP_Value + Default> NP_Map<T> {
 
 }
 
-
+/// The iterator to loop over the keys/values in a map
+#[derive(Debug)]
 pub struct NP_Map_Iterator<T> {
     current_index: u16,
     address: u32, // pointer location
@@ -543,6 +732,7 @@ pub struct NP_Map_Iterator<T> {
 
 impl<T: NP_Value + Default> NP_Map_Iterator<T> {
 
+    #[doc(hidden)]
     pub fn new(address: u32, head: u32, length: u16, memory: Rc<NP_Memory>, value: Rc<NP_Schema>) -> Self {
         NP_Map_Iterator {
             current_index: 0,
@@ -556,6 +746,7 @@ impl<T: NP_Value + Default> NP_Map_Iterator<T> {
         }
     }
 
+    /// Convert the iterator back into a map
     pub fn into_map(self) -> NP_Map<T> {
         self.map
     }
@@ -569,26 +760,35 @@ impl<T: NP_Value + Default> Iterator for NP_Map_Iterator<T> {
         if self.current_address == 0 {
             return None;
         }
-        
-        let value_address = u32::from_be_bytes(*self.memory.get_4_bytes(self.current_address as usize).unwrap_or(&[0; 4]));
 
-        let key_bytes_addr = *self.memory.get_4_bytes((self.current_address + 8) as usize).unwrap_or(&[0; 4]);
+        let value_address: u32 =  match &self.memory.size {
+            NP_Size::U16 => u16::from_be_bytes(*self.memory.get_2_bytes(self.current_address as usize).unwrap_or(&[0; 2])) as u32,
+            NP_Size::U32 => u32::from_be_bytes(*self.memory.get_4_bytes(self.current_address as usize).unwrap_or(&[0; 4]))
+        };
 
-        let key_addr = u32::from_be_bytes(key_bytes_addr) as usize;
+        let key_addr:usize =  match &self.memory.size {
+            NP_Size::U16 => u16::from_be_bytes(*self.memory.get_2_bytes(self.current_address as usize + 4).unwrap_or(&[0; 2])) as usize,
+            NP_Size::U32 => u32::from_be_bytes(*self.memory.get_4_bytes(self.current_address as usize + 8).unwrap_or(&[0; 4])) as usize
+        };
 
-        let key_bytes_length = *self.memory.get_4_bytes(key_addr).unwrap_or(&[0; 4]);
+        let bytes_size:usize =  match &self.memory.size {
+            NP_Size::U16 => u16::from_be_bytes(*self.memory.get_2_bytes(key_addr).unwrap_or(&[0; 2])) as usize,
+            NP_Size::U32 => u32::from_be_bytes(*self.memory.get_4_bytes(key_addr).unwrap_or(&[0; 4])) as usize
+        };
 
-        let bytes_size = u32::from_be_bytes(key_bytes_length) as usize;
-
-        let key_bytes: &[u8] = &self.memory.read_bytes()[(key_addr+4)..(key_addr+4+bytes_size)];
+        let key_bytes: &[u8] = match &self.memory.size {
+            NP_Size::U16 => &self.memory.read_bytes()[(key_addr+2)..(key_addr+2+bytes_size)],
+            NP_Size::U32 => &self.memory.read_bytes()[(key_addr+4)..(key_addr+4+bytes_size)]
+        };
 
         let key_vec = key_bytes.to_vec();
 
-        let next_bytes: [u8; 4] = *self.memory.get_4_bytes((self.current_address + 4) as usize).unwrap_or(&[0; 4]);
-
         let this_address = self.current_address;
         // point to next value
-        self.current_address = u32::from_be_bytes(next_bytes);
+        self.current_address = match &self.memory.size {
+            NP_Size::U16 => u16::from_be_bytes(*self.memory.get_2_bytes((self.current_address + 2) as usize).unwrap_or(&[0; 2])) as u32,
+            NP_Size::U32 => u32::from_be_bytes(*self.memory.get_4_bytes((self.current_address + 4) as usize).unwrap_or(&[0; 4]))
+        };
         
         self.current_index += 1;
         return Some(NP_Map_Item {
@@ -604,22 +804,27 @@ impl<T: NP_Value + Default> Iterator for NP_Map_Iterator<T> {
     }
 }
 
+/// A single iterator item
+#[derive(Debug)]
 pub struct NP_Map_Item<T> { 
+    /// The index of this item in the map
     pub index: u16,
+    /// The key of this item
     pub key: Vec<u8>,
+    /// if there is a value here or not
     pub has_value: bool,
-    pub value: Rc<NP_Schema>,
+    value: Rc<NP_Schema>,
     address: u32,
-    // length: u16,
     map: NP_Map<T>,
     memory: Rc<NP_Memory>
 }
 
 impl<T: NP_Value + Default> NP_Map_Item<T> {
-    
+    /// Select the pointer at this iterator
     pub fn select(&mut self) -> Result<NP_Ptr<T>, NP_Error> {
-        Ok(NP_Ptr::new_map_item_ptr(self.address, Rc::clone(&self.value), Rc::clone(&self.memory)))
+        Ok(NP_Ptr::_new_map_item_ptr(self.address, Rc::clone(&self.value), Rc::clone(&self.memory)))
     }
+    /// Delete the value at this iterator
     // TODO: Build a select statement that grabs the current index in place instead of seeking to it.
     pub fn delete(&mut self) -> Result<bool, NP_Error> {
         self.map.delete(&self.key)

@@ -5,15 +5,19 @@ use alloc::string::String;
 use alloc::borrow::ToOwned;
 use alloc::string::ToString;
 
+/// The error type used for errors in this library
 #[derive(Debug)]
 pub struct NP_Error {
+    /// The message of this error
     pub message: String
 }
 
 impl NP_Error {
+    /// Generate a new error with a specific message
     pub fn new<S: AsRef<str>>(message: S) -> Self {
         NP_Error { message: message.as_ref().to_owned() }
     }
+    /// Convert an option to an error type
     pub fn unwrap<T>(value: Option<T>) -> Result<T, NP_Error> {
         match value {
             Some(x) => Ok(x),

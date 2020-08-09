@@ -10,6 +10,7 @@ use alloc::string::String;
 use alloc::boxed::Box;
 use alloc::borrow::ToOwned;
 
+/// Any data type
 #[derive(Debug)]
 pub struct NP_Any {
 
@@ -20,16 +21,16 @@ impl<'a> NP_Any {
     /// Casts a pointer from NP_Any to any other type.
     /// 
     /// 
-    pub fn cast<T: NP_Value + Default>(pointer: NP_Ptr<NP_Any>) -> core::result::Result<NP_Ptr<T>, NP_Error> {
+    pub fn cast<T: NP_Value + Default>(pointer: NP_Ptr<NP_Any>) -> Result<NP_Ptr<T>, NP_Error> {
 
         // schema is "any" type, all casting permitted
         if pointer.schema.type_data.0 == NP_TypeKeys::Any as i64 {
-            return Ok(NP_Ptr::new_standard_ptr(pointer.location, pointer.schema, pointer.memory));
+            return Ok(NP_Ptr::_new_standard_ptr(pointer.location, pointer.schema, pointer.memory));
         }
 
         // schema matches type
         if T::type_idx().0 == pointer.schema.type_data.0 { 
-            return Ok(NP_Ptr::new_standard_ptr(pointer.location, pointer.schema, pointer.memory));
+            return Ok(NP_Ptr::_new_standard_ptr(pointer.location, pointer.schema, pointer.memory));
         }
 
         // schema does not match type
@@ -51,17 +52,16 @@ impl NP_Value for NP_Any {
     fn type_idx() -> (i64, String) { (NP_TypeKeys::Any as i64, "any".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Any as i64, "any".to_owned()) }
 
-    fn buffer_set(_address: u32, _kind: &NP_PtrKinds, _schema: Rc<NP_Schema>, _buffer: Rc<NP_Memory>, _value: Box<&Self>) -> core::result::Result<NP_PtrKinds, NP_Error> {
+    fn buffer_set(_address: u32, _kind: &NP_PtrKinds, _schema: Rc<NP_Schema>, _buffer: Rc<NP_Memory>, _value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
         Err(NP_Error::new("Can't use .set() with (Any), must cast first with NP_Any::cast<T>(pointer)."))
     }
-
-    fn buffer_into(_address: u32, _kind: NP_PtrKinds, _schema: Rc<NP_Schema>, _buffer: Rc<NP_Memory>) -> core::result::Result<Option<Box<Self>>, NP_Error> {
+    fn buffer_into(_address: u32, _kind: NP_PtrKinds, _schema: Rc<NP_Schema>, _buffer: Rc<NP_Memory>) -> Result<Option<Box<Self>>, NP_Error> {
         Err(NP_Error::new("Type (Any) doesn't support .into()!"))
     }
     fn buffer_to_json(_address: u32, _kind: &NP_PtrKinds, _schema: Rc<NP_Schema>, _buffer: Rc<NP_Memory>) -> NP_JSON {
         NP_JSON::Null
     }
-    fn buffer_get_size(_address: u32, _kind: &NP_PtrKinds, _schema: Rc<NP_Schema>, _buffer: Rc<NP_Memory>) -> core::result::Result<u32, NP_Error> {
+    fn buffer_get_size(_address: u32, _kind: &NP_PtrKinds, _schema: Rc<NP_Schema>, _buffer: Rc<NP_Memory>) -> Result<u32, NP_Error> {
         Ok(0)
     }
     fn buffer_do_compact<'a, X: NP_Value + Default>(_from_ptr: &'a NP_Ptr<X>, _to_ptr: NP_Ptr<NP_Any>) -> Result<(u32, NP_PtrKinds, Rc<NP_Schema>), NP_Error> where Self: NP_Value + Default {

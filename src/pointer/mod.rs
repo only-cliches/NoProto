@@ -10,14 +10,19 @@
 //! 
 //! 
 
+/// Misc types (NP_Dec, NP_Geo, etc)
 pub mod misc;
+/// String type
 pub mod string;
+/// Bytes type
 pub mod bytes;
+/// Any type
 pub mod any;
+/// Numbers types
 pub mod numbers;
 
 use crate::json_flex::NP_JSON;
-use crate::memory::NP_Memory;
+use crate::memory::{NP_Size, NP_Memory};
 use crate::NP_Error;
 use crate::{schema::{NP_Schema, NP_TypeKeys}, collection::{map::NP_Map, table::NP_Table, list::NP_List, tuple::NP_Tuple}, utils::{overflow_error, print_path, type_error}};
 
@@ -35,40 +40,31 @@ use any::NP_Any;
 pub enum NP_PtrKinds {
     None,
     // scalar / collection
-    Standard  { value: u32 }, // 4 bytes [4]
+    Standard  { addr: u32 }, // u32(4 bytes [4]), u16(2 bytes [2])
 
     // collection items
-    MapItem   { value: u32, next: u32, key: u32 },  // 12 bytes [4, 4, 4]
-    TableItem { value: u32, next: u32, i: u8    },  // 9  bytes [4, 4, 1]
-    ListItem  { value: u32, next: u32, i: u16   },  // 10 bytes [4, 4, 2]
+    MapItem   { addr: u32, next: u32, key: u32 },  // u32(12 bytes [4, 4, 4]), u16(6 bytes [2, 2, 2])
+    TableItem { addr: u32, next: u32, i: u8    },  // u32(9  bytes [4, 4, 1]), u16(5 bytes [2, 2, 1])
+    ListItem  { addr: u32, next: u32, i: u16   },  // u32(10 bytes [4, 4, 2]), u16(6 bytes [2, 2, 2])
 }
 
 
 impl NP_PtrKinds {
 
     /// Get the address of the value for this pointer
-    pub fn get_value(&self) -> u32 {
+    pub fn get_value_addr(&self) -> u32 {
         match self {
             NP_PtrKinds::None                                                => { 0 },
-            NP_PtrKinds::Standard  { value } =>                      { *value },
-            NP_PtrKinds::MapItem   { value, key: _,  next: _ } =>    { *value },
-            NP_PtrKinds::TableItem { value, i: _,    next: _ } =>    { *value },
-            NP_PtrKinds::ListItem  { value, i:_ ,    next: _ } =>    { *value }
-        }
-    }
-
-    /// Get the size of this pointer based it's kind
-    pub fn get_size(&self) -> u32 {
-        match self {
-            NP_PtrKinds::None                                     =>    { 0u32 },
-            NP_PtrKinds::Standard  { value: _ }                   =>    { 4u32 },
-            NP_PtrKinds::MapItem   { value: _, key: _,  next: _ } =>    { 12u32 },
-            NP_PtrKinds::TableItem { value: _, i:_ ,    next: _ } =>    { 9u32 },
-            NP_PtrKinds::ListItem  { value: _, i:_ ,    next: _ } =>    { 10u32 }
+            NP_PtrKinds::Standard  { addr } =>                      { *addr },
+            NP_PtrKinds::MapItem   { addr, key: _,  next: _ } =>    { *addr },
+            NP_PtrKinds::TableItem { addr, i: _,    next: _ } =>    { *addr },
+            NP_PtrKinds::ListItem  { addr, i:_ ,    next: _ } =>    { *addr }
         }
     }
 }
 
+/// This trait is used to implement types as NoProto buffer types.
+/// This includes all the type data, encoding and decoding methods.
 pub trait NP_Value {
     /// Check if a specific string "type" in the schema matches this data type
     /// 
@@ -141,19 +137,26 @@ pub trait NP_Value {
 
 /// The base data type, all information is stored/retrieved against pointers
 /// 
-/// Each pointer represents at least a 32 bit unsigned integer that is either zero for no value or points to an offset in the buffer.  All pointer addresses are zero based against the beginning of the buffer.
+/// Each pointer represents at least a 16 or 32 bit unsigned integer that is either zero for no value or points to an offset in the buffer.  All pointer addresses are zero based against the beginning of the buffer.
 /// 
 /// # Using Scalar Types with Pointers
 /// 
 /// # Using Collection Types with Pointers
 /// 
+/// 
+/// 
 #[derive(Debug)]
 pub struct NP_Ptr<T: NP_Value + Default> {
-    pub location: u32, // pointer address in buffer
-    pub kind: NP_PtrKinds, // the kind of pointer this is (standard, list item, map item, etc).  Includes value address
-    pub memory: Rc<NP_Memory>, // the underlying buffer this pointer is a part of
-    pub schema: Rc<NP_Schema>, // schema stores the *actual* schema data for this pointer, regardless of type casting
-    pub value: T // a static invocation of the pointer type
+    ///pointer address in buffer
+    pub location: u32, 
+    /// the kind of pointer this is (standard, list item, map item, etc).  Includes value address
+    pub kind: NP_PtrKinds, 
+    /// the underlying buffer this pointer is a part of
+    pub memory: Rc<NP_Memory>, 
+    /// schema stores the *actual* schema data for this pointer, regardless of type casting
+    pub schema: Rc<NP_Schema>, 
+    /// a static invocation of the pointer type
+    pub value: T 
 }
 
 impl<T: NP_Value + Default> NP_Ptr<T> {
@@ -162,7 +165,6 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
     pub fn get(&mut self) -> Result<Option<T>, NP_Error> {
 
         match NP_TypeKeys::from(T::type_idx().0) {
-            NP_TypeKeys::JSON => { return Err(NP_Error::new("Can't get JSON Object!")) },
             NP_TypeKeys::Table => { return Err(NP_Error::new("Can't get Table object, use .into()!")) },
             NP_TypeKeys::List => { return Err(NP_Error::new("Can't get List object, use .into()")) },
             NP_TypeKeys::Tuple => { return Err(NP_Error::new("Can't get Tuple object, use .into()")) },
@@ -203,14 +205,16 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
     }
 
     #[doc(hidden)]
-    pub fn new_standard_ptr(location: u32, schema: Rc<NP_Schema>, memory: Rc<NP_Memory>) -> Self {
+    pub fn _new_standard_ptr(location: u32, schema: Rc<NP_Schema>, memory: Rc<NP_Memory>) -> Self {
 
         let addr = location as usize;
-        let value: [u8; 4] = *memory.get_4_bytes(addr).unwrap_or(&[0; 4]);
         
         NP_Ptr {
             location: location,
-            kind: NP_PtrKinds::Standard { value: u32::from_be_bytes(value) },
+            kind: NP_PtrKinds::Standard { addr: match &memory.size {
+                NP_Size::U32 => u32::from_be_bytes(*memory.get_4_bytes(addr).unwrap_or(&[0; 4])),
+                NP_Size::U16 => u16::from_be_bytes(*memory.get_2_bytes(addr).unwrap_or(&[0; 2])) as u32
+            }},
             memory: memory,
             schema: schema,
             value: T::default()
@@ -218,21 +222,26 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
     }
 
     #[doc(hidden)]
-    pub fn new_table_item_ptr(location: u32, schema: Rc<NP_Schema>, memory: Rc<NP_Memory>) -> Self {
+    pub fn _new_table_item_ptr(location: u32, schema: Rc<NP_Schema>, memory: Rc<NP_Memory>) -> Self {
 
         let addr = location as usize;
         let b_bytes = &memory.read_bytes();
 
-        let value: [u8; 4] = *memory.get_4_bytes(addr).unwrap_or(&[0; 4]);
-        let next: [u8; 4] = *memory.get_4_bytes(addr + 4).unwrap_or(&[0; 4]);
-        let index: u8 = b_bytes[addr + 8];
-
         NP_Ptr {
             location: location,
             kind: NP_PtrKinds::TableItem { 
-                value: u32::from_be_bytes(value),
-                next: u32::from_be_bytes(next),
-                i: index
+                addr: match &memory.size {
+                    NP_Size::U32 => u32::from_be_bytes(*memory.get_4_bytes(addr).unwrap_or(&[0; 4])),
+                    NP_Size::U16 => u16::from_be_bytes(*memory.get_2_bytes(addr).unwrap_or(&[0; 2])) as u32
+                },
+                next: match &memory.size {
+                    NP_Size::U32 => u32::from_be_bytes(*memory.get_4_bytes(addr + 4).unwrap_or(&[0; 4])),
+                    NP_Size::U16 => u16::from_be_bytes(*memory.get_2_bytes(addr + 2).unwrap_or(&[0; 2])) as u32
+                },
+                i: match &memory.size {
+                    NP_Size::U32 => b_bytes[addr + 8],
+                    NP_Size::U16 => b_bytes[addr + 4]
+                }
             },
             memory: memory,
             schema: schema,
@@ -241,19 +250,25 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
     }
 
     #[doc(hidden)]
-    pub fn new_map_item_ptr(location: u32, schema: Rc<NP_Schema>, memory: Rc<NP_Memory>) -> Self {
+    pub fn _new_map_item_ptr(location: u32, schema: Rc<NP_Schema>, memory: Rc<NP_Memory>) -> Self {
 
         let addr = location as usize;
-        let value: [u8; 4] = *memory.get_4_bytes(addr).unwrap_or(&[0; 4]);
-        let next: [u8; 4] = *memory.get_4_bytes(addr + 4).unwrap_or(&[0; 4]);
-        let key: [u8; 4] = *memory.get_4_bytes(addr + 8).unwrap_or(&[0; 4]);
 
         NP_Ptr {
             location: location,
             kind: NP_PtrKinds::MapItem { 
-                value: u32::from_be_bytes(value),
-                next: u32::from_be_bytes(next),
-                key: u32::from_be_bytes(key)
+                addr: match &memory.size {
+                    NP_Size::U32 => u32::from_be_bytes(*memory.get_4_bytes(addr).unwrap_or(&[0; 4])),
+                    NP_Size::U16 => u16::from_be_bytes(*memory.get_2_bytes(addr).unwrap_or(&[0; 2])) as u32
+                },
+                next: match &memory.size {
+                    NP_Size::U32 => u32::from_be_bytes(*memory.get_4_bytes(addr + 4).unwrap_or(&[0; 4])),
+                    NP_Size::U16 => u16::from_be_bytes(*memory.get_2_bytes(addr + 2).unwrap_or(&[0; 2])) as u32
+                },
+                key: match &memory.size {
+                    NP_Size::U32 => u32::from_be_bytes(*memory.get_4_bytes(addr + 8).unwrap_or(&[0; 4])),
+                    NP_Size::U16 => u16::from_be_bytes(*memory.get_2_bytes(addr + 4).unwrap_or(&[0; 2])) as u32
+                }
             },
             memory: memory,
             schema: schema,
@@ -262,19 +277,25 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
     }
 
     #[doc(hidden)]
-    pub fn new_list_item_ptr(location: u32, schema: Rc<NP_Schema>, memory: Rc<NP_Memory>) -> Self {
+    pub fn _new_list_item_ptr(location: u32, schema: Rc<NP_Schema>, memory: Rc<NP_Memory>) -> Self {
 
         let addr = location as usize;
-        let value: [u8; 4] = *memory.get_4_bytes(addr).unwrap_or(&[0; 4]);
-        let next: [u8; 4] = *memory.get_4_bytes(addr + 4).unwrap_or(&[0; 4]);
-        let index: [u8; 2] = *memory.get_2_bytes(addr + 8).unwrap_or(&[0; 2]);
 
         NP_Ptr {
             location: location,
             kind: NP_PtrKinds::ListItem { 
-                value: u32::from_be_bytes(value),
-                next: u32::from_be_bytes(next),
-                i: u16::from_be_bytes(index)
+                addr: match &memory.size {
+                    NP_Size::U32 => u32::from_be_bytes(*memory.get_4_bytes(addr).unwrap_or(&[0; 4])),
+                    NP_Size::U16 => u16::from_be_bytes(*memory.get_2_bytes(addr).unwrap_or(&[0; 2])) as u32
+                },
+                next: match &memory.size {
+                    NP_Size::U32 => u32::from_be_bytes(*memory.get_4_bytes(addr + 4).unwrap_or(&[0; 4])),
+                    NP_Size::U16 => u16::from_be_bytes(*memory.get_2_bytes(addr + 2).unwrap_or(&[0; 2])) as u32
+                },
+                i: match &memory.size {
+                    NP_Size::U32 => u16::from_be_bytes(*memory.get_2_bytes(addr + 8).unwrap_or(&[0; 2])),
+                    NP_Size::U16 => u16::from_be_bytes(*memory.get_2_bytes(addr + 4).unwrap_or(&[0; 2]))
+                }
             },
             memory: memory,
             schema: schema,
@@ -285,7 +306,7 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
     /// Check if there is any value set at this pointer
     pub fn has_value(&self) -> bool {
 
-        if self.kind.get_value() == 0 {
+        if self.kind.get_value_addr() == 0 {
             return false;
         }
 
@@ -295,6 +316,7 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
     /// Clear / delete the value at this pointer.  This is just dereferences, so it doesn't actually remove items from the buffer.  Also if this is called on a collection type, all children of the collection will also be cleared.
     /// 
     /// If you clear a large object it's probably a good idea to run compaction to recover the free space.
+    /// 
     pub fn clear(self) -> Result<NP_Ptr<T>, NP_Error> {
         Ok(NP_Ptr {
             location: self.location,
@@ -306,7 +328,8 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
     }
 
     /// Destroy this pointer and convert it into the underlying data type.
-    /// This is mostly useful for collections but can also be used to extract scalar values out of the buffer.
+    /// This is mostly useful for collections but can also be used to copy scalar values out of the buffer.
+    /// 
     pub fn into(self) -> Result<Option<T>, NP_Error> {
 
         // make sure the type we're casting to isn't ANY or the cast itself isn't ANY
@@ -339,7 +362,10 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
     /// Used to set scalar values inside the buffer, the path only works with dot notation.
     /// This does not work with collection types or `NP_JSON`.
     /// 
+    /// The request path will start from the location of this pointer.
+    /// 
     /// The type that you cast the request to will be compared to the schema, if it doesn't match the schema the request will fail.
+    /// 
     pub fn deep_set<X: NP_Value + Default>(&mut self, path: &str, value: X) -> Result<(), NP_Error> {
 
         match NP_TypeKeys::from(X::type_idx().0) {
@@ -350,7 +376,7 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
             NP_TypeKeys::Tuple => { Err(NP_Error::new("Can't deep set tuple type!")) },
             _ => {
                 let vec_path: Vec<&str> = path.split(".").filter(|v| { v.len() > 0 }).collect();
-                let pointer: NP_Ptr<NP_Any> = NP_Ptr::new_standard_ptr(self.location, Rc::clone(&self.schema), Rc::clone(&self.memory));
+                let pointer: NP_Ptr<NP_Any> = NP_Ptr::_new_standard_ptr(self.location, Rc::clone(&self.schema), Rc::clone(&self.memory));
                 pointer._deep_set::<X>(vec_path, 0, value)
             }
         }
@@ -359,9 +385,11 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
     /// Clear an inner value from the buffer.  The path only works with dot notation.
     /// This can also be used to clear deeply nested collection objects.
     /// 
+    /// The request path will start from the location of this pointer.
+    /// 
     pub fn deep_clear(&self, path: &str) -> Result<(), NP_Error> {
         let vec_path: Vec<&str> = path.split(".").filter(|v| { v.len() > 0 }).collect();
-        let pointer: NP_Ptr<NP_Any> = NP_Ptr::new_standard_ptr(self.location, Rc::clone(&self.schema), Rc::clone(&self.memory));
+        let pointer: NP_Ptr<NP_Any> = NP_Ptr::_new_standard_ptr(self.location, Rc::clone(&self.schema), Rc::clone(&self.memory));
         pointer._deep_clear(vec_path, 0)
     }
   
@@ -369,10 +397,12 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
     /// You can also use this to get JSON by casting the request type to `NP_JSON`.
     /// This can also be used to retrieve deeply nested collection objects.
     /// 
+    /// The request path will start from the location of this pointer.
+    /// 
     /// The type that you cast the request to will be compared to the schema, if it doesn't match the schema the request will fail.
     pub fn deep_get<X: NP_Value + Default>(&self, path: &str) -> Result<Option<Box<X>>, NP_Error> {
         let vec_path: Vec<&str> = path.split(".").filter(|v| { v.len() > 0 }).collect();
-        let pointer: NP_Ptr<NP_Any> = NP_Ptr::new_standard_ptr(self.location, Rc::clone(&self.schema), Rc::clone(&self.memory));
+        let pointer: NP_Ptr<NP_Any> = NP_Ptr::_new_standard_ptr(self.location, Rc::clone(&self.schema), Rc::clone(&self.memory));
         pointer._deep_get::<X>(vec_path, 0)
     }
 
@@ -745,9 +775,7 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
                 // make sure the schema and type match
                 if is_json_req == false { type_error(&self.schema.type_data, &X::type_idx(), &path, path_index - 1)?; }
 
-                let value = X::buffer_into(self.location, self.kind, Rc::clone(&self.schema), self.memory)?;
-
-                match value {
+                match X::buffer_into(self.location, self.kind, Rc::clone(&self.schema), self.memory)? {
                     Some(x) => {
                         Ok(Some(x))
                     },
@@ -929,9 +957,10 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
 
 
     /// Calculate the number of bytes used by this object and it's descendants.
+    /// 
     pub fn calc_size(&self) -> Result<u32, NP_Error> {
 
-        let base_size = self.kind.get_size();
+        let base_size = self.memory.ptr_size(&self.kind);
 
         if self.location == 0 { // no value, just base size
             return Ok(base_size);

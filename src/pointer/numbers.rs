@@ -40,7 +40,7 @@ impl NP_Value for i8 {
 
     fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: Rc<NP_Schema>, memory: Rc<NP_Memory>, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
 
-        let mut addr = kind.get_value();
+        let mut addr = kind.get_value_addr();
 
         let offset = core::i8::MAX as i16;
 
@@ -64,7 +64,7 @@ impl NP_Value for i8 {
     }
 
     fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: Rc<NP_Schema>, memory: Rc<NP_Memory>) -> Result<Option<Box<Self>>, NP_Error> {
-        let addr = kind.get_value() as usize;
+        let addr = kind.get_value_addr() as usize;
 
         // empty value
         if addr == 0 {
@@ -107,8 +107,8 @@ impl NP_Value for i8 {
 
     fn buffer_get_size(_address: u32, kind: &NP_PtrKinds, _schema: Rc<NP_Schema>, _buffer: Rc<NP_Memory>) -> Result<u32, NP_Error> {
  
-        if kind.get_value() == 0 {
-            return Ok(0) 
+        if kind.get_value_addr() == 0 {
+            Ok(0) 
         } else {
             Ok(core::mem::size_of::<Self>() as u32)
         }
@@ -148,7 +148,7 @@ impl NP_Value for i16 {
 
     fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: Rc<NP_Schema>, memory: Rc<NP_Memory>, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
 
-        let mut addr = kind.get_value();
+        let mut addr = kind.get_value_addr();
 
         let offset = core::i16::MAX as i32;
 
@@ -171,7 +171,7 @@ impl NP_Value for i16 {
     }
 
     fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: Rc<NP_Schema>, memory: Rc<NP_Memory>) -> Result<Option<Box<Self>>, NP_Error> {
-        let addr = kind.get_value() as usize;
+        let addr = kind.get_value_addr() as usize;
 
         // empty value
         if addr == 0 {
@@ -212,7 +212,7 @@ impl NP_Value for i16 {
     }
 
     fn buffer_get_size(_address: u32, kind: &NP_PtrKinds, _schema: Rc<NP_Schema>, _buffer: Rc<NP_Memory>) -> Result<u32, NP_Error> {
-        let addr = kind.get_value() as usize;
+        let addr = kind.get_value_addr() as usize;
 
         if addr == 0 {
             return Ok(0) 
@@ -255,7 +255,7 @@ impl NP_Value for i32 {
 
     fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: Rc<NP_Schema>, memory: Rc<NP_Memory>, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
 
-        let mut addr = kind.get_value();
+        let mut addr = kind.get_value_addr();
 
         let offset = core::i32::MAX as i64;
 
@@ -279,7 +279,7 @@ impl NP_Value for i32 {
 
 
     fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: Rc<NP_Schema>, memory: Rc<NP_Memory>) -> Result<Option<Box<Self>>, NP_Error> {
-        let addr = kind.get_value() as usize;
+        let addr = kind.get_value_addr() as usize;
 
         // empty value
         if addr == 0 {
@@ -320,7 +320,7 @@ impl NP_Value for i32 {
     }
 
     fn buffer_get_size(_address: u32, kind: &NP_PtrKinds, _schema: Rc<NP_Schema>, _buffer: Rc<NP_Memory>) -> Result<u32, NP_Error> {
-        let addr = kind.get_value() as usize;
+        let addr = kind.get_value_addr() as usize;
 
         if addr == 0 {
             return Ok(0) 
@@ -363,7 +363,7 @@ impl NP_Value for i64 {
 
     fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: Rc<NP_Schema>, memory: Rc<NP_Memory>, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
 
-        let mut addr = kind.get_value();
+        let mut addr = kind.get_value_addr();
 
         let offset = core::i64::MAX as i128;
 
@@ -385,7 +385,7 @@ impl NP_Value for i64 {
         }
     }
     fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: Rc<NP_Schema>, memory: Rc<NP_Memory>) -> Result<Option<Box<Self>>, NP_Error> {
-        let addr = kind.get_value() as usize;
+        let addr = kind.get_value_addr() as usize;
 
         // empty value
         if addr == 0 {
@@ -426,7 +426,7 @@ impl NP_Value for i64 {
     }
 
     fn buffer_get_size(_address: u32, kind: &NP_PtrKinds, _schema: Rc<NP_Schema>, _buffer: Rc<NP_Memory>) -> Result<u32, NP_Error> {
-        let addr = kind.get_value() as usize;
+        let addr = kind.get_value_addr() as usize;
 
         if addr == 0 {
             return Ok(0) 
@@ -469,7 +469,7 @@ impl NP_Value for u8 {
 
     fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: Rc<NP_Schema>, memory: Rc<NP_Memory>, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
 
-        let mut addr = kind.get_value();
+        let mut addr = kind.get_value_addr();
 
         if addr != 0 { // existing value, replace
             let bytes = value.to_be_bytes();
@@ -492,7 +492,7 @@ impl NP_Value for u8 {
     }
 
     fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: Rc<NP_Schema>, memory: Rc<NP_Memory>) -> Result<Option<Box<Self>>, NP_Error> {
-        let addr = kind.get_value() as usize;
+        let addr = kind.get_value_addr() as usize;
 
         // empty value
         if addr == 0 {
@@ -531,7 +531,7 @@ impl NP_Value for u8 {
     }
 
     fn buffer_get_size(_address: u32, kind: &NP_PtrKinds, _schema: Rc<NP_Schema>, _buffer: Rc<NP_Memory>) -> Result<u32, NP_Error> {
-        let addr = kind.get_value() as usize;
+        let addr = kind.get_value_addr() as usize;
 
         if addr == 0 {
             return Ok(0) 
@@ -574,7 +574,7 @@ impl NP_Value for u16 {
 
     fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: Rc<NP_Schema>, memory: Rc<NP_Memory>, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
 
-        let mut addr = kind.get_value();
+        let mut addr = kind.get_value_addr();
 
         if addr != 0 { // existing value, replace
             let bytes = value.to_be_bytes();
@@ -598,7 +598,7 @@ impl NP_Value for u16 {
 
 
     fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: Rc<NP_Schema>, memory: Rc<NP_Memory>) -> Result<Option<Box<Self>>, NP_Error> {
-        let addr = kind.get_value() as usize;
+        let addr = kind.get_value_addr() as usize;
 
         // empty value
         if addr == 0 {
@@ -637,7 +637,7 @@ impl NP_Value for u16 {
     }
 
     fn buffer_get_size(_address: u32, kind: &NP_PtrKinds, _schema: Rc<NP_Schema>, _buffer: Rc<NP_Memory>) -> Result<u32, NP_Error> {
-        let addr = kind.get_value() as usize;
+        let addr = kind.get_value_addr() as usize;
 
         if addr == 0 {
             return Ok(0) 
@@ -679,7 +679,7 @@ impl NP_Value for u32 {
 
     fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: Rc<NP_Schema>, memory: Rc<NP_Memory>, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
 
-        let mut addr = kind.get_value();
+        let mut addr = kind.get_value_addr();
 
         if addr != 0 { // existing value, replace
             let bytes = value.to_be_bytes();
@@ -703,7 +703,7 @@ impl NP_Value for u32 {
 
  
     fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: Rc<NP_Schema>, memory: Rc<NP_Memory>) -> Result<Option<Box<Self>>, NP_Error> {
-        let addr = kind.get_value() as usize;
+        let addr = kind.get_value_addr() as usize;
 
         // empty value
         if addr == 0 {
@@ -742,7 +742,7 @@ impl NP_Value for u32 {
     }
 
     fn buffer_get_size(_address: u32, kind: &NP_PtrKinds, _schema: Rc<NP_Schema>, _buffer: Rc<NP_Memory>) -> Result<u32, NP_Error> {
-        let addr = kind.get_value() as usize;
+        let addr = kind.get_value_addr() as usize;
 
         if addr == 0 {
             return Ok(0) 
@@ -785,7 +785,7 @@ impl NP_Value for u64 {
 
     fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: Rc<NP_Schema>, memory: Rc<NP_Memory>, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
 
-        let mut addr = kind.get_value();
+        let mut addr = kind.get_value_addr();
 
         if addr != 0 { // existing value, replace
             let bytes = value.to_be_bytes();
@@ -809,7 +809,7 @@ impl NP_Value for u64 {
 
 
     fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: Rc<NP_Schema>, memory: Rc<NP_Memory>) -> Result<Option<Box<Self>>, NP_Error> {
-        let addr = kind.get_value() as usize;
+        let addr = kind.get_value_addr() as usize;
 
         // empty value
         if addr == 0 {
@@ -848,7 +848,7 @@ impl NP_Value for u64 {
     }
 
     fn buffer_get_size(_address: u32, kind: &NP_PtrKinds, _schema: Rc<NP_Schema>, _buffer: Rc<NP_Memory>) -> Result<u32, NP_Error> {
-        let addr = kind.get_value() as usize;
+        let addr = kind.get_value_addr() as usize;
 
         if addr == 0 {
             return Ok(0) 
@@ -891,7 +891,7 @@ impl NP_Value for f32 {
 
     fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: Rc<NP_Schema>, memory: Rc<NP_Memory>, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
 
-        let mut addr = kind.get_value();
+        let mut addr = kind.get_value_addr();
 
         if addr != 0 { // existing value, replace
             let bytes = value.to_be_bytes();
@@ -914,7 +914,7 @@ impl NP_Value for f32 {
     }
 
     fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: Rc<NP_Schema>, memory: Rc<NP_Memory>) -> Result<Option<Box<Self>>, NP_Error> {
-        let addr = kind.get_value() as usize;
+        let addr = kind.get_value_addr() as usize;
 
         // empty value
         if addr == 0 {
@@ -953,7 +953,7 @@ impl NP_Value for f32 {
     }
 
     fn buffer_get_size(_address: u32, kind: &NP_PtrKinds, _schema: Rc<NP_Schema>, _buffer: Rc<NP_Memory>) -> Result<u32, NP_Error> {
-        let addr = kind.get_value() as usize;
+        let addr = kind.get_value_addr() as usize;
 
         if addr == 0 {
             return Ok(0) 
@@ -996,7 +996,7 @@ impl NP_Value for f64 {
 
     fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: Rc<NP_Schema>, memory: Rc<NP_Memory>, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
 
-        let mut addr = kind.get_value();
+        let mut addr = kind.get_value_addr();
 
         if addr != 0 { // existing value, replace
             let bytes = value.to_be_bytes();
@@ -1018,7 +1018,7 @@ impl NP_Value for f64 {
 
 
     fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: Rc<NP_Schema>, memory: Rc<NP_Memory>) -> Result<Option<Box<Self>>, NP_Error> {
-        let addr = kind.get_value() as usize;
+        let addr = kind.get_value_addr() as usize;
 
         // empty value
         if addr == 0 {
@@ -1057,7 +1057,7 @@ impl NP_Value for f64 {
     }
 
     fn buffer_get_size(_address: u32, kind: &NP_PtrKinds, _schema: Rc<NP_Schema>, _buffer: Rc<NP_Memory>) -> Result<u32, NP_Error> {
-        let addr = kind.get_value() as usize;
+        let addr = kind.get_value_addr() as usize;
 
         if addr == 0 {
             return Ok(0) 

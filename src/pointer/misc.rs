@@ -57,7 +57,9 @@ use alloc::{rc::Rc, string::ToString};
 /// ```
 #[derive(Clone, Copy, Debug)]
 pub struct NP_Dec {
+    /// The number being stored, does not include decimal point data
     pub num: i64,
+    /// The exponent of this number
     pub exp: u8
 }
 
@@ -82,7 +84,6 @@ impl NP_Dec {
             s *= 10f64;
             step -= 1;
         }
-        // let s = 10f64.powf(self.exp as f64);
         m / s
     }
 
@@ -723,7 +724,7 @@ impl NP_Value for NP_Dec {
 
     fn buffer_set(address: u32, kind: &NP_PtrKinds, schema: Rc<NP_Schema>, memory: Rc<NP_Memory>, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
 
-        let mut addr = kind.get_value();
+        let mut addr = kind.get_value_addr();
 
         let mut cloned_value = (*value).clone();
         cloned_value.shift_exp(schema.type_state as u8);
@@ -755,7 +756,7 @@ impl NP_Value for NP_Dec {
     }
 
     fn buffer_into(_address: u32, kind: NP_PtrKinds, schema: Rc<NP_Schema>, buffer: Rc<NP_Memory>) -> Result<Option<Box<Self>>, NP_Error> {
-        let addr = kind.get_value() as usize;
+        let addr = kind.get_value_addr() as usize;
 
         // empty value
         if addr == 0 {
@@ -806,7 +807,7 @@ impl NP_Value for NP_Dec {
     }
 
     fn buffer_get_size(_address: u32, kind: &NP_PtrKinds, _schema: Rc<NP_Schema>, _buffer: Rc<NP_Memory>) -> Result<u32, NP_Error> {
-        let addr = kind.get_value() as usize;
+        let addr = kind.get_value_addr() as usize;
 
         if addr == 0 {
             return Ok(0) 
@@ -824,8 +825,22 @@ impl NP_Value for NP_Dec {
 /// When `geo4`, `geo8`, or `geo16` types are used the data is saved and retrieved with this struct.
 #[derive(Debug)]
 pub struct NP_Geo {
+    /// The latitude of this coordinate
     pub lat: f64,
+    /// The longitude of this coordinate
     pub lng: f64
+}
+
+impl NP_Geo {
+    /// Get the deviser value depending on the resolution of the type in the schema
+    pub fn get_deviser(size: i64) -> f64 {
+        match size {
+            16 => 1000000000f64,
+            8 =>  10000000f64,
+            4 =>  100f64,
+            _ => 0.0
+        }
+     }
 }
 
 impl Default for NP_Geo {
@@ -841,12 +856,12 @@ impl NP_Value for NP_Geo {
     }
 
     fn schema_state(type_string: &str, _json_schema: &NP_JSON) -> Result<i64, NP_Error> {
-        Ok(match type_string {
-            "geo4" => 4,
-            "geo8" => 8,
-            "geo16" => 16,
-            _ => 0
-        })
+        match type_string {
+            "geo4" => Ok(4),
+            "geo8" => Ok(8),
+            "geo16" => Ok(16),
+            _ => Err(NP_Error::new("Geo type must be geo4, geo8 or geo16!"))
+        }
     }
 
     fn schema_default(schema: Rc<NP_Schema>) -> Option<Box<Self>> {
@@ -905,7 +920,7 @@ impl NP_Value for NP_Geo {
 
     fn buffer_set(address: u32, kind: &NP_PtrKinds, schema: Rc<NP_Schema>, memory: Rc<NP_Memory>, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
 
-        let mut addr = kind.get_value();
+        let mut addr = kind.get_value_addr();
 
         let value_bytes_size = schema.type_state as usize;
 
@@ -920,7 +935,7 @@ impl NP_Value for NP_Geo {
         // convert input values into bytes
         let value_bytes = match schema.type_state {
             16 => {
-                let dev = 1000000000f64;
+                let dev = NP_Geo::get_deviser(16);
 
                 let mut v_bytes: [u8; 16] = [0; 16];
                 let lat_bytes = ((value.lat * dev) as i64).to_be_bytes();
@@ -936,7 +951,7 @@ impl NP_Value for NP_Geo {
                 v_bytes
             },
             8 => {
-                let dev = 10000000f64;
+                let dev = NP_Geo::get_deviser(8);
 
                 let mut v_bytes: [u8; 16] = [0; 16];
                 let lat_bytes = ((value.lat * dev) as i32).to_be_bytes();
@@ -952,7 +967,7 @@ impl NP_Value for NP_Geo {
                 v_bytes
             },
             4 => {
-                let dev = 100f64;
+                let dev = NP_Geo::get_deviser(4);
 
                 let mut v_bytes: [u8; 16] = [0; 16];
                 let lat_bytes = ((value.lat * dev) as i16).to_be_bytes();
@@ -1006,7 +1021,7 @@ impl NP_Value for NP_Geo {
 
     fn buffer_into(_address: u32, kind: NP_PtrKinds, schema: Rc<NP_Schema>, buffer: Rc<NP_Memory>) -> Result<Option<Box<Self>>, NP_Error> {
 
-        let addr = kind.get_value() as usize;
+        let addr = kind.get_value_addr() as usize;
 
         // empty value
         if addr == 0 {
@@ -1022,7 +1037,7 @@ impl NP_Value for NP_Geo {
                 let lat = i64::from_be_bytes(bytes_lat) as f64;
                 let lon = i64::from_be_bytes(bytes_lon) as f64;
 
-                let dev = 1000000000f64;
+                let dev = NP_Geo::get_deviser(16);
 
                 Some(Box::new(NP_Geo { lat: lat / dev, lng: lon / dev}))
 
@@ -1034,7 +1049,7 @@ impl NP_Value for NP_Geo {
                 let lat = i32::from_be_bytes(bytes_lat) as f64;
                 let lon = i32::from_be_bytes(bytes_lon) as f64;
 
-                let dev = 10000000f64;
+                let dev = NP_Geo::get_deviser(8);
 
                 Some(Box::new(NP_Geo { lat: lat / dev, lng: lon / dev}))
             },
@@ -1045,7 +1060,7 @@ impl NP_Value for NP_Geo {
                 let lat = i16::from_be_bytes(bytes_lat) as f64;
                 let lon = i16::from_be_bytes(bytes_lon) as f64;
 
-                let dev = 100f64;
+                let dev = NP_Geo::get_deviser(4);
 
                 Some(Box::new(NP_Geo { lat: lat / dev, lng: lon / dev}))
             },
@@ -1056,9 +1071,9 @@ impl NP_Value for NP_Geo {
     }
 
     fn buffer_to_json(address: u32, kind: &NP_PtrKinds, schema: Rc<NP_Schema>, buffer: Rc<NP_Memory>) -> NP_JSON {
-        let this_string = Self::buffer_into(address, *kind, Rc::clone(&schema), buffer);
+        let this_value = Self::buffer_into(address, *kind, Rc::clone(&schema), buffer);
 
-        match this_string {
+        match this_value {
             Ok(x) => {
                 match x {
                     Some(y) => {
@@ -1084,7 +1099,7 @@ impl NP_Value for NP_Geo {
     }
 
     fn buffer_get_size(_address: u32, kind: &NP_PtrKinds, schema: Rc<NP_Schema>, _buffer: Rc<NP_Memory>) -> Result<u32, NP_Error> {
-        let addr = kind.get_value() as usize;
+        let addr = kind.get_value_addr() as usize;
 
         if addr == 0 {
             return Ok(0) 
@@ -1101,7 +1116,9 @@ impl NP_Value for NP_Geo {
 /// 
 /// Useful for storing time stamp data that doesn't have collisions.
 pub struct NP_ULID {
+    /// The unix timestamp in milliseconds for this ULID
     pub time: u64,
+    /// The random bytes for this ULID
     pub id: u128
 }
 
@@ -1127,7 +1144,9 @@ impl NP_ULID {
         }
     }
 
-    /// Generates 
+    /// Generates a ULID with the given time and a provided random number generator.
+    /// This is the preferrable way to generate a ULID, if you can provide a better RNG function than the psudorandom one built into this library, you should.
+    /// 
     pub fn generate_with_rand<F>(now_ms: u64, random_fn: F) -> NP_ULID where F: Fn(u8, u8) -> u8 {
 
         let mut id: [u8; 16] = [0; 16];
@@ -1142,6 +1161,8 @@ impl NP_ULID {
         }
     }
 
+    /// Generates a stringified version of this ULID with base32.
+    /// 
     pub fn to_string(&self) -> String {
         let mut result: String = "".to_owned();
 
@@ -1176,7 +1197,7 @@ impl NP_Value for NP_ULID {
 
     fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: Rc<NP_Schema>, memory: Rc<NP_Memory>, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
 
-        let mut addr = kind.get_value();
+        let mut addr = kind.get_value_addr();
 
         let timebits: [u8; 8] = value.time.to_be_bytes();
         let idbits: [u8; 16] = value.id.to_be_bytes();
@@ -1216,7 +1237,7 @@ impl NP_Value for NP_ULID {
     }
 
     fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: Rc<NP_Schema>, buffer: Rc<NP_Memory>) -> Result<Option<Box<Self>>, NP_Error> {
-        let addr = kind.get_value() as usize;
+        let addr = kind.get_value_addr() as usize;
 
         // empty value
         if addr == 0 {
@@ -1267,7 +1288,7 @@ impl NP_Value for NP_ULID {
     }
 
     fn buffer_get_size(_address: u32, kind: &NP_PtrKinds, _schema: Rc<NP_Schema>, _buffer: Rc<NP_Memory>) -> Result<u32, NP_Error> {
-        let addr = kind.get_value() as usize;
+        let addr = kind.get_value_addr() as usize;
 
         if addr == 0 {
             return Ok(0) 
@@ -1283,11 +1304,14 @@ impl NP_Value for NP_ULID {
 /// 
 /// `uuid` types are always represented with this struct.
 pub struct NP_UUID {
+    /// The random bytes for this UUID
     pub value: [u8; 16]
 }
 
 impl NP_UUID {
 
+    /// Generate a new UUID with a given random seed.  You should attempt to provide a seed with as much randomness as possible.
+    /// 
     pub fn generate(random_seed: u32) -> NP_UUID {
 
 
@@ -1308,6 +1332,9 @@ impl NP_UUID {
         uuid
     }
 
+    /// Generates a UUID with a provided random number generator.
+    /// This is the preferrable way to generate a ULID, if you can provide a better RNG function than the psudorandom one built into this library, you should.
+    /// 
     pub fn generate_with_rand<F>(random_fn: F) -> NP_UUID where F: Fn(u8, u8) -> u8 {
         let mut uuid = NP_UUID {
             value: [0; 16]
@@ -1324,6 +1351,8 @@ impl NP_UUID {
         uuid
     }
 
+    /// Generates a stringified version of the UUID.
+    /// 
     pub fn to_string(&self) -> String {
 
         let mut result: String = "".to_owned();
@@ -1363,7 +1392,7 @@ impl NP_Value for NP_UUID {
 
     fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: Rc<NP_Schema>, memory: Rc<NP_Memory>, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
 
-        let mut addr = kind.get_value();
+        let mut addr = kind.get_value_addr();
 
         if addr != 0 { // existing value, replace
             let bytes = value.value;
@@ -1387,7 +1416,7 @@ impl NP_Value for NP_UUID {
     }
 
     fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: Rc<NP_Schema>, buffer: Rc<NP_Memory>) -> Result<Option<Box<Self>>, NP_Error> {
-        let addr = kind.get_value() as usize;
+        let addr = kind.get_value_addr() as usize;
 
         // empty value
         if addr == 0 {
@@ -1430,7 +1459,7 @@ impl NP_Value for NP_UUID {
     }
 
     fn buffer_get_size(_address: u32, kind: &NP_PtrKinds, _schema: Rc<NP_Schema>, _buffer: Rc<NP_Memory>) -> Result<u32, NP_Error> {
-        let addr = kind.get_value() as usize;
+        let addr = kind.get_value_addr() as usize;
 
         if addr == 0 {
             return Ok(0) 
@@ -1443,23 +1472,28 @@ impl NP_Value for NP_UUID {
 }
 
 /// Represents the string value of a choice in a schema
+#[derive(Clone, Debug)]
 pub struct NP_Option {
+    /// The value of this option type
     pub value: Option<String>
 }
 
 impl NP_Option {
+    /// Create a new option type with the given string
     pub fn new(value: String) -> NP_Option {
         NP_Option {
             value: Some(value)
         }
     }
 
+    /// Create a new empty option type
     pub fn empty() -> NP_Option {
         NP_Option {
             value: None
         }
     }
     
+    /// Set the value of this option type
     pub fn set(&mut self, value: Option<String>) {
         self.value = value;
     }
@@ -1520,7 +1554,7 @@ impl NP_Value for NP_Option {
 
     fn buffer_set(address: u32, kind: &NP_PtrKinds, schema: Rc<NP_Schema>, memory: Rc<NP_Memory>, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
 
-        let mut addr = kind.get_value();
+        let mut addr = kind.get_value_addr();
         
         match &*schema.kind {
             NP_SchemaKinds::Enum { choices } => {
@@ -1575,7 +1609,7 @@ impl NP_Value for NP_Option {
     }
 
     fn buffer_into(_address: u32, kind: NP_PtrKinds, schema: Rc<NP_Schema>, buffer: Rc<NP_Memory>) -> Result<Option<Box<Self>>, NP_Error> {
-        let addr = kind.get_value() as usize;
+        let addr = kind.get_value_addr() as usize;
 
         // empty value
         if addr == 0 {
@@ -1645,7 +1679,7 @@ impl NP_Value for NP_Option {
     }
 
     fn buffer_get_size(_address: u32, kind: &NP_PtrKinds, _schema: Rc<NP_Schema>, _buffer: Rc<NP_Memory>) -> Result<u32, NP_Error> {
-        let addr = kind.get_value() as usize;
+        let addr = kind.get_value_addr() as usize;
 
         if addr == 0 {
             return Ok(0) 
@@ -1690,7 +1724,7 @@ impl NP_Value for bool {
 
     fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: Rc<NP_Schema>, memory: Rc<NP_Memory>, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
 
-        let mut addr = kind.get_value();
+        let mut addr = kind.get_value_addr();
 
         if addr != 0 { // existing value, replace
             let bytes = if **value == true {
@@ -1719,7 +1753,7 @@ impl NP_Value for bool {
     }
 
     fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: Rc<NP_Schema>, buffer: Rc<NP_Memory>) -> Result<Option<Box<Self>>, NP_Error> {
-        let addr = kind.get_value() as usize;
+        let addr = kind.get_value_addr() as usize;
 
         // empty value
         if addr == 0 {
@@ -1764,7 +1798,7 @@ impl NP_Value for bool {
     }
 
     fn buffer_get_size(_address: u32, kind: &NP_PtrKinds, _schema: Rc<NP_Schema>, _buffer: Rc<NP_Memory>) -> Result<u32, NP_Error> {
-        let addr = kind.get_value() as usize;
+        let addr = kind.get_value_addr() as usize;
 
         if addr == 0 {
             return Ok(0) 
@@ -1778,10 +1812,12 @@ impl NP_Value for bool {
 
 /// Stores the current unix epoch in u64
 pub struct NP_Date {
+    /// The value of the date
     pub value: u64
 }
 
 impl NP_Date {
+    /// Create a new date type with the given time
     pub fn new(time: u64) -> Self {
         NP_Date { value: time }
     }
@@ -1831,7 +1867,7 @@ impl NP_Value for NP_Date {
 
     fn buffer_set(address: u32, kind: &NP_PtrKinds, _schema: Rc<NP_Schema>, memory: Rc<NP_Memory>, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
 
-        let mut addr = kind.get_value();
+        let mut addr = kind.get_value_addr();
 
         if addr != 0 { // existing value, replace
             let bytes = value.value.to_be_bytes();
@@ -1855,7 +1891,7 @@ impl NP_Value for NP_Date {
     }
 
     fn buffer_into(_address: u32, kind: NP_PtrKinds, _schema: Rc<NP_Schema>, buffer: Rc<NP_Memory>) -> Result<Option<Box<Self>>, NP_Error> {
-        let addr = kind.get_value() as usize;
+        let addr = kind.get_value_addr() as usize;
 
         // empty value
         if addr == 0 {
@@ -1872,13 +1908,12 @@ impl NP_Value for NP_Date {
     }
 
     fn buffer_to_json(address: u32, kind: &NP_PtrKinds, schema: Rc<NP_Schema>, buffer: Rc<NP_Memory>) -> NP_JSON {
-        let this_string = Self::buffer_into(address, *kind, Rc::clone(&schema), buffer);
 
-        match this_string {
+        match Self::buffer_into(address, *kind, Rc::clone(&schema), buffer) {
             Ok(x) => {
                 match x {
                     Some(y) => {
-                        NP_JSON::Float(y.value as f64)
+                        NP_JSON::Integer(y.value as i64)
                     },
                     None => {
                         match &schema.default {
@@ -1895,7 +1930,7 @@ impl NP_Value for NP_Date {
     }
 
     fn buffer_get_size(_address: u32, kind: &NP_PtrKinds, _schema: Rc<NP_Schema>, _buffer: Rc<NP_Memory>) -> Result<u32, NP_Error> {
-        let addr = kind.get_value() as usize;
+        let addr = kind.get_value_addr() as usize;
 
         if addr == 0 {
             return Ok(0) 

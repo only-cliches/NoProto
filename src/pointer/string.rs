@@ -1,7 +1,7 @@
 use alloc::vec::Vec;
 use crate::schema::NP_Schema;
 use crate::error::NP_Error;
-use crate::memory::NP_Memory;
+use crate::memory::{NP_Size, NP_Memory};
 use crate::{schema::NP_TypeKeys, pointer::NP_Value, utils::from_utf8_lossy, json_flex::NP_JSON};
 use super::{NP_PtrKinds};
 
@@ -38,7 +38,7 @@ impl NP_Value for String {
         let bytes = value.as_bytes();
         let str_size = bytes.len() as u64;
 
-        let mut addr = kind.get_value() as usize;
+        let mut addr = kind.get_value_addr() as usize;
 
         let write_bytes = memory.write_bytes();
 
@@ -72,33 +72,54 @@ impl NP_Value for String {
         // flexible size
 
         let prev_size: usize = if addr != 0 {
-            let mut size_bytes: [u8; 4] = [0; 4];
-            size_bytes.copy_from_slice(&memory.read_bytes()[addr..(addr+4)]);
-            u32::from_be_bytes(size_bytes) as usize
+            match memory.size {
+                NP_Size::U16 => {
+                    let mut size_bytes: [u8; 2] = [0; 2];
+                    size_bytes.copy_from_slice(&memory.read_bytes()[addr..(addr+2)]);
+                    u16::from_be_bytes(size_bytes) as usize
+                },
+                NP_Size::U32 => { 
+                    let mut size_bytes: [u8; 4] = [0; 4];
+                    size_bytes.copy_from_slice(&memory.read_bytes()[addr..(addr+4)]);
+                    u32::from_be_bytes(size_bytes) as usize
+                }
+            }
         } else {
             0 as usize
         };
 
         if prev_size >= str_size as usize { // previous string is larger than this one, use existing memory
     
-            let size_bytes = (str_size as u32).to_be_bytes();
+            let size_bytes = match memory.size {
+                NP_Size::U16 => { (str_size as u16).to_be_bytes().to_vec() },
+                NP_Size::U32 => { (str_size as u32).to_be_bytes().to_vec() }
+            };
 
             // set string size
             for x in 0..size_bytes.len() {
                 write_bytes[(addr + x) as usize] = size_bytes[x as usize];
             }
 
+            let offset = match memory.size {
+                NP_Size::U16 => { 2usize },
+                NP_Size::U32 => { 4usize }
+            };
+
             // set bytes
             for x in 0..bytes.len() {
-                write_bytes[(addr + x + 4) as usize] = bytes[x as usize];
+                write_bytes[(addr + x + offset) as usize] = bytes[x as usize];
             }
 
             return Ok(*kind);
         } else { // not enough space or space has not been allocted yet
             
+            // first 2 / 4 bytes are string length
+            let str_bytes = match memory.size {
+                NP_Size::U16 => { (str_size as u16).to_be_bytes().to_vec() },
+                NP_Size::U32 => { (str_size as u32).to_be_bytes().to_vec() }
+            };
 
-            // first 4 bytes are string length
-            addr = memory.malloc((str_size as u32).to_be_bytes().to_vec())? as usize;
+            addr = memory.malloc(str_bytes)? as usize;
 
             // then string content
             memory.malloc(bytes.to_vec())?;
@@ -109,7 +130,7 @@ impl NP_Value for String {
     }
 
     fn buffer_into(_address: u32, kind: NP_PtrKinds, schema: Rc<NP_Schema>, buffer: Rc<NP_Memory>) -> core::result::Result<Option<Box<Self>>, NP_Error> {
-        let addr = kind.get_value() as usize;
+        let addr = kind.get_value_addr() as usize;
  
         // empty value
         if addr == 0 {
@@ -129,12 +150,25 @@ impl NP_Value for String {
 
         } else { // dynamic size
             // get size of bytes
-            let mut size: [u8; 4] = [0; 4];
-            size.copy_from_slice(&memory.read_bytes()[addr..(addr+4)]);
-            let bytes_size = u32::from_be_bytes(size) as usize;
+
+            let bytes_size: usize = match memory.size {
+                NP_Size::U16 => {
+                    let mut size_bytes: [u8; 2] = [0; 2];
+                    size_bytes.copy_from_slice(&memory.read_bytes()[addr..(addr+2)]);
+                    u16::from_be_bytes(size_bytes) as usize
+                },
+                NP_Size::U32 => { 
+                    let mut size_bytes: [u8; 4] = [0; 4];
+                    size_bytes.copy_from_slice(&memory.read_bytes()[addr..(addr+4)]);
+                    u32::from_be_bytes(size_bytes) as usize
+                }
+            };
 
             // get bytes
-            let bytes = &memory.read_bytes()[(addr+4)..(addr+4+bytes_size)];
+            let bytes = match memory.size {
+                NP_Size::U16 => { &memory.read_bytes()[(addr+2)..(addr+2+bytes_size)]},
+                NP_Size::U32 => { &memory.read_bytes()[(addr+4)..(addr+4+bytes_size)] }
+            };
 
             return Ok(Some(Box::new(from_utf8_lossy(bytes))))
         }
@@ -183,7 +217,7 @@ impl NP_Value for String {
     }
 
     fn buffer_get_size(_address: u32, kind: &NP_PtrKinds, schema: Rc<NP_Schema>, buffer: Rc<NP_Memory>) -> core::result::Result<u32, NP_Error> {
-        let value = kind.get_value();
+        let value = kind.get_value_addr();
 
         // empty value
         if value == 0 {
@@ -191,18 +225,29 @@ impl NP_Value for String {
         }
         
         // get size of bytes
-        let addr = value as usize;
-        let mut size: [u8; 4] = [0; 4];
+        let addr = value as usize;        
         let memory = buffer;
 
         if schema.type_state != -1 { // fixed size
             return Ok(schema.type_state as u32);
         } else { // flexible size
-            size.copy_from_slice(&memory.read_bytes()[addr..(addr+4)]);
-            let bytes_size = u32::from_be_bytes(size) as u32;
+
+
+            let bytes_size: u32 = match &memory.size {
+                NP_Size::U16 => {
+                    let mut size: [u8; 2] = [0; 2];
+                    size.copy_from_slice(&memory.read_bytes()[addr..(addr+2)]);
+                    (u16::from_be_bytes(size) as u32) + 2
+                },
+                NP_Size::U32 => {
+                    let mut size: [u8; 4] = [0; 4];
+                    size.copy_from_slice(&memory.read_bytes()[addr..(addr+4)]);
+                    (u32::from_be_bytes(size) as u32) + 4
+                }
+            };
             
             // return total size of this string
-            return Ok(bytes_size + 4);
+            return Ok(bytes_size);
         }
     }
 }

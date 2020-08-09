@@ -6,8 +6,8 @@
 //! 
 //! Changes:
 //! - Library has been converted & stripped for no_std use
-//! - All code paths that can panic have been replaced with proper error handling
-//! - Additions that are needed for this librarie's use case
+//! - All `.unwrap()`s have been replaced with proper error handling
+//! - Several additions that were needed for NoProto
 //! - Some minor optimizations
 //! 
 //! The MIT License (MIT)
@@ -44,17 +44,21 @@ use core::str::FromStr;
 use core::ops::Index;
 use crate::{pointer::{NP_PtrKinds, NP_Value, NP_Ptr, any::NP_Any}, error::NP_Error, schema::{NP_TypeKeys, NP_Schema}, memory::NP_Memory};
 
+/// The JSON representation of a JS Map
 #[derive(Debug)]
 pub struct JSMAP<T> {
+    /// The vec of values in the map
     pub values: Vec<(String, T)>
 }
 
 impl<T> JSMAP<T> {
 
+    /// Generate a new empty map
     pub fn new() -> Self {
         JSMAP { values: Vec::new() }
     }
 
+    /// Insert a value into the map
     pub fn insert(&mut self, key: String, value: T) -> usize {
 
         for x in 0..self.values.len() {
@@ -69,6 +73,7 @@ impl<T> JSMAP<T> {
         self.values.len()
     }
 
+    /// Get a mutable reference to a value in the map
     pub fn get_mut(&mut self, key: &str) -> Option<&mut T> {
         for x in 0..self.values.len() {
             if self.values[x].0 == *key {
@@ -78,6 +83,7 @@ impl<T> JSMAP<T> {
         None
     }
 
+    /// Get an immutable reference to a value in the map
     pub fn get(&self, key: &str) -> Option<&T> {
         for x in 0..self.values.len() {
             if self.values[x].0 == *key {
@@ -87,6 +93,7 @@ impl<T> JSMAP<T> {
         None
     }
 
+    /// Check if a value exists in the map
     pub fn has(&self, key: &str) -> bool {
         for x in 0..self.values.len() {
             if self.values[x].0 == *key {
@@ -97,15 +104,24 @@ impl<T> JSMAP<T> {
     }
 }
 
+/// Represents an JSON value
 #[derive(Debug)]
 pub enum NP_JSON {
-    String(String),
-    Integer(i64),
-    Float(f64),
-    Dictionary(JSMAP<NP_JSON>),
-    Array(Vec<NP_JSON>),
-    Null,
-    False,
+    /// String JSON type
+    String(String), 
+    /// Integer JSON type
+    Integer(i64), 
+    /// Float JSON type
+    Float(f64), 
+    /// Map JSON type
+    Dictionary(JSMAP<NP_JSON>), 
+    /// List JSON type
+    Array(Vec<NP_JSON>), 
+    /// NULL json type
+    Null, 
+    /// boolean false type
+    False, 
+    /// boolean true type
     True,
 }
 
@@ -113,7 +129,7 @@ impl NP_Value for NP_JSON {
     fn type_idx() -> (i64, String) { (NP_TypeKeys::JSON as i64, "json".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::JSON as i64, "json".to_owned()) }
     fn buffer_into(address: u32, _kind: NP_PtrKinds, schema: Rc<NP_Schema>, buffer: Rc<NP_Memory>) -> Result<Option<Box<Self>>, NP_Error> {
-        let root = NP_Ptr::<NP_Any>::new_standard_ptr(address, Rc::clone(&schema), Rc::clone(&buffer));
+        let root = NP_Ptr::<NP_Any>::_new_standard_ptr(address, Rc::clone(&schema), Rc::clone(&buffer));
         Ok(Some(Box::new(root.json_encode())))
     }
 }
@@ -126,6 +142,7 @@ impl Default for NP_JSON {
 
 
 impl NP_JSON {
+    /// copy this value and it's children
     pub fn clone(&self) -> NP_JSON {
 
         match self {
@@ -171,116 +188,134 @@ impl NP_JSON {
             },
         }
     }
+    /// Get this value as a string
     pub fn into_string(&self) -> Option<&String> {
         match self {
             &NP_JSON::String(ref v) => Some(v),
             _ => None,
         }
     }
+    /// Get this value as an i64
     pub fn into_i64(&self) -> Option<&i64> {
         match self {
             &NP_JSON::Integer(ref v) => Some(v),
             _ => None,
         }
     }
+    /// Get this value as an f64
     pub fn into_f64(&self) -> Option<&f64> {
         match self {
             &NP_JSON::Float(ref v) => Some(v),
             _ => None,
         }
     }
+    /// Get this value as a hashmap
     pub fn into_hashmap(&self) -> Option<&JSMAP<NP_JSON>> {
         match self {
             &NP_JSON::Dictionary(ref v) => Some(v),
             _ => None,
         }
     }
+    /// Get this value as a list
     pub fn into_vec(&self) -> Option<&Vec<NP_JSON>> {
         match self {
             &NP_JSON::Array(ref v) => Some(v),
             _ => None,
         }
     }
+    /// Check if this value is null
     pub fn is_null(&self) -> bool {
         match self {
             &NP_JSON::Null => true,
             _ => false,
         }
     }
+    /// Check if this value is boolean true
     pub fn is_true(&self) -> bool {
         match self {
             &NP_JSON::True => true,
             _ => false,
         }
     }
+    /// Check if this value is boolean false
     pub fn is_false(&self) -> bool {
         match self {
             &NP_JSON::False => true,
             _ => false,
         }
     }
+    /// Check if this value is array
     pub fn is_array(&self) -> bool {
         match self {
             &NP_JSON::Array(_) => true,
             _ => false,
         }
     }
+    /// Check if this value is map
     pub fn is_dictionary(&self) -> bool {
         match self {
             &NP_JSON::Dictionary(_) => true,
             _ => false,
         }
     }
+    /// Check if this value is string
     pub fn is_string(&self) -> bool {
         match self {
             &NP_JSON::String(_) => true,
             _ => false,
         }
     }
+    /// Check if this value is an integer
     pub fn is_integer(&self) -> bool {
         match self {
             &NP_JSON::Integer(_) => true,
             _ => false,
         }
     }
+    /// Check if this value is float
     pub fn is_float(&self) -> bool {
         match self {
             &NP_JSON::Float(_) => true,
             _ => false,
         }
     }
+    /// Get a reference to the string in this value if it's a string
     pub fn unwrap_string(&self) -> Option<&String> {
         match self {
             &NP_JSON::String(ref v) => Some(v),
             _ => None,
         }
     }
+    /// Get a reference to the i64 in this value if it's a i64
     pub fn unwrap_i64(&self) -> Option<&i64> {
         match self {
             &NP_JSON::Integer(ref v) => Some(v),
             _ => None,
         }
     }
+    /// Get a reference to the f64 in this value if it's a f64
     pub fn unwrap_f64(&self) -> Option<&f64> {
         match self {
             &NP_JSON::Float(ref v) => Some(v),
             _ => None,
         }
     }
+    /// Get a reference to the hashmap in this value if it's a hashmap
     pub fn unwrap_hashmap(&self) -> Option<&JSMAP<NP_JSON>> {
         match self {
             &NP_JSON::Dictionary(ref v) => Some(v),
             _ => None,
         }
     }
+    /// Get a reference to the list in this value if it's a list
     pub fn unwrap_vec(&self) -> Option<&Vec<NP_JSON>> {
         match self {
             &NP_JSON::Array(ref v) => Some(v),
             _ => None,
         }
     }
-
-    pub fn to_string(&self) -> String {
+    /// Stringify this JSON object and it's children
+    pub fn stringify(&self) -> String {
         match self {
             &NP_JSON::String(ref v) => {
                 let mut string: String = "\"".to_owned();
@@ -300,10 +335,10 @@ impl NP_JSON {
                         string.push(',');
                     }
                     let mut substring = "\"".to_owned();
-                    substring.push_str(k);
+                    substring.push_str(k.replace("\"", "\\\"").as_str());
                     substring.push_str("\":");
                     string.push_str(substring.as_str());
-                    string.push_str(&v.to_string());
+                    string.push_str(&v.stringify());
                 }
                 string.push_str("}");
                 string
@@ -317,7 +352,7 @@ impl NP_JSON {
                     } else {
                         string.push(',');
                     }
-                    string.push_str(&i.to_string());
+                    string.push_str(&i.stringify());
                 }
                 let mut return_string = "[".to_owned();
                 return_string.push_str(string.as_str());
@@ -471,6 +506,7 @@ fn recursive(v: &mut NP_JSON,
     Ok(is_find)
 }
 
+/// Parse a JSON string into a JSON object in memory
 pub fn json_decode(text: String) -> Result<Box<NP_JSON>, NP_Error> {
 
     let mut ret = Box::new(NP_JSON::Null);

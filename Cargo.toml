@@ -1,7 +1,7 @@
 [package]
 name = "no_proto"
 license = "MIT"
-version = "0.0.3"
+version = "0.0.4"
 description = "Faster than JSON with Schemas and Native Types.  Protocol Buffers you can update without compiling."
 homepage = "https://github.com/ClickSimply/NoProto"
 repository = "https://github.com/ClickSimply/NoProto"

@@ -9,7 +9,7 @@
 //! Properties that are not part of the schema are ignored.
 //! 
 //! If you're familiar with Typescript, schemas can be described by this recursive interface:
-//! ```text
+//! ```typescript
 //! interface NP_Schema {
 //!     // table, string, bytes, etc
 //!     type: string; 
@@ -44,14 +44,14 @@
 //! ```
 //! 
 //! Schemas can be as simple as a single scalar type, for example a perfectly valid schema for a buffer that contains only a string:
-//! ```text
+//! ```json
 //! {
 //!     "type": "string"
 //! }
 //! ```
 //! 
-//! However, you will likely want to store collections of items, so that's easy to do as well.
-//! ```text
+//! However, you will likely want to store more complicated objects, so that's easy to do as well.
+//! ```json
 //! {
 //!     "type": "table",
 //!     "columns": [
@@ -66,7 +66,7 @@
 //! There are multiple collection types, and they can be nested.
 //! 
 //! For example, this is a list of tables.  Each table has two columns: id and title.  Both columns are a string type.
-//! ```text
+//! ```json
 //! {
 //!     "type": "list",
 //!     "of": {
@@ -81,7 +81,7 @@
 //! 
 //! A list of strings is just as easy...
 //! 
-//! ```text
+//! ```json
 //! {
 //!     "type": "list",
 //!     "of": { type: "string" }
@@ -94,13 +94,13 @@
 //! 
 //! | Type                                   | Rust Type / Struct                                                       |Bytewise Sorting  | Bytes (Size)   | Limits / Notes                                                           |
 //! |----------------------------------------|--------------------------------------------------------------------------|------------------|----------------|--------------------------------------------------------------------------|
-//! | [`table`](#table)                      | [`NP_Table`](../collection/table/struct.NP_Table.html)                   |𐄂                 | 4 bytes - ~4GB | Linked list with indexed keys that map against up to 255 named columns.  |
-//! | [`list`](#list)                        | [`NP_List`](../collection/list/struct.NP_List.html)                      |𐄂                 | 8 bytes - ~4GB | Linked list with integer indexed values and  up to 65,535 items.         |
-//! | [`map`](#map)                          | [`NP_Map`](../collection/map/struct.NP_Map.html)                         |𐄂                 | 4 bytes - ~4GB | Linked list with `Vec<u8>` keys.                                         |
-//! | [`tuple`](#tuple)                      | [`NP_Tuple`](../collection/tuple/struct.NP_Tuple.html)                   |✓ *               | 4 bytes - ~4GB | Static sized collection of specific values.                              |
-//! | [`any`](#any)                          | [`NP_Any`](../pointer/any/struct.NP_Any.html)                            |𐄂                 | 4 bytes - ~4GB | Generic type.                                                            |
-//! | [`string`](#string)                    | [`String`](https://doc.rust-lang.org/std/string/struct.String.html)      |✓ **              | 4 bytes - ~4GB | Utf-8 formatted string.                                                  |
-//! | [`bytes`](#bytes)                      | [`NP_Bytes`](../pointer/bytes/struct.NP_Bytes.html)                      |✓ **              | 4 bytes - ~4GB | Arbitrary bytes.                                                         |
+//! | [`table`](#table)                      | [`NP_Table`](../collection/table/struct.NP_Table.html)                   |𐄂                 | 2 bytes - ~4GB | Linked list with indexed keys that map against up to 255 named columns.  |
+//! | [`list`](#list)                        | [`NP_List`](../collection/list/struct.NP_List.html)                      |𐄂                 | 4 bytes - ~4GB | Linked list with integer indexed values and  up to 65,535 items.         |
+//! | [`map`](#map)                          | [`NP_Map`](../collection/map/struct.NP_Map.html)                         |𐄂                 | 2 bytes - ~4GB | Linked list with `Vec<u8>` keys.                                         |
+//! | [`tuple`](#tuple)                      | [`NP_Tuple`](../collection/tuple/struct.NP_Tuple.html)                   |✓ *               | 2 bytes - ~4GB | Static sized collection of specific values.                              |
+//! | [`any`](#any)                          | [`NP_Any`](../pointer/any/struct.NP_Any.html)                            |𐄂                 | 2 bytes - ~4GB | Generic type.                                                            |
+//! | [`string`](#string)                    | [`String`](https://doc.rust-lang.org/std/string/struct.String.html)      |✓ **              | 2 bytes - ~4GB | Utf-8 formatted string.                                                  |
+//! | [`bytes`](#bytes)                      | [`NP_Bytes`](../pointer/bytes/struct.NP_Bytes.html)                      |✓ **              | 2 bytes - ~4GB | Arbitrary bytes.                                                         |
 //! | [`int8`](#int8-int16-int32-int64)      | [`i8`](https://doc.rust-lang.org/std/primitive.i8.html)                  |✓                 | 1 byte         | -127 to 127                                                              |
 //! | [`int16`](#int8-int16-int32-int64)     | [`i16`](https://doc.rust-lang.org/std/primitive.i16.html)                |✓                 | 2 bytes        | -32,768 to 32,768                                                        |
 //! | [`int32`](#int8-int16-int32-int64)     | [`i32`](https://doc.rust-lang.org/std/primitive.i32.html)                |✓                 | 4 bytes        | -2,147,483,648 to 2,147,483,648                                          |
@@ -114,11 +114,11 @@
 //! | [`option`](#option)                    | [`NP_Option`](../pointer/misc/struct.NP_Option.html)                     |✓                 | 1 byte         | Up to 255 string based options in schema.                                |
 //! | [`bool`](#bool)                        | [`bool`](https://doc.rust-lang.org/std/primitive.bool.html)              |✓                 | 1 byte         |                                                                          |
 //! | [`decimal`](#decimal)                  | [`NP_Dec`](../pointer/misc/struct.NP_Dec.html)                           |✓                 | 8 bytes        | Fixed point decimal number based on i64.                                 |
-//! | [`geo4`](#geo4-geo8-geo16)             | [`NP_Geo`](../pointer/misc/struct.NP_Geo.html)                           |✓                 | 4 bytes        | 1.1km resolution (city) geographic coordinate                           |
+//! | [`geo4`](#geo4-geo8-geo16)             | [`NP_Geo`](../pointer/misc/struct.NP_Geo.html)                           |✓                 | 4 bytes        | 1.1km resolution (city) geographic coordinate                            |
 //! | [`geo8`](#geo4-geo8-geo16)             | [`NP_Geo`](../pointer/misc/struct.NP_Geo.html)                           |✓                 | 8 bytes        | 11mm resolution (marble) geographic coordinate                           |
 //! | [`geo16`](#geo4-geo8-geo16)            | [`NP_Geo`](../pointer/misc/struct.NP_Geo.html)                           |✓                 | 16 bytes       | 110 microns resolution (grain of sand) geographic coordinate             |
-//! | [`ulid`](#ulid)                        | [`NP_ULID`](../pointer/misc/struct.NP_ULID.html)                         |✓                 | 16 bytes       | u64 for time with 8 random bytes.                                        |
-//! | [`uuid`](#uuid)                        | [`NP_UUID`](../pointer/misc/struct.NP_UUID.html)                         |✓                 | 16 bytes       | v4 UUID, 2e37 possible UUIDs                                          |
+//! | [`ulid`](#ulid)                        | [`NP_ULID`](../pointer/misc/struct.NP_ULID.html)                         |✓                 | 16 bytes       | 6 bytes for the timestamp, 10 bytes of randomness.                       |
+//! | [`uuid`](#uuid)                        | [`NP_UUID`](../pointer/misc/struct.NP_UUID.html)                         |✓                 | 16 bytes       | v4 UUID, 2e37 possible UUIDs                                             |
 //! | [`date`](#date)                        | [`NP_Date`](../pointer/misc/struct.NP_Date.html)                         |✓                 | 8 bytes        | Good to store unix epoch (in seconds) until the year 584,942,417,355     |
 //!  
 //! - \* `sorting` must be set to `true` in the schema for this object to enable sorting.
@@ -134,11 +134,11 @@
 //! You can sort by multiple types/values if a tuple is used.  The ordering of values in the tuple will determine the sort order.  For example if you have a tuple with types (A, B) the ordering will first sort by A, then B where A is identical.  This is true for any number of items, for example a tuple with types (A,B,C,D) will sort by D when A, B & C are identical.
 //! 
 //! **Compaction**<br/>
-//! NoProto Buffers are contiguous, growing arrays of bytes.  When you add or update a value sometimes additional memory is used and the old value is dereferenced, meaning the buffer is now occupying more space than it needs to.  This space can be recovered with compaction.  Compaction involves a recursive, full copy of all referenced & valid values of the buffer, it's an expensive operation that should be avoided.
+//! Campaction is an optional operation you can perform at any time on a buffer, typically used to recover free space.  NoProto Buffers are contiguous, growing arrays of bytes.  When you add or update a value sometimes additional memory is used and the old value is dereferenced, meaning the buffer is now occupying more space than it needs to.  This space can be recovered with compaction.  Compaction involves a recursive, full copy of all referenced & valid values of the buffer, it's an expensive operation that should be avoided.
 //! 
 //! Sometimes the space you can recover with compaction is minimal or you can craft your schema and upates in such a way that compactions are never needed, in these cases compaction can be avoided with little to no consequence.
 //! 
-//! Deleting a value will always mean space can be recovered with compaction, but updating values can have different outcomes to the space used depending on the type and options.
+//! Deleting a value will almost always mean space can be recovered with compaction, but updating values can have different outcomes to the space used depending on the type and options.
 //! 
 //! Each type will have notes on how updates can lead to wasted bytes and require compaction to recover the wasted space.
 //! 
@@ -164,9 +164,11 @@
 //! 
 //! Table schemas have a single required property called `columns`.  The `columns` property is an array of arrays that represent all possible columns in the table and their data types.  Any type can be used in columns, including tables.
 //! 
-//! If you expect to have dynamic column names a map may be a better use case.
+//! Tables do not store the column names in the buffer, only the column index, so this is a very efficient way to store associated data.
 //! 
-//! ```text
+//! If you need dynamic column names a map may be a better use case.
+//! 
+//! ```json
 //! {
 //!     "type": "table",
 //!     "columns": [ // can have between 1 and 255 columns
@@ -197,7 +199,9 @@
 //! 
 //! Lists have a single required property in the schema, `of`.  The `of` property contains another schema for the type of data contained in the list.  Any type is supported, including another list.
 //! 
-//! ```text
+//! The more items you have in a list, the slower it will be to seek to values at the end of the list. 
+//! 
+//! ```json
 //! // a list of list of strings
 //! {
 //!     "type": "list",
@@ -227,9 +231,9 @@
 //! 
 //! Maps have a single required property in the schema, `value`. The property is used to describe the schema of the values for the map.  Keys are always `Vec<u8>`.  Values can be any schema type, including another map.
 //! 
-//! If you expect to have fixed, predictable keys then use a `table` instead.  
+//! If you expect to have fixed, predictable keys then use a `table` instead.  This is less efficient than tables because keys are stored in the buffer.  
 //! 
-//! ```text
+//! ```json
 //! // a map where every values are strings
 //! {
 //!     "type": "map",
@@ -252,12 +256,12 @@
 //! 
 //! Tuples have a single required property in the schema called `values`.  It's an array of schemas that represnt the tuple values.  Any schema is allowed, including other Tuples.
 //! 
-//! ### Sorting
-//! You can use tuples to support bytewise sorting across a list of items.  By setting the `sorted` property to `true` you enable a strict mode for the tuple that enables bytewise sorting.  When `sorted` is enabled only scalar values that support sorting are allowed in the schema.  For example, you can only have fixed length strings/bytes.
+//! **Sorting**<br/>
+//! You can use tuples to support bytewise sorting across a list of items.  By setting the `sorted` property to `true` you enable a strict mode for the tuple that enables bytewise sorting.  When `sorted` is enabled only scalar values that support sorting are allowed in the schema.  For example, strings/bytes types can only be fixed size.
 //! 
 //! When `sorted` is true the order of values is gauranteed to be constant across buffers, allowing compound bytewise sorting.
 //! 
-//! ```text
+//! ```json
 //! {
 //!     "type": "tuple",
 //!     "values": [
@@ -292,7 +296,7 @@
 //! - **Compaction**: Any types are always compacted out of the buffer, data stored behind an `any` schema will be lost after compaction.
 //! - **Schema Mutations**: None
 //! 
-//! ```text
+//! ```json
 //! {
 //!     "type": "any"
 //! }
@@ -307,11 +311,11 @@
 //! 
 //! - **Bytewise Sorting**: Supported only if `size` property is set in schema.
 //! - **Compaction**: If `size` property is set, compaction cannot reclaim space.  Otherwise it will reclaim space unless all updates have been identical in length.
-//! - **Schema Mutations**: If the `size` property is set it's safe to make it smaller, but not larger.  If the field is being used for bytewise sorting, no mutation is safe.
+//! - **Schema Mutations**: If the `size` property is set it's safe to make it smaller, but not larger (this may cause existing string values to truncate, though).  If the field is being used for bytewise sorting, no mutation is safe.
 //! 
 //!
 //! 
-//! ```text
+//! ```json
 //! {
 //!     "type": "string"
 //! }
@@ -330,9 +334,9 @@
 //! 
 //! - **Bytewise Sorting**: Supported only if `size` property is set in schema.
 //! - **Compaction**: If `size` property is set, compaction cannot reclaim space.  Otherwise it will reclaim space unless all updates have been identical in length.
-//! - **Schema Mutations**: If the `size` property is set it's safe to make it smaller, but not larger.  If the field is being used for bytewise sorting, no mutation is safe.
+//! - **Schema Mutations**: If the `size` property is set it's safe to make it smaller, but not larger (this may cause existing bytes values to truncate, though).  If the field is being used for bytewise sorting, no mutation is safe.
 //! 
-//! ```text
+//! ```json
 //! {
 //!     "type": "bytes"
 //! }
@@ -350,7 +354,7 @@
 //! ## int8, int16, int32, int64
 //! Signed integers allow positive or negative whole numbers to be stored.  The bytes are stored in big endian format and converted to unsigned types to allow bytewise sorting.
 //! 
-//! ```text
+//! ```json
 //! {
 //!     "type": "int8"
 //! }
@@ -370,7 +374,7 @@
 //! - **Compaction**: Updates are done in place, never use additional space.
 //! - **Schema Mutations**: None
 //! 
-//! ```text
+//! ```json
 //! {
 //!     "type": "uint8"
 //! }
@@ -386,7 +390,7 @@
 //! - **Compaction**: Updates are done in place, never use additional space.
 //! - **Schema Mutations**: None
 //! 
-//! ```text
+//! ```json
 //! {
 //!     "type": "float"
 //! }
@@ -396,7 +400,7 @@
 //! - [Using scalar values with pointers](../pointer/struct.NP_Ptr.html#using-scalar-types-with-pointers)
 //! 
 //! ## option
-//! Allows efficeint storage of a selection between a known collection of ordered strings.  The selection is stored as a single u8 byte, limiting the max choices to 255.
+//! Allows efficeint storage of a selection between a known collection of ordered strings.  The selection is stored as a single u8 byte, limiting the max number of choices to 255.
 //! 
 //! - **Bytewise Sorting**: Supported
 //! - **Compaction**: Updates are done in place, never use additional space.
@@ -404,7 +408,7 @@
 //! 
 //! There is one required property of this schema called `choices`.  The property should contain an array of strings that represent all possible choices of the option.
 //! 
-//! ```text
+//! ```json
 //! {
 //!     "type": "option",
 //!     "choices": ["choice 1", "choice 2", "etc"]
@@ -422,7 +426,7 @@
 //! - **Compaction**: Updates are done in place, never use additional space.
 //! - **Schema Mutations**: None
 //! 
-//! ```text
+//! ```json
 //! {
 //!     "type": "bool"
 //! }
@@ -438,9 +442,9 @@
 //! - **Compaction**: Updates are done in place, never use additional space.
 //! - **Schema Mutations**: None
 //! 
-//! There is a single required property called `exp` that represents the number of decimal points every value in this column will have.
+//! There is a single required property called `exp` that represents the number of decimal points every value will have.
 //! 
-//! ```text
+//! ```json
 //! {
 //!     "type": "decimal",
 //!     "exp": 3
@@ -466,7 +470,7 @@
 //! | geo8  | 8     | 11mm resolution (marble)               |
 //! | geo16 | 16    | 110 microns resolution (grain of sand) |
 //! 
-//! ```text
+//! ```json
 //! {
 //!     "type": "geo4"
 //! }
@@ -477,13 +481,13 @@
 //! - [Using scalar values with pointers](../pointer/struct.NP_Ptr.html#using-scalar-types-with-pointers)
 //! 
 //! ## ulid
-//! Allows you to store a unique ID with a timestamp.
+//! Allows you to store a unique ID with a timestamp.  The timestamp is stored in milliseconds since the unix epoch.
 //! 
 //! - **Bytewise Sorting**: Supported, orders by timestamp. Order is random if timestamp is identical between two values.
 //! - **Compaction**: Updates are done in place, never use additional space.
 //! - **Schema Mutations**: None
 //! 
-//! ```text
+//! ```json
 //! {
 //!     "type": "ulid"
 //! }
@@ -500,7 +504,7 @@
 //! - **Compaction**: Updates are done in place, never use additional space.
 //! - **Schema Mutations**: None
 //! 
-//! ```text
+//! ```json
 //! {
 //!     "type": "uuid"
 //! }
@@ -517,7 +521,7 @@
 //! - **Compaction**: Updates are done in place, never use additional space.
 //! - **Schema Mutations**: None
 //! 
-//! ```text
+//! ```json
 //! {
 //!     "type": "date"
 //! }
@@ -527,6 +531,13 @@
 //! - [Using NP_Date data type](../pointer/misc/struct.NP_Date.html)
 //! - [Using scalar values with pointers](../pointer/struct.NP_Ptr.html#using-scalar-types-with-pointers)
 //!  
+//! 
+//! ## Next Step
+//! 
+//! Read about how to initialize a schema into a NoProto Factory.
+//! 
+//! [Go to NP_Factory docs](../struct.NP_Factory.html)
+//! 
 use crate::json_flex::NP_JSON;
 use crate::pointer::any::NP_Any;
 use crate::pointer::misc::NP_Date;
@@ -546,7 +557,9 @@ use alloc::boxed::Box;
 use alloc::borrow::ToOwned;
 use alloc::{rc::Rc, string::ToString};
 
+
 /// Stores the kind of each schema and any property details related to the schema.  Users of the library should never need to create or manipulate this data type.
+#[doc(hidden)]
 #[derive(Debug)]
 pub enum NP_SchemaKinds {
     None,
@@ -621,6 +634,7 @@ impl From<i64> for NP_TypeKeys {
     }
 }
 
+#[doc(hidden)]
 /// Used to parse JSON into valid schema objects used internally by the library.
 /// Users of the library should never need to create or manipulate this data type.
 /// 
@@ -634,9 +648,11 @@ pub struct NP_Schema {
 }
 
 #[doc(hidden)]
+#[derive(Debug)]
 pub struct NP_Types { }
 
 impl<'a> NP_Types {
+    /// check if a given type matches the schema
     pub fn do_check<T: NP_Value + Default>(type_string: &str, json_schema: &NP_JSON)-> Result<Option<NP_Schema>, NP_Error>{
         if T::is_type(type_string) {
             Ok(Some(NP_Schema { 
@@ -650,7 +666,8 @@ impl<'a> NP_Types {
         }
     }
 
-    pub fn get_type(type_string: &str, json_schema: &NP_JSON)-> Result<NP_Schema, NP_Error> {
+    /// Compile the JSON schema into a NP_Schema
+    pub fn compile_schema(type_string: &str, json_schema: &NP_JSON)-> Result<NP_Schema, NP_Error> {
 
         let check = NP_Types::do_check::<NP_Any>(type_string, json_schema)?;
         match check { Some(x) => return Ok(x), None => {} };
@@ -717,6 +734,7 @@ impl<'a> NP_Types {
 
 impl NP_Schema {
 
+    /// Get a blank schema
     pub fn blank() -> NP_Schema {
 
         NP_Schema {
@@ -727,10 +745,12 @@ impl NP_Schema {
         }
     }
 
+    /// Attempt to convert JSON into a valid schema.
     pub fn from_json(json: Box<NP_JSON>) -> Result<Self, NP_Error> {
         NP_Schema::validate_model(&*json)
     }
 
+    /// Validate the JSON as schema.
     pub fn validate_model(json_schema: &NP_JSON) -> Result<Self, NP_Error> {
 
         if json_schema.is_dictionary() == false {
@@ -965,7 +985,7 @@ impl NP_Schema {
                 })
             },
             _ => {
-                NP_Types::get_type(type_string, json_schema)
+                NP_Types::compile_schema(type_string, json_schema)
             }
         }
     }
