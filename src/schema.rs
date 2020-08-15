@@ -90,7 +90,7 @@
 //! 
 //! Each type has trade offs associated with it.  The table and documentation below go into further detail.
 //! 
-//! Here is a table of supported types. 
+//! ## Supported Data Types
 //! 
 //! | Type                                   | Rust Type / Struct                                                       |Bytewise Sorting  | Bytes (Size)   | Limits / Notes                                                           |
 //! |----------------------------------------|--------------------------------------------------------------------------|------------------|----------------|--------------------------------------------------------------------------|

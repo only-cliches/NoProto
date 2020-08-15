@@ -116,7 +116,7 @@ let user_buffer = user_factory.open_buffer(user_bytes);
 let tag = user_buffer.deep_get::<String>("tags.0")?;
 assert_eq!(tag, Some(Box::new(String::from("first tag"))));
 
-// get internal value, the age field
+// get nested internal value, the age field
 let age = user_buffer.deep_get::<u16>("age")?;
 // returns default value from schema
 assert_eq!(age, Some(Box::new(0u16)));

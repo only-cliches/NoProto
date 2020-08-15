@@ -1811,6 +1811,7 @@ impl NP_Value for bool {
 }
 
 /// Stores the current unix epoch in u64
+#[derive(Clone, Copy)]
 pub struct NP_Date {
     /// The value of the date
     pub value: u64
@@ -1820,6 +1821,12 @@ impl NP_Date {
     /// Create a new date type with the given time
     pub fn new(time: u64) -> Self {
         NP_Date { value: time }
+    }
+}
+
+impl PartialEq for NP_Date {
+    fn eq(&self, other: &Self) -> bool {
+        self.value == other.value
     }
 }
 

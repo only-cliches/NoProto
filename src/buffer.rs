@@ -51,6 +51,8 @@ impl NP_Buffer {
     /// 
     /// The type of the root schema should be provided, if the type provided does not match the root schema this operation will fail.
     /// 
+    /// Opening the buffer is most common when you want to iterate through a collection or something similar.  [Read more here.](../pointer/struct.NP_Ptr.html#using-collection-types-with-pointers)
+    /// 
     pub fn open<ROOT: NP_Value + Default>(&mut self, callback: &mut (dyn FnMut(NP_Ptr<ROOT>) -> Result<(), NP_Error>)) -> Result<(), NP_Error>
     {   
         let pointer: NP_Ptr<ROOT> = NP_Ptr::_new_standard_ptr(ROOT_PTR_ADDR, Rc::clone(&self.schema), Rc::clone(&self.memory));

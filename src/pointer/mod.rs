@@ -141,8 +141,90 @@ pub trait NP_Value {
 /// 
 /// # Using Scalar Types with Pointers
 /// 
+/// Scalars can easily be added or retrieved from a buffer using the `deep_set` and `deep_get` methods on the buffers.
+/// ```rust
+/// use no_proto::error::NP_Error;
+/// use no_proto::NP_Factory;
+/// use no_proto::pointer::misc::NP_Date;
+/// use std::time::{SystemTime, UNIX_EPOCH};
+/// 
+/// // Simple schema with just a date
+/// let scalar_factory = NP_Factory::new(r#"{
+///     "type": "date"
+/// }"#)?;
+/// 
+/// let mut new_buffer = scalar_factory.empty_buffer(None, None);
+/// 
+/// // When using scalar values, you must use the correct type with `deep_set`.
+/// // For the `date` data type the correct rust type is `NP_Date`
+/// let since_the_epoch = SystemTime::now().duration_since(UNIX_EPOCH).expect("Time went backwards");
+/// let time_now: NP_Date = NP_Date::new(since_the_epoch.as_millis() as u64);
+/// 
+/// // deep set root
+/// new_buffer.deep_set("", time_now.clone());
+/// 
+/// // Deep get is just the reverse, must type cast correctly.
+/// assert_eq!(new_buffer.deep_get::<NP_Date>("")?, Some(Box::new(time_now)));
+/// 
+/// // clear value at root
+/// new_buffer.deep_clear("")?;
+/// 
+/// assert_eq!(new_buffer.deep_get::<NP_Date>("")?, None);
+/// 
+/// # Ok::<(), NP_Error>(()) 
+/// ```
+/// 
+/// You can learn about which scalar types map with which rust data types on [this page](../schema/index.html#supported-data-types).
+/// 
 /// # Using Collection Types with Pointers
 /// 
+/// You can always retrieve, update and delete scalar values from within collections following the guidelines above. The process outlined here is mostly useful for iterating through collections, for example if you wanted to know what values are in a list or how large a list is.
+/// 
+/// ```rust
+/// use no_proto::error::NP_Error;
+/// use no_proto::NP_Factory;
+/// use no_proto::collection::list::NP_List;
+/// use std::time::{SystemTime, UNIX_EPOCH};
+/// 
+/// // Simple schema with just a date
+/// let list_factory = NP_Factory::new(r#"{
+///     "type": "list",
+///     "of": {"type": "u32"}
+/// }"#)?;
+/// 
+/// let mut new_buffer = list_factory.empty_buffer(None, None);
+/// 
+/// // we can use `deep_set` to set internal values of the list
+/// new_buffer.deep_set("2", 200u32)?; // index 2 of list
+/// new_buffer.deep_set("9", 150u32)?; // index 9 of list
+/// 
+/// let mut which_items: Vec<u32> = Vec::new();
+/// 
+/// // to access collection internals, we must open the buffer
+/// new_buffer.open::<NP_List<u32>>(&mut |mut root_ptr| {
+///     // root_ptr is a NP_Ptr that is generic over the root type cast in the `open` function.
+///     // in this case root_ptr is NP_Ptr<NP_List<u32>>
+///        
+///     // convert the root pointer into a list.
+///     let root_list: NP_List<u32> = root_ptr.into()?.unwrap();
+///     
+///     // convert the list into an iterator, then loop over it.
+///     for mut item in root_list.it() {
+///         // will loop 10 times... 0 to 9 since we put item at the 9th index
+///         match item.select().unwrap().into().unwrap() {
+///             Some(x) => { which_items.push(x) },
+///             None => { which_items.push(0) }
+///         }
+///     }
+/// 
+///     Ok(())
+/// })?;
+/// 
+/// assert_eq!(which_items, vec![0, 0, 200u32, 0, 0, 0, 0, 0, 0, 150u32]);
+/// 
+/// # Ok::<(), NP_Error>(()) 
+/// ```
+///  
 /// 
 /// 
 #[derive(Debug)]
@@ -773,7 +855,7 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
                 }
 
                 // make sure the schema and type match
-                if is_json_req == false { type_error(&self.schema.type_data, &X::type_idx(), &path, path_index - 1)?; }
+                if is_json_req == false { type_error(&self.schema.type_data, &X::type_idx(), &path, path_index)?; }
 
                 match X::buffer_into(self.location, self.kind, Rc::clone(&self.schema), self.memory)? {
                     Some(x) => {

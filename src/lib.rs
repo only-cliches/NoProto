@@ -302,8 +302,9 @@ impl NP_Factory {
 mod tests {
 
     use super::*;
-    //use collection::{table::NP_Table, list::NP_List};
-    //use json_flex::NP_JSON;
+    // use collection::{table::NP_Table, list::NP_List};
+    // use json_flex::NP_JSON;
+    // use pointer::misc::NP_Date;
 
     #[test]
     fn it_works() -> core::result::Result<(), NP_Error> {
@@ -341,11 +342,11 @@ mod tests {
         println!("name: {}", value.unwrap().stringify());
 
         println!("BYTES: {:?}", new_buffer.close());
-
+*/
         // let buffer2 = factory.deep_set::<String>(return_buffer, "15", "hello, world".to_owned())?;
 
         // println!("value {:?}", factory.deep_get::<String>(return_buffer, "10.name")?);
- */
+ 
         Ok(())
     }
     
