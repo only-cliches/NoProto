@@ -229,7 +229,7 @@ pub trait NP_Value {
 /// 
 #[derive(Debug)]
 pub struct NP_Ptr<T: NP_Value + Default> {
-    ///pointer address in buffer
+    /// pointer address in buffer 
     pub location: u32, 
     /// the kind of pointer this is (standard, list item, map item, etc).  Includes value address
     pub kind: NP_PtrKinds, 
