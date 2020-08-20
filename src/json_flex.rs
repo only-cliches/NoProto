@@ -34,7 +34,7 @@
 //! SOFTWARE.
 
 
-use alloc::rc::Rc;
+
 use alloc::vec::Vec;
 use alloc::string::String;
 use alloc::boxed::Box;
@@ -42,7 +42,7 @@ use alloc::borrow::ToOwned;
 use alloc::string::ToString;
 use core::str::FromStr;
 use core::ops::Index;
-use crate::{pointer::{NP_PtrKinds, NP_Value, NP_Ptr, any::NP_Any, NP_Lite_Ptr}, error::NP_Error, schema::{NP_TypeKeys, NP_Schema}, memory::NP_Memory};
+use crate::{pointer::{NP_Value, any::NP_Any, NP_Lite_Ptr}, error::NP_Error, schema::{NP_TypeKeys}};
 
 /// The JSON representation of a JS Map
 #[derive(Debug)]

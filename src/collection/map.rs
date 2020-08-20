@@ -239,8 +239,6 @@ impl<T: NP_Value + Default> NP_Value for NP_Map<T> {
 
         let to_ptr_list = to_ptr.into::<NP_Map<NP_Any>>();
 
-        let new_address = to_ptr_list.location;
-
         match Self::into_value(from_ptr)? {
             Some(old_list) => {
 

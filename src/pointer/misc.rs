@@ -2,7 +2,7 @@ use crate::utils::to_base32;
 use crate::json_flex::{JSMAP, NP_JSON};
 use crate::schema::{NP_SchemaKinds, NP_Schema, NP_TypeKeys};
 use crate::pointer::NP_PtrKinds;
-use crate::{memory::NP_Memory, pointer::NP_Value, error::NP_Error, utils::{Rand, to_hex}};
+use crate::{pointer::NP_Value, error::NP_Error, utils::{Rand, to_hex}};
 use core::fmt;
 
 use alloc::string::String;

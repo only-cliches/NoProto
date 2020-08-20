@@ -193,8 +193,6 @@ impl NP_Value for NP_Table {
 
         let to_ptr_list = to_ptr.into::<Self>();
 
-        let new_address = to_ptr_list.location;
-
         match Self::into_value(from_ptr)? {
             Some(old_list) => {
 

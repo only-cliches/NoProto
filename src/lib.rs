@@ -1,4 +1,4 @@
-#![deny(missing_docs, missing_debug_implementations)]
+#![warn(missing_docs, missing_debug_implementations)]
 #![allow(non_camel_case_types)]
 #![no_std]
 

@@ -493,8 +493,6 @@ impl<T: NP_Value + Default> NP_List<T> {
         // no value for sure
         if value_address == 0 { return Ok(Some((None, index))) }
 
-        let kind = NP_PtrKinds::ListItem { addr: value_address, next: next_address, i: index };
-
         // try to get the value
         match T::into_value(NP_Lite_Ptr::new_standard(value_address, list_of, memory)) {
             Ok(x) => {
@@ -896,8 +894,6 @@ impl<T: NP_Value + Default> NP_Value for NP_List<T> {
         }
 
         let to_ptr_list = to_ptr.into::<NP_List<NP_Any>>();
-
-        let new_address = to_ptr_list.location;
 
         match Self::into_value(from_ptr)? {
             Some(old_list) => {

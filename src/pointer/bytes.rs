@@ -1,6 +1,6 @@
 use crate::schema::NP_Schema;
 use crate::error::NP_Error;
-use crate::memory::{NP_Size, NP_Memory};
+use crate::memory::{NP_Size};
 use crate::{schema::NP_TypeKeys, pointer::NP_Value, json_flex::NP_JSON};
 use super::{NP_PtrKinds, NP_Lite_Ptr};
 
