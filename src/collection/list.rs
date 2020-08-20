@@ -1,4 +1,4 @@
-use crate::{memory::{NP_Size, NP_Memory}, pointer::{NP_Value, NP_Ptr, NP_PtrKinds, any::NP_Any}, error::NP_Error, schema::{NP_SchemaKinds, NP_Schema, NP_TypeKeys}, json_flex::NP_JSON};
+use crate::{memory::{NP_Size, NP_Memory}, pointer::{NP_Value, NP_Ptr, NP_PtrKinds, any::NP_Any, NP_Lite_Ptr}, error::NP_Error, schema::{NP_SchemaKinds, NP_Schema, NP_TypeKeys}, json_flex::NP_JSON};
 
 use alloc::string::String;
 use alloc::borrow::ToOwned;
@@ -496,7 +496,7 @@ impl<T: NP_Value + Default> NP_List<T> {
         let kind = NP_PtrKinds::ListItem { addr: value_address, next: next_address, i: index };
 
         // try to get the value
-        match T::buffer_into(value_address, kind, list_of, memory) {
+        match T::into_value(NP_Lite_Ptr::new_standard(value_address, list_of, memory)) {
             Ok(x) => {
                 match x {
                     Some(y) => {
@@ -723,18 +723,18 @@ impl<T: NP_Value + Default> NP_Value for NP_List<T> {
     }
     fn type_idx() -> (i64, String) { (NP_TypeKeys::List as i64, "list".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::List as i64, "list".to_owned()) }
-    fn buffer_set(_address: u32, _kind: &NP_PtrKinds, _schema: Rc<NP_Schema>, _buffer: Rc<NP_Memory>, _value: Box<&Self>) -> core::result::Result<NP_PtrKinds, NP_Error> {
+    fn set_value(_pointer: NP_Lite_Ptr, _value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
         Err(NP_Error::new("Type (list) doesn't support .set()! Use .into() instead."))
     }
 
-    fn buffer_into(address: u32, kind: NP_PtrKinds, schema: Rc<NP_Schema>, buffer: Rc<NP_Memory>) -> core::result::Result<Option<Box<NP_List<T>>>, NP_Error> {
+    fn into_value(ptr: NP_Lite_Ptr) -> Result<Option<Box<Self>>, NP_Error> {
         
-        match &*schema.kind {
+        match &*ptr.schema.kind {
             NP_SchemaKinds::List { of } => {
 
-                let mut addr = kind.get_value_addr(); // get pointer of list (head/tail)
+                let mut addr = ptr.kind.get_value_addr(); // get pointer of list (head/tail)
 
-                match &buffer.size {
+                match &ptr.memory.size {
                     NP_Size::U16 => {
                         let mut head: [u8; 2] = [0; 2];
                         let mut tail: [u8; 2] = [0; 2];
@@ -742,17 +742,17 @@ impl<T: NP_Value + Default> NP_Value for NP_List<T> {
         
                         if addr == 0 {
                             // no list here, make one
-                            addr = buffer.malloc([0u8; 4].to_vec())?; // stores HEAD & TAIL for list
-                            buffer.set_value_address(address, addr, &kind);
+                            addr = ptr.memory.malloc([0u8; 4].to_vec())?; // stores HEAD & TAIL for list
+                            ptr.memory.set_value_address(ptr.location, addr, &ptr.kind);
                         } else {
                             // existing head, read value
                             let a = addr as usize;
-                            head = *buffer.get_2_bytes(a).unwrap_or(&[0; 2]);
-                            tail = *buffer.get_2_bytes(a + 2).unwrap_or(&[0; 2]);
+                            head = *ptr.memory.get_2_bytes(a).unwrap_or(&[0; 2]);
+                            tail = *ptr.memory.get_2_bytes(a + 2).unwrap_or(&[0; 2]);
                         }
 
         
-                        Ok(Some(Box::new(NP_List::<T>::new(addr, u16::from_be_bytes(head) as u32, u16::from_be_bytes(tail) as u32, buffer, Rc::clone(of ))?)))
+                        Ok(Some(Box::new(NP_List::<T>::new(addr, u16::from_be_bytes(head) as u32, u16::from_be_bytes(tail) as u32, ptr.memory, Rc::clone(of ))?)))
                     },
                     NP_Size::U32 => {
                         let mut head: [u8; 4] = [0; 4];
@@ -760,16 +760,16 @@ impl<T: NP_Value + Default> NP_Value for NP_List<T> {
         
                         if addr == 0 {
                             // no list here, make one
-                            addr = buffer.malloc([0u8; 8].to_vec())?; // stores HEAD & TAIL for list
-                            buffer.set_value_address(address, addr, &kind);
+                            addr = ptr.memory.malloc([0u8; 8].to_vec())?; // stores HEAD & TAIL for list
+                            ptr.memory.set_value_address(ptr.location, addr, &ptr.kind);
                         } else {
                             // existing head, read value
                             let a = addr as usize;
-                            head = *buffer.get_4_bytes(a).unwrap_or(&[0; 4]);
-                            tail = *buffer.get_4_bytes(a + 4).unwrap_or(&[0; 4]);
+                            head = *ptr.memory.get_4_bytes(a).unwrap_or(&[0; 4]);
+                            tail = *ptr.memory.get_4_bytes(a + 4).unwrap_or(&[0; 4]);
                         }
         
-                        Ok(Some(Box::new(NP_List::<T>::new(addr, u32::from_be_bytes(head), u32::from_be_bytes(tail), buffer, Rc::clone(of ))?)))
+                        Ok(Some(Box::new(NP_List::<T>::new(addr, u32::from_be_bytes(head), u32::from_be_bytes(tail), ptr.memory, Rc::clone(of ))?)))
                     }
                 }
             },
@@ -779,17 +779,17 @@ impl<T: NP_Value + Default> NP_Value for NP_List<T> {
         }
     }
 
-    fn buffer_get_size(_address: u32, kind: &NP_PtrKinds, schema: Rc<NP_Schema>, buffer: Rc<NP_Memory>) -> Result<u32, NP_Error> {
+    fn get_size(ptr: NP_Lite_Ptr) -> Result<u32, NP_Error> {
         // head + tail;,
-        let base_size = match buffer.size {
+        let base_size = match ptr.memory.size {
             NP_Size::U32 => 8u32,
             NP_Size::U16 => 4u32
         };
 
-        match &*schema.kind {
+        match &*ptr.schema.kind {
             NP_SchemaKinds::List { of } => {
 
-                let addr = kind.get_value_addr();
+                let addr = ptr.kind.get_value_addr();
 
                 if addr == 0 {
                     return Ok(0);
@@ -797,16 +797,16 @@ impl<T: NP_Value + Default> NP_Value for NP_List<T> {
 
                 // existing head, read value
                 let a = addr as usize;
-                let head = match &buffer.size {
-                    NP_Size::U16 => u16::from_be_bytes(*buffer.get_2_bytes(a).unwrap_or(&[0; 2])) as u32,
-                    NP_Size::U32 => u32::from_be_bytes(*buffer.get_4_bytes(a).unwrap_or(&[0; 4]))
+                let head = match &ptr.memory.size {
+                    NP_Size::U16 => u16::from_be_bytes(*ptr.memory.get_2_bytes(a).unwrap_or(&[0; 2])) as u32,
+                    NP_Size::U32 => u32::from_be_bytes(*ptr.memory.get_4_bytes(a).unwrap_or(&[0; 4]))
                 };
-                let tail = match &buffer.size {
-                    NP_Size::U16 => u16::from_be_bytes(*buffer.get_2_bytes(a + 2).unwrap_or(&[0; 2])) as u32,
-                    NP_Size::U32 => u32::from_be_bytes(*buffer.get_4_bytes(a + 4).unwrap_or(&[0; 4]))
+                let tail = match &ptr.memory.size {
+                    NP_Size::U16 => u16::from_be_bytes(*ptr.memory.get_2_bytes(a + 2).unwrap_or(&[0; 2])) as u32,
+                    NP_Size::U32 => u32::from_be_bytes(*ptr.memory.get_4_bytes(a + 4).unwrap_or(&[0; 4]))
                 };
             
-                let list = NP_List::<T>::new(addr, head, tail, buffer, Rc::clone(of) ).unwrap();
+                let list = NP_List::<T>::new(addr, head, tail, ptr.memory, Rc::clone(of) ).unwrap();
 
                 let mut acc_size = 0u32;
 
@@ -825,28 +825,28 @@ impl<T: NP_Value + Default> NP_Value for NP_List<T> {
         }
     }
     
-    fn buffer_to_json(_address: u32, kind: &NP_PtrKinds, schema: Rc<NP_Schema>, buffer: Rc<NP_Memory>) -> NP_JSON {
+    fn to_json(ptr: NP_Lite_Ptr) -> NP_JSON {
 
-        match &*schema.kind {
+        match &*ptr.schema.kind {
             NP_SchemaKinds::List { of } => {
 
-                let addr = kind.get_value_addr();
+                let addr = ptr.kind.get_value_addr();
 
                 if addr == 0 {
                     return NP_JSON::Null;
                 }
 
                 let a = addr as usize;
-                let head = match &buffer.size {
-                    NP_Size::U16 => u16::from_be_bytes(*buffer.get_2_bytes(a).unwrap_or(&[0; 2])) as u32,
-                    NP_Size::U32 => u32::from_be_bytes(*buffer.get_4_bytes(a).unwrap_or(&[0; 4]))
+                let head = match &ptr.memory.size {
+                    NP_Size::U16 => u16::from_be_bytes(*ptr.memory.get_2_bytes(a).unwrap_or(&[0; 2])) as u32,
+                    NP_Size::U32 => u32::from_be_bytes(*ptr.memory.get_4_bytes(a).unwrap_or(&[0; 4]))
                 };
-                let tail = match &buffer.size {
-                    NP_Size::U16 => u16::from_be_bytes(*buffer.get_2_bytes(a + 2).unwrap_or(&[0; 2])) as u32,
-                    NP_Size::U32 => u32::from_be_bytes(*buffer.get_4_bytes(a + 4).unwrap_or(&[0; 4]))
+                let tail = match &ptr.memory.size {
+                    NP_Size::U16 => u16::from_be_bytes(*ptr.memory.get_2_bytes(a + 2).unwrap_or(&[0; 2])) as u32,
+                    NP_Size::U32 => u32::from_be_bytes(*ptr.memory.get_4_bytes(a + 4).unwrap_or(&[0; 4]))
                 };
 
-                let list = NP_List::<T>::new(addr, head, tail, buffer, Rc::clone(of) ).unwrap_or(NP_List::default());
+                let list = NP_List::<T>::new(addr, head, tail, ptr.memory, Rc::clone(of) ).unwrap_or(NP_List::default());
 
                 let mut json_list = Vec::new();
 
@@ -889,17 +889,17 @@ impl<T: NP_Value + Default> NP_Value for NP_List<T> {
         }
     }
 
-    fn buffer_do_compact<X: NP_Value + Default + >(from_ptr: &NP_Ptr<X>, to_ptr: NP_Ptr<NP_Any>) -> Result<(u32, NP_PtrKinds, Rc<NP_Schema>), NP_Error> where Self: NP_Value + Default {
+    fn do_compact(from_ptr: NP_Lite_Ptr, to_ptr: NP_Lite_Ptr) -> Result<(), NP_Error> where Self: NP_Value + Default {
 
         if from_ptr.location == 0 {
-            return Ok((0, from_ptr.kind, Rc::clone(&from_ptr.schema)));
+            return Ok(());
         }
 
-        let to_ptr_list = NP_Any::cast::<NP_List<NP_Any>>(to_ptr)?;
+        let to_ptr_list = to_ptr.into::<NP_List<NP_Any>>();
 
         let new_address = to_ptr_list.location;
 
-        match Self::buffer_into(from_ptr.location, from_ptr.kind, Rc::clone(&from_ptr.schema), Rc::clone(&from_ptr.memory))? {
+        match Self::into_value(from_ptr)? {
             Some(old_list) => {
 
                 match to_ptr_list.into()? {
@@ -908,13 +908,11 @@ impl<T: NP_Value + Default> NP_Value for NP_List<T> {
                         for mut item in old_list.it().into_iter() {
                             if item.has_value.0 && item.has_value.1 {
 
-                                let new_ptr = new_list.select(item.index)?;
-                                let old_ptr = item.select()?;
-                                old_ptr._compact(new_ptr)?;
+                                let new_ptr = NP_Lite_Ptr::from(new_list.select(item.index)?);
+                                let old_ptr = NP_Lite_Ptr::from(item.select()?);
+                                old_ptr.compact(new_ptr)?;
                             }
                         }
-
-                        return Ok((new_address, from_ptr.kind, Rc::clone(&from_ptr.schema)));
                     },
                     None => {}
                 }
@@ -922,7 +920,7 @@ impl<T: NP_Value + Default> NP_Value for NP_List<T> {
             None => { }
         }
 
-        Ok((0, from_ptr.kind, Rc::clone(&from_ptr.schema)))
+        Ok(())
     }
 }
 

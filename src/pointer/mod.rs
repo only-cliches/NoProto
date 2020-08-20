@@ -54,7 +54,7 @@ impl NP_PtrKinds {
     /// Get the address of the value for this pointer
     pub fn get_value_addr(&self) -> u32 {
         match self {
-            NP_PtrKinds::None                                                => { 0 },
+            NP_PtrKinds::None                                              => { 0 },
             NP_PtrKinds::Standard  { addr } =>                      { *addr },
             NP_PtrKinds::MapItem   { addr, key: _,  next: _ } =>    { *addr },
             NP_PtrKinds::TableItem { addr, i: _,    next: _ } =>    { *addr },
@@ -84,29 +84,29 @@ pub trait NP_Value {
 
     /// Set the value of this scalar into the buffer
     /// 
-    fn buffer_set(_address: u32, _kind: &NP_PtrKinds, _schema: Rc<NP_Schema>, _buffer: Rc<NP_Memory>, _value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
+    fn set_value(_pointer: NP_Lite_Ptr, _value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
         let mut message = "This type (".to_owned();
         message.push_str(Self::type_idx().1.as_str());
         message.push_str(") doesn't support .set()!");
         Err(NP_Error::new(message.as_str()))
     }
 
-    /// Pull the data from the buffer and conver into type
+    /// Pull the data from the buffer and convert into type
     /// 
-    fn buffer_into(_address: u32, _kind: NP_PtrKinds, _schema: Rc<NP_Schema>, _buffer: Rc<NP_Memory>) -> Result<Option<Box<Self>>, NP_Error> {
+    fn into_value(_pointer: NP_Lite_Ptr) -> Result<Option<Box<Self>>, NP_Error> {
         let message = "This type  doesn't support into!".to_owned();
         Err(NP_Error::new(message.as_str()))
     }
 
     /// Convert this type into a JSON value (recursive for collections)
     /// 
-    fn buffer_to_json(_address: u32, _kind: &NP_PtrKinds, _schema: Rc<NP_Schema>, _buffer: Rc<NP_Memory>) -> NP_JSON {
+    fn to_json(_pointer: NP_Lite_Ptr) -> NP_JSON {
          NP_JSON::Null
     }
 
     /// Calculate the size of this pointer and it's children (recursive for collections)
     /// 
-    fn buffer_get_size(_address: u32, _kind: &NP_PtrKinds, _schema: Rc<NP_Schema>, _buffer: Rc<NP_Memory>) -> Result<u32, NP_Error> {
+    fn get_size(_pointer: NP_Lite_Ptr) -> Result<u32, NP_Error> {
          Err(NP_Error::new("Size not supported for this type!"))
     }
 
@@ -118,20 +118,175 @@ pub trait NP_Value {
     
     /// Handle copying from old pointer/buffer to new pointer/buffer (recursive for collections)
     /// 
-    fn buffer_do_compact<X: NP_Value + Default>(from_ptr: &NP_Ptr<X>, to_ptr: NP_Ptr<NP_Any>) -> Result<(u32, NP_PtrKinds, Rc<NP_Schema>), NP_Error> where Self: NP_Value + Default {
+    fn do_compact(from_ptr: NP_Lite_Ptr, to_ptr: NP_Lite_Ptr) -> Result<(), NP_Error> where Self: NP_Value + Default {
         if from_ptr.location == 0 {
-            return Ok((0, from_ptr.kind, Rc::clone(&from_ptr.schema)));
+            return Ok(());
         }
 
-        match Self::buffer_into(from_ptr.location, from_ptr.kind, Rc::clone(&from_ptr.schema), Rc::clone(&from_ptr.memory))? {
+        match Self::into_value(from_ptr)? {
             Some(x) => {
-                Self::buffer_set(to_ptr.location, &to_ptr.kind, Rc::clone(&to_ptr.schema), to_ptr.memory, Box::new(&*x))?;
-                return Ok((to_ptr.location, to_ptr.kind, Rc::clone(&to_ptr.schema)));
+                Self::set_value(to_ptr, Box::new(&*x))?;
             },
             None => { }
         }
 
-        Ok((0, from_ptr.kind, Rc::clone(&from_ptr.schema)))
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone)]
+#[doc(hidden)]
+/// Lite pointer for manipulating non typed pointer data
+pub struct NP_Lite_Ptr {
+    /// pointer location in buffer 
+    pub location: u32, 
+    /// the kind of pointer this is (standard, list item, map item, etc).  Includes value address
+    pub kind: NP_PtrKinds, 
+    /// the underlying buffer this pointer is a part of
+    pub memory: Rc<NP_Memory>, 
+    /// schema stores the *actual* schema data for this pointer, regardless of type casting
+    pub schema: Rc<NP_Schema>
+}
+
+impl NP_Lite_Ptr {
+
+    /// New standard lite pointer  
+    pub fn new_standard(location: u32, schema: Rc<NP_Schema>, memory: Rc<NP_Memory>) -> Self {
+
+        let addr = location as usize;
+        
+        NP_Lite_Ptr {
+            location: location,
+            kind: NP_PtrKinds::Standard { addr: match &memory.size {
+                NP_Size::U32 => u32::from_be_bytes(*memory.get_4_bytes(addr).unwrap_or(&[0; 4])),
+                NP_Size::U16 => u16::from_be_bytes(*memory.get_2_bytes(addr).unwrap_or(&[0; 2])) as u32
+            }},
+            memory: memory,
+            schema: schema
+        }
+    }
+
+    /// Convert a normal pointer into a lite one
+    pub fn from<X: NP_Value + Default>(ptr: NP_Ptr<X>) -> Self {
+        let addr = ptr.location as usize;
+        NP_Lite_Ptr {
+            location: ptr.location,
+            kind: NP_PtrKinds::Standard { addr: match &ptr.memory.size {
+                NP_Size::U32 => u32::from_be_bytes(*ptr.memory.get_4_bytes(addr).unwrap_or(&[0; 4])),
+                NP_Size::U16 => u16::from_be_bytes(*ptr.memory.get_2_bytes(addr).unwrap_or(&[0; 2])) as u32
+            }},
+            memory: ptr.memory,
+            schema: ptr.schema
+        }
+    }
+
+    /// Convert into a Lite pointer from borrowed pointer
+    pub fn from_borrowed<X: NP_Value + Default>(ptr: &NP_Ptr<X>) -> Self {
+        let addr = ptr.location as usize;
+        NP_Lite_Ptr {
+            location: ptr.location,
+            kind: NP_PtrKinds::Standard { addr: match &ptr.memory.size {
+                NP_Size::U32 => u32::from_be_bytes(*ptr.memory.get_4_bytes(addr).unwrap_or(&[0; 4])),
+                NP_Size::U16 => u16::from_be_bytes(*ptr.memory.get_2_bytes(addr).unwrap_or(&[0; 2])) as u32
+            }},
+            memory: Rc::clone(&ptr.memory),
+            schema: Rc::clone(&ptr.schema)
+        }
+    }
+
+    /// Convert a lite pointer into a normal one
+    pub fn into<X: NP_Value + Default>(self) -> NP_Ptr<X> {
+        NP_Ptr {
+            location: self.location,
+            kind: self.kind,
+            memory: self.memory,
+            schema: self.schema,
+            value: X::default()
+        }
+    }
+
+    /// used to run compaction on this pointer
+    /// should not be called directly by the library user
+    /// Use NP_Factory methods of `compact` and `maybe_compact`.
+    pub fn compact(self, copy_to: NP_Lite_Ptr) -> Result<(), NP_Error> {
+
+        match NP_TypeKeys::from(self.schema.type_data.0) {
+            NP_TypeKeys::Any => {
+                Ok(())
+            },
+            NP_TypeKeys::JSON => {
+                unreachable!()
+            },
+            NP_TypeKeys::UTF8String => {
+                String::do_compact(self, copy_to)
+            },
+            NP_TypeKeys::Bytes => {
+                NP_Bytes::do_compact(self, copy_to)
+            },
+            NP_TypeKeys::Int8 => {
+                i8::do_compact(self, copy_to)
+            },
+            NP_TypeKeys::Int16 => {
+                i16::do_compact(self, copy_to)
+            },
+            NP_TypeKeys::Int32 => {
+                i32::do_compact(self, copy_to)
+            },
+            NP_TypeKeys::Int64 => {
+                i64::do_compact(self, copy_to)
+            },
+            NP_TypeKeys::Uint8 => {
+                u8::do_compact(self, copy_to)
+            },
+            NP_TypeKeys::Uint16 => {
+                u16::do_compact(self, copy_to)
+            },
+            NP_TypeKeys::Uint32 => {
+                u32::do_compact(self, copy_to)
+            },
+            NP_TypeKeys::Uint64 => {
+                u64::do_compact(self, copy_to)
+            },
+            NP_TypeKeys::Float => {
+                f32::do_compact(self, copy_to)
+            },
+            NP_TypeKeys::Double => {
+                f64::do_compact(self, copy_to)
+            },
+            NP_TypeKeys::Decimal => {
+                NP_Dec::do_compact(self, copy_to)
+            },
+            NP_TypeKeys::Boolean => {
+                bool::do_compact(self, copy_to)
+            },
+            NP_TypeKeys::Geo => {
+                NP_Geo::do_compact(self, copy_to)
+            },
+            NP_TypeKeys::Uuid => {
+                NP_UUID::do_compact(self, copy_to)
+            },
+            NP_TypeKeys::Ulid => {
+                NP_ULID::do_compact(self, copy_to)
+            },
+            NP_TypeKeys::Date => {
+                NP_Date::do_compact(self, copy_to)
+            },
+            NP_TypeKeys::Enum => {
+                NP_Option::do_compact(self, copy_to)
+            },
+            NP_TypeKeys::Table => {
+                NP_Table::do_compact(self, copy_to)
+            },
+            NP_TypeKeys::Map => {
+                NP_Map::<NP_Any>::do_compact(self, copy_to)
+            },
+            NP_TypeKeys::List => {
+                NP_List::<NP_Any>::do_compact(self, copy_to)
+            },
+            NP_TypeKeys::Tuple => {
+                NP_Tuple::do_compact(self, copy_to)
+            }
+        }
     }
 }
 
@@ -254,7 +409,7 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
             _ => {  }
         };
 
-        let value = T::buffer_into(self.location, self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory))?;
+        let value = T::into_value(NP_Lite_Ptr::from_borrowed(self))?;
         
         Ok(match value {
             Some (x) => {
@@ -282,7 +437,7 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
             _ => { }
         };
         
-        self.kind = T::buffer_set(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory), Box::new(&value))?;
+        self.kind = T::set_value(NP_Lite_Ptr::from_borrowed(self), Box::new(&value))?;
         Ok(())
     }
 
@@ -428,7 +583,7 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
             }
         }
         
-        let result = T::buffer_into(self.location, self.kind, Rc::clone(&self.schema), self.memory)?;
+        let result = T::into_value(NP_Lite_Ptr::from_borrowed(&self))?;
 
         Ok(match result {
             Some(x) => Some(*x),
@@ -500,7 +655,7 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
         match NP_TypeKeys::from(self.schema.type_data.0) {
             NP_TypeKeys::Table => {
 
-                let result = NP_Table::buffer_into(self.location, self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory))?;
+                let result = NP_Table::into_value(NP_Lite_Ptr::from(self))?;
                 
                 match result {
                     Some(mut table) => {
@@ -516,7 +671,7 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
             NP_TypeKeys::Map => {
 
 
-                let result = NP_Map::<NP_Any>::buffer_into(self.location, self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory))?;
+                let result = NP_Map::<NP_Any>::into_value(NP_Lite_Ptr::from(self))?;
 
                 match result {
                     Some(mut map) => {
@@ -531,7 +686,7 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
             },
             NP_TypeKeys::List => {
 
-                let result = NP_List::<NP_Any>::buffer_into(self.location, self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory))?;
+                let result = NP_List::<NP_Any>::into_value(NP_Lite_Ptr::from(self))?;
 
                 match result {
                     Some(mut list) => {
@@ -555,7 +710,7 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
             },
             NP_TypeKeys::Tuple => {
 
-                let result = NP_Tuple::buffer_into(self.location, self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory))?;
+                let result = NP_Tuple::into_value(NP_Lite_Ptr::from(self))?;
 
                 match result {
                     Some(tuple) => {
@@ -599,7 +754,7 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
 
                 overflow_error("deep set", &path, path_index)?;
 
-                let result = NP_Table::buffer_into(self.location, self.kind, self.schema, self.memory)?;
+                let result = NP_Table::into_value(NP_Lite_Ptr::from(self))?;
                 
                 match result {
                     Some(mut table) => {
@@ -618,7 +773,7 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
 
                 overflow_error("deep set", &path, path_index)?;
                 
-                let result = NP_Map::<NP_Any>::buffer_into(self.location, self.kind, self.schema, self.memory)?;
+                let result = NP_Map::<NP_Any>::into_value(NP_Lite_Ptr::from(self))?;
 
                 match result {
                     Some(mut map) => {
@@ -637,7 +792,7 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
 
                 overflow_error("deep set", &path, path_index)?;
 
-                let result = NP_List::<NP_Any>::buffer_into(self.location, self.kind, self.schema, self.memory)?;
+                let result = NP_List::<NP_Any>::into_value(NP_Lite_Ptr::from(self))?;
 
                 match result {
                     Some(mut list) => {
@@ -664,7 +819,7 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
 
                 overflow_error("deep set", &path, path_index)?;
 
-                let result = NP_Tuple::buffer_into(self.location, self.kind, self.schema, self.memory)?;
+                let result = NP_Tuple::into_value(NP_Lite_Ptr::from(self))?;
 
                 match result {
                     Some(tuple) => {
@@ -709,7 +864,7 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
                     return Err(NP_Error::new(err));
                 }
 
-                X::buffer_set(self.location, &self.kind, self.schema, self.memory, Box::new(&value))?;
+                X::set_value(NP_Lite_Ptr::from(self), Box::new(&value))?;
 
                 Ok(())
             }
@@ -732,14 +887,14 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
                     overflow_error("deep get", &path, path_index)?;
                 }
 
-                let result = NP_Table::buffer_into(self.location, self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory))?;
+                let result = NP_Table::into_value(NP_Lite_Ptr::from_borrowed(&self))?;
                 
                 match result {
                     Some(mut table) => {
                         if path.len() == path_index && is_json_req {
                             // make sure the schema and type match
                             if is_json_req == false { type_error(&self.schema.type_data, &X::type_idx(), &path, path_index)?; };
-                            X::buffer_into(self.location, self.kind, self.schema, self.memory)
+                            X::into_value(NP_Lite_Ptr::from(self))
                         } else {
                             let table_key = path[path_index];
                             let col = table.select::<NP_Any>(table_key)?;
@@ -756,14 +911,14 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
                 if is_json_req == false {
                     overflow_error("deep get", &path, path_index)?;
                 }
-                let result = NP_Map::<NP_Any>::buffer_into(self.location, self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory))?;
+                let result = NP_Map::<NP_Any>::into_value(NP_Lite_Ptr::from_borrowed(&self))?;
 
                 match result {
                     Some(mut map) => {
                         if path.len() == path_index {
                             // make sure the schema and type match
                             if is_json_req == false { type_error(&self.schema.type_data, &X::type_idx(), &path, path_index)?; };
-                            X::buffer_into(self.location, self.kind, self.schema, self.memory)
+                            X::into_value(NP_Lite_Ptr::from(self))
                         } else {
                             let map_key = path[path_index];
                             let col = map.select(&map_key.as_bytes().to_vec())?;
@@ -781,14 +936,14 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
                     overflow_error("deep get", &path, path_index)?;
                 }
 
-                let result = NP_List::<NP_Any>::buffer_into(self.location, self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory))?;
+                let result = NP_List::<NP_Any>::into_value(NP_Lite_Ptr::from_borrowed(&self))?;
 
                 match result {
                     Some(mut list) => {
                         if path.len() == path_index {
                             // make sure the schema and type match
                             if is_json_req == false { type_error(&self.schema.type_data, &X::type_idx(), &path, path_index)?; };
-                            X::buffer_into(self.location, self.kind, self.schema, self.memory)
+                            X::into_value(NP_Lite_Ptr::from(self))
                         } else {
                             let list_key = path[path_index];
                             let list_key_int = list_key.parse::<u16>();
@@ -815,14 +970,14 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
                     overflow_error("deep get", &path, path_index)?;
                 }
 
-                let result = NP_Tuple::buffer_into(self.location, self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory))?;
+                let result = NP_Tuple::into_value(NP_Lite_Ptr::from_borrowed(&self))?;
 
                 match result {
                     Some(tuple) => {
                         if path.len() == path_index {
                             // make sure the schema and type match
                             if is_json_req == false { type_error(&self.schema.type_data, &X::type_idx(), &path, path_index)?; };
-                            X::buffer_into(self.location, self.kind, self.schema, self.memory)
+                            X::into_value(NP_Lite_Ptr::from(self))
                         } else {
                             let list_key = path[path_index];
                             let list_key_int = list_key.parse::<u8>();
@@ -857,7 +1012,7 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
                 // make sure the schema and type match
                 if is_json_req == false { type_error(&self.schema.type_data, &X::type_idx(), &path, path_index)?; }
 
-                match X::buffer_into(self.location, self.kind, Rc::clone(&self.schema), self.memory)? {
+                match X::into_value(NP_Lite_Ptr::from_borrowed(&self))? {
                     Some(x) => {
                         Ok(Some(x))
                     },
@@ -879,164 +1034,78 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
             NP_TypeKeys::Any => { },
             NP_TypeKeys::JSON => { },
             NP_TypeKeys::UTF8String => {
-                String::buffer_set(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory), Box::new(&String::default()))?;
+                String::set_value(NP_Lite_Ptr::from_borrowed(self), Box::new(&String::default()))?;
             },
             NP_TypeKeys::Bytes => {
-                NP_Bytes::buffer_set(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory), Box::new(&NP_Bytes::default()))?;
+                NP_Bytes::set_value(NP_Lite_Ptr::from_borrowed(self), Box::new(&NP_Bytes::default()))?;
             },
             NP_TypeKeys::Int8 => {
-                i8::buffer_set(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory), Box::new(&i8::default()))?;
+                i8::set_value(NP_Lite_Ptr::from_borrowed(self), Box::new(&i8::default()))?;
             },
             NP_TypeKeys::Int16 => {
-                i16::buffer_set(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory), Box::new(&i16::default()))?;
+                i16::set_value(NP_Lite_Ptr::from_borrowed(self), Box::new(&i16::default()))?;
             },
             NP_TypeKeys::Int32 => {
-                i32::buffer_set(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory), Box::new(&i32::default()))?;
+                i32::set_value(NP_Lite_Ptr::from_borrowed(self), Box::new(&i32::default()))?;
             },
             NP_TypeKeys::Int64 => {
-                i64::buffer_set(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory), Box::new(&i64::default()))?;
+                i64::set_value(NP_Lite_Ptr::from_borrowed(self), Box::new(&i64::default()))?;
             },
             NP_TypeKeys::Uint8 => {
-                u8::buffer_set(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory), Box::new(&u8::default()))?;
+                u8::set_value(NP_Lite_Ptr::from_borrowed(self), Box::new(&u8::default()))?;
             },
             NP_TypeKeys::Uint16 => {
-                u16::buffer_set(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory), Box::new(&u16::default()))?;
+                u16::set_value(NP_Lite_Ptr::from_borrowed(self), Box::new(&u16::default()))?;
             },
             NP_TypeKeys::Uint32 => {
-                u32::buffer_set(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory), Box::new(&u32::default()))?;
+                u32::set_value(NP_Lite_Ptr::from_borrowed(self), Box::new(&u32::default()))?;
             },
             NP_TypeKeys::Uint64 => {
-                u64::buffer_set(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory), Box::new(&u64::default()))?;
+                u64::set_value(NP_Lite_Ptr::from_borrowed(self), Box::new(&u64::default()))?;
             },
             NP_TypeKeys::Float => {
-                f32::buffer_set(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory), Box::new(&f32::default()))?;
+                f32::set_value(NP_Lite_Ptr::from_borrowed(self), Box::new(&f32::default()))?;
             },
             NP_TypeKeys::Double => {
-                f64::buffer_set(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory), Box::new(&f64::default()))?;
+                f64::set_value(NP_Lite_Ptr::from_borrowed(self), Box::new(&f64::default()))?;
             },
             NP_TypeKeys::Decimal => {
-                NP_Dec::buffer_set(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory), Box::new(&NP_Dec::default()))?;
+                NP_Dec::set_value(NP_Lite_Ptr::from_borrowed(self), Box::new(&NP_Dec::default()))?;
             },
             NP_TypeKeys::Boolean => {
-                bool::buffer_set(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory), Box::new(&bool::default()))?;
+                bool::set_value(NP_Lite_Ptr::from_borrowed(self), Box::new(&bool::default()))?;
             },
             NP_TypeKeys::Geo => {
-                NP_Geo::buffer_set(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory), Box::new(&NP_Geo::default()))?;
+                NP_Geo::set_value(NP_Lite_Ptr::from_borrowed(self), Box::new(&NP_Geo::default()))?;
             },
             NP_TypeKeys::Uuid => {
-                NP_UUID::buffer_set(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory), Box::new(&NP_UUID::default()))?;
+                NP_UUID::set_value(NP_Lite_Ptr::from_borrowed(self), Box::new(&NP_UUID::default()))?;
             },
             NP_TypeKeys::Ulid => {
-                NP_ULID::buffer_set(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory), Box::new(&NP_ULID::default()))?;
+                NP_ULID::set_value(NP_Lite_Ptr::from_borrowed(self), Box::new(&NP_ULID::default()))?;
             },
             NP_TypeKeys::Date => {
-                NP_Date::buffer_set(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory), Box::new(&NP_Date::default()))?;
+                NP_Date::set_value(NP_Lite_Ptr::from_borrowed(self), Box::new(&NP_Date::default()))?;
             },
             NP_TypeKeys::Enum => {
-                NP_Option::buffer_set(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory), Box::new(&NP_Option::default()))?;
+                NP_Option::set_value(NP_Lite_Ptr::from_borrowed(self), Box::new(&NP_Option::default()))?;
             },
             NP_TypeKeys::Table => {
-                NP_Table::buffer_set(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory), Box::new(&NP_Table::default()))?;
+                NP_Table::set_value(NP_Lite_Ptr::from_borrowed(self), Box::new(&NP_Table::default()))?;
             },
             NP_TypeKeys::Map => {
-                NP_Map::<NP_Any>::buffer_set(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory), Box::new(&NP_Map::default()))?;
+                NP_Map::<NP_Any>::set_value(NP_Lite_Ptr::from_borrowed(self), Box::new(&NP_Map::default()))?;
             },
             NP_TypeKeys::List => {
-                NP_List::<NP_Any>::buffer_set(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory), Box::new(&NP_List::default()))?;
+                NP_List::<NP_Any>::set_value(NP_Lite_Ptr::from_borrowed(self), Box::new(&NP_List::default()))?;
             },
             NP_TypeKeys::Tuple => {
-                NP_Tuple::buffer_set(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory), Box::new(&NP_Tuple::default()))?;
+                NP_Tuple::set_value(NP_Lite_Ptr::from_borrowed(self), Box::new(&NP_Tuple::default()))?;
             }
         };
 
         Ok(())
     }
-
-    #[doc(hidden)]
-    /// used to run compaction on this pointer
-    /// should not be called directly by the library user
-    /// Use NP_Factory methods of `compact` and `maybe_compact`.
-    pub fn _compact(&self, copy_to: NP_Ptr<NP_Any>) -> Result<(u32, NP_PtrKinds, Rc<NP_Schema>), NP_Error> {
-
-        match NP_TypeKeys::from(self.schema.type_data.0) {
-            NP_TypeKeys::Any => {
-                Ok((0, self.kind.clone(), Rc::clone(&self.schema)))
-            },
-            NP_TypeKeys::JSON => {
-                unreachable!()
-            },
-            NP_TypeKeys::UTF8String => {
-                String::buffer_do_compact(self, copy_to)
-            },
-            NP_TypeKeys::Bytes => {
-                NP_Bytes::buffer_do_compact(self, copy_to)
-            },
-            NP_TypeKeys::Int8 => {
-                i8::buffer_do_compact(self, copy_to)
-            },
-            NP_TypeKeys::Int16 => {
-                i16::buffer_do_compact(self, copy_to)
-            },
-            NP_TypeKeys::Int32 => {
-                i32::buffer_do_compact(self, copy_to)
-            },
-            NP_TypeKeys::Int64 => {
-                i64::buffer_do_compact(self, copy_to)
-            },
-            NP_TypeKeys::Uint8 => {
-                u8::buffer_do_compact(self, copy_to)
-            },
-            NP_TypeKeys::Uint16 => {
-                u16::buffer_do_compact(self, copy_to)
-            },
-            NP_TypeKeys::Uint32 => {
-                u32::buffer_do_compact(self, copy_to)
-            },
-            NP_TypeKeys::Uint64 => {
-                u64::buffer_do_compact(self, copy_to)
-            },
-            NP_TypeKeys::Float => {
-                f32::buffer_do_compact(self, copy_to)
-            },
-            NP_TypeKeys::Double => {
-                f64::buffer_do_compact(self, copy_to)
-            },
-            NP_TypeKeys::Decimal => {
-                NP_Dec::buffer_do_compact(self, copy_to)
-            },
-            NP_TypeKeys::Boolean => {
-                bool::buffer_do_compact(self, copy_to)
-            },
-            NP_TypeKeys::Geo => {
-                NP_Geo::buffer_do_compact(self, copy_to)
-            },
-            NP_TypeKeys::Uuid => {
-                NP_UUID::buffer_do_compact(self, copy_to)
-            },
-            NP_TypeKeys::Ulid => {
-                NP_ULID::buffer_do_compact(self, copy_to)
-            },
-            NP_TypeKeys::Date => {
-                NP_Date::buffer_do_compact(self, copy_to)
-            },
-            NP_TypeKeys::Enum => {
-                NP_Option::buffer_do_compact(self, copy_to)
-            },
-            NP_TypeKeys::Table => {
-                NP_Table::buffer_do_compact(self, copy_to)
-            },
-            NP_TypeKeys::Map => {
-                NP_Map::<NP_Any>::buffer_do_compact(self, copy_to)
-            },
-            NP_TypeKeys::List => {
-                NP_List::<NP_Any>::buffer_do_compact(self, copy_to)
-            },
-            NP_TypeKeys::Tuple => {
-                NP_Tuple::buffer_do_compact(self, copy_to)
-            }
-        }
-    }
-
 
     /// Calculate the number of bytes used by this object and it's descendants.
     /// 
@@ -1056,73 +1125,73 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
                 unreachable!()
             },
             NP_TypeKeys::UTF8String => {
-                String::buffer_get_size(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory))
+                String::get_size(NP_Lite_Ptr::from_borrowed(self))
             },
             NP_TypeKeys::Bytes => {
-                NP_Bytes::buffer_get_size(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory))
+                NP_Bytes::get_size(NP_Lite_Ptr::from_borrowed(self))
             },
             NP_TypeKeys::Int8 => {
-                i8::buffer_get_size(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory))
+                i8::get_size(NP_Lite_Ptr::from_borrowed(self))
             },
             NP_TypeKeys::Int16 => {
-                i16::buffer_get_size(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory))
+                i16::get_size(NP_Lite_Ptr::from_borrowed(self))
             },
             NP_TypeKeys::Int32 => {
-                i32::buffer_get_size(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory))
+                i32::get_size(NP_Lite_Ptr::from_borrowed(self))
             },
             NP_TypeKeys::Int64 => {
-                i64::buffer_get_size(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory))
+                i64::get_size(NP_Lite_Ptr::from_borrowed(self))
             },
             NP_TypeKeys::Uint8 => {
-                u8::buffer_get_size(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory))
+                u8::get_size(NP_Lite_Ptr::from_borrowed(self))
             },
             NP_TypeKeys::Uint16 => {
-                u16::buffer_get_size(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory))
+                u16::get_size(NP_Lite_Ptr::from_borrowed(self))
             },
             NP_TypeKeys::Uint32 => {
-                u32::buffer_get_size(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory))
+                u32::get_size(NP_Lite_Ptr::from_borrowed(self))
             },
             NP_TypeKeys::Uint64 => {
-                u64::buffer_get_size(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory))
+                u64::get_size(NP_Lite_Ptr::from_borrowed(self))
             },
             NP_TypeKeys::Float => {
-                f32::buffer_get_size(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory))
+                f32::get_size(NP_Lite_Ptr::from_borrowed(self))
             },
             NP_TypeKeys::Double => {
-                f64::buffer_get_size(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory))
+                f64::get_size(NP_Lite_Ptr::from_borrowed(self))
             },
             NP_TypeKeys::Decimal => {
-                NP_Dec::buffer_get_size(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory))
+                NP_Dec::get_size(NP_Lite_Ptr::from_borrowed(self))
             },
             NP_TypeKeys::Boolean => {
-                bool::buffer_get_size(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory))
+                bool::get_size(NP_Lite_Ptr::from_borrowed(self))
             },
             NP_TypeKeys::Geo => {
-                NP_Geo::buffer_get_size(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory))
+                NP_Geo::get_size(NP_Lite_Ptr::from_borrowed(self))
             },
             NP_TypeKeys::Uuid => {
-                NP_UUID::buffer_get_size(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory))
+                NP_UUID::get_size(NP_Lite_Ptr::from_borrowed(self))
             },
             NP_TypeKeys::Ulid => {
-                NP_ULID::buffer_get_size(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory))
+                NP_ULID::get_size(NP_Lite_Ptr::from_borrowed(self))
             },
             NP_TypeKeys::Date => {
-                NP_Date::buffer_get_size(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory))
+                NP_Date::get_size(NP_Lite_Ptr::from_borrowed(self))
             },
             NP_TypeKeys::Enum => {
-                NP_Option::buffer_get_size(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory))
+                NP_Option::get_size(NP_Lite_Ptr::from_borrowed(self))
             },
             NP_TypeKeys::Table => {
-                NP_Table::buffer_get_size(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory))
+                NP_Table::get_size(NP_Lite_Ptr::from_borrowed(self))
             },
             NP_TypeKeys::Map => {
-                NP_Map::<NP_Any>::buffer_get_size(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory))
+                NP_Map::<NP_Any>::get_size(NP_Lite_Ptr::from_borrowed(self))
             },
             NP_TypeKeys::List => {
-                NP_List::<NP_Any>::buffer_get_size(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory))
+                NP_List::<NP_Any>::get_size(NP_Lite_Ptr::from_borrowed(self))
             },
             NP_TypeKeys::Tuple => {
-                NP_Tuple::buffer_get_size(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory))
+                NP_Tuple::get_size(NP_Lite_Ptr::from_borrowed(self))
             }
         }?;
 
@@ -1147,73 +1216,73 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
                 unreachable!()
             },
             NP_TypeKeys::UTF8String => {
-                String::buffer_to_json(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory))
+                String::to_json(NP_Lite_Ptr::from_borrowed(self))
             },
             NP_TypeKeys::Bytes => {
-                NP_Bytes::buffer_to_json(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory))
+                NP_Bytes::to_json(NP_Lite_Ptr::from_borrowed(self))
             },
             NP_TypeKeys::Int8 => {
-                i8::buffer_to_json(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory))
+                i8::to_json(NP_Lite_Ptr::from_borrowed(self))
             },
             NP_TypeKeys::Int16 => {
-                i16::buffer_to_json(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory))
+                i16::to_json(NP_Lite_Ptr::from_borrowed(self))
             },
             NP_TypeKeys::Int32 => {
-                i32::buffer_to_json(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory))
+                i32::to_json(NP_Lite_Ptr::from_borrowed(self))
             },
             NP_TypeKeys::Int64 => {
-                i64::buffer_to_json(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory))
+                i64::to_json(NP_Lite_Ptr::from_borrowed(self))
             },
             NP_TypeKeys::Uint8 => {
-                u8::buffer_to_json(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory))
+                u8::to_json(NP_Lite_Ptr::from_borrowed(self))
             },
             NP_TypeKeys::Uint16 => {
-                u16::buffer_to_json(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory))
+                u16::to_json(NP_Lite_Ptr::from_borrowed(self))
             },
             NP_TypeKeys::Uint32 => {
-                u32::buffer_to_json(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory))
+                u32::to_json(NP_Lite_Ptr::from_borrowed(self))
             },
             NP_TypeKeys::Uint64 => {
-                u64::buffer_to_json(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory))
+                u64::to_json(NP_Lite_Ptr::from_borrowed(self))
             },
             NP_TypeKeys::Float => {
-                f32::buffer_to_json(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory))
+                f32::to_json(NP_Lite_Ptr::from_borrowed(self))
             },
             NP_TypeKeys::Double => {
-                f64::buffer_to_json(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory))
+                f64::to_json(NP_Lite_Ptr::from_borrowed(self))
             },
             NP_TypeKeys::Decimal => {
-                NP_Dec::buffer_to_json(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory))
+                NP_Dec::to_json(NP_Lite_Ptr::from_borrowed(self))
             },
             NP_TypeKeys::Boolean => {
-                bool::buffer_to_json(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory))
+                bool::to_json(NP_Lite_Ptr::from_borrowed(self))
             },
             NP_TypeKeys::Geo => {
-                NP_Geo::buffer_to_json(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory))
+                NP_Geo::to_json(NP_Lite_Ptr::from_borrowed(self))
             },
             NP_TypeKeys::Uuid => {
-                NP_UUID::buffer_to_json(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory))
+                NP_UUID::to_json(NP_Lite_Ptr::from_borrowed(self))
             },
             NP_TypeKeys::Ulid => {
-                NP_ULID::buffer_to_json(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory))
+                NP_ULID::to_json(NP_Lite_Ptr::from_borrowed(self))
             },
             NP_TypeKeys::Date => {
-                NP_Date::buffer_to_json(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory))
+                NP_Date::to_json(NP_Lite_Ptr::from_borrowed(self))
             },
             NP_TypeKeys::Enum => {
-                NP_Option::buffer_to_json(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory))
+                NP_Option::to_json(NP_Lite_Ptr::from_borrowed(self))
             },
             NP_TypeKeys::Table => {
-                NP_Table::buffer_to_json(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory))
+                NP_Table::to_json(NP_Lite_Ptr::from_borrowed(self))
             },
             NP_TypeKeys::Map => {
-                NP_Map::<NP_Any>::buffer_to_json(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory))
+                NP_Map::<NP_Any>::to_json(NP_Lite_Ptr::from_borrowed(self))
             },
             NP_TypeKeys::List => {
-                NP_List::<NP_Any>::buffer_to_json(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory))
+                NP_List::<NP_Any>::to_json(NP_Lite_Ptr::from_borrowed(self))
             },
             NP_TypeKeys::Tuple => {
-                NP_Tuple::buffer_to_json(self.location, &self.kind, Rc::clone(&self.schema), Rc::clone(&self.memory))
+                NP_Tuple::to_json(NP_Lite_Ptr::from_borrowed(self))
             }
         }
     }

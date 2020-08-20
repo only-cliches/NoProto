@@ -42,7 +42,7 @@ use alloc::borrow::ToOwned;
 use alloc::string::ToString;
 use core::str::FromStr;
 use core::ops::Index;
-use crate::{pointer::{NP_PtrKinds, NP_Value, NP_Ptr, any::NP_Any}, error::NP_Error, schema::{NP_TypeKeys, NP_Schema}, memory::NP_Memory};
+use crate::{pointer::{NP_PtrKinds, NP_Value, NP_Ptr, any::NP_Any, NP_Lite_Ptr}, error::NP_Error, schema::{NP_TypeKeys, NP_Schema}, memory::NP_Memory};
 
 /// The JSON representation of a JS Map
 #[derive(Debug)]
@@ -128,8 +128,8 @@ pub enum NP_JSON {
 impl NP_Value for NP_JSON {
     fn type_idx() -> (i64, String) { (NP_TypeKeys::JSON as i64, "json".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::JSON as i64, "json".to_owned()) }
-    fn buffer_into(address: u32, _kind: NP_PtrKinds, schema: Rc<NP_Schema>, buffer: Rc<NP_Memory>) -> Result<Option<Box<Self>>, NP_Error> {
-        let root = NP_Ptr::<NP_Any>::_new_standard_ptr(address, Rc::clone(&schema), Rc::clone(&buffer));
+    fn into_value(pointer: NP_Lite_Ptr) -> Result<Option<Box<Self>>, NP_Error> {
+        let root = pointer.into::<NP_Any>();
         Ok(Some(Box::new(root.json_encode())))
     }
 }

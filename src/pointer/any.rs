@@ -4,7 +4,7 @@ use crate::pointer::NP_Ptr;
 use crate::error::NP_Error;
 use crate::memory::NP_Memory;
 use crate::{schema::NP_TypeKeys, pointer::NP_Value, json_flex::NP_JSON};
-use super::NP_PtrKinds;
+use super::{NP_Lite_Ptr, NP_PtrKinds};
 
 use alloc::string::String;
 use alloc::boxed::Box;
@@ -52,19 +52,19 @@ impl NP_Value for NP_Any {
     fn type_idx() -> (i64, String) { (NP_TypeKeys::Any as i64, "any".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Any as i64, "any".to_owned()) }
 
-    fn buffer_set(_address: u32, _kind: &NP_PtrKinds, _schema: Rc<NP_Schema>, _buffer: Rc<NP_Memory>, _value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
+    fn set_value(_pointer: NP_Lite_Ptr, _value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
         Err(NP_Error::new("Can't use .set() with (Any), must cast first with NP_Any::cast<T>(pointer)."))
     }
-    fn buffer_into(_address: u32, _kind: NP_PtrKinds, _schema: Rc<NP_Schema>, _buffer: Rc<NP_Memory>) -> Result<Option<Box<Self>>, NP_Error> {
+    fn into_value(_pointer: NP_Lite_Ptr) -> Result<Option<Box<Self>>, NP_Error> {
         Err(NP_Error::new("Type (Any) doesn't support .into()!"))
     }
-    fn buffer_to_json(_address: u32, _kind: &NP_PtrKinds, _schema: Rc<NP_Schema>, _buffer: Rc<NP_Memory>) -> NP_JSON {
+    fn to_json(_pointer: NP_Lite_Ptr) -> NP_JSON {
         NP_JSON::Null
     }
-    fn buffer_get_size(_address: u32, _kind: &NP_PtrKinds, _schema: Rc<NP_Schema>, _buffer: Rc<NP_Memory>) -> Result<u32, NP_Error> {
+    fn get_size(_pointer: NP_Lite_Ptr) -> Result<u32, NP_Error> {
         Ok(0)
     }
-    fn buffer_do_compact<'a, X: NP_Value + Default>(_from_ptr: &'a NP_Ptr<X>, _to_ptr: NP_Ptr<NP_Any>) -> Result<(u32, NP_PtrKinds, Rc<NP_Schema>), NP_Error> where Self: NP_Value + Default {
+    fn do_compact(_from_ptr: NP_Lite_Ptr, _to_ptr: NP_Lite_Ptr) -> Result<(), NP_Error> where Self: NP_Value + Default {
         Err(NP_Error::new("Cannot compact an ANY field!"))
     }
 }

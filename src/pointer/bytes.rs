@@ -2,7 +2,7 @@ use crate::schema::NP_Schema;
 use crate::error::NP_Error;
 use crate::memory::{NP_Size, NP_Memory};
 use crate::{schema::NP_TypeKeys, pointer::NP_Value, json_flex::NP_JSON};
-use super::{NP_PtrKinds};
+use super::{NP_PtrKinds, NP_Lite_Ptr};
 
 use alloc::vec::Vec;
 use alloc::vec;
@@ -86,32 +86,32 @@ impl NP_Value for NP_Bytes {
         }
     }
 
-    fn buffer_set(address: u32, kind: &NP_PtrKinds, schema: Rc<NP_Schema>, memory: Rc<NP_Memory>, value: Box<&Self>) -> core::result::Result<NP_PtrKinds, NP_Error> {
-
+    fn set_value(pointer: NP_Lite_Ptr, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
+ 
         let bytes = &value.bytes;
         let str_size = bytes.len() as u64;
 
-        let mut addr = kind.get_value_addr() as usize;
+        let mut addr = pointer.kind.get_value_addr() as usize;
 
-        let write_bytes = memory.write_bytes();
+        let write_bytes = pointer.memory.write_bytes();
 
-        if schema.type_state != -1 { // fixed size bytes
-            let mut set_kind = kind.clone();
+        if pointer.schema.type_state != -1 { // fixed size bytes
+            let mut set_kind = pointer.kind.clone();
 
             if addr == 0 { // malloc new bytes
 
-                let mut empty_bytes: Vec<u8> = Vec::with_capacity(schema.type_state as usize);
-                for _x in 0..(schema.type_state as usize) {
+                let mut empty_bytes: Vec<u8> = Vec::with_capacity(pointer.schema.type_state as usize);
+                for _x in 0..(pointer.schema.type_state as usize) {
                     empty_bytes.push(0);
                 }
                 
-                addr = memory.malloc(empty_bytes)? as usize;
+                addr = pointer.memory.malloc(empty_bytes)? as usize;
 
                 // set location address
-                set_kind = memory.set_value_address(address, addr as u32, kind);
+                set_kind = pointer.memory.set_value_address(pointer.location, addr as u32, &pointer.kind);
             }
 
-            for x in 0..(schema.type_state as usize) {
+            for x in 0..(pointer.schema.type_state as usize) {
                 if x < bytes.len() { // assign values of bytes
                     write_bytes[(addr + x)] = bytes[x];
                 } else { // rest is zeros
@@ -125,15 +125,15 @@ impl NP_Value for NP_Bytes {
         // flexible size
 
         let prev_size: usize = if addr != 0 {
-            match memory.size {
+            match pointer.memory.size {
                 NP_Size::U16 => {
                     let mut size_bytes: [u8; 2] = [0; 2];
-                    size_bytes.copy_from_slice(&memory.read_bytes()[addr..(addr+2)]);
+                    size_bytes.copy_from_slice(&pointer.memory.read_bytes()[addr..(addr+2)]);
                     u16::from_be_bytes(size_bytes) as usize
                 },
                 NP_Size::U32 => { 
                     let mut size_bytes: [u8; 4] = [0; 4];
-                    size_bytes.copy_from_slice(&memory.read_bytes()[addr..(addr+4)]);
+                    size_bytes.copy_from_slice(&pointer.memory.read_bytes()[addr..(addr+4)]);
                     u32::from_be_bytes(size_bytes) as usize
                 }
             }
@@ -143,7 +143,7 @@ impl NP_Value for NP_Bytes {
 
         if prev_size >= str_size as usize { // previous string is larger than this one, use existing memory
     
-            let size_bytes = match memory.size {
+            let size_bytes = match pointer.memory.size {
                 NP_Size::U16 => { (str_size as u16).to_be_bytes().to_vec() },
                 NP_Size::U32 => { (str_size as u32).to_be_bytes().to_vec() }
             };
@@ -153,7 +153,7 @@ impl NP_Value for NP_Bytes {
                 write_bytes[(addr + x) as usize] = size_bytes[x as usize];
             }
 
-            let offset = match memory.size {
+            let offset = match pointer.memory.size {
                 NP_Size::U16 => { 2usize },
                 NP_Size::U32 => { 4usize }
             };
@@ -163,44 +163,44 @@ impl NP_Value for NP_Bytes {
                 write_bytes[(addr + x + offset) as usize] = bytes[x as usize];
             }
 
-            return Ok(*kind);
+            return Ok(pointer.kind);
         } else { // not enough space or space has not been allocted yet
             
             // first 2 / 4 bytes are string length
-            let str_bytes = match memory.size {
+            let str_bytes = match pointer.memory.size {
                 NP_Size::U16 => { (str_size as u16).to_be_bytes().to_vec() },
                 NP_Size::U32 => { (str_size as u32).to_be_bytes().to_vec() }
             };
 
-            addr = memory.malloc(str_bytes)? as usize;
+            addr = pointer.memory.malloc(str_bytes)? as usize;
 
             // then string content
-            memory.malloc(bytes.to_vec())?;
+            pointer.memory.malloc(bytes.to_vec())?;
 
-            return Ok(memory.set_value_address(address, addr as u32, kind));
+            return Ok(pointer.memory.set_value_address(pointer.location, addr as u32, &pointer.kind));
         }
             
     }
     
 
-    fn buffer_into(_address: u32, kind: NP_PtrKinds, schema: Rc<NP_Schema>, buffer: Rc<NP_Memory>) -> core::result::Result<Option<Box<Self>>, NP_Error> {
-        let addr = kind.get_value_addr() as usize;
+    fn into_value(pointer: NP_Lite_Ptr) -> Result<Option<Box<Self>>, NP_Error> {
+        let addr = pointer.kind.get_value_addr() as usize;
  
         // empty value
         if addr == 0 {
             return Ok(None);
         }
 
-        let memory = buffer;
+        let memory = pointer.memory;
 
-        if schema.type_state != -1 { // fixed size
+        if pointer.schema.type_state != -1 { // fixed size
             
-            let size = schema.type_state as usize;
+            let size = pointer.schema.type_state as usize;
             
             // get bytes
             let bytes = &memory.read_bytes()[(addr)..(addr+size)];
 
-            return Ok(Some(Box::new(NP_Bytes { bytes: bytes.to_vec() })))
+            return Ok(Some(Box::new(NP_Bytes { bytes: bytes.to_vec()})))
 
         } else { // dynamic size
             // get size of bytes
@@ -224,13 +224,13 @@ impl NP_Value for NP_Bytes {
                 NP_Size::U32 => { &memory.read_bytes()[(addr+4)..(addr+4+bytes_size)] }
             };
 
-            return Ok(Some(Box::new(NP_Bytes { bytes: bytes.to_vec() })))
+            return Ok(Some(Box::new(NP_Bytes { bytes: bytes.to_vec()})))
         }
         
     }
 
-    fn buffer_to_json(address: u32, kind: &NP_PtrKinds, schema: Rc<NP_Schema>, buffer: Rc<NP_Memory>) -> NP_JSON {
-        let this_bytes = Self::buffer_into(address, *kind, Rc::clone(&schema), buffer);
+    fn to_json(pointer: NP_Lite_Ptr) -> NP_JSON {
+        let this_bytes = Self::into_value(pointer.clone());
 
         match this_bytes {
             Ok(x) => {
@@ -242,7 +242,7 @@ impl NP_Value for NP_Bytes {
                         NP_JSON::Array(bytes)
                     },
                     None => {
-                        match &schema.default {
+                        match &pointer.schema.default {
                             Some(x) => x.clone(),
                             None => NP_JSON::Null
                         }
@@ -255,8 +255,8 @@ impl NP_Value for NP_Bytes {
         }
     }
 
-    fn buffer_get_size(_address: u32, kind: &NP_PtrKinds, schema: Rc<NP_Schema>, buffer: Rc<NP_Memory>) -> core::result::Result<u32, NP_Error> {
-        let value = kind.get_value_addr();
+    fn get_size(pointer: NP_Lite_Ptr) -> Result<u32, NP_Error> {
+        let value = pointer.kind.get_value_addr();
 
         // empty value
         if value == 0 {
@@ -265,10 +265,10 @@ impl NP_Value for NP_Bytes {
         
         // get size of bytes
         let addr = value as usize;        
-        let memory = buffer;
+        let memory = pointer.memory;
 
-        if schema.type_state != -1 { // fixed size
-            return Ok(schema.type_state as u32);
+        if pointer.schema.type_state != -1 { // fixed size
+            return Ok(pointer.schema.type_state as u32);
         } else { // flexible size
 
 

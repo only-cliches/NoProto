@@ -4,7 +4,7 @@ use alloc::boxed::Box;
 use alloc::vec::Vec;
 use crate::pointer::NP_Value;
 use crate::error::NP_Error;
-use crate::pointer::{any::NP_Any, NP_Ptr};
+use crate::pointer::{any::NP_Any, NP_Ptr, NP_Lite_Ptr};
 use crate::memory::{NP_Size, NP_Memory};
 use crate::{schema::{NP_TypeKeys, NP_Schema}, json_flex::NP_JSON};
 use alloc::{borrow::ToOwned, rc::Rc};
@@ -224,12 +224,12 @@ impl NP_Buffer {
             Some(x) => { x }
         };
 
-        let old_root = NP_Ptr::<NP_Any>::_new_standard_ptr(ROOT_PTR_ADDR, Rc::clone(&self.schema), Rc::clone(&self.memory));
+        let old_root = NP_Lite_Ptr::new_standard(ROOT_PTR_ADDR, Rc::clone(&self.schema), Rc::clone(&self.memory));
 
         let new_bytes = Rc::new(NP_Memory::new(Some(capacity), size));
-        let new_root = NP_Ptr::<NP_Any>::_new_standard_ptr(ROOT_PTR_ADDR, Rc::clone(&self.schema), Rc::clone(&new_bytes));
+        let new_root = NP_Lite_Ptr::new_standard(ROOT_PTR_ADDR, Rc::clone(&self.schema), Rc::clone(&new_bytes));
 
-        old_root._compact(new_root)?;
+        old_root.compact(new_root)?;
 
         self.memory = new_bytes;
 

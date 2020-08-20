@@ -1,6 +1,6 @@
 use crate::pointer::any::NP_Any;
 use crate::pointer::NP_Ptr;
-use crate::pointer::{NP_PtrKinds, NP_Value};
+use crate::pointer::{NP_PtrKinds, NP_Value, NP_Lite_Ptr};
 use crate::{memory::{NP_Size, NP_Memory}, schema::{NP_SchemaKinds, NP_Schema, NP_TypeKeys}, error::NP_Error, json_flex::NP_JSON};
 
 use alloc::vec::Vec;
@@ -130,21 +130,21 @@ impl NP_Value for NP_Tuple {
     }
     fn type_idx() -> (i64, String) { (NP_TypeKeys::Tuple as i64, "tuple".to_owned()) }
     fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Tuple as i64, "tuple".to_owned()) }
-    fn buffer_set(_address: u32, _kind: &NP_PtrKinds, _schema: Rc<NP_Schema>, _buffer: Rc<NP_Memory>, _value: Box<&Self>) -> core::result::Result<NP_PtrKinds, NP_Error> {
+    fn set_value(_pointer: NP_Lite_Ptr, _value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
         Err(NP_Error::new("Type (tuple) doesn't support .set()! Use .into() instead."))
     }
 
-    fn buffer_into(address: u32, kind: NP_PtrKinds, schema: Rc<NP_Schema>, buffer: Rc<NP_Memory>) -> core::result::Result<Option<Box<Self>>, NP_Error> {
+    fn into_value(ptr: NP_Lite_Ptr) -> Result<Option<Box<Self>>, NP_Error> {
 
-        match &*schema.kind {
+        match &*ptr.schema.kind {
             NP_SchemaKinds::Tuple { values, sorted } => {
 
-                let mut addr = kind.get_value_addr();
+                let mut addr = ptr.kind.get_value_addr();
 
                 let mut values_vec: Vec<u32> = Vec::new();
 
                 if addr == 0 {
-                    let mut addresses = match &buffer.size {
+                    let mut addresses = match &ptr.memory.size {
                         NP_Size::U16 => Vec::with_capacity(2 * values.len()),
                         NP_Size::U32 => Vec::with_capacity(4 * values.len())
                     };
@@ -156,27 +156,27 @@ impl NP_Value for NP_Tuple {
                     }
 
                     // no tuple here, make one
-                    addr = buffer.malloc(addresses)?; // stores value addresses
-                    buffer.set_value_address(address, addr, &kind);
+                    addr = ptr.memory.malloc(addresses)?; // stores value addresses
+                    ptr.memory.set_value_address(ptr.location, addr, &ptr.kind);
                     for _x in 0..values.len() {
                         values_vec.push(0);
                     }
 
                     if *sorted { // write default values in sorted order
                         for x in 0..values_vec.len() as u32 {
-                            let ptr = match &buffer.size {
-                                NP_Size::U16 => NP_Ptr::<NP_Any>::_new_standard_ptr(addr + (x * 2), Rc::clone(&schema), Rc::clone(&buffer)),
-                                NP_Size::U32 => NP_Ptr::<NP_Any>::_new_standard_ptr(addr + (x * 4), Rc::clone(&schema), Rc::clone(&buffer))
+                            let ptr = match &ptr.memory.size {
+                                NP_Size::U16 => NP_Ptr::<NP_Any>::_new_standard_ptr(addr + (x * 2), Rc::clone(&ptr.schema), Rc::clone(&ptr.memory)),
+                                NP_Size::U32 => NP_Ptr::<NP_Any>::_new_standard_ptr(addr + (x * 4), Rc::clone(&ptr.schema), Rc::clone(&ptr.memory))
                             };
                             ptr.set_default()?;
                             values_vec[x as usize] = ptr.location;
                             
-                            match &buffer.size {
+                            match &ptr.memory.size {
                                 NP_Size::U16 => {
-                                    buffer.set_value_address(addr + (x * 2), ptr.location, &kind);
+                                    ptr.memory.set_value_address(addr + (x * 2), ptr.location, &ptr.kind);
                                 },
                                 NP_Size::U32 => {
-                                    buffer.set_value_address(addr + (x * 4), ptr.location, &kind);
+                                    ptr.memory.set_value_address(addr + (x * 4), ptr.location, &ptr.kind);
                                 }
                             };
                         }
@@ -185,16 +185,16 @@ impl NP_Value for NP_Tuple {
                 } else {
                     // existing head, read value
                     let a = addr as usize;
-                    match &buffer.size {
+                    match &ptr.memory.size {
                         NP_Size::U16 => {
                             for x in 0..values.len() {
-                                let value_address_bytes = *buffer.get_2_bytes(a + (x * 2)).unwrap_or(&[0; 2]);
+                                let value_address_bytes = *ptr.memory.get_2_bytes(a + (x * 2)).unwrap_or(&[0; 2]);
                                 values_vec.push(u16::from_be_bytes(value_address_bytes) as u32);
                             }    
                         },
                         NP_Size::U32 => {
                             for x in 0..values.len() {
-                                let value_address_bytes = *buffer.get_4_bytes(a + (x * 4)).unwrap_or(&[0; 4]);
+                                let value_address_bytes = *ptr.memory.get_4_bytes(a + (x * 4)).unwrap_or(&[0; 4]);
                                 values_vec.push(u32::from_be_bytes(value_address_bytes));
                             }                            
                         }
@@ -202,7 +202,7 @@ impl NP_Value for NP_Tuple {
 
                 }
 
-                Ok(Some(Box::new(NP_Tuple::new(addr, buffer, Rc::clone(&values), values_vec))))
+                Ok(Some(Box::new(NP_Tuple::new(addr, ptr.memory, Rc::clone(&values), values_vec))))
             },
             _ => {
                 unreachable!();
@@ -210,20 +210,20 @@ impl NP_Value for NP_Tuple {
         }
     }
 
-    fn buffer_get_size(_address: u32, kind: &NP_PtrKinds, schema: Rc<NP_Schema>, buffer: Rc<NP_Memory>) -> Result<u32, NP_Error> {
+    fn get_size(ptr: NP_Lite_Ptr) -> Result<u32, NP_Error> {
         
         let base_size = 0u32;
 
-        let addr = kind.get_value_addr();
+        let addr = ptr.kind.get_value_addr();
 
         if addr == 0 {
             return Ok(0);
         }
 
-        match &*schema.kind {
+        match &*ptr.schema.kind {
             NP_SchemaKinds::Tuple { values: _, sorted: _ } => {
 
-                let tuple = NP_Tuple::buffer_into(addr, *kind, schema, Rc::clone(&buffer))?.unwrap();
+                let tuple = NP_Tuple::into_value(ptr.clone())?.unwrap();
 
                 let mut acc_size = 0u32;
 
@@ -233,7 +233,7 @@ impl NP_Value for NP_Tuple {
                         acc_size += ptr.calc_size()?;
                     } else {
                         // empty pointer
-                        acc_size += match &buffer.size {
+                        acc_size += match &ptr.memory.size {
                             NP_Size::U16 => 2,
                             NP_Size::U32 => 4
                         };
@@ -248,18 +248,18 @@ impl NP_Value for NP_Tuple {
         }
     }
 
-    fn buffer_to_json(_address: u32, kind: &NP_PtrKinds, schema: Rc<NP_Schema>, buffer: Rc<NP_Memory>) -> NP_JSON {
+    fn to_json(ptr: NP_Lite_Ptr) -> NP_JSON {
 
-        match &*schema.kind {
+        match &*ptr.schema.kind {
             NP_SchemaKinds::Tuple { values: _, sorted: _ } => {
 
-                let addr = kind.get_value_addr();
+                let addr = ptr.kind.get_value_addr();
 
                 if addr == 0 {
                     return NP_JSON::Null;
                 }
 
-                let tuple = NP_Tuple::buffer_into(addr, *kind, schema, buffer).unwrap_or(Some(Box::new(NP_Tuple::default()))).unwrap_or(Box::new(NP_Tuple::default()));
+                let tuple = NP_Tuple::into_value(ptr).unwrap_or(Some(Box::new(NP_Tuple::default()))).unwrap_or(Box::new(NP_Tuple::default()));
 
                 let mut json_list = Vec::new();
 
@@ -287,17 +287,17 @@ impl NP_Value for NP_Tuple {
         }
     }
 
-    fn buffer_do_compact<X: NP_Value + Default>(from_ptr: &NP_Ptr<X>, to_ptr: NP_Ptr<NP_Any>) -> Result<(u32, NP_PtrKinds, Rc<NP_Schema>), NP_Error> where Self: NP_Value + Default {
+    fn do_compact(from_ptr: NP_Lite_Ptr, to_ptr: NP_Lite_Ptr) -> Result<(), NP_Error> where Self: NP_Value + Default {
 
         if from_ptr.location == 0 {
-            return Ok((0, from_ptr.kind, Rc::clone(&from_ptr.schema)));
+            return Ok(());
         }
 
-        let to_ptr_list = NP_Any::cast::<NP_Tuple>(to_ptr)?;
+        let to_ptr_list = to_ptr.into::<Self>();
 
         let new_address = to_ptr_list.location;
 
-        match Self::buffer_into(from_ptr.location, from_ptr.kind, Rc::clone(&from_ptr.schema), Rc::clone(&from_ptr.memory))? {
+        match Self::into_value(from_ptr)? {
             Some(old_list) => {
 
                 match to_ptr_list.into()? {
@@ -306,14 +306,12 @@ impl NP_Value for NP_Tuple {
                         for mut item in old_list.it().into_iter() {
 
                             if item.has_value {
-                                let new_ptr = new_tuple.select(item.index as u8)?;
-                                let old_ptr = item.select::<NP_Any>()?;
-                                old_ptr._compact(new_ptr)?;
+                                let new_ptr = NP_Lite_Ptr::from(new_tuple.select::<NP_Any>(item.index as u8)?);
+                                let old_ptr = NP_Lite_Ptr::from(item.select::<NP_Any>()?);
+                                old_ptr.compact(new_ptr)?;
                             }
 
                         }
-
-                        return Ok((new_address, from_ptr.kind, Rc::clone(&from_ptr.schema)));
                     },
                     None => {}
                 }
@@ -321,7 +319,7 @@ impl NP_Value for NP_Tuple {
             None => { }
         }
 
-        Ok((0, from_ptr.kind, Rc::clone(&from_ptr.schema)))
+        Ok(())
     }
 }
 
