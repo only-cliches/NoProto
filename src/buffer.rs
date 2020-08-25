@@ -29,9 +29,9 @@ pub struct NP_Buffer {
 #[derive(Debug)]
 pub struct NP_Compact_Data {
     /// The size of the old buffer
-    pub old_buffer_size: u32,
+    pub current_buffer: u32,
     /// The estimated size of the new buffer after compaction
-    pub new_buffer_size: u32,
+    pub estimated_new_size: u32,
     /// How many known wasted bytes in the old buffer
     pub wasted_bytes: u32
 }
@@ -187,16 +187,9 @@ impl NP_Buffer {
     /// 
     pub fn maybe_compact<F>(&mut self, new_capacity: Option<u32>, new_size: Option<NP_Size>, mut callback: F) -> Result<(), NP_Error> where F: FnMut(NP_Compact_Data) -> bool {
 
-        let wasted_bytes = self.calc_wasted_bytes()?;
-        let old_size = self.memory.read_bytes().len() as u32;
+        let bytes_data = self.calc_bytes()?;
 
-        let compact_data = NP_Compact_Data { 
-            old_buffer_size: old_size,
-            new_buffer_size: if old_size > wasted_bytes { old_size - wasted_bytes } else  { 0 },
-            wasted_bytes: wasted_bytes
-        };
-
-        let do_compact = callback(compact_data);
+        let do_compact = callback(bytes_data);
 
         if do_compact {
             self.compact(new_capacity, new_size)?
@@ -239,15 +232,19 @@ impl NP_Buffer {
     /// Recursively measures how many bytes each element in the buffer is using and subtracts that from the size of the buffer.
     /// This will let you know how many bytes can be saved from a compaction.
     /// 
-    pub fn calc_wasted_bytes(&self) -> Result<u32, NP_Error> {
+    pub fn calc_bytes(&self) -> Result<NP_Compact_Data, NP_Error> {
 
         let root: NP_Ptr<NP_Any> = NP_Ptr::_new_standard_ptr(ROOT_PTR_ADDR, Rc::clone(&self.schema), Rc::clone(&self.memory));
 
         let real_bytes = root.calc_size()? + ROOT_PTR_ADDR;
-        let total_bytes = self.memory.read_bytes().len() as u32;
+        let old_size = self.memory.read_bytes().len() as u32;
 
-        if total_bytes >= real_bytes {
-            return Ok(total_bytes - real_bytes);
+        if old_size >= real_bytes {
+            return Ok(NP_Compact_Data {
+                current_buffer: real_bytes,
+                estimated_new_size: real_bytes - (old_size - real_bytes),
+                wasted_bytes: old_size - real_bytes
+            });
         } else {
             return Err(NP_Error::new("Error calculating wasted bytes!"));
         }

@@ -750,7 +750,7 @@ impl<T: NP_Value + Default> NP_Value for NP_List<T> {
                         }
 
         
-                        Ok(Some(Box::new(NP_List::<T>::new(addr, u16::from_be_bytes(head) as u32, u16::from_be_bytes(tail) as u32, ptr.memory, Rc::clone(of ))?)))
+                        Ok(Some(Box::new(Self::new(addr, u16::from_be_bytes(head) as u32, u16::from_be_bytes(tail) as u32, ptr.memory, Rc::clone(of ))?)))
                     },
                     NP_Size::U32 => {
                         let mut head: [u8; 4] = [0; 4];
@@ -767,7 +767,7 @@ impl<T: NP_Value + Default> NP_Value for NP_List<T> {
                             tail = *ptr.memory.get_4_bytes(a + 4).unwrap_or(&[0; 4]);
                         }
         
-                        Ok(Some(Box::new(NP_List::<T>::new(addr, u32::from_be_bytes(head), u32::from_be_bytes(tail), ptr.memory, Rc::clone(of ))?)))
+                        Ok(Some(Box::new(Self::new(addr, u32::from_be_bytes(head), u32::from_be_bytes(tail), ptr.memory, Rc::clone(of ))?)))
                     }
                 }
             },
@@ -804,7 +804,7 @@ impl<T: NP_Value + Default> NP_Value for NP_List<T> {
                     NP_Size::U32 => u32::from_be_bytes(*ptr.memory.get_4_bytes(a + 4).unwrap_or(&[0; 4]))
                 };
             
-                let list = NP_List::<T>::new(addr, head, tail, ptr.memory, Rc::clone(of) ).unwrap();
+                let list = Self::new(addr, head, tail, ptr.memory, Rc::clone(of) ).unwrap();
 
                 let mut acc_size = 0u32;
 
@@ -844,7 +844,7 @@ impl<T: NP_Value + Default> NP_Value for NP_List<T> {
                     NP_Size::U32 => u32::from_be_bytes(*ptr.memory.get_4_bytes(a + 4).unwrap_or(&[0; 4]))
                 };
 
-                let list = NP_List::<T>::new(addr, head, tail, ptr.memory, Rc::clone(of) ).unwrap_or(NP_List::default());
+                let list = Self::new(addr, head, tail, ptr.memory, Rc::clone(of) ).unwrap_or(NP_List::default());
 
                 let mut json_list = Vec::new();
 

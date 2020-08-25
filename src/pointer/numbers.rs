@@ -1,3 +1,5 @@
+use crate::utils::to_unsigned;
+use crate::utils::to_signed;
 use crate::schema::NP_Schema;
 use crate::error::NP_Error;
 use crate::{schema::NP_TypeKeys, pointer::NP_Value, json_flex::NP_JSON};
@@ -7,1062 +9,137 @@ use alloc::string::String;
 use alloc::boxed::Box;
 use alloc::{rc::Rc, borrow::ToOwned};
 
-impl NP_Value for i8 {
-
-    fn is_type( type_str: &str) -> bool {
-        "int8" == type_str || "i8" == type_str
-    }
-
-    fn type_idx() -> (i64, String) { (NP_TypeKeys::Int8 as i64, "int8".to_owned()) }
-    fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Int8 as i64, "int8".to_owned()) }
-
-    fn schema_default(schema: Rc<NP_Schema>) -> Option<Box<Self>> {
-        match &schema.default {
-            Some(x) => {
-                match x {
-                    NP_JSON::Integer(value) => {
-                        Some(Box::new(*value as Self))
+macro_rules! noproto_number {
+    ($t:ty, $str1: tt, $str2: tt, $tkey: expr, $signedInt: expr, $fp: expr) => {
+        impl NP_Value for $t {
+            fn is_type( type_str: &str) -> bool {
+                $str1 == type_str || $str2 == type_str
+            }
+            fn type_idx() -> (i64, String) { ($tkey as i64, $str1.to_owned()) }
+            fn self_type_idx(&self) -> (i64, String) { ($tkey as i64, $str1.to_owned()) }
+            fn schema_default(schema: Rc<NP_Schema>) -> Option<Box<Self>> {
+                match &schema.default {
+                    Some(x) => {
+                        match x {
+                            NP_JSON::Integer(value) => {
+                                Some(Box::new(*value as Self))
+                            },
+                            NP_JSON::Float(value) => {
+                                Some(Box::new(*value as Self))
+                            },
+                            _ => {
+                                None
+                            }
+                        }
                     },
-                    NP_JSON::Float(value) => {
-                        Some(Box::new(*value as Self))
-                    },
-                    _ => {
+                    None => {
                         None
                     }
                 }
-            },
-            None => {
-                None
             }
-        }
-    }
+            fn set_value(ptr: NP_Lite_Ptr, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
 
-    fn set_value(ptr: NP_Lite_Ptr, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
-
-        let mut addr = ptr.kind.get_value_addr();
-
-        let offset = core::i8::MAX as i16;
-
-        if addr != 0 { // existing value, replace
-            let bytes = (((**value as i16) + offset) as u8).to_be_bytes();
-
-            let write_bytes = ptr.memory.write_bytes();
-
-            // overwrite existing values in buffer
-            for x in 0..bytes.len() {
-                write_bytes[(addr + x as u32) as usize] = bytes[x as usize];
-            }
-            return Ok(ptr.kind);
-        } else { // new value
-
-            let bytes = (((**value as i16) + offset) as u8).to_be_bytes();
-            addr = ptr.memory.malloc(bytes.to_vec())?;
-            return Ok(ptr.memory.set_value_address(ptr.location, addr as u32, &ptr.kind));
-        }
+                let mut addr = ptr.kind.get_value_addr();
         
-    }
+                if addr != 0 { // existing value, replace
+                    let mut bytes = value.to_be_bytes();
 
-    fn into_value(ptr: NP_Lite_Ptr) -> Result<Option<Box<Self>>, NP_Error> {
-        let addr = ptr.kind.get_value_addr() as usize;
+                    if $signedInt {
+                        bytes[0] = to_unsigned(bytes[0]);
+                    }
+        
+                    let write_bytes = ptr.memory.write_bytes();
+        
+                    // overwrite existing values in buffer
+                    for x in 0..bytes.len() {
+                        write_bytes[(addr + x as u32) as usize] = bytes[x as usize];
+                    }
+                    return Ok(ptr.kind);
+                } else { // new value
+        
+                    let mut bytes = value.to_be_bytes();
 
-        // empty value
-        if addr == 0 {
-            return Ok(None);
-        }
+                    if $signedInt {
+                        bytes[0] = to_unsigned(bytes[0]);
+                    }
+        
+                    addr = ptr.memory.malloc(bytes.to_vec())?;
+                    return Ok(ptr.memory.set_value_address(ptr.location, addr as u32, &ptr.kind));
+                }
+                
+            }
+        
+            fn into_value(ptr: NP_Lite_Ptr) -> Result<Option<Box<Self>>, NP_Error> {
+                let addr = ptr.kind.get_value_addr() as usize;
+        
+                // empty value
+                if addr == 0 {
+                    return Ok(None);
+                }
+        
+                let read_memory = ptr.memory.read_bytes();
+                let mut be_bytes = <$t>::default().to_be_bytes();
+                for x in 0..be_bytes.len() {
+                    be_bytes[x] = read_memory[addr + x];
+                }
 
-        let offset = core::i8::MAX as i16;
+                if $signedInt {
+                    be_bytes[0] = to_signed(be_bytes[0]);
+                }
+        
+                Ok(Some(Box::new(<$t>::from_be_bytes(be_bytes))))
+            }
 
-        Ok(match ptr.memory.get_1_byte(addr) {
-            Some(x) => {
-                Some(Box::new(((u8::from_be_bytes([x]) as i16) - offset) as i8))
-            },
-            None => None
-        })
-    }
-
-
-    fn to_json(ptr: NP_Lite_Ptr) -> NP_JSON {
-        let this_string = Self::into_value(ptr.clone());
-
-        match this_string {
-            Ok(x) => {
-                match x {
-                    Some(y) => {
-                        NP_JSON::Integer(*y as i64)
-                    },
-                    None => {
-                        match &ptr.schema.default {
-                            Some(x) => x.clone(),
-                            None => NP_JSON::Null
+            fn to_json(ptr: NP_Lite_Ptr) -> NP_JSON {
+                let this_string = Self::into_value(ptr.clone());
+        
+                match this_string {
+                    Ok(x) => {
+                        match x {
+                            Some(y) => {
+                                if $fp {
+                                    NP_JSON::Float(*y as f64)
+                                } else {
+                                    NP_JSON::Integer(*y as i64)
+                                }
+                            },
+                            None => {
+                                match &ptr.schema.default {
+                                    Some(x) => x.clone(),
+                                    None => NP_JSON::Null
+                                }
+                            }
                         }
+                    },
+                    Err(_e) => {
+                        NP_JSON::Null
                     }
                 }
-            },
-            Err(_e) => {
-                NP_JSON::Null
+            }
+            fn get_size(ptr: NP_Lite_Ptr) -> Result<u32, NP_Error> {
+         
+                if ptr.kind.get_value_addr() == 0 {
+                    Ok(0) 
+                } else {
+                    Ok(core::mem::size_of::<Self>() as u32)
+                }
             }
         }
     }
-
-    fn get_size(ptr: NP_Lite_Ptr) -> Result<u32, NP_Error> {
- 
-        if ptr.kind.get_value_addr() == 0 {
-            Ok(0) 
-        } else {
-            Ok(core::mem::size_of::<Self>() as u32)
-        }
-    }
-
 }
 
-impl NP_Value for i16 {
-
-    fn is_type( type_str: &str) -> bool {
-        "int16" == type_str || "i16" == type_str
-    }
-
-    fn type_idx() -> (i64, String) { (NP_TypeKeys::Int16 as i64, "int16".to_owned()) }
-    fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Int16 as i64, "int16".to_owned()) }
-
-    fn schema_default(schema: Rc<NP_Schema>) -> Option<Box<Self>> {
-        match &schema.default {
-            Some(x) => {
-                match x {
-                    NP_JSON::Integer(value) => {
-                        Some(Box::new(*value as Self))
-                    },
-                    NP_JSON::Float(value) => {
-                        Some(Box::new(*value as Self))
-                    },
-                    _ => {
-                        None
-                    }
-                }
-            },
-            None => {
-                None
-            }
-        }
-    }
-
-    fn set_value(ptr: NP_Lite_Ptr, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
-
-        let mut addr = ptr.kind.get_value_addr();
-
-        let offset = core::i16::MAX as i32;
-
-        if addr != 0 { // existing value, replace
-            let bytes = (((**value as i32) + offset) as u16).to_be_bytes();
-
-            let write_bytes = ptr.memory.write_bytes();
-
-            // overwrite existing values in buffer
-            for x in 0..bytes.len() {
-                write_bytes[(addr + x as u32) as usize] = bytes[x as usize];
-            }
-            return Ok(ptr.kind);
-        } else { // new value
-
-            let bytes = (((**value as i32) + offset) as u16).to_be_bytes();
-            addr = ptr.memory.malloc(bytes.to_vec())?;
-            return Ok(ptr.memory.set_value_address(ptr.location, addr as u32, &ptr.kind));
-        }
-    }
-
-    fn into_value(ptr: NP_Lite_Ptr) -> Result<Option<Box<Self>>, NP_Error> {
-        let addr = ptr.kind.get_value_addr() as usize;
-
-        // empty value
-        if addr == 0 {
-            return Ok(None);
-        }
-
-        let offset = core::i16::MAX as i32;
-
-        Ok(match ptr.memory.get_2_bytes(addr) {
-            Some(x) => {
-                Some(Box::new(((u16::from_be_bytes(*x) as i32) - offset) as i16))
-            },
-            None => None
-        })
-    }
-
-    fn to_json(ptr: NP_Lite_Ptr) -> NP_JSON {
-        let this_string = Self::into_value(ptr.clone());
-
-        match this_string {
-            Ok(x) => {
-                match x {
-                    Some(y) => {
-                        NP_JSON::Integer(*y as i64)
-                    },
-                    None => {
-                        match &ptr.schema.default {
-                            Some(x) => x.clone(),
-                            None => NP_JSON::Null
-                        }
-                    }
-                }
-            },
-            Err(_e) => {
-                NP_JSON::Null
-            }
-        }
-    }
-
-    fn get_size(ptr: NP_Lite_Ptr) -> Result<u32, NP_Error> {
-        let addr = ptr.kind.get_value_addr() as usize;
-
-        if addr == 0 {
-            return Ok(0) 
-        } else {
-            Ok(core::mem::size_of::<Self>() as u32)
-        }
-    }
-
-}
-
-impl NP_Value for i32 {
-
-    fn is_type( type_str: &str) -> bool {
-        "int32" == type_str || "i32" == type_str
-    }
-
-    fn type_idx() -> (i64, String) { (NP_TypeKeys::Int32 as i64, "int32".to_owned()) }
-    fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Int32 as i64, "int32".to_owned()) }
-
-    fn schema_default(schema: Rc<NP_Schema>) -> Option<Box<Self>> {
-        match &schema.default {
-            Some(x) => {
-                match x {
-                    NP_JSON::Integer(value) => {
-                        Some(Box::new(*value as Self))
-                    },
-                    NP_JSON::Float(value) => {
-                        Some(Box::new(*value as Self))
-                    },
-                    _ => {
-                        None
-                    }
-                }
-            },
-            None => {
-                None
-            }
-        }
-    }
-
-    fn set_value(ptr: NP_Lite_Ptr, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
-
-        let mut addr = ptr.kind.get_value_addr();
-
-        let offset = core::i32::MAX as i64;
-
-        if addr != 0 { // existing value, replace
-            let bytes = (((**value as i64) + offset) as u32).to_be_bytes();
-
-            let write_bytes = ptr.memory.write_bytes();
-
-            // overwrite existing values in buffer
-            for x in 0..bytes.len() {
-                write_bytes[(addr + x as u32) as usize] = bytes[x as usize];
-            }
-            return Ok(ptr.kind);
-        } else { // new value
-
-            let bytes = (((**value as i64) + offset) as u32).to_be_bytes();
-            addr = ptr.memory.malloc(bytes.to_vec())?;
-            return Ok(ptr.memory.set_value_address(ptr.location, addr as u32, &ptr.kind));
-        }
-    }
-
-
-    fn into_value(ptr: NP_Lite_Ptr) -> Result<Option<Box<Self>>, NP_Error> {
-        let addr = ptr.kind.get_value_addr() as usize;
-
-        // empty value
-        if addr == 0 {
-            return Ok(None);
-        }
-
-        let offset = core::i32::MAX as i64;
-
-        Ok(match ptr.memory.get_4_bytes(addr) {
-            Some(x) => {
-                Some(Box::new(((u32::from_be_bytes(*x) as i64) - offset) as i32))
-            },
-            None => None
-        })
-    }
-
-    fn to_json(ptr: NP_Lite_Ptr) -> NP_JSON {
-        let this_string = Self::into_value(ptr.clone());
-
-        match this_string {
-            Ok(x) => {
-                match x {
-                    Some(y) => {
-                        NP_JSON::Integer(*y as i64)
-                    },
-                    None => {
-                        match &ptr.schema.default {
-                            Some(x) => x.clone(),
-                            None => NP_JSON::Null
-                        }
-                    }
-                }
-            },
-            Err(_e) => {
-                NP_JSON::Null
-            }
-        }
-    }
-
-    fn get_size(ptr: NP_Lite_Ptr) -> Result<u32, NP_Error> {
-        let addr = ptr.kind.get_value_addr() as usize;
-
-        if addr == 0 {
-            return Ok(0) 
-        } else {
-            Ok(core::mem::size_of::<Self>() as u32)
-        }
-    }
-
-}
-
-impl NP_Value for i64 {
-
-    fn is_type( type_str: &str) -> bool {
-        "int64" == type_str || "i64" == type_str
-    }
-
-    fn type_idx() -> (i64, String) { (NP_TypeKeys::Int64 as i64, "int64".to_owned()) }
-    fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Int64 as i64, "int64".to_owned()) }
-
-    fn schema_default(schema: Rc<NP_Schema>) -> Option<Box<Self>> {
-        match &schema.default {
-            Some(x) => {
-                match x {
-                    NP_JSON::Integer(value) => {
-                        Some(Box::new(*value as Self))
-                    },
-                    NP_JSON::Float(value) => {
-                        Some(Box::new(*value as Self))
-                    },
-                    _ => {
-                        None
-                    }
-                }
-            },
-            None => {
-                None
-            }
-        }
-    }
-
-    fn set_value(ptr: NP_Lite_Ptr, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
-
-        let mut addr = ptr.kind.get_value_addr();
-
-        let offset = core::i64::MAX as i128;
-
-        if addr != 0 { // existing value, replace
-            let bytes = (((**value as i128) + offset) as u64).to_be_bytes();
-
-            let write_bytes = ptr.memory.write_bytes();
-
-            // overwrite existing values in buffer
-            for x in 0..bytes.len() {
-                write_bytes[(addr + x as u32) as usize] = bytes[x as usize];
-            }
-            return Ok(ptr.kind);
-        } else { // new value
-
-            let bytes = (((**value as i128) + offset) as u64).to_be_bytes();
-            addr = ptr.memory.malloc(bytes.to_vec())?;
-            return Ok(ptr.memory.set_value_address(ptr.location, addr as u32, &ptr.kind));
-        }
-    }
-    fn into_value(ptr: NP_Lite_Ptr) -> Result<Option<Box<Self>>, NP_Error> {
-        let addr = ptr.kind.get_value_addr() as usize;
-
-        // empty value
-        if addr == 0 {
-            return Ok(None);
-        }
-
-        let offset = core::i64::MAX as i128;
-
-        Ok(match ptr.memory.get_8_bytes(addr) {
-            Some(x) => {
-                Some(Box::new(((u64::from_be_bytes(*x) as i128) - offset) as i64))
-            },
-            None => None
-        })
-    }
-
-    fn to_json(ptr: NP_Lite_Ptr) -> NP_JSON {
-        let this_string = Self::into_value(ptr.clone());
-
-        match this_string {
-            Ok(x) => {
-                match x {
-                    Some(y) => {
-                        NP_JSON::Integer(*y as i64)
-                    },
-                    None => {
-                        match &ptr.schema.default {
-                            Some(x) => x.clone(),
-                            None => NP_JSON::Null
-                        }
-                    }
-                }
-            },
-            Err(_e) => {
-                NP_JSON::Null
-            }
-        }
-    }
-
-    fn get_size(ptr: NP_Lite_Ptr) -> Result<u32, NP_Error> {
-        let addr = ptr.kind.get_value_addr() as usize;
-
-        if addr == 0 {
-            return Ok(0) 
-        } else {
-            Ok(core::mem::size_of::<Self>() as u32)
-        }
-    }
-
-}
-
-impl NP_Value for u8 {
-
-    fn is_type( type_str: &str) -> bool {
-        "uint8" == type_str || "u8" == type_str
-    }
-
-    fn type_idx() -> (i64, String) { (NP_TypeKeys::Uint8 as i64, "uint8".to_owned()) }
-    fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Uint8 as i64, "uint8".to_owned()) }
-
-    fn schema_default(schema: Rc<NP_Schema>) -> Option<Box<Self>> {
-        match &schema.default {
-            Some(x) => {
-                match x {
-                    NP_JSON::Integer(value) => {
-                        Some(Box::new(*value as Self))
-                    },
-                    NP_JSON::Float(value) => {
-                        Some(Box::new(*value as Self))
-                    },
-                    _ => {
-                        None
-                    }
-                }
-            },
-            None => {
-                None
-            }
-        }
-    }
-
-    fn set_value(ptr: NP_Lite_Ptr, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
-
-        let mut addr = ptr.kind.get_value_addr();
-
-        if addr != 0 { // existing value, replace
-            let bytes = value.to_be_bytes();
-
-            let write_bytes = ptr.memory.write_bytes();
-
-            // overwrite existing values in buffer
-            for x in 0..bytes.len() {
-                write_bytes[(addr + x as u32) as usize] = bytes[x as usize];
-            }
-            return Ok(ptr.kind);
-        } else { // new value
-
-            let bytes = value.to_be_bytes();
-            addr = ptr.memory.malloc(bytes.to_vec())?;
-
-            return Ok(ptr.memory.set_value_address(ptr.location, addr as u32, &ptr.kind));
-        }
-
-    }
-
-    fn into_value(ptr: NP_Lite_Ptr) -> Result<Option<Box<Self>>, NP_Error> {
-        let addr = ptr.kind.get_value_addr() as usize;
-
-        // empty value
-        if addr == 0 {
-            return Ok(None);
-        }
-
-        Ok(match ptr.memory.get_1_byte(addr) {
-            Some(x) => {
-                Some(Box::new(u8::from_be_bytes([x])))
-            },
-            None => None
-        })
-    }
-
-    fn to_json(ptr: NP_Lite_Ptr) -> NP_JSON {
-        let this_string = Self::into_value(ptr.clone());
-
-        match this_string {
-            Ok(x) => {
-                match x {
-                    Some(y) => {
-                        NP_JSON::Integer(*y as i64)
-                    },
-                    None => {
-                        match &ptr.schema.default {
-                            Some(x) => x.clone(),
-                            None => NP_JSON::Null
-                        }
-                    }
-                }
-            },
-            Err(_e) => {
-                NP_JSON::Null
-            }
-        }
-    }
-
-    fn get_size(ptr: NP_Lite_Ptr) -> Result<u32, NP_Error> {
-        let addr = ptr.kind.get_value_addr() as usize;
-
-        if addr == 0 {
-            return Ok(0) 
-        } else {
-            Ok(core::mem::size_of::<Self>() as u32)
-        }
-    }
-
-}
-
-impl NP_Value for u16 {
-
-    fn is_type( type_str: &str) -> bool {
-        "uint16" == type_str || "u16" == type_str
-    }
-
-    fn type_idx() -> (i64, String) { (NP_TypeKeys::Uint16 as i64, "uint16".to_owned()) }
-    fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Uint16 as i64, "uint16".to_owned()) }
-
-    fn schema_default(schema: Rc<NP_Schema>) -> Option<Box<Self>> {
-        match &schema.default {
-            Some(x) => {
-                match x {
-                    NP_JSON::Integer(value) => {
-                        Some(Box::new(*value as Self))
-                    },
-                    NP_JSON::Float(value) => {
-                        Some(Box::new(*value as Self))
-                    },
-                    _ => {
-                        None
-                    }
-                }
-            },
-            None => {
-                None
-            }
-        }
-    }
-
-    fn set_value(ptr: NP_Lite_Ptr, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
-
-        let mut addr = ptr.kind.get_value_addr();
-
-        if addr != 0 { // existing value, replace
-            let bytes = value.to_be_bytes();
-
-            let write_bytes = ptr.memory.write_bytes();
-
-            // overwrite existing values in buffer
-            for x in 0..bytes.len() {
-                write_bytes[(addr + x as u32) as usize] = bytes[x as usize];
-            }
-
-            return Ok(ptr.kind);
-        } else { // new value
-
-            let bytes = value.to_be_bytes();
-            addr = ptr.memory.malloc(bytes.to_vec())?;
-
-            return Ok(ptr.memory.set_value_address(ptr.location, addr as u32, &ptr.kind));
-        }
-    }
-
-
-    fn into_value(ptr: NP_Lite_Ptr) -> Result<Option<Box<Self>>, NP_Error> {
-        let addr = ptr.kind.get_value_addr() as usize;
-
-        // empty value
-        if addr == 0 {
-            return Ok(None);
-        }
-
-        Ok(match ptr.memory.get_2_bytes(addr) {
-            Some(x) => {
-                Some(Box::new(u16::from_be_bytes(*x)))
-            },
-            None => None
-        })
-    }
-
-    fn to_json(ptr: NP_Lite_Ptr) -> NP_JSON {
-        let this_string = Self::into_value(ptr.clone());
-
-        match this_string {
-            Ok(x) => {
-                match x {
-                    Some(y) => {
-                        NP_JSON::Integer(*y as i64)
-                    },
-                    None => {
-                        match &ptr.schema.default {
-                            Some(x) => x.clone(),
-                            None => NP_JSON::Null
-                        }
-                    }
-                }
-            },
-            Err(_e) => {
-                NP_JSON::Null
-            }
-        }
-    }
-
-    fn get_size(ptr: NP_Lite_Ptr) -> Result<u32, NP_Error> {
-        let addr = ptr.kind.get_value_addr() as usize;
-
-        if addr == 0 {
-            return Ok(0) 
-        } else {
-            Ok(core::mem::size_of::<Self>() as u32)
-        }
-    }
-
-}
-
-impl NP_Value for u32 {
-    fn is_type( type_str: &str) -> bool {
-        "uint32" == type_str || "u32" == type_str
-    }
-
-    fn type_idx() -> (i64, String) { (NP_TypeKeys::Uint32 as i64, "uint32".to_owned()) }
-    fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Uint32 as i64, "uint32".to_owned()) }
-
-    fn schema_default(schema: Rc<NP_Schema>) -> Option<Box<Self>> {
-        match &schema.default {
-            Some(x) => {
-                match x {
-                    NP_JSON::Integer(value) => {
-                        Some(Box::new(*value as Self))
-                    },
-                    NP_JSON::Float(value) => {
-                        Some(Box::new(*value as Self))
-                    },
-                    _ => {
-                        None
-                    }
-                }
-            },
-            None => {
-                None
-            }
-        }
-    }
-
-    fn set_value(ptr: NP_Lite_Ptr, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
-
-        let mut addr = ptr.kind.get_value_addr();
-
-        if addr != 0 { // existing value, replace
-            let bytes = value.to_be_bytes();
-
-            let write_bytes = ptr.memory.write_bytes();
-
-            // overwrite existing values in buffer
-            for x in 0..bytes.len() {
-                write_bytes[(addr + x as u32) as usize] = bytes[x as usize];
-            }
-
-            return Ok(ptr.kind);
-        } else { // new value
-
-            let bytes = value.to_be_bytes();
-            addr = ptr.memory.malloc(bytes.to_vec())?;
-
-            return Ok(ptr.memory.set_value_address(ptr.location, addr as u32, &ptr.kind));
-        }
-    }
-
- 
-    fn into_value(ptr: NP_Lite_Ptr) -> Result<Option<Box<Self>>, NP_Error> {
-        let addr = ptr.kind.get_value_addr() as usize;
-
-        // empty value
-        if addr == 0 {
-            return Ok(None);
-        }
-
-        Ok(match ptr.memory.get_4_bytes(addr) {
-            Some(x) => {
-                Some(Box::new(u32::from_be_bytes(*x)))
-            },
-            None => None
-        })
-    }
-
-    fn to_json(ptr: NP_Lite_Ptr) -> NP_JSON {
-        let this_string = Self::into_value(ptr.clone());
-
-        match this_string {
-            Ok(x) => {
-                match x {
-                    Some(y) => {
-                        NP_JSON::Integer(*y as i64)
-                    },
-                    None => {
-                        match &ptr.schema.default {
-                            Some(x) => x.clone(),
-                            None => NP_JSON::Null
-                        }
-                    }
-                }
-            },
-            Err(_e) => {
-                NP_JSON::Null
-            }
-        }
-    }
-
-    fn get_size(ptr: NP_Lite_Ptr) -> Result<u32, NP_Error> {
-        let addr = ptr.kind.get_value_addr() as usize;
-
-        if addr == 0 {
-            return Ok(0) 
-        } else {
-            Ok(core::mem::size_of::<Self>() as u32)
-        }
-    }
-
-}
-
-impl NP_Value for u64 {
-
-    fn is_type( type_str: &str) -> bool {
-        "uint64" == type_str || "u64" == type_str
-    }
-
-    fn type_idx() -> (i64, String) { (NP_TypeKeys::Uint64 as i64, "uint64".to_owned()) }
-    fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Uint64 as i64, "uint64".to_owned()) }
-
-    fn schema_default(schema: Rc<NP_Schema>) -> Option<Box<Self>> {
-        match &schema.default {
-            Some(x) => {
-                match x {
-                    NP_JSON::Integer(value) => {
-                        Some(Box::new(*value as Self))
-                    },
-                    NP_JSON::Float(value) => {
-                        Some(Box::new(*value as Self))
-                    },
-                    _ => {
-                        None
-                    }
-                }
-            },
-            None => {
-                None
-            }
-        }
-    }
-
-    fn set_value(ptr: NP_Lite_Ptr, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
-
-        let mut addr = ptr.kind.get_value_addr();
-
-        if addr != 0 { // existing value, replace
-            let bytes = value.to_be_bytes();
-
-            let write_bytes = ptr.memory.write_bytes();
-
-            // overwrite existing values in buffer
-            for x in 0..bytes.len() {
-                write_bytes[(addr + x as u32) as usize] = bytes[x as usize];
-            }
-
-            return Ok(ptr.kind);
-        } else { // new value
-
-            let bytes = value.to_be_bytes();
-            addr = ptr.memory.malloc(bytes.to_vec())?;
-
-            return Ok(ptr.memory.set_value_address(ptr.location, addr as u32, &ptr.kind));
-        }
-    }
-
-
-    fn into_value(ptr: NP_Lite_Ptr) -> Result<Option<Box<Self>>, NP_Error> {
-        let addr = ptr.kind.get_value_addr() as usize;
-
-        // empty value
-        if addr == 0 {
-            return Ok(None);
-        }
-
-        Ok(match ptr.memory.get_8_bytes(addr) {
-            Some(x) => {
-                Some(Box::new(u64::from_be_bytes(*x)))
-            },
-            None => None
-        })
-    }
-
-    fn to_json(ptr: NP_Lite_Ptr) -> NP_JSON {
-        let this_string = Self::into_value(ptr.clone());
-
-        match this_string {
-            Ok(x) => {
-                match x {
-                    Some(y) => {
-                        NP_JSON::Integer(*y as i64)
-                    },
-                    None => {
-                        match &ptr.schema.default {
-                            Some(x) => x.clone(),
-                            None => NP_JSON::Null
-                        }
-                    }
-                }
-            },
-            Err(_e) => {
-                NP_JSON::Null
-            }
-        }
-    }
-
-    fn get_size(ptr: NP_Lite_Ptr) -> Result<u32, NP_Error> {
-        let addr = ptr.kind.get_value_addr() as usize;
-
-        if addr == 0 {
-            return Ok(0) 
-        } else {
-            Ok(core::mem::size_of::<Self>() as u32)
-        }
-    }
-
-}
-
-impl NP_Value for f32 {
-
-    fn is_type( type_str: &str) -> bool {
-        "float" == type_str || "f32" == type_str
-    }
-
-    fn type_idx() -> (i64, String) { (NP_TypeKeys::Float as i64, "float".to_owned()) }
-    fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Float as i64, "float".to_owned()) }
-
-    fn schema_default(schema: Rc<NP_Schema>) -> Option<Box<Self>> {
-        match &schema.default {
-            Some(x) => {
-                match x {
-                    NP_JSON::Integer(value) => {
-                        Some(Box::new(*value as Self))
-                    },
-                    NP_JSON::Float(value) => {
-                        Some(Box::new(*value as Self))
-                    },
-                    _ => {
-                        None
-                    }
-                }
-            },
-            None => {
-                None
-            }
-        }
-    }
-
-    fn set_value(ptr: NP_Lite_Ptr, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
-
-        let mut addr = ptr.kind.get_value_addr();
-
-        if addr != 0 { // existing value, replace
-            let bytes = value.to_be_bytes();
-
-            let write_bytes = ptr.memory.write_bytes();
-
-            // overwrite existing values in buffer
-            for x in 0..bytes.len() {
-                write_bytes[(addr + x as u32) as usize] = bytes[x as usize];
-            }
-
-            return Ok(ptr.kind);
-        } else { // new value
-
-            let bytes = value.to_be_bytes();
-            addr = ptr.memory.malloc(bytes.to_vec())?;
-
-            return Ok(ptr.memory.set_value_address(ptr.location, addr as u32, &ptr.kind));
-        }
-    }
-
-    fn into_value(ptr: NP_Lite_Ptr) -> Result<Option<Box<Self>>, NP_Error> {
-        let addr = ptr.kind.get_value_addr() as usize;
-
-        // empty value
-        if addr == 0 {
-            return Ok(None);
-        }
-
-        Ok(match ptr.memory.get_4_bytes(addr) {
-            Some(x) => {
-                Some(Box::new(f32::from_be_bytes(*x)))
-            },
-            None => None
-        })
-    }
-
-    fn to_json(ptr: NP_Lite_Ptr) -> NP_JSON {
-        let this_string = Self::into_value(ptr.clone());
-
-        match this_string {
-            Ok(x) => {
-                match x {
-                    Some(y) => {
-                        NP_JSON::Float(*y as f64)
-                    },
-                    None => {
-                        match &ptr.schema.default {
-                            Some(x) => x.clone(),
-                            None => NP_JSON::Null
-                        }
-                    }
-                }
-            },
-            Err(_e) => {
-                NP_JSON::Null
-            }
-        }
-    }
-
-    fn get_size(ptr: NP_Lite_Ptr) -> Result<u32, NP_Error> {
-        let addr = ptr.kind.get_value_addr() as usize;
-
-        if addr == 0 {
-            return Ok(0) 
-        } else {
-            Ok(core::mem::size_of::<Self>() as u32)
-        }
-    }
-
-}
-
-impl NP_Value for f64 {
-
-    fn is_type( type_str: &str) -> bool {
-        "double" == type_str || "f64" == type_str
-    }
-
-    fn type_idx() -> (i64, String) { (NP_TypeKeys::Double as i64, "double".to_owned()) }
-    fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Double as i64, "double".to_owned()) }
-
-    fn schema_default(schema: Rc<NP_Schema>) -> Option<Box<Self>> {
-        match &schema.default {
-            Some(x) => {
-                match x {
-                    NP_JSON::Integer(value) => {
-                        Some(Box::new(*value as Self))
-                    },
-                    NP_JSON::Float(value) => {
-                        Some(Box::new(*value as Self))
-                    },
-                    _ => {
-                        None
-                    }
-                }
-            },
-            None => {
-                None
-            }
-        }
-    }
-
-    fn set_value(ptr: NP_Lite_Ptr, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
-
-        let mut addr = ptr.kind.get_value_addr();
-
-        if addr != 0 { // existing value, replace
-            let bytes = value.to_be_bytes();
-
-            let write_bytes = ptr.memory.write_bytes();
-
-            // overwrite existing values in buffer
-            for x in 0..bytes.len() {
-                write_bytes[(addr + x as u32) as usize] = bytes[x as usize];
-            }
-            return Ok(ptr.kind);
-        } else { // new value
-
-            let bytes = value.to_be_bytes();
-            addr = ptr.memory.malloc(bytes.to_vec())?;
-            return Ok(ptr.memory.set_value_address(ptr.location, addr as u32, &ptr.kind));
-        }
-    }
-
-
-    fn into_value(ptr: NP_Lite_Ptr) -> Result<Option<Box<Self>>, NP_Error> {
-        let addr = ptr.kind.get_value_addr() as usize;
-
-        // empty value
-        if addr == 0 {
-            return Ok(None);
-        }
-
-        Ok(match ptr.memory.get_8_bytes(addr) {
-            Some(x) => {
-                Some(Box::new(f64::from_be_bytes(*x)))
-            },
-            None => None
-        })
-    }
-    
-    fn to_json(ptr: NP_Lite_Ptr) -> NP_JSON {
-        let this_string = Self::into_value(ptr.clone());
-
-        match this_string {
-            Ok(x) => {
-                match x {
-                    Some(y) => {
-                        NP_JSON::Float(*y)
-                    },
-                    None => {
-                        match &ptr.schema.default {
-                            Some(x) => x.clone(),
-                            None => NP_JSON::Null
-                        }
-                    }
-                }
-            },
-            Err(_e) => {
-                NP_JSON::Null
-            }
-        }
-    }
-
-    fn get_size(ptr: NP_Lite_Ptr) -> Result<u32, NP_Error> {
-        let addr = ptr.kind.get_value_addr() as usize;
-
-        if addr == 0 {
-            return Ok(0) 
-        } else {
-            Ok(core::mem::size_of::<Self>() as u32)
-        }
-    }
-
-}
+// signed integers
+noproto_number!(i8, "int8", "i8", NP_TypeKeys::Int8, true, false);
+noproto_number!(i16, "int16", "i16", NP_TypeKeys::Int16, true, false);
+noproto_number!(i32, "int32", "i32", NP_TypeKeys::Int32, true, false);
+noproto_number!(i64, "int64", "i64", NP_TypeKeys::Int64, true, false);
+
+// unsigned integers
+noproto_number!(u8, "uint8", "u8", NP_TypeKeys::Uint8, false, false);
+noproto_number!(u16, "uint16", "u16", NP_TypeKeys::Uint16, false, false);
+noproto_number!(u32, "uint32", "u32", NP_TypeKeys::Uint32, false, false);
+noproto_number!(u64, "uint64", "u64", NP_TypeKeys::Uint64, false, false);
+
+// floating point
+noproto_number!(f32, "float", "f32", NP_TypeKeys::Float, false, true);
+noproto_number!(f64, "double", "f64", NP_TypeKeys::Double, false, true);

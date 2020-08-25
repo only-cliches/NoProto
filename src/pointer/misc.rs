@@ -1,9 +1,12 @@
+use crate::utils::to_signed;
+use crate::utils::to_unsigned;
 use crate::utils::to_base32;
 use crate::json_flex::{JSMAP, NP_JSON};
 use crate::schema::{NP_SchemaKinds, NP_Schema, NP_TypeKeys};
 use crate::pointer::NP_PtrKinds;
 use crate::{pointer::NP_Value, error::NP_Error, utils::{Rand, to_hex}};
 use core::fmt;
+use core::convert::TryInto;
 
 use alloc::string::String;
 use alloc::boxed::Box;
@@ -641,7 +644,7 @@ impl Default for NP_Dec {
 impl NP_Value for NP_Dec {
 
     fn is_type( type_str: &str) -> bool {
-        "decimal" == type_str
+        "decimal" == type_str || "dec" == type_str
     }
 
     fn type_idx() -> (i64, String) { (NP_TypeKeys::Decimal as i64, "decimal".to_owned()) }
@@ -732,10 +735,11 @@ impl NP_Value for NP_Dec {
 
         let i64_value = cloned_value.num;
 
-        let offset = core::i64::MAX as i128;
-
         if addr != 0 { // existing value, replace
-            let bytes = (((i64_value as i128) + offset) as u64).to_be_bytes();
+            let mut bytes = i64_value.to_be_bytes();
+
+            // convert to unsigned
+            bytes[0] = to_unsigned(bytes[0]);
 
             let write_bytes = ptr.memory.write_bytes();
 
@@ -746,12 +750,12 @@ impl NP_Value for NP_Dec {
             return Ok(ptr.kind);
         } else { // new value
 
-            let mut bytes: [u8; 8] = [0; 8];
-            let be_bytes = (((i64_value as i128) + offset) as u64).to_be_bytes();
-            for x in 0..be_bytes.len() {
-                bytes[x] = be_bytes[x];
-            }
-            addr = ptr.memory.malloc(bytes.to_vec())?;
+            let mut be_bytes = i64_value.to_be_bytes();
+
+            // convert to unsigned
+            be_bytes[0] = to_unsigned(be_bytes[0]);
+
+            addr = ptr.memory.malloc(be_bytes.to_vec())?;
             return Ok(ptr.memory.set_value_address(ptr.location, addr as u32, &ptr.kind));
         }
     }
@@ -766,12 +770,11 @@ impl NP_Value for NP_Dec {
 
         let memory = ptr.memory;
 
-        let offset = core::i64::MAX as i128;
-
         Ok(match memory.get_8_bytes(addr) {
             Some(x) => {
-                let value = ((u64::from_be_bytes(*x) as i128) - offset) as i64;
-                Some(Box::new(NP_Dec::new(value, ptr.schema.type_state as u8)))
+                let mut be_bytes = x.clone();
+                be_bytes[0] = to_signed(be_bytes[0]);
+                Some(Box::new(NP_Dec::new(i64::from_be_bytes(be_bytes), ptr.schema.type_state as u8)))
             },
             None => None
         })
@@ -813,11 +816,139 @@ impl NP_Value for NP_Dec {
         if addr == 0 {
             return Ok(0) 
         } else {
-            Ok(8)
+            Ok(core::mem::size_of::<i64>() as u32)
         }
     }
+}
 
+/// Allows you to efficiently retrieve just the bytes of the geographic coordinate
+#[derive(Debug)]
+pub struct NP_Geo_Bytes {
+    /// Size of this coordinate: 4, 8 or 16
+    pub size: u8,
+    /// latitude bytes
+    pub lat: Vec<u8>,
+    /// longitude bytes
+    pub lng: Vec<u8>
+}
 
+impl NP_Geo_Bytes {
+    /// Get the actual geographic coordinate for these bytes
+    pub fn into_geo(self) -> Option<NP_Geo> {
+        match self.size {
+            16 => {
+         
+                let mut bytes_lat = self.lat.as_slice().try_into().unwrap_or([0; 8]);
+                let mut bytes_lon = self.lng.as_slice().try_into().unwrap_or([0; 8]);
+
+                // convert to signed bytes
+                bytes_lat[0] = to_signed(bytes_lat[0]); 
+                bytes_lon[0] = to_signed(bytes_lon[0]); 
+
+                let lat = i64::from_be_bytes(bytes_lat) as f64;
+                let lon = i64::from_be_bytes(bytes_lon) as f64;
+
+                let dev = NP_Geo::get_deviser(16);
+
+                Some(NP_Geo { lat: lat / dev, lng: lon / dev, size: 16})
+            },
+            8 => {
+                let mut bytes_lat = self.lat.as_slice().try_into().unwrap_or([0; 4]);
+                let mut bytes_lon = self.lng.as_slice().try_into().unwrap_or([0; 4]);
+
+                // convert to signed bytes
+                bytes_lat[0] = to_signed(bytes_lat[0]); 
+                bytes_lon[0] = to_signed(bytes_lon[0]); 
+
+                let lat = i32::from_be_bytes(bytes_lat) as f64;
+                let lon = i32::from_be_bytes(bytes_lon) as f64;
+
+                let dev = NP_Geo::get_deviser(8);
+
+                Some(NP_Geo { lat: lat / dev, lng: lon / dev, size: 8})
+            },
+            4 => {
+                let mut bytes_lat = self.lat.as_slice().try_into().unwrap_or([0; 2]);
+                let mut bytes_lon = self.lng.as_slice().try_into().unwrap_or([0; 2]);
+
+                // convert to signed bytes
+                bytes_lat[0] = to_signed(bytes_lat[0]); 
+                bytes_lon[0] = to_signed(bytes_lon[0]); 
+
+                let lat = i16::from_be_bytes(bytes_lat) as f64;
+                let lon = i16::from_be_bytes(bytes_lon) as f64;
+
+                let dev = NP_Geo::get_deviser(4);
+
+                Some(NP_Geo { lat: lat / dev, lng: lon / dev, size: 4})
+            },
+            _ => {
+                None
+            }
+        }
+    }
+}
+
+impl Default for NP_Geo_Bytes {
+    fn default() -> Self { 
+        NP_Geo_Bytes { lat: Vec::new(), lng: Vec::new(), size: 0 }
+     }
+}
+
+impl NP_Value for NP_Geo_Bytes {
+    fn is_type( type_str: &str) -> bool {
+        NP_Geo::is_type(type_str)
+    }
+    fn schema_state(type_string: &str, json_schema: &NP_JSON) -> Result<i64, NP_Error> {
+        NP_Geo::schema_state(type_string, json_schema)
+    }
+    fn schema_default(_schema: Rc<NP_Schema>) -> Option<Box<Self>> {
+        None
+    }
+    fn type_idx() -> (i64, String) { NP_Geo::type_idx() }
+    fn self_type_idx(&self) -> (i64, String) { NP_Geo::type_idx() }
+    fn set_value(_ptr: NP_Lite_Ptr, _value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
+        Err(NP_Error::new("Can't set value with NP_Geo_Bytes, use NP_Geo instead!"))
+    }
+    fn to_json(ptr: NP_Lite_Ptr) -> NP_JSON {
+        NP_Geo::to_json(ptr)
+    }
+    fn get_size(ptr: NP_Lite_Ptr) -> Result<u32, NP_Error> {
+        NP_Geo::get_size(ptr)
+    }
+    fn into_value(ptr: NP_Lite_Ptr) -> Result<Option<Box<Self>>, NP_Error> {
+
+        let addr = ptr.kind.get_value_addr() as usize;
+
+        // empty value
+        if addr == 0 {
+            return Ok(None);
+        }
+
+        Ok(Some(Box::new(match ptr.schema.type_state {
+            16 => {
+                let bytes_lat: [u8; 8] = *ptr.memory.get_8_bytes(addr).unwrap_or(&[0; 8]);
+                let bytes_lon: [u8; 8] = *ptr.memory.get_8_bytes(addr + 8).unwrap_or(&[0; 8]);
+
+                NP_Geo_Bytes { lat: bytes_lat.to_vec(), lng: bytes_lon.to_vec(), size: 16 }
+            },
+            8 => {
+                let bytes_lat: [u8; 4] = *ptr.memory.get_4_bytes(addr).unwrap_or(&[0; 4]);
+                let bytes_lon: [u8; 4] = *ptr.memory.get_4_bytes(addr + 4).unwrap_or(&[0; 4]);
+
+                NP_Geo_Bytes { lat: bytes_lat.to_vec(), lng: bytes_lon.to_vec(), size: 8 }
+            },
+            4 => {
+                let bytes_lat: [u8; 2] = *ptr.memory.get_2_bytes(addr).unwrap_or(&[0; 2]);
+                let bytes_lon: [u8; 2] = *ptr.memory.get_2_bytes(addr + 2).unwrap_or(&[0; 2]);
+
+                NP_Geo_Bytes { lat: bytes_lat.to_vec(), lng: bytes_lon.to_vec(), size: 4 }
+            },
+            _ => {
+                unreachable!();
+            }
+        })))
+    }
 }
 
 
@@ -826,6 +957,8 @@ impl NP_Value for NP_Dec {
 /// When `geo4`, `geo8`, or `geo16` types are used the data is saved and retrieved with this struct.
 #[derive(Debug)]
 pub struct NP_Geo {
+    /// The size of this geographic coordinate.  4, 8 or 16
+    pub size: u8,
     /// The latitude of this coordinate
     pub lat: f64,
     /// The longitude of this coordinate
@@ -842,11 +975,59 @@ impl NP_Geo {
             _ => 0.0
         }
      }
+
+     /// Get the bytes that represent this geographic coordinate
+     pub fn get_bytes(&self) -> Option<NP_Geo_Bytes> {
+        if self.size == 0 {
+            return None
+        }
+
+        let dev = NP_Geo::get_deviser(self.size as i64);
+
+        match self.size {
+            16 => {
+
+                let mut lat_bytes = ((self.lat * dev) as i64).to_be_bytes();
+                let mut lon_bytes = ((self.lng * dev) as i64).to_be_bytes();
+
+                // convert to unsigned bytes
+                lat_bytes[0] = to_unsigned(lat_bytes[0]);
+                lon_bytes[0] = to_unsigned(lon_bytes[0]);
+
+                Some(NP_Geo_Bytes { lat: lat_bytes.to_vec(), lng: lon_bytes.to_vec(), size: self.size })
+            },
+            8 => {
+
+                let mut lat_bytes = ((self.lat * dev) as i32).to_be_bytes();
+                let mut lon_bytes = ((self.lng * dev) as i32).to_be_bytes();
+
+                // convert to unsigned bytes
+                lat_bytes[0] = to_unsigned(lat_bytes[0]);
+                lon_bytes[0] = to_unsigned(lon_bytes[0]);
+
+                Some(NP_Geo_Bytes { lat: lat_bytes.to_vec(), lng: lon_bytes.to_vec(), size: self.size })
+            },
+            4 => {
+
+                let mut lat_bytes = ((self.lat * dev) as i16).to_be_bytes();
+                let mut lon_bytes = ((self.lng * dev) as i16).to_be_bytes();
+
+                // convert to unsigned bytes
+                lat_bytes[0] = to_unsigned(lat_bytes[0]);
+                lon_bytes[0] = to_unsigned(lon_bytes[0]);
+
+                Some(NP_Geo_Bytes { lat: lat_bytes.to_vec(), lng: lon_bytes.to_vec(), size: self.size })
+            },
+            _ => {
+                None
+            }
+        }
+     }
 }
 
 impl Default for NP_Geo {
     fn default() -> Self { 
-        NP_Geo { lat: 0.0, lng: 0.0 }
+        NP_Geo { lat: 0.0, lng: 0.0, size: 0 }
      }
 }
 
@@ -866,6 +1047,7 @@ impl NP_Value for NP_Geo {
     }
 
     fn schema_default(schema: Rc<NP_Schema>) -> Option<Box<Self>> {
+        let size = schema.type_state as u8;
         match &schema.default {
             Some(x) => {
                 match x {
@@ -900,7 +1082,7 @@ impl NP_Value for NP_Geo {
                         };
 
                         if has_lat_lon {
-                            return Some(Box::new(NP_Geo { lat: get_value(lat), lng: get_value(lon) }));
+                            return Some(Box::new(NP_Geo { lat: get_value(lat), lng: get_value(lon), size: size }));
                         }
 
                         None
@@ -939,8 +1121,12 @@ impl NP_Value for NP_Geo {
                 let dev = NP_Geo::get_deviser(16);
 
                 let mut v_bytes: [u8; 16] = [0; 16];
-                let lat_bytes = ((value.lat * dev) as i64).to_be_bytes();
-                let lon_bytes = ((value.lng * dev) as i64).to_be_bytes();
+                let mut lat_bytes = ((value.lat * dev) as i64).to_be_bytes();
+                let mut lon_bytes = ((value.lng * dev) as i64).to_be_bytes();
+
+                // convert to unsigned bytes
+                lat_bytes[0] = to_unsigned(lat_bytes[0]);
+                lon_bytes[0] = to_unsigned(lon_bytes[0]);
 
                 for x in 0..value_bytes_size {
                     if x < half_value_bytes {
@@ -955,8 +1141,12 @@ impl NP_Value for NP_Geo {
                 let dev = NP_Geo::get_deviser(8);
 
                 let mut v_bytes: [u8; 16] = [0; 16];
-                let lat_bytes = ((value.lat * dev) as i32).to_be_bytes();
-                let lon_bytes = ((value.lng * dev) as i32).to_be_bytes();
+                let mut lat_bytes = ((value.lat * dev) as i32).to_be_bytes();
+                let mut lon_bytes = ((value.lng * dev) as i32).to_be_bytes();
+
+                // convert to unsigned bytes
+                lat_bytes[0] = to_unsigned(lat_bytes[0]);
+                lon_bytes[0] = to_unsigned(lon_bytes[0]);
 
                 for x in 0..value_bytes_size {
                     if x < half_value_bytes {
@@ -971,8 +1161,12 @@ impl NP_Value for NP_Geo {
                 let dev = NP_Geo::get_deviser(4);
 
                 let mut v_bytes: [u8; 16] = [0; 16];
-                let lat_bytes = ((value.lat * dev) as i16).to_be_bytes();
-                let lon_bytes = ((value.lng * dev) as i16).to_be_bytes();
+                let mut lat_bytes = ((value.lat * dev) as i16).to_be_bytes();
+                let mut lon_bytes = ((value.lng * dev) as i16).to_be_bytes();
+
+                // convert to unsigned bytes
+                lat_bytes[0] = to_unsigned(lat_bytes[0]);
+                lon_bytes[0] = to_unsigned(lon_bytes[0]);
 
                 for x in 0..value_bytes_size {
                     if x < half_value_bytes {
@@ -1029,46 +1223,57 @@ impl NP_Value for NP_Geo {
             return Ok(None);
         }
 
-        Ok(match ptr.schema.type_state {
+        Ok(Some(Box::new(match ptr.schema.type_state {
             16 => {
          
-                let bytes_lat: [u8; 8] = *ptr.memory.get_8_bytes(addr).unwrap_or(&[0; 8]);
-                let bytes_lon: [u8; 8] = *ptr.memory.get_8_bytes(addr + 8).unwrap_or(&[0; 8]);
+                let mut bytes_lat: [u8; 8] = *ptr.memory.get_8_bytes(addr).unwrap_or(&[0; 8]);
+                let mut bytes_lon: [u8; 8] = *ptr.memory.get_8_bytes(addr + 8).unwrap_or(&[0; 8]);
+
+                // convert to signed bytes
+                bytes_lat[0] = to_signed(bytes_lat[0]); 
+                bytes_lon[0] = to_signed(bytes_lon[0]); 
 
                 let lat = i64::from_be_bytes(bytes_lat) as f64;
                 let lon = i64::from_be_bytes(bytes_lon) as f64;
 
                 let dev = NP_Geo::get_deviser(16);
 
-                Some(Box::new(NP_Geo { lat: lat / dev, lng: lon / dev}))
-
+                NP_Geo { lat: lat / dev, lng: lon / dev, size: 16}
             },
             8 => {
-                let bytes_lat: [u8; 4] = *ptr.memory.get_4_bytes(addr).unwrap_or(&[0; 4]);
-                let bytes_lon: [u8; 4] = *ptr.memory.get_4_bytes(addr + 4).unwrap_or(&[0; 4]);
+                let mut bytes_lat: [u8; 4] = *ptr.memory.get_4_bytes(addr).unwrap_or(&[0; 4]);
+                let mut bytes_lon: [u8; 4] = *ptr.memory.get_4_bytes(addr + 4).unwrap_or(&[0; 4]);
+
+                // convert to signed bytes
+                bytes_lat[0] = to_signed(bytes_lat[0]); 
+                bytes_lon[0] = to_signed(bytes_lon[0]); 
 
                 let lat = i32::from_be_bytes(bytes_lat) as f64;
                 let lon = i32::from_be_bytes(bytes_lon) as f64;
 
                 let dev = NP_Geo::get_deviser(8);
 
-                Some(Box::new(NP_Geo { lat: lat / dev, lng: lon / dev}))
+                NP_Geo { lat: lat / dev, lng: lon / dev, size: 8}
             },
             4 => {
-                let bytes_lat: [u8; 2] = *ptr.memory.get_2_bytes(addr).unwrap_or(&[0; 2]);
-                let bytes_lon: [u8; 2] = *ptr.memory.get_2_bytes(addr + 2).unwrap_or(&[0; 2]);
+                let mut bytes_lat: [u8; 2] = *ptr.memory.get_2_bytes(addr).unwrap_or(&[0; 2]);
+                let mut bytes_lon: [u8; 2] = *ptr.memory.get_2_bytes(addr + 2).unwrap_or(&[0; 2]);
+
+                // convert to signed bytes
+                bytes_lat[0] = to_signed(bytes_lat[0]); 
+                bytes_lon[0] = to_signed(bytes_lon[0]); 
 
                 let lat = i16::from_be_bytes(bytes_lat) as f64;
                 let lon = i16::from_be_bytes(bytes_lon) as f64;
 
                 let dev = NP_Geo::get_deviser(4);
 
-                Some(Box::new(NP_Geo { lat: lat / dev, lng: lon / dev}))
+                NP_Geo { lat: lat / dev, lng: lon / dev, size: 4}
             },
             _ => {
                 unreachable!();
             }
-        })
+        })))
     }
 
     fn to_json(ptr: NP_Lite_Ptr) -> NP_JSON {

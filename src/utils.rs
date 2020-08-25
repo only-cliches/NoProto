@@ -9,6 +9,16 @@ const KY: u32 = 362436069;
 const KZ: u32 = 521288629;
 const KW: u32 = 88675123;
 
+#[inline(always)]
+pub fn to_unsigned(byte: u8) -> u8 {
+    if byte >= 128 { byte - 128 } else { byte + 128 }
+}
+
+#[inline(always)]
+pub fn to_signed(byte: u8) -> u8 {
+    if byte < 128 { byte + 128 } else { byte - 128 }
+}
+
 pub struct Rand {
     x: u32, y: u32, z: u32, w: u32
 }
