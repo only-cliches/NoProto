@@ -464,11 +464,11 @@
 //! 
 //! Larger geo values take up more space, but allow greater resolution.
 //! 
-//! | Type  | Bytes | Earth Resolution                       |
-//! |-------|-------|----------------------------------------|
-//! | geo4  | 4     | 1.1km resolution (city)                |
-//! | geo8  | 8     | 11mm resolution (marble)               |
-//! | geo16 | 16    | 110 microns resolution (grain of sand) |
+//! | Type  | Bytes | Earth Resolution                       | Decimal Places |
+//! |-------|-------|----------------------------------------|----------------|
+//! | geo4  | 4     | 1.1km resolution (city)                | 2              |
+//! | geo8  | 8     | 11mm resolution (marble)               | 7              |
+//! | geo16 | 16    | 110 microns resolution (grain of sand) | 9              |
 //! 
 //! ```json
 //! {
