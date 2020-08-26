@@ -5,7 +5,6 @@
 //! They are designed to hold a variable amount of data that is parsed based on a schema provided by the client.
 //! 
 //! 
-//! 
 //! ## Pointers
 //! 
 //! Pointers contain one or more addresses depending on the pointer type.  The addresses will point to data or other pointers.
@@ -53,7 +52,9 @@
 //! |     u16/u32     |            u16/u32            |          u16/u32              |
 //! ```
 //! 
-//! Map collections represent a linked list of these pointers.  There shoudld only be map item pointers for items in the map that have data.
+//! Map collections represent a linked list of these pointers.  There should only be map item pointers for items in the map that have data.
+//! 
+//! The last map item pointer in a map should have a zero in the next item address for no further map items.
 //! 
 //! The `key` is always stored as a variable sequence of bytes provided by the client.  If you go to the address of the key you should find a length (u16/u32) followed by a sequence of bytes that represents the key.
 //! 
@@ -67,6 +68,8 @@
 //! 
 //! Tables are a linked list of these pointers.  There should only be table item pointers for columns that have data.
 //! 
+//! The last table item pointer should have a zero in the next item address for no further table items.
+//! 
 //! **List Item Pointer**<br/>
 //! 
 //! Used by items in a list object.  Contains the following:
@@ -77,16 +80,18 @@
 //! 
 //! Unlike tables and maps, the order of the list items point to eachother should be kept so that the index is the correct sequence.
 //! 
-//! You can have gaps in the sequence, but the index should always be in sequence.  So if you have 3 item pointers with indexes 2, 8 and 20 they should point to each other in this order: 2 -> 8 -> 20
+//! You can have gaps in the sequence, but the index should always be in order.  So if you have 3 item pointers with indexes 2, 8 and 20 they should point to each other in this order: 2 -> 8 -> 20.  This doesn't mean they have to be in order in the buffer, they just have to point to eachother in order.
 //! 
 //! There should be list item pointers only for indexes that have data in the list.
+//! 
+//! The last list item pointer in a list should have a zero in the next item address for no further list items.
 //! 
 //! 
 //! ## Data
 //! 
 //! Data is stored in a specific format based on the data type in the schema.  The schema should determine how bytes at a sepcific are treated.
 //! 
-//! When a pointer's address "points" to a location in the buffer, you should be able to parse the bytes at the designated location following the rules for the given data type.
+//! When a pointer's address "points" to a location in the buffer, you should be able to parse the bytes at the designated location following the rules for the given data type below.
 //! 
 //! Most data types have a known size ahead of time, some don't, and some have a size dependent on the schema.
 //! 
@@ -121,7 +126,7 @@
 //! 
 //! For example, an i8 of value -20 should be converted to 108, then saved as 108.
 //! 
-//! When it's requested by the client, it should be converted back to signed before being passed to the user.
+//! When it's requested by the user, it should be converted back to signed before being passed to the user.
 //! 
 //! **uint8, uint16, uint32, uint64**<br/>
 //! 
@@ -139,7 +144,7 @@
 //! 
 //! Option values are stored as a single `u8` value.  The value should represent the zero based location in the choice set.
 //! 
-//! For example if the schema has `choices: ["red", "blue", "yellow"]` and the client selects `yellow`, this value should `2`.
+//! For example if the schema has `choices: ["red", "blue", "yellow"]` and the user selects `yellow`, this value should `2`.
 //! 
 //! **bool**<br/>
 //! 
@@ -149,14 +154,14 @@
 //! 
 //! Stored the same as an i64 value (including converting to unsigned format described above).
 //! 
-//! The `i64` number should be devided by `10^exp` .  The `exp` value is provided in the schema.
+//! The `i64` number should be devided by `10 ^ exp` to get the true value.  The `exp` value is provided in the schema.
 //! 
-//! For example, if you pull `293` from the buffer and the `exp` value in the schema is `2`, the value is actually `293 / 100` or 2.93.
+//! For example, if you pull a `293` i64 value from the buffer and the `exp` value in the schema is `2`, the value is actually `293 / 100` or 2.93.
 //! 
-//! You should avoid converting the number to floating point values except for display purposes.
+//! You should avoid converting the number to floating point values except for display purposes.  Study the source code for the `NP_Dec` type to see how to preserve the internal i64 value correctly.
 //! 
 //! **geo4, geo8, geo16**<br/>
-//! Each geo size uses two signed integers right next to eachother in the buffer.  i16 for geo4, i32 for geo8 and i64 for geo16
+//! Each geo size uses two signed integers right next to eachother in the buffer.  i16/16 for geo4, i32/i32 for geo8 and i64/i64 for geo16
 //! 
 //! The two signed integers are converted to unsigned values before being saved into big endian format. 
 //! 
@@ -186,14 +191,16 @@
 //! 
 //! ***bytes, string**<br/>
 //! 
-//! If there is a `size` property in the schema, store the provided data and zero out the rest.
+//! If there is a `size` property in the schema, store the provided data and zero out the rest of the space.
 //! 
-//! For example, if the user provideds a single byte "22" and the size is `3`, this should be in the buffer:
+//! If the provided data is too large, truncate it.
+//! 
+//! For example, if the user provideds a single byte `[22]` and the size is `3`, this should be in the buffer:
 //! ```text
 //! [22, 0, 0]
 //! ```
 //! 
-//! If there is no fixed `size` in the buffer, store a size (u16/u32) followed by the actual data.
+//! If there is no fixed `size` in the schema, store a size (u16/u32) followed by the actual data.
 //! 
 //! If it's a string, the data should be utf-8 encoded when it's saved into the buffer and utf-8 decoded when it's retrieved.
 //! 

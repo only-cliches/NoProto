@@ -1,6 +1,6 @@
 #![warn(missing_docs, missing_debug_implementations)]
 #![allow(non_camel_case_types)]
-// #![no_std]
+#![no_std]
 
 //! ## High Performance Serialization Library
 //! Faster than JSON with Schemas and Native Types.  Like Mutable Protocol Buffers with Compile Free Schemas.
@@ -169,8 +169,8 @@ pub mod collection;
 pub mod buffer;
 pub mod schema;
 pub mod error;
-pub mod format;
 pub mod json_flex;
+pub mod format;
 mod memory;
 mod utils;
 
@@ -303,29 +303,52 @@ impl NP_Factory {
 mod tests {
 
     use super::*;
-    use collection::{table::NP_Table, list::NP_List};
-    use json_flex::NP_JSON;
-    use pointer::misc::NP_Date;
+    // use collection::{table::NP_Table, list::NP_List};
+    // use json_flex::NP_JSON;
+    // use pointer::misc::NP_Date;
 
     #[test]
     fn it_works() -> core::result::Result<(), NP_Error> {
 
-        
+        /*
         let factory: NP_Factory = NP_Factory::new(r#"{
-            "type": "i8"
+            "type": "list",
+            "of": {
+                "type": "table",
+                "columns": [
+                    ["name", {"type": "string", "default": "no name"}],
+                    ["age",  {"type": "i16", "default": 10}]
+                ]
+            }
         }"#)?;
 
-        let mut new_buffer = factory.empty_buffer(None, Some(NP_Size::U32));
+        let mut new_buffer = factory.empty_buffer(None, None);
 
+        new_buffer.open::<NP_List<NP_Table>>(&mut |_list| {
 
-        new_buffer.deep_set("", -20i8)?;
+            Ok(())
+        })?;
+
+        new_buffer.deep_set("10.name", "something".to_owned())?;
+        new_buffer.deep_set("10.name", "someth\"ing22".to_owned())?;
+        new_buffer.deep_set("9.age", -29383i16)?;
+        println!("Size: {:?}", new_buffer.calc_bytes()?);
+        // new_buffer.compact(None, None)?;
+        println!("Size: {:?}", new_buffer.calc_bytes()?);
+
+        // println!("JSON: {}", new_buffer.json_encode().stringify());
+        // new_buffer.compact(None, None)?;
+        
+        let value = new_buffer.deep_get::<NP_JSON>("9")?;
+
+        println!("name: {}", value.unwrap().stringify());
 
         println!("BYTES: {:?}", new_buffer.close());
 
         // let buffer2 = factory.deep_set::<String>(return_buffer, "15", "hello, world".to_owned())?;
 
         // println!("value {:?}", factory.deep_get::<String>(return_buffer, "10.name")?);
-        
+        */
         Ok(())
     }
     
