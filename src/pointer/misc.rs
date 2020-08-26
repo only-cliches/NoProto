@@ -1,3 +1,4 @@
+use alloc::vec::Vec;
 use crate::utils::to_signed;
 use crate::utils::to_unsigned;
 use crate::utils::to_base32;
@@ -1405,8 +1406,8 @@ impl NP_Value for NP_ULID {
 
         let mut addr = ptr.kind.get_value_addr();
 
-        let timebits: [u8; 8] = value.time.to_be_bytes();
-        let idbits: [u8; 16] = value.id.to_be_bytes();
+        let time_bytes: [u8; 8] = value.time.to_be_bytes();
+        let id_bytes: [u8; 16] = value.id.to_be_bytes();
 
         if addr != 0 { // existing value, replace
 
@@ -1415,9 +1416,9 @@ impl NP_Value for NP_ULID {
             // overwrite existing values in buffer
             for x in 0..16 {
                 if x < 6 {
-                    write_bytes[(addr + x as u32) as usize] = timebits[x as usize + 2];
+                    write_bytes[(addr + x as u32) as usize] = time_bytes[x as usize + 2];
                 } else {
-                    write_bytes[(addr + x as u32) as usize] = idbits[x as usize];
+                    write_bytes[(addr + x as u32) as usize] = id_bytes[x as usize];
                 }
             }
 
@@ -1429,9 +1430,9 @@ impl NP_Value for NP_ULID {
 
             for x in 0..bytes.len() {
                 if x < 6 {
-                    bytes[(addr + x as u32) as usize] = timebits[x as usize + 2];
+                    bytes[(addr + x as u32) as usize] = time_bytes[x as usize + 2];
                 } else {
-                    bytes[(addr + x as u32) as usize] = idbits[x as usize];
+                    bytes[(addr + x as u32) as usize] = id_bytes[x as usize];
                 }
             }
 

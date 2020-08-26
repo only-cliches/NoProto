@@ -12,11 +12,13 @@ use alloc::{rc::Rc, borrow::ToOwned};
 macro_rules! noproto_number {
     ($t:ty, $str1: tt, $str2: tt, $tkey: expr, $signedInt: expr, $fp: expr) => {
         impl NP_Value for $t {
-            fn is_type( type_str: &str) -> bool {
-                $str1 == type_str || $str2 == type_str
-            }
+
+            fn is_type( type_str: &str) -> bool {  $str1 == type_str || $str2 == type_str }
+
             fn type_idx() -> (i64, String) { ($tkey as i64, $str1.to_owned()) }
+
             fn self_type_idx(&self) -> (i64, String) { ($tkey as i64, $str1.to_owned()) }
+
             fn schema_default(schema: Rc<NP_Schema>) -> Option<Box<Self>> {
                 match &schema.default {
                     Some(x) => {
@@ -37,6 +39,7 @@ macro_rules! noproto_number {
                     }
                 }
             }
+    
             fn set_value(ptr: NP_Lite_Ptr, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
 
                 let mut addr = ptr.kind.get_value_addr();
@@ -91,9 +94,9 @@ macro_rules! noproto_number {
             }
 
             fn to_json(ptr: NP_Lite_Ptr) -> NP_JSON {
-                let this_string = Self::into_value(ptr.clone());
+                let this_value = Self::into_value(ptr.clone());
         
-                match this_string {
+                match this_value {
                     Ok(x) => {
                         match x {
                             Some(y) => {
@@ -116,6 +119,7 @@ macro_rules! noproto_number {
                     }
                 }
             }
+
             fn get_size(ptr: NP_Lite_Ptr) -> Result<u32, NP_Error> {
          
                 if ptr.kind.get_value_addr() == 0 {
@@ -129,17 +133,17 @@ macro_rules! noproto_number {
 }
 
 // signed integers
-noproto_number!(i8, "int8", "i8", NP_TypeKeys::Int8, true, false);
-noproto_number!(i16, "int16", "i16", NP_TypeKeys::Int16, true, false);
-noproto_number!(i32, "int32", "i32", NP_TypeKeys::Int32, true, false);
-noproto_number!(i64, "int64", "i64", NP_TypeKeys::Int64, true, false);
+noproto_number!(i8,    "int8",  "i8", NP_TypeKeys::Int8  , true , false);
+noproto_number!(i16,  "int16", "i16", NP_TypeKeys::Int16 , true , false);
+noproto_number!(i32,  "int32", "i32", NP_TypeKeys::Int32 , true , false);
+noproto_number!(i64,  "int64", "i64", NP_TypeKeys::Int64 , true , false);
 
 // unsigned integers
-noproto_number!(u8, "uint8", "u8", NP_TypeKeys::Uint8, false, false);
+noproto_number!(u8,   "uint8",  "u8", NP_TypeKeys::Uint8 , false, false);
 noproto_number!(u16, "uint16", "u16", NP_TypeKeys::Uint16, false, false);
 noproto_number!(u32, "uint32", "u32", NP_TypeKeys::Uint32, false, false);
 noproto_number!(u64, "uint64", "u64", NP_TypeKeys::Uint64, false, false);
 
 // floating point
-noproto_number!(f32, "float", "f32", NP_TypeKeys::Float, false, true);
-noproto_number!(f64, "double", "f64", NP_TypeKeys::Double, false, true);
+noproto_number!(f32,  "float", "f32", NP_TypeKeys::Float , false,  true);
+noproto_number!(f64, "double", "f64", NP_TypeKeys::Double, false,  true);

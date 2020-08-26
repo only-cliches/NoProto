@@ -605,31 +605,31 @@ pub enum NP_TypeKeys {
 
 impl From<i64> for NP_TypeKeys {
     fn from(value: i64) -> Self {
-        if value == NP_TypeKeys::Any as i64 { return NP_TypeKeys::Any }
+        if value == NP_TypeKeys::Any as i64        { return NP_TypeKeys::Any }
         if value == NP_TypeKeys::UTF8String as i64 { return NP_TypeKeys::UTF8String }
-        if value == NP_TypeKeys::Bytes as i64 { return NP_TypeKeys::Bytes }
-        if value == NP_TypeKeys::Int8 as i64 { return NP_TypeKeys::Int8 }
-        if value == NP_TypeKeys::Int16 as i64 { return NP_TypeKeys::Int16 }
-        if value == NP_TypeKeys::Int32 as i64 { return NP_TypeKeys::Int32 }
-        if value == NP_TypeKeys::Int64 as i64 { return NP_TypeKeys::Int64 }
-        if value == NP_TypeKeys::Uint8 as i64 { return NP_TypeKeys::Uint8 }
-        if value == NP_TypeKeys::Uint16 as i64 { return NP_TypeKeys::Uint16 }
-        if value == NP_TypeKeys::Uint32 as i64 { return NP_TypeKeys::Uint32 }
-        if value == NP_TypeKeys::Uint64 as i64 { return NP_TypeKeys::Uint64 }
-        if value == NP_TypeKeys::Float as i64 { return NP_TypeKeys::Float }
-        if value == NP_TypeKeys::Double as i64 { return NP_TypeKeys::Double }
-        if value == NP_TypeKeys::Decimal as i64 { return NP_TypeKeys::Decimal }
-        if value == NP_TypeKeys::Boolean as i64 { return NP_TypeKeys::Boolean }
-        if value == NP_TypeKeys::Geo as i64 { return NP_TypeKeys::Geo }
-        if value == NP_TypeKeys::Uuid as i64 { return NP_TypeKeys::Uuid }
-        if value == NP_TypeKeys::Ulid as i64 { return NP_TypeKeys::Ulid }
-        if value == NP_TypeKeys::Date as i64 { return NP_TypeKeys::Date }
-        if value == NP_TypeKeys::Enum as i64 { return NP_TypeKeys::Enum }
-        if value == NP_TypeKeys::Table as i64 { return NP_TypeKeys::Table }
-        if value == NP_TypeKeys::Map as i64 { return NP_TypeKeys::Map }
-        if value == NP_TypeKeys::List as i64 { return NP_TypeKeys::List }
-        if value == NP_TypeKeys::Tuple as i64 { return NP_TypeKeys::Tuple }
-        if value == NP_TypeKeys::JSON as i64 { return NP_TypeKeys::JSON }
+        if value == NP_TypeKeys::Bytes as i64      { return NP_TypeKeys::Bytes }
+        if value == NP_TypeKeys::Int8 as i64       { return NP_TypeKeys::Int8 }
+        if value == NP_TypeKeys::Int16 as i64      { return NP_TypeKeys::Int16 }
+        if value == NP_TypeKeys::Int32 as i64      { return NP_TypeKeys::Int32 }
+        if value == NP_TypeKeys::Int64 as i64      { return NP_TypeKeys::Int64 }
+        if value == NP_TypeKeys::Uint8 as i64      { return NP_TypeKeys::Uint8 }
+        if value == NP_TypeKeys::Uint16 as i64     { return NP_TypeKeys::Uint16 }
+        if value == NP_TypeKeys::Uint32 as i64     { return NP_TypeKeys::Uint32 }
+        if value == NP_TypeKeys::Uint64 as i64     { return NP_TypeKeys::Uint64 }
+        if value == NP_TypeKeys::Float as i64      { return NP_TypeKeys::Float }
+        if value == NP_TypeKeys::Double as i64     { return NP_TypeKeys::Double }
+        if value == NP_TypeKeys::Decimal as i64    { return NP_TypeKeys::Decimal }
+        if value == NP_TypeKeys::Boolean as i64    { return NP_TypeKeys::Boolean }
+        if value == NP_TypeKeys::Geo as i64        { return NP_TypeKeys::Geo }
+        if value == NP_TypeKeys::Uuid as i64       { return NP_TypeKeys::Uuid }
+        if value == NP_TypeKeys::Ulid as i64       { return NP_TypeKeys::Ulid }
+        if value == NP_TypeKeys::Date as i64       { return NP_TypeKeys::Date }
+        if value == NP_TypeKeys::Enum as i64       { return NP_TypeKeys::Enum }
+        if value == NP_TypeKeys::Table as i64      { return NP_TypeKeys::Table }
+        if value == NP_TypeKeys::Map as i64        { return NP_TypeKeys::Map }
+        if value == NP_TypeKeys::List as i64       { return NP_TypeKeys::List }
+        if value == NP_TypeKeys::Tuple as i64      { return NP_TypeKeys::Tuple }
+        if value == NP_TypeKeys::JSON as i64       { return NP_TypeKeys::JSON }
         NP_TypeKeys::Any
     }
 }

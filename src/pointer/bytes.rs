@@ -127,14 +127,12 @@ impl NP_Value for NP_Bytes {
         let prev_size: usize = if addr != 0 {
             match pointer.memory.size {
                 NP_Size::U16 => {
-                    let mut size_bytes: [u8; 2] = [0; 2];
-                    size_bytes.copy_from_slice(&pointer.memory.read_bytes()[addr..(addr+2)]);
-                    u16::from_be_bytes(size_bytes) as usize
+                    let size_bytes: &[u8; 2] = pointer.memory.get_2_bytes(addr).unwrap_or(&[0; 2]);
+                    u16::from_be_bytes(*size_bytes) as usize
                 },
                 NP_Size::U32 => { 
-                    let mut size_bytes: [u8; 4] = [0; 4];
-                    size_bytes.copy_from_slice(&pointer.memory.read_bytes()[addr..(addr+4)]);
-                    u32::from_be_bytes(size_bytes) as usize
+                    let size_bytes: &[u8; 4] = pointer.memory.get_4_bytes(addr).unwrap_or(&[0; 4]);
+                    u32::from_be_bytes(*size_bytes) as usize
                 }
             }
         } else {

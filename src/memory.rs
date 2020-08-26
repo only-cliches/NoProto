@@ -12,6 +12,7 @@ pub enum NP_Size {
 #[derive(Debug)]
 pub struct NP_Memory {
     bytes: UnsafeCell<Vec<u8>>,
+    
     pub size: NP_Size
 }
 
@@ -51,6 +52,7 @@ impl<'a> NP_Memory {
         let mut new_bytes = Vec::with_capacity(use_size);
 
         new_bytes.push(PROTOCOL_VERSION); // Protocol version (for breaking changes if needed later)
+
         match &size {
             NP_Size::U32 => {
                 new_bytes.push(0); // size key (0 for U32)
