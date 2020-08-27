@@ -129,7 +129,7 @@ let user_bytes: Vec<u8> = user_buffer.close();
 // we can now save user_bytes to disk, 
 // send it over the network, or whatever else is needed with the data
 
-# Ok::<(), NP_Error>(()) 
+Ok::<(), NP_Error>(()) 
 ```
 
 ## Guided Learning / Next Steps:
