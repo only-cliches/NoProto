@@ -126,6 +126,10 @@ impl NP_Value for NP_Bytes {
 
         let prev_size: usize = if addr != 0 {
             match pointer.memory.size {
+                NP_Size::U8 => {
+                    let size_bytes: u8 = pointer.memory.get_1_byte(addr).unwrap_or(0);
+                    u8::from_be_bytes([size_bytes]) as usize
+                },
                 NP_Size::U16 => {
                     let size_bytes: &[u8; 2] = pointer.memory.get_2_bytes(addr).unwrap_or(&[0; 2]);
                     u16::from_be_bytes(*size_bytes) as usize
@@ -142,6 +146,7 @@ impl NP_Value for NP_Bytes {
         if prev_size >= str_size as usize { // previous string is larger than this one, use existing memory
     
             let size_bytes = match pointer.memory.size {
+                NP_Size::U8 => { (str_size as u8).to_be_bytes().to_vec() }
                 NP_Size::U16 => { (str_size as u16).to_be_bytes().to_vec() },
                 NP_Size::U32 => { (str_size as u32).to_be_bytes().to_vec() }
             };
@@ -152,6 +157,7 @@ impl NP_Value for NP_Bytes {
             }
 
             let offset = match pointer.memory.size {
+                NP_Size::U8 =>  { 1usize },
                 NP_Size::U16 => { 2usize },
                 NP_Size::U32 => { 4usize }
             };
@@ -166,6 +172,7 @@ impl NP_Value for NP_Bytes {
             
             // first 2 / 4 bytes are string length
             let str_bytes = match pointer.memory.size {
+                NP_Size::U8 => { (str_size as u8).to_be_bytes().to_vec() }
                 NP_Size::U16 => { (str_size as u16).to_be_bytes().to_vec() },
                 NP_Size::U32 => { (str_size as u32).to_be_bytes().to_vec() }
             };
@@ -204,6 +211,11 @@ impl NP_Value for NP_Bytes {
             // get size of bytes
 
             let bytes_size: usize = match memory.size {
+                NP_Size::U8 => {
+                    let mut size_bytes: [u8; 1] = [0; 1];
+                    size_bytes.copy_from_slice(&memory.read_bytes()[addr..(addr+1)]);
+                    u8::from_be_bytes(size_bytes) as usize
+                },
                 NP_Size::U16 => {
                     let mut size_bytes: [u8; 2] = [0; 2];
                     size_bytes.copy_from_slice(&memory.read_bytes()[addr..(addr+2)]);
@@ -218,7 +230,8 @@ impl NP_Value for NP_Bytes {
 
             // get bytes
             let bytes = match memory.size {
-                NP_Size::U16 => { &memory.read_bytes()[(addr+2)..(addr+2+bytes_size)]},
+                NP_Size::U8 => { &memory.read_bytes()[(addr+1)..(addr+1+bytes_size)] },
+                NP_Size::U16 => { &memory.read_bytes()[(addr+2)..(addr+2+bytes_size)] },
                 NP_Size::U32 => { &memory.read_bytes()[(addr+4)..(addr+4+bytes_size)] }
             };
 
@@ -271,6 +284,11 @@ impl NP_Value for NP_Bytes {
 
 
             let bytes_size: u32 = match &memory.size {
+                NP_Size::U8 => {
+                    let mut size: [u8; 1] = [0; 1];
+                    size.copy_from_slice(&memory.read_bytes()[addr..(addr+1)]);
+                    (u8::from_be_bytes(size) as u32) + 1
+                },
                 NP_Size::U16 => {
                     let mut size: [u8; 2] = [0; 2];
                     size.copy_from_slice(&memory.read_bytes()[addr..(addr+2)]);

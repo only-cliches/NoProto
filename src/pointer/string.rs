@@ -36,7 +36,6 @@ impl NP_Value for String {
             },
             None => Ok(None)
         }
-        
     }
 
     fn schema_default(schema: Rc<NP_Schema>) -> Option<Box<Self>> {

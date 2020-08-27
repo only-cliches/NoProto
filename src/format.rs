@@ -313,8 +313,7 @@
 //! use no_proto::NP_Factory;
 //! 
 //! let factory: NP_Factory = NP_Factory::new(r#"{
-//!    "type": "bool",
-//!    "choices": ["blue", "orange", "red"]
+//!    "type": "bool"
 //! }"#)?;
 //!
 //! let mut new_buffer = factory.empty_buffer(None, None);

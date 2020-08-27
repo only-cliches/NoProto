@@ -159,7 +159,8 @@ impl NP_Lite_Ptr {
             location: location,
             kind: NP_PtrKinds::Standard { addr: match &memory.size {
                 NP_Size::U32 => u32::from_be_bytes(*memory.get_4_bytes(addr).unwrap_or(&[0; 4])),
-                NP_Size::U16 => u16::from_be_bytes(*memory.get_2_bytes(addr).unwrap_or(&[0; 2])) as u32
+                NP_Size::U16 => u16::from_be_bytes(*memory.get_2_bytes(addr).unwrap_or(&[0; 2])) as u32,
+                NP_Size::U8 => u8::from_be_bytes([memory.get_1_byte(addr).unwrap_or(0)]) as u32
             }},
             memory: memory,
             schema: schema
@@ -173,7 +174,8 @@ impl NP_Lite_Ptr {
             location: ptr.location,
             kind: NP_PtrKinds::Standard { addr: match &ptr.memory.size {
                 NP_Size::U32 => u32::from_be_bytes(*ptr.memory.get_4_bytes(addr).unwrap_or(&[0; 4])),
-                NP_Size::U16 => u16::from_be_bytes(*ptr.memory.get_2_bytes(addr).unwrap_or(&[0; 2])) as u32
+                NP_Size::U16 => u16::from_be_bytes(*ptr.memory.get_2_bytes(addr).unwrap_or(&[0; 2])) as u32,
+                NP_Size::U8 => u8::from_be_bytes([ptr.memory.get_1_byte(addr).unwrap_or(0)]) as u32
             }},
             memory: ptr.memory,
             schema: ptr.schema
@@ -187,7 +189,8 @@ impl NP_Lite_Ptr {
             location: ptr.location,
             kind: NP_PtrKinds::Standard { addr: match &ptr.memory.size {
                 NP_Size::U32 => u32::from_be_bytes(*ptr.memory.get_4_bytes(addr).unwrap_or(&[0; 4])),
-                NP_Size::U16 => u16::from_be_bytes(*ptr.memory.get_2_bytes(addr).unwrap_or(&[0; 2])) as u32
+                NP_Size::U16 => u16::from_be_bytes(*ptr.memory.get_2_bytes(addr).unwrap_or(&[0; 2])) as u32,
+                NP_Size::U8 => u8::from_be_bytes([ptr.memory.get_1_byte(addr).unwrap_or(0)]) as u32
             }},
             memory: Rc::clone(&ptr.memory),
             schema: Rc::clone(&ptr.schema)
@@ -450,7 +453,8 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
             location: location,
             kind: NP_PtrKinds::Standard { addr: match &memory.size {
                 NP_Size::U32 => u32::from_be_bytes(*memory.get_4_bytes(addr).unwrap_or(&[0; 4])),
-                NP_Size::U16 => u16::from_be_bytes(*memory.get_2_bytes(addr).unwrap_or(&[0; 2])) as u32
+                NP_Size::U16 => u16::from_be_bytes(*memory.get_2_bytes(addr).unwrap_or(&[0; 2])) as u32,
+                NP_Size::U8 => u8::from_be_bytes([memory.get_1_byte(addr).unwrap_or(0)]) as u32
             }},
             memory: memory,
             schema: schema,
@@ -473,11 +477,12 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
                 },
                 next: match &memory.size {
                     NP_Size::U32 => u32::from_be_bytes(*memory.get_4_bytes(addr + 4).unwrap_or(&[0; 4])),
-                    NP_Size::U16 => u16::from_be_bytes(*memory.get_2_bytes(addr + 2).unwrap_or(&[0; 2])) as u32
+                    NP_Size::U16 => u16::from_be_bytes(*memory.get_2_bytes(addr + 2).unwrap_or(&[0; 2])) as u32,
                 },
                 i: match &memory.size {
                     NP_Size::U32 => b_bytes[addr + 8],
-                    NP_Size::U16 => b_bytes[addr + 4]
+                    NP_Size::U16 => b_bytes[addr + 4],
+                    NP_Size::U8 => b_bytes[addr + 2]
                 }
             },
             memory: memory,
