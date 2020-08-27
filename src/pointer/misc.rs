@@ -967,6 +967,12 @@ pub struct NP_Geo {
 }
 
 impl NP_Geo {
+
+    /// Create a new NP_Geo value, make sure the size matches the schema
+    pub fn new(size: u8, lat: f64, lng: f64) -> Self {
+        NP_Geo { size, lat, lng}
+    }
+
     /// Get the deviser value depending on the resolution of the type in the schema
     pub fn get_deviser(size: i64) -> f64 {
         match size {
@@ -1687,9 +1693,9 @@ pub struct NP_Option {
 
 impl NP_Option {
     /// Create a new option type with the given string
-    pub fn new(value: String) -> NP_Option {
+    pub fn new<S: AsRef<str>>(value: S) -> NP_Option {
         NP_Option {
-            value: Some(value)
+            value: Some(value.as_ref().to_string())
         }
     }
 

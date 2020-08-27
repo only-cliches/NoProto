@@ -35,6 +35,8 @@ impl NP_Tuple {
 
         let values = self.values.as_ref().unwrap();
 
+        let addr = self.address;
+
         if index as usize > values.len() {
             return Err(NP_Error::new("Attempted to access tuple value outside length!"));
         }
@@ -65,7 +67,12 @@ impl NP_Tuple {
             }
         };
 
-        Ok(NP_Ptr::_new_standard_ptr(values[index as usize], schema, rc_memory))
+        let location = match rc_memory.size {
+            NP_Size::U16 => {addr + (index as u32 * 2) },
+            NP_Size::U32 => {addr + (index as u32 * 4) } 
+        };
+
+        Ok(NP_Ptr::_new_standard_ptr(location, schema, rc_memory))
     }
 
     /// Convert the tuple into an iterator
@@ -144,20 +151,22 @@ impl NP_Value for NP_Tuple {
                 let mut values_vec: Vec<u32> = Vec::new();
 
                 if addr == 0 {
-                    let mut addresses = match &ptr.memory.size {
-                        NP_Size::U16 => Vec::with_capacity(2 * values.len()),
-                        NP_Size::U32 => Vec::with_capacity(4 * values.len())
+
+                    let length = match &ptr.memory.size {
+                        NP_Size::U16 => 2 * values.len(),
+                        NP_Size::U32 => 4 * values.len()
                     };
 
+                    let mut addresses = Vec::with_capacity(length);
 
-
-                    for x in 0..addresses.len() {
-                        addresses[x] = 0;
+                    for _x in 0..length {
+                        addresses.push(0);
                     }
 
                     // no tuple here, make one
                     addr = ptr.memory.malloc(addresses)?; // stores value addresses
                     ptr.memory.set_value_address(ptr.location, addr, &ptr.kind);
+
                     for _x in 0..values.len() {
                         values_vec.push(0);
                     }

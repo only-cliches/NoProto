@@ -31,7 +31,7 @@ use alloc::boxed::Box;
 use alloc::borrow::ToOwned;
 use alloc::{rc::Rc, vec::Vec};
 use bytes::NP_Bytes;
-use misc::{NP_Geo, NP_Dec, NP_UUID, NP_ULID, NP_Date, NP_Option};
+pub use misc::{NP_Geo, NP_Dec, NP_UUID, NP_ULID, NP_Date, NP_Option};
 use any::NP_Any;
 
 // stores the different kinds of pointers and the details for each pointer

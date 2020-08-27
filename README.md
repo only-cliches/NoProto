@@ -15,6 +15,7 @@ Faster than JSON with Schemas and Native Types.  Like Mutable Protocol Buffers w
 - Supports native data types
 - Supports collection types (list, map, table & tuple)
 - Supports deep nesting of collection types
+- [Thoroughly documented](https://docs.rs/no_proto/latest/no_proto/format/index.html) & simple data storage format
 
 NoProto allows you to store, read & mutate structured data with near zero overhead. It's like Cap'N Proto/Flatbuffers except buffers and schemas are dynamic at runtime instead of requiring compilation.  It's like JSON but faster, type safe and allows native types.
 
@@ -71,6 +72,7 @@ NoProto moves the cost of deserialization to the access methods instead of deser
 - Tuple types are limited to 255 items.
 - Buffers are not validated or checked before deserializing.
 
+
 # Quick Example
 ```rust
 use no_proto::error::NP_Error;
@@ -126,6 +128,8 @@ let user_bytes: Vec<u8> = user_buffer.close();
 
 // we can now save user_bytes to disk, 
 // send it over the network, or whatever else is needed with the data
+
+# Ok::<(), NP_Error>(()) 
 ```
 
 ## Guided Learning / Next Steps:
@@ -133,6 +137,8 @@ let user_bytes: Vec<u8> = user_buffer.close();
 2. [`Factories`](https://docs.rs/no_proto/latest/no_proto/struct.NP_Factory.html) - Parsing schemas into something you can work with.
 3. [`Buffers`](https://docs.rs/no_proto/latest/no_proto/buffer/struct.NP_Buffer.html) - How to create, update & compact buffers.
 4. [`Pointers`](https://docs.rs/no_proto/latest/no_proto/pointer/struct.NP_Ptr.html) - How to add, remove and edit values in a buffer.
+5. [`Data Format`](https://docs.rs/no_proto/latest/no_proto/format/index.html) - Learn how data is saved into the buffer.
+
 
 ----------------------
 

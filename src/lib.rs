@@ -19,6 +19,7 @@
 //! - Supports native data types
 //! - Supports collection types (list, map, table & tuple)
 //! - Supports deep nesting of collection types
+//! - [Thoroughly documented](https://docs.rs/no_proto/latest/no_proto/format/index.html) & simple data storage format
 //! 
 //! NoProto allows you to store, read & mutate structured data with near zero overhead. It's like Cap'N Proto/Flatbuffers except buffers and schemas are dynamic at runtime instead of requiring compilation.  It's like JSON but faster, type safe and allows native types.
 //! 
@@ -74,6 +75,7 @@
 //! - Tables are limited to 255 columns.
 //! - Tuple types are limited to 255 items.
 //! - Buffers are not validated or checked before deserializing.
+//! 
 //! 
 //! # Quick Example
 //! ```rust
@@ -139,6 +141,8 @@
 //! 2. [`Factories`](https://docs.rs/no_proto/latest/no_proto/struct.NP_Factory.html) - Parsing schemas into something you can work with.
 //! 3. [`Buffers`](https://docs.rs/no_proto/latest/no_proto/buffer/struct.NP_Buffer.html) - How to create, update & compact buffers.
 //! 4. [`Pointers`](https://docs.rs/no_proto/latest/no_proto/pointer/struct.NP_Ptr.html) - How to add, remove and edit values in a buffer.
+//! 5. [`Data Format`](https://docs.rs/no_proto/latest/no_proto/format/index.html) - Learn how data is saved into the buffer.
+//! 
 //! 
 //! ----------------------
 //! 
@@ -309,6 +313,7 @@ mod tests {
 
     #[test]
     fn it_works() -> core::result::Result<(), NP_Error> {
+
 
         /*
         let factory: NP_Factory = NP_Factory::new(r#"{
