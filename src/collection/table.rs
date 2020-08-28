@@ -32,6 +32,23 @@ impl NP_Value for NP_Table {
             NP_SchemaKinds::Table { columns } => {
 
                 match &ptr.memory.size {
+                    NP_Size::U8 => {
+                        let mut addr = ptr.kind.get_value_addr();
+
+                        let mut head: [u8; 1] = [0; 1];
+        
+                        if addr == 0 {
+                            // no table here, make one
+                            addr = ptr.memory.malloc([0 as u8; 1].to_vec())?; // stores HEAD
+                            ptr.memory.set_value_address(ptr.location, addr, &ptr.kind); // set pointer to new table
+                        } else {
+                            // existing head, read value
+                            let a = addr as usize;
+                            head = [ptr.memory.get_1_byte(a).unwrap_or(0)];
+                        }
+        
+                        Ok(Some(Box::new(NP_Table::new(addr, u8::from_be_bytes(head) as u32, ptr.memory, Rc::clone(&columns)))))
+                    },
                     NP_Size::U16 => {
                         let mut addr = ptr.kind.get_value_addr();
 
@@ -85,6 +102,7 @@ impl NP_Value for NP_Table {
         }
 
         let base_size = match &ptr.memory.size {
+            NP_Size::U8  => 1u32,
             NP_Size::U16 => 2u32,
             NP_Size::U32 => 4u32
         };
@@ -300,6 +318,9 @@ impl NP_Table {
     
                     // set column index in pointer
                     match &memory.size {
+                        NP_Size::U8 => { 
+                            ptr_bytes[2] = column_index;
+                        },
                         NP_Size::U16 => { 
                             ptr_bytes[4] = column_index;
                         },
@@ -324,6 +345,7 @@ impl NP_Table {
                     while has_next {
 
                         let index = match &memory.size {
+                            NP_Size::U8 => { memory.read_bytes()[(next_addr + 2)] },
                             NP_Size::U16 => { memory.read_bytes()[(next_addr + 4)] },
                             NP_Size::U32 => { memory.read_bytes()[(next_addr + 8)] }
                         };
@@ -335,6 +357,7 @@ impl NP_Table {
                         
                         // not found yet, get next address
                         let next_ptr = match memory.size {
+                            NP_Size::U8 => u8::from_be_bytes([memory.get_1_byte(next_addr + 1).unwrap_or(0)]) as usize,
                             NP_Size::U16 => u16::from_be_bytes(*memory.get_2_bytes(next_addr + 2).unwrap_or(&[0; 2])) as usize,
                             NP_Size::U32 => u32::from_be_bytes(*memory.get_4_bytes(next_addr + 4).unwrap_or(&[0; 4])) as usize
                         };
@@ -352,6 +375,9 @@ impl NP_Table {
     
                     // set column index in pointer
                     match &memory.size {
+                        NP_Size::U8 => { 
+                            ptr_bytes[2] = column_index;
+                        },
                         NP_Size::U16 => { 
                             ptr_bytes[4] = column_index;
                         },
@@ -366,6 +392,10 @@ impl NP_Table {
 
                     // set previouse pointer's "next" value to this new pointer
                     match &memory.size {
+                        NP_Size::U8 => { 
+                            let addr_bytes = (addr as u8).to_be_bytes();
+                            write_bytes[(next_addr + 1)] = addr_bytes[0];
+                        },
                         NP_Size::U16 => { 
                             let addr_bytes = (addr as u16).to_be_bytes();
                             for x in 0..addr_bytes.len() {
@@ -435,6 +465,7 @@ impl NP_Table {
             while has_next {
 
                 let index = match &memory.size {
+                    NP_Size::U8  => { memory.read_bytes()[(curr_addr + 2)] },
                     NP_Size::U16 => { memory.read_bytes()[(curr_addr + 4)] },
                     NP_Size::U32 => { memory.read_bytes()[(curr_addr + 8)] }
                 };
@@ -445,6 +476,19 @@ impl NP_Table {
 
 
                     let next_pointer: u32 = match &memory.size {
+                        NP_Size::U8 => { 
+                            let next_pointer_bytes: [u8; 1];
+
+                            match memory.get_1_byte(curr_addr + 1) {
+                                Some(x) => {
+                                    next_pointer_bytes = [x];
+                                },
+                                None => {
+                                    return Err(NP_Error::new("Out of range request"));
+                                }
+                            }
+                            u8::from_be_bytes(next_pointer_bytes) as u32
+                        },
                         NP_Size::U16 => { 
                             let next_pointer_bytes: [u8; 2];
 
@@ -480,6 +524,10 @@ impl NP_Table {
                         let memory_bytes = memory.write_bytes();
 
                         match &memory.size {
+                            NP_Size::U8 => {
+                                let next_pointer_bytes = (next_pointer as u8).to_be_bytes();
+                                memory_bytes[(prev_addr + 1) as usize] = next_pointer_bytes[0];
+                            },
                             NP_Size::U16 => {
                                 let next_pointer_bytes = (next_pointer as u16).to_be_bytes();
                                 for x in 0..next_pointer_bytes.len() {
@@ -500,6 +548,7 @@ impl NP_Table {
                 
                 // not found yet, get next address
                 let next_ptr = match memory.size {
+                    NP_Size::U8 => u8::from_be_bytes([memory.get_1_byte(curr_addr + 1).unwrap_or(0)]) as usize,
                     NP_Size::U16 => u16::from_be_bytes(*memory.get_2_bytes(curr_addr + 2).unwrap_or(&[0; 2])) as usize,
                     NP_Size::U32 => u32::from_be_bytes(*memory.get_4_bytes(curr_addr + 4).unwrap_or(&[0; 4])) as usize
                 };
@@ -531,6 +580,7 @@ impl NP_Table {
         let memory_bytes = memory.write_bytes();
        
         let head_bytes = match memory.size {
+            NP_Size::U8 => { 0u8.to_be_bytes().to_vec() },
             NP_Size::U16 => { 0u16.to_be_bytes().to_vec() },
             NP_Size::U32 => { 0u32.to_be_bytes().to_vec() }
         };
@@ -559,6 +609,7 @@ impl NP_Table {
         let memory_bytes = memory.write_bytes();
        
         let addr_bytes = match memory.size {
+            NP_Size::U8 => { (addr as u8).to_be_bytes().to_vec() },
             NP_Size::U16 => { (addr as u16).to_be_bytes().to_vec() },
             NP_Size::U32 => { addr.to_be_bytes().to_vec() }
         };
@@ -617,6 +668,7 @@ impl NP_Table {
         while has_next {
 
             let index = match &memory.size {
+                NP_Size::U8 => { memory.read_bytes()[(next_addr + 2)] },
                 NP_Size::U16 => { memory.read_bytes()[(next_addr + 4)] },
                 NP_Size::U32 => { memory.read_bytes()[(next_addr + 8)] }
             };
@@ -624,6 +676,7 @@ impl NP_Table {
             // found our value!
             if index == *column_index {
                 let value_addr = match &memory.size {
+                    NP_Size::U8 => { u8::from_be_bytes([memory.get_1_byte(next_addr).unwrap_or(0)]) as u32 },
                     NP_Size::U16 => { u16::from_be_bytes(*memory.get_2_bytes(next_addr).unwrap_or(&[0; 2])) as u32 },
                     NP_Size::U32 => { u32::from_be_bytes(*memory.get_4_bytes(next_addr).unwrap_or(&[0; 4])) }
                 };
@@ -634,6 +687,7 @@ impl NP_Table {
             // not found yet, get next address
             
             next_addr = match &memory.size {
+                NP_Size::U8 => { u8::from_be_bytes([memory.get_1_byte(next_addr + 1).unwrap_or(0)]) as usize },
                 NP_Size::U16 => { u16::from_be_bytes(*memory.get_2_bytes(next_addr + 2).unwrap_or(&[0; 2])) as usize },
                 NP_Size::U32 => { u32::from_be_bytes(*memory.get_4_bytes(next_addr + 4).unwrap_or(&[0; 4])) as usize }
             };

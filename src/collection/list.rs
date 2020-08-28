@@ -70,6 +70,9 @@ impl<T: NP_Value + Default> NP_List<T> {
             let index_bytes = index.to_be_bytes();
 
             match memory.size {
+                NP_Size::U8 => {
+                    ptr_bytes[3] = (index as u8).to_be_bytes()[0];
+                },
                 NP_Size::U16 => {
                     for x in 0..index_bytes.len() {
                         ptr_bytes[x + 4] = index_bytes[x];
@@ -106,7 +109,8 @@ impl<T: NP_Value + Default> NP_List<T> {
 
                 let offset = match memory.size {
                     NP_Size::U32 => 8,
-                    NP_Size::U16 => 4
+                    NP_Size::U16 => 4,
+                    NP_Size::U8 => 2,
                 };
 
                 match memory.get_2_bytes(curr_addr + offset) {
@@ -134,6 +138,19 @@ impl<T: NP_Value + Default> NP_List<T> {
                         let mut ptr_bytes: Vec<u8> = memory.blank_ptr_bytes(&NP_PtrKinds::ListItem { addr: 0, i: 0, next: 0 }); // List item pointer
 
                         match &memory.size {
+                            NP_Size::U8 => {
+                                // set "next" value of this new pointer to current pointer in the loop
+                                let curr_addr_bytes = (curr_addr as u8).to_be_bytes();
+                                for x in 0..curr_addr_bytes.len() {
+                                    ptr_bytes[1 + x] = curr_addr_bytes[x]; 
+                                }
+ 
+                                // set index of the new pointer
+                                let index_bytes = (index as u8).to_be_bytes();
+                                for x in 0..index_bytes.len() {
+                                    ptr_bytes[2 + x] = index_bytes[x]; 
+                                }
+                            },
                             NP_Size::U16 => {
                                // set "next" value of this new pointer to current pointer in the loop
                                let curr_addr_bytes = (curr_addr as u16).to_be_bytes();
@@ -174,6 +191,13 @@ impl<T: NP_Value + Default> NP_List<T> {
                         let memory_write = memory.write_bytes();
 
                         match &memory.size {
+                            NP_Size::U8 => {
+                                let new_addr_bytes = (new_addr as u8).to_be_bytes();
+
+                                for x in 0..new_addr_bytes.len() {
+                                    memory_write[prev_addr + 1 + x] = new_addr_bytes[x];
+                                }
+                            },
                             NP_Size::U16 => {
                                 let new_addr_bytes = (new_addr as u16).to_be_bytes();
 
@@ -196,6 +220,7 @@ impl<T: NP_Value + Default> NP_List<T> {
                     // not found yet, get next address
 
                     let next_ptr = match &memory.size {
+                        NP_Size::U8 => u8::from_be_bytes([memory.get_1_byte(curr_addr + 1).unwrap_or(0)]) as usize,
                         NP_Size::U16 => u16::from_be_bytes(*memory.get_2_bytes(curr_addr + 2).unwrap_or(&[0; 2])) as usize,
                         NP_Size::U32 => u32::from_be_bytes(*memory.get_4_bytes(curr_addr + 4).unwrap_or(&[0; 4])) as usize
                     };
@@ -220,9 +245,27 @@ impl<T: NP_Value + Default> NP_List<T> {
             let column_index_bytes = index.to_be_bytes();
 
             let addr = match &memory.size {
+                NP_Size::U8 => {
+                    let new_index_bytes = (index as u8).to_be_bytes();
+                    for x in 0..new_index_bytes.len() {
+                        ptr_bytes[2 + x] = new_index_bytes[x];
+                    }
+            
+                    let addr = memory.malloc(ptr_bytes.to_vec())?;
+        
+                    // set previouse pointer's "next" value to this new pointer
+                    let addr_bytes = (addr as u8).to_be_bytes();
+                    let memory_write = memory.write_bytes();
+                    for x in 0..addr_bytes.len() {
+                        memory_write[(curr_addr + 1 + x)] = addr_bytes[x];
+                    }
+        
+                    self.set_tail(addr);
+                    addr
+                },
                 NP_Size::U16 => {
                     for x in 0..column_index_bytes.len() {
-                        ptr_bytes[4+ x] = column_index_bytes[x];
+                        ptr_bytes[4 + x] = column_index_bytes[x];
                     }
             
                     let addr = memory.malloc(ptr_bytes.to_vec())?;
@@ -260,53 +303,6 @@ impl<T: NP_Value + Default> NP_List<T> {
             return Ok(NP_Ptr::_new_list_item_ptr(addr as u32, list_of, memory));
         }
     }
-/*
-    pub fn debug<F>(&self, mut callback: F) -> Result<bool, NP_Error> where F: FnMut(u16, u32, u32) {
-        callback(0, self.address, self.head);
-
-        let mut curr_addr = self.head as usize;
-
-        let mut do_continue = true;
-
-        let memory = match &self.memory {
-            Some(x) => Rc::clone(x),
-            None => unreachable!()
-        };
-
-        while do_continue {
-
-            let ptr_index: u16;
-
-            let index_bytes: [u8; 2];
-
-            match memory.get_2_bytes(curr_addr + 8) {
-                Some(x) => {
-                    index_bytes = *x;
-                },
-                None => {
-                    return Err(NP_Error::new("Out of range request"));
-                }
-            }
-
-            ptr_index = u16::from_be_bytes(index_bytes);
-            
-
-            let next_bytes: [u8; 4] = *memory.get_4_bytes(curr_addr + 4).unwrap_or(&[0; 4]);
-            let next_ptr = u32::from_be_bytes(next_bytes) as usize;
-            callback(ptr_index, curr_addr as u32, next_ptr as u32);
-            if next_ptr == 0 { // out of values to check
-                do_continue = false;
-            } else {
-                // set next pointer for next loop
-                curr_addr = next_ptr;
-            }
-        }
-
-        callback(0, self.address, self.tail);
-
-        Ok(true)
-    }
-*/
 
     /// Deletes a value from the list, including it's pointer.
     pub fn delete(&mut self, index: u16) -> Result<bool, NP_Error> {
@@ -347,6 +343,31 @@ impl<T: NP_Value + Default> NP_List<T> {
                 if ptr_index == index {
 
                     match memory.size {
+                        NP_Size::U8 => {
+                            let next_pointer_bytes: u8;
+
+                            match memory.get_1_byte(curr_addr + 1) {
+                                Some(x) => {
+                                    next_pointer_bytes = x;
+                                },
+                                None => {
+                                    return Err(NP_Error::new("Out of range request"));
+                                }
+                            }
+        
+                            if curr_addr == self.head as usize { // item is HEAD
+                                self.set_head(u8::from_be_bytes([next_pointer_bytes]) as u32);
+                            } else { // item is NOT head
+                        
+                                let memory_bytes = memory.write_bytes();
+                        
+                                memory_bytes[(prev_addr + 1) as usize] = next_pointer_bytes;
+                            }
+        
+                            if curr_addr as u32 == self.tail { // item is tail
+                                self.set_tail(prev_addr)
+                            }
+                        },
                         NP_Size::U16 => {
                             let next_pointer_bytes: [u8; 2];
 
@@ -411,6 +432,9 @@ impl<T: NP_Value + Default> NP_List<T> {
                 }
 
                 let next_ptr = match &memory.size {
+                    NP_Size::U8 => {
+                        u8::from_be_bytes([memory.get_1_byte(curr_addr + 1).unwrap_or(0)]) as usize
+                    },
                     NP_Size::U16 => {
                         u16::from_be_bytes(*memory.get_2_bytes(curr_addr + 2).unwrap_or(&[0; 2])) as usize
                     },
@@ -444,6 +468,7 @@ impl<T: NP_Value + Default> NP_List<T> {
         };
 
         let tail_index = match &memory.size {
+            NP_Size::U8 => [0, memory.get_1_byte((self.tail + 2) as usize).unwrap_or(0)],
             NP_Size::U16 => *memory.get_2_bytes((self.tail + 4) as usize).unwrap_or(&[0; 2]),
             NP_Size::U32 => *memory.get_2_bytes((self.tail + 8) as usize).unwrap_or(&[0; 2])
         };
@@ -473,11 +498,13 @@ impl<T: NP_Value + Default> NP_List<T> {
         let index_address_bytes = *memory.get_2_bytes((self.head + 8) as usize).unwrap_or(&[0; 2]);
 
         let value_address = match &memory.size {
+            NP_Size::U8 => u8::from_be_bytes([memory.get_1_byte(self.head as usize).unwrap_or(0)]) as u32,
             NP_Size::U16 => u16::from_be_bytes(*memory.get_2_bytes(self.head as usize).unwrap_or(&[0; 2])) as u32,
             NP_Size::U32 => u32::from_be_bytes(*memory.get_4_bytes(self.head as usize).unwrap_or(&[0; 4]))
         };
 
         let next_address = match &memory.size {
+            NP_Size::U8 => u8::from_be_bytes([memory.get_1_byte((self.head + 1) as usize).unwrap_or(0)]) as u32,
             NP_Size::U16 => u16::from_be_bytes(*memory.get_2_bytes((self.head + 2) as usize).unwrap_or(&[0; 2])) as u32,
             NP_Size::U32 => u32::from_be_bytes(*memory.get_4_bytes((self.head + 4) as usize).unwrap_or(&[0; 4]))
         };
@@ -530,6 +557,9 @@ impl<T: NP_Value + Default> NP_List<T> {
 
             // set index in pointer
             match memory.size {
+                NP_Size::U8 => {
+                    ptr_bytes[3] = 0;
+                },
                 NP_Size::U16 => {
                     for x in 0..0u16.to_be_bytes().len() {
                         ptr_bytes[x + 4] = 0;
@@ -559,6 +589,7 @@ impl<T: NP_Value + Default> NP_List<T> {
             let tail_index_bytes = match &memory.size {
                 NP_Size::U32 => *memory.get_2_bytes((tail_addr + 8) as usize).unwrap_or(&[0; 2]),
                 NP_Size::U16 => *memory.get_2_bytes((tail_addr + 4) as usize).unwrap_or(&[0; 2]),
+                NP_Size::U8 => [0, memory.get_1_byte((tail_addr + 2) as usize).unwrap_or(0)],
             };
 
             if (u16::from_be_bytes(tail_index_bytes) + 1) as u32 > core::u16::MAX as u32 {
@@ -572,6 +603,7 @@ impl<T: NP_Value + Default> NP_List<T> {
             let mult = match &memory.size {
                 NP_Size::U32 => 4,
                 NP_Size::U16 => 2,
+                NP_Size::U8 => 1
             } as u32;
 
             // set index in new pointer
@@ -587,6 +619,7 @@ impl<T: NP_Value + Default> NP_List<T> {
             let next_addr_bytes = match &memory.size {
                 NP_Size::U32 => addr.to_be_bytes().to_vec(),
                 NP_Size::U16 => (addr as u16).to_be_bytes().to_vec(),
+                NP_Size::U8 => (addr as u8).to_be_bytes().to_vec(),
             };
             
             let memory_write = memory.write_bytes();
@@ -641,6 +674,9 @@ impl<T: NP_Value + Default> NP_List<T> {
                 // not found yet, get next address
 
                 let next_ptr = match &memory.size {
+                    NP_Size::U8 => {
+                        u8::from_be_bytes([memory.get_1_byte(curr_addr + 1).unwrap_or(0)]) as usize
+                    },
                     NP_Size::U16 => {
                         u16::from_be_bytes(*memory.get_2_bytes(curr_addr + 2).unwrap_or(&[0; 2])) as usize
                     },
@@ -671,6 +707,7 @@ impl<T: NP_Value + Default> NP_List<T> {
         let addr_bytes = match &memory.size {
             NP_Size::U32 => addr.to_be_bytes().to_vec(),
             NP_Size::U16 => (addr as u16).to_be_bytes().to_vec(),
+            NP_Size::U8 => (addr as u8).to_be_bytes().to_vec()
         };
 
         let memory_bytes = memory.write_bytes();
@@ -692,6 +729,7 @@ impl<T: NP_Value + Default> NP_List<T> {
         let addr_bytes = match &memory.size {
             NP_Size::U32 => addr.to_be_bytes().to_vec(),
             NP_Size::U16 => (addr as u16).to_be_bytes().to_vec(),
+            NP_Size::U8 => (addr as u8).to_be_bytes().to_vec()
         };
 
 
@@ -700,6 +738,7 @@ impl<T: NP_Value + Default> NP_List<T> {
         let offset = match &memory.size {
             NP_Size::U32 => 4,
             NP_Size::U16 => 2,
+            NP_Size::U8 => 1
         };
 
         for x in 0..addr_bytes.len() {
@@ -733,11 +772,28 @@ impl<T: NP_Value + Default> NP_Value for NP_List<T> {
                 let mut addr = ptr.kind.get_value_addr(); // get pointer of list (head/tail)
 
                 match &ptr.memory.size {
+                    NP_Size::U8 => {
+                        let mut head: [u8; 1] = [0; 1];
+                        let mut tail: [u8; 1] = [0; 1];
+
+                        if addr == 0 {
+                            // no list here, make one
+                            addr = ptr.memory.malloc([0u8; 2].to_vec())?; // stores HEAD & TAIL for list
+                            ptr.memory.set_value_address(ptr.location, addr, &ptr.kind);
+                        } else {
+                            // existing head, read value
+                            let a = addr as usize;
+                            head = [ptr.memory.get_1_byte(a).unwrap_or(0)];
+                            tail = [ptr.memory.get_1_byte(a + 1).unwrap_or(0)];
+                        }
+
+        
+                        Ok(Some(Box::new(Self::new(addr, u8::from_be_bytes(head) as u32, u8::from_be_bytes(tail) as u32, ptr.memory, Rc::clone(of ))?)))
+                    },
                     NP_Size::U16 => {
                         let mut head: [u8; 2] = [0; 2];
                         let mut tail: [u8; 2] = [0; 2];
 
-        
                         if addr == 0 {
                             // no list here, make one
                             addr = ptr.memory.malloc([0u8; 4].to_vec())?; // stores HEAD & TAIL for list
@@ -781,7 +837,8 @@ impl<T: NP_Value + Default> NP_Value for NP_List<T> {
         // head + tail;,
         let base_size = match ptr.memory.size {
             NP_Size::U32 => 8u32,
-            NP_Size::U16 => 4u32
+            NP_Size::U16 => 4u32,
+            NP_Size::U8 => 2u32
         };
 
         match &*ptr.schema.kind {
@@ -796,10 +853,12 @@ impl<T: NP_Value + Default> NP_Value for NP_List<T> {
                 // existing head, read value
                 let a = addr as usize;
                 let head = match &ptr.memory.size {
+                    NP_Size::U8 => u8::from_be_bytes([ptr.memory.get_1_byte(a).unwrap_or(0)]) as u32,
                     NP_Size::U16 => u16::from_be_bytes(*ptr.memory.get_2_bytes(a).unwrap_or(&[0; 2])) as u32,
                     NP_Size::U32 => u32::from_be_bytes(*ptr.memory.get_4_bytes(a).unwrap_or(&[0; 4]))
                 };
                 let tail = match &ptr.memory.size {
+                    NP_Size::U8 => u8::from_be_bytes([ptr.memory.get_1_byte(a + 1).unwrap_or(0)]) as u32,
                     NP_Size::U16 => u16::from_be_bytes(*ptr.memory.get_2_bytes(a + 2).unwrap_or(&[0; 2])) as u32,
                     NP_Size::U32 => u32::from_be_bytes(*ptr.memory.get_4_bytes(a + 4).unwrap_or(&[0; 4]))
                 };
@@ -836,10 +895,12 @@ impl<T: NP_Value + Default> NP_Value for NP_List<T> {
 
                 let a = addr as usize;
                 let head = match &ptr.memory.size {
+                    NP_Size::U8 => u8::from_be_bytes([ptr.memory.get_1_byte(a).unwrap_or(0)]) as u32,
                     NP_Size::U16 => u16::from_be_bytes(*ptr.memory.get_2_bytes(a).unwrap_or(&[0; 2])) as u32,
                     NP_Size::U32 => u32::from_be_bytes(*ptr.memory.get_4_bytes(a).unwrap_or(&[0; 4]))
                 };
                 let tail = match &ptr.memory.size {
+                    NP_Size::U8 => u8::from_be_bytes([ptr.memory.get_1_byte(a + 1).unwrap_or(0)]) as u32,
                     NP_Size::U16 => u16::from_be_bytes(*ptr.memory.get_2_bytes(a + 2).unwrap_or(&[0; 2])) as u32,
                     NP_Size::U32 => u32::from_be_bytes(*ptr.memory.get_4_bytes(a + 4).unwrap_or(&[0; 4]))
                 };
@@ -964,15 +1025,20 @@ impl<T: NP_Value + Default + > Iterator for NP_List_Iterator<T> {
         }
 
         let offset = match self.memory.size {
+            NP_Size::U8 => 2,
             NP_Size::U16 => 4,
             NP_Size::U32 => 8
         };
 
-        let ptr_index: u16 = u16::from_be_bytes(*self.memory.get_2_bytes((self.current_address + offset) as usize).unwrap_or(&[0; 2]));
+        let ptr_index: u16 = match &self.memory.size {
+            NP_Size ::U8 => u8::from_be_bytes([self.memory.get_1_byte((self.current_address + offset) as usize).unwrap_or(0)]) as u16,
+            _ => u16::from_be_bytes(*self.memory.get_2_bytes((self.current_address + offset) as usize).unwrap_or(&[0; 2]))
+        };
 
         if ptr_index == self.current_index { // pointer matches current index
 
             let value_address = match &self.memory.size {
+                NP_Size::U8 => u8::from_be_bytes([self.memory.get_1_byte(self.current_address as usize).unwrap_or(0)]) as u32,
                 NP_Size::U16 => u16::from_be_bytes(*self.memory.get_2_bytes(self.current_address as usize).unwrap_or(&[0; 2])) as u32,
                 NP_Size::U32 => u32::from_be_bytes(*self.memory.get_4_bytes(self.current_address as usize).unwrap_or(&[0; 4]))
             };
@@ -980,6 +1046,7 @@ impl<T: NP_Value + Default + > Iterator for NP_List_Iterator<T> {
             let this_address = self.current_address;
             // point to next value
             self.current_address = match &self.memory.size {
+                NP_Size::U8 => u8::from_be_bytes([self.memory.get_1_byte((self.current_address + 1) as usize).unwrap_or(0)]) as u32,
                 NP_Size::U16 => u16::from_be_bytes(*self.memory.get_2_bytes((self.current_address + 2) as usize).unwrap_or(&[0; 2])) as u32,
                 NP_Size::U32 => u32::from_be_bytes(*self.memory.get_4_bytes((self.current_address + 4) as usize).unwrap_or(&[0; 4]))
             };

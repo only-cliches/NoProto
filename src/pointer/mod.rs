@@ -473,11 +473,13 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
             kind: NP_PtrKinds::TableItem { 
                 addr: match &memory.size {
                     NP_Size::U32 => u32::from_be_bytes(*memory.get_4_bytes(addr).unwrap_or(&[0; 4])),
-                    NP_Size::U16 => u16::from_be_bytes(*memory.get_2_bytes(addr).unwrap_or(&[0; 2])) as u32
+                    NP_Size::U16 => u16::from_be_bytes(*memory.get_2_bytes(addr).unwrap_or(&[0; 2])) as u32,
+                    NP_Size::U8 => u8::from_be_bytes([memory.get_1_byte(addr).unwrap_or(0)]) as u32
                 },
                 next: match &memory.size {
                     NP_Size::U32 => u32::from_be_bytes(*memory.get_4_bytes(addr + 4).unwrap_or(&[0; 4])),
                     NP_Size::U16 => u16::from_be_bytes(*memory.get_2_bytes(addr + 2).unwrap_or(&[0; 2])) as u32,
+                    NP_Size::U8 => u8::from_be_bytes([memory.get_1_byte(addr + 1).unwrap_or(0)]) as u32
                 },
                 i: match &memory.size {
                     NP_Size::U32 => b_bytes[addr + 8],
@@ -501,15 +503,18 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
             kind: NP_PtrKinds::MapItem { 
                 addr: match &memory.size {
                     NP_Size::U32 => u32::from_be_bytes(*memory.get_4_bytes(addr).unwrap_or(&[0; 4])),
-                    NP_Size::U16 => u16::from_be_bytes(*memory.get_2_bytes(addr).unwrap_or(&[0; 2])) as u32
+                    NP_Size::U16 => u16::from_be_bytes(*memory.get_2_bytes(addr).unwrap_or(&[0; 2])) as u32,
+                    NP_Size::U8 => u8::from_be_bytes([memory.get_1_byte(addr).unwrap_or(0)]) as u32
                 },
                 next: match &memory.size {
                     NP_Size::U32 => u32::from_be_bytes(*memory.get_4_bytes(addr + 4).unwrap_or(&[0; 4])),
-                    NP_Size::U16 => u16::from_be_bytes(*memory.get_2_bytes(addr + 2).unwrap_or(&[0; 2])) as u32
+                    NP_Size::U16 => u16::from_be_bytes(*memory.get_2_bytes(addr + 2).unwrap_or(&[0; 2])) as u32,
+                    NP_Size::U8 => u8::from_be_bytes([memory.get_1_byte(addr + 1).unwrap_or(0)]) as u32
                 },
                 key: match &memory.size {
                     NP_Size::U32 => u32::from_be_bytes(*memory.get_4_bytes(addr + 8).unwrap_or(&[0; 4])),
-                    NP_Size::U16 => u16::from_be_bytes(*memory.get_2_bytes(addr + 4).unwrap_or(&[0; 2])) as u32
+                    NP_Size::U16 => u16::from_be_bytes(*memory.get_2_bytes(addr + 4).unwrap_or(&[0; 2])) as u32,
+                    NP_Size::U8 => u8::from_be_bytes([memory.get_1_byte(addr + 2).unwrap_or(0)]) as u32
                 }
             },
             memory: memory,
@@ -528,15 +533,18 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
             kind: NP_PtrKinds::ListItem { 
                 addr: match &memory.size {
                     NP_Size::U32 => u32::from_be_bytes(*memory.get_4_bytes(addr).unwrap_or(&[0; 4])),
-                    NP_Size::U16 => u16::from_be_bytes(*memory.get_2_bytes(addr).unwrap_or(&[0; 2])) as u32
+                    NP_Size::U16 => u16::from_be_bytes(*memory.get_2_bytes(addr).unwrap_or(&[0; 2])) as u32,
+                    NP_Size::U8 => u8::from_be_bytes([memory.get_1_byte(addr).unwrap_or(0)]) as u32
                 },
                 next: match &memory.size {
                     NP_Size::U32 => u32::from_be_bytes(*memory.get_4_bytes(addr + 4).unwrap_or(&[0; 4])),
-                    NP_Size::U16 => u16::from_be_bytes(*memory.get_2_bytes(addr + 2).unwrap_or(&[0; 2])) as u32
+                    NP_Size::U16 => u16::from_be_bytes(*memory.get_2_bytes(addr + 2).unwrap_or(&[0; 2])) as u32,
+                    NP_Size::U8 => u8::from_be_bytes([memory.get_1_byte(addr + 1).unwrap_or(0)]) as u32
                 },
                 i: match &memory.size {
                     NP_Size::U32 => u16::from_be_bytes(*memory.get_2_bytes(addr + 8).unwrap_or(&[0; 2])),
-                    NP_Size::U16 => u16::from_be_bytes(*memory.get_2_bytes(addr + 4).unwrap_or(&[0; 2]))
+                    NP_Size::U16 => u16::from_be_bytes(*memory.get_2_bytes(addr + 4).unwrap_or(&[0; 2])),
+                    NP_Size::U8 => u8::from_be_bytes([memory.get_1_byte(addr + 2).unwrap_or(0)]) as u16
                 }
             },
             memory: memory,

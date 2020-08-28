@@ -5,8 +5,7 @@ fn main() -> Result<(), NP_Error> {
     // JSON is used to describe schema for the factory
     // Each factory represents a single schema
     // One factory can be used to serialize/deserialize any number of buffers
-    let user_factory = NP_Factory::new(
-        r#"{
+    let user_factory = NP_Factory::new(r#"{
         "type": "table",
         "columns": [
             ["name",   {"type": "string"}],
@@ -15,8 +14,7 @@ fn main() -> Result<(), NP_Error> {
                 "type": "string"
             }}]
         ]
-    }"#,
-    )?;
+    }"#)?;
 
     println!("\n= Quick Example =\n");
 

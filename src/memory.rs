@@ -114,29 +114,29 @@ impl<'a> NP_Memory {
         match self.size {
             NP_Size::U32 => {
                 match ptr {
-                    NP_PtrKinds::None                                     =>   { 0u32 },
-                    NP_PtrKinds::Standard  { addr: _ }                   =>    { 4u32 },
-                    NP_PtrKinds::MapItem   { addr: _, key: _,  next: _ } =>    { 12u32 },
-                    NP_PtrKinds::TableItem { addr: _, i:_ ,    next: _ } =>    { 9u32 },
-                    NP_PtrKinds::ListItem  { addr: _, i:_ ,    next: _ } =>    { 10u32 }
+                    NP_PtrKinds::None                                     =>   {  0 },
+                    NP_PtrKinds::Standard  { addr: _ }                   =>    {  4 },
+                    NP_PtrKinds::MapItem   { addr: _, key: _,  next: _ } =>    { 12 },
+                    NP_PtrKinds::TableItem { addr: _, i:_ ,    next: _ } =>    {  9 },
+                    NP_PtrKinds::ListItem  { addr: _, i:_ ,    next: _ } =>    { 10 }
                 }
             },
             NP_Size::U16 => {
                 match ptr {
-                    NP_PtrKinds::None                                     =>   { 0u32 },
-                    NP_PtrKinds::Standard  { addr: _ }                   =>    { 2u32 },
-                    NP_PtrKinds::MapItem   { addr: _, key: _,  next: _ } =>    { 6u32 },
-                    NP_PtrKinds::TableItem { addr: _, i:_ ,    next: _ } =>    { 5u32 },
-                    NP_PtrKinds::ListItem  { addr: _, i:_ ,    next: _ } =>    { 6u32 }
+                    NP_PtrKinds::None                                     =>   { 0 },
+                    NP_PtrKinds::Standard  { addr: _ }                   =>    { 2 },
+                    NP_PtrKinds::MapItem   { addr: _, key: _,  next: _ } =>    { 6 },
+                    NP_PtrKinds::TableItem { addr: _, i:_ ,    next: _ } =>    { 5 },
+                    NP_PtrKinds::ListItem  { addr: _, i:_ ,    next: _ } =>    { 6 }
                 }
             },
             NP_Size::U8 => {
                 match ptr {
-                    NP_PtrKinds::None                                     =>   { 0u32 },
-                    NP_PtrKinds::Standard  { addr: _ }                   =>    { 1u32 },
-                    NP_PtrKinds::MapItem   { addr: _, key: _,  next: _ } =>    { 3u32 },
-                    NP_PtrKinds::TableItem { addr: _, i:_ ,    next: _ } =>    { 3u32 },
-                    NP_PtrKinds::ListItem  { addr: _, i:_ ,    next: _ } =>    { 4u32 }
+                    NP_PtrKinds::None                                     =>   { 0 },
+                    NP_PtrKinds::Standard  { addr: _ }                   =>    { 1 },
+                    NP_PtrKinds::MapItem   { addr: _, key: _,  next: _ } =>    { 3 },
+                    NP_PtrKinds::TableItem { addr: _, i:_ ,    next: _ } =>    { 3 },
+                    NP_PtrKinds::ListItem  { addr: _, i:_ ,    next: _ } =>    { 3 }
                 }
             }
         }

@@ -68,6 +68,7 @@ impl NP_Tuple {
         };
 
         let location = match rc_memory.size {
+            NP_Size::U8 => {addr + (index as u32 * 1) },
             NP_Size::U16 => {addr + (index as u32 * 2) },
             NP_Size::U32 => {addr + (index as u32 * 4) } 
         };
@@ -113,7 +114,8 @@ impl NP_Tuple {
 
         let byte_count = match memory.size {
             NP_Size::U32 => length * 4,
-            NP_Size::U16 => length * 2
+            NP_Size::U16 => length * 2,
+            NP_Size::U8 => length * 1
         };
 
         for x in 0..byte_count {
@@ -151,6 +153,9 @@ impl NP_Value for NP_Tuple {
 
                 for x in 0..values.len() as u32 {
                     match &ptr.memory.size {
+                        NP_Size::U8 => {
+                            value_addrs.push(addr + (x * 1));
+                        },
                         NP_Size::U16 => {
                             value_addrs.push(addr + (x * 2));
                         },
@@ -163,6 +168,7 @@ impl NP_Value for NP_Tuple {
                 if addr == 0 {
 
                     let length = match &ptr.memory.size {
+                        NP_Size::U8  => 1 * values.len(),
                         NP_Size::U16 => 2 * values.len(),
                         NP_Size::U32 => 4 * values.len()
                     };
@@ -218,6 +224,7 @@ impl NP_Value for NP_Tuple {
                     } else {
                         // empty pointer
                         acc_size += match &ptr.memory.size {
+                            NP_Size::U8  => 1,
                             NP_Size::U16 => 2,
                             NP_Size::U32 => 4
                         };
