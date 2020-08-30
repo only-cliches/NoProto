@@ -14,7 +14,7 @@ use core::convert::TryInto;
 use alloc::string::String;
 use alloc::boxed::Box;
 use alloc::borrow::ToOwned;
-use alloc::{rc::Rc, string::ToString};
+use alloc::{string::ToString};
 use super::NP_Lite_Ptr;
 
 /// Represents a fixed point decimal number.
@@ -1527,6 +1527,25 @@ impl NP_ULID {
 }
 
 
+impl NP_Schema_Parser for NP_ULID {
+
+    fn type_key(&self) -> u8 { NP_TypeKeys::Ulid as u8 }
+
+    fn from_json_to_state(&self, json_schema: &NP_JSON) -> Result<Option<Vec<u8>>, NP_Error> {
+
+        let type_str = NP_Schema::get_type(json_schema)?;
+
+        if "ulid" == type_str {
+            let mut schema_data: Vec<u8> = Vec::new();
+            schema_data.push(NP_TypeKeys::Ulid as u8);
+            return Ok(Some(schema_data));
+        }
+        
+        Ok(None)
+    }
+}
+
+
 impl Default for NP_ULID {
     fn default() -> Self { 
         NP_ULID { id: 0, time: 0 }
@@ -1623,10 +1642,7 @@ impl NP_Value for NP_ULID {
                         NP_JSON::String(y.to_string())
                     },
                     None => {
-                        match &ptr.schema.default {
-                            Some(x) => x.clone(),
-                            None => NP_JSON::Null
-                        }
+                        NP_JSON::Null
                     }
                 }
             },
@@ -1730,14 +1746,29 @@ impl Default for NP_UUID {
      }
 }
 
+
+impl NP_Schema_Parser for NP_UUID {
+
+    fn type_key(&self) -> u8 { NP_TypeKeys::Uuid as u8 }
+
+    fn from_json_to_state(&self, json_schema: &NP_JSON) -> Result<Option<Vec<u8>>, NP_Error> {
+
+        let type_str = NP_Schema::get_type(json_schema)?;
+
+        if "ulid" == type_str {
+            let mut schema_data: Vec<u8> = Vec::new();
+            schema_data.push(NP_TypeKeys::Uuid as u8);
+            return Ok(Some(schema_data));
+        }
+        
+        Ok(None)
+    }
+}
+
 impl NP_Value for NP_UUID {
 
-    fn is_type( type_str: &str) -> bool {
-        "uuid" == type_str
-    }
-
-    fn type_idx() -> (u8, String) { (NP_TypeKeys::Uuid as i64, "uuid".to_owned()) }
-    fn self_type_idx(&self) -> (u8, String) { (NP_TypeKeys::Uuid as i64, "uuid".to_owned()) }
+    fn type_idx() -> (u8, String) { (NP_TypeKeys::Uuid as u8, "uuid".to_owned()) }
+    fn self_type_idx(&self) -> (u8, String) { (NP_TypeKeys::Uuid as u8, "uuid".to_owned()) }
 
     fn set_value(ptr: NP_Lite_Ptr, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
 
@@ -1794,10 +1825,7 @@ impl NP_Value for NP_UUID {
                         NP_JSON::String(y.to_string())
                     },
                     None => {
-                        match &ptr.schema.default {
-                            Some(x) => x.clone(),
-                            None => NP_JSON::Null
-                        }
+                        NP_JSON::Null
                     }
                 }
             },
@@ -1846,6 +1874,31 @@ impl NP_Option {
     pub fn set(&mut self, value: Option<String>) {
         self.value = value;
     }
+
+    pub fn get_schema_state(schema_ptr: &NP_Schema_Ptr) -> NP_Option_Schema_State {
+        let default_index: Option<u8> = None;
+
+        if schema_ptr.schema.bytes[schema_ptr.address + 1] > 0 {
+            default_index = Some(schema_ptr.schema.bytes[schema_ptr.address + 1] - 1);
+        }
+
+        let choices_len = schema_ptr.schema.bytes[schema_ptr.address + 2];
+
+        let mut choices: Vec<String> = Vec::new();
+        let mut offset: usize = schema_ptr.address + 3;
+        for x in 0..choices_len {
+            let choice_size = schema_ptr.schema.bytes[offset] as usize;
+            let choice_bytes = &schema_ptr.schema.bytes[(offset + 1)..(offset + 1 + choice_size)];
+            choices.push(String::from_utf8_lossy(choice_bytes).into());
+            offset += 1 + choice_size;
+        }
+
+
+        NP_Option_Schema_State {
+            default: default_index,
+            choices: choices
+        }
+    }
 }
 
 impl Default for NP_Option {
@@ -1854,107 +1907,143 @@ impl Default for NP_Option {
      }
 }
 
+/// The schema state for NP_Option type
+#[derive(Clone, Debug)]
+struct NP_Option_Schema_State {
+    pub default: Option<u8>,
+    pub choices: Vec<String>
+}
+
+impl NP_Schema_Parser for NP_Option {
+
+    fn type_key(&self) -> u8 { NP_TypeKeys::Enum as u8 }
+
+    fn from_json_to_state(&self, json_schema: &NP_JSON) -> Result<Option<Vec<u8>>, NP_Error> {
+
+        let type_str = NP_Schema::get_type(json_schema)?;
+
+        if "option" == type_str || "enum" == type_str {
+            let mut schema_data: Vec<u8> = Vec::new();
+            schema_data.push(NP_TypeKeys::Enum as u8);
+
+            let mut choices: Vec<String> = Vec::new();
+
+            let default_stir: Option<String> = None;
+
+            match json_schema["default"] {
+                NP_JSON::String(def) => {
+                    default_stir = Some(def);
+                },
+                _ => {}
+            }
+
+            let default_index: Option<u8> = None;
+
+            match json_schema["choices"] {
+                NP_JSON::Array(x) => {
+                    for opt in x {
+                        match opt {
+                            NP_JSON::String(stir) => {
+                                if stir.len() > 255 {
+                                    return Err(NP_Error::new("'option' choices cannot be longer than 255 characters each!"))
+                                }
+                                if let Some(def) = default_stir {
+                                    if def == stir {
+                                        default_index = Some(choices.len() as u8);
+                                    }
+                                }
+                                choices.push(stir);
+                            },
+                            _ => {}
+                        }
+                    }
+                },
+                _ => {
+                    return Err(NP_Error::new("'option' type requires a 'choices' key with an array of strings!"))
+                }
+            }
+
+            if choices.len() > 254 {
+                return Err(NP_Error::new("'option' type cannot have more than 254 choices!"))
+            }
+
+            // default value
+            match default_index {
+                Some(x) => schema_data.push(x + 1),
+                None => schema_data.push(0)
+            }
+
+            // choices
+            schema_data.push(choices.len() as u8);
+            for choice in choices {
+                schema_data.push(choice.len() as u8);
+                schema_data.extend(choice.as_bytes().to_vec())
+            }
+
+            return Ok(Some(schema_data));
+        }
+        
+        Ok(None)
+    }
+}
+
 impl NP_Value for NP_Option {
 
-    fn is_type( type_str: &str) -> bool {
-        "option" == type_str || "enum" == type_str
-    }
-
-    fn type_idx() -> (u8, String) { (NP_TypeKeys::Enum as i64, "option".to_owned()) }
-    fn self_type_idx(&self) -> (u8, String) { (NP_TypeKeys::Enum as i64, "option".to_owned()) }
+    fn type_idx() -> (u8, String) { (NP_TypeKeys::Enum as u8, "option".to_owned()) }
+    fn self_type_idx(&self) -> (u8, String) { (NP_TypeKeys::Enum as u8, "option".to_owned()) }
 
     fn schema_default(schema: &NP_Schema_Ptr) -> Option<Box<Self>> {
-        match &schema.default {
-            Some(x) => {
-                match x {
-                    NP_JSON::Integer(x) => {
-                        match &*schema.kind {
-                            NP_SchemaKinds::Enum { choices } => {
-                                let mut str_value: String = "".to_owned();
-                                let mut ct: i64 = 0;
 
-                                for opt in choices {
-                                    if ct == *x {
-                                        str_value = opt.clone();
-                                    }
-                                    ct += 1;
-                                };
+        let schema_state = NP_Option::get_schema_state(&schema);
 
-                                Some(Box::new(NP_Option::new(str_value)))
-                            },
-                            _ => {
-                                None
-                            }
-                        }
-                    },
-                    NP_JSON::String(x) => {
-                        Some(Box::new(NP_Option::new(x.clone())))
-                    },
-                    _ => {
-                        None
-                    }
-                }
-            },
-            None => {
-                None
-            }
+        if let Some(idx) = schema_state.default {
+            Some(Box::new(NP_Option { value: Some(schema_state.choices[idx as usize]) }))
+        } else {
+            None
         }
     }
 
     fn set_value(ptr: NP_Lite_Ptr, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
 
         let mut addr = ptr.kind.get_value_addr();
-        
-        match &*ptr.schema.kind {
-            NP_SchemaKinds::Enum { choices } => {
 
-                let mut value_num: i32 = -1;
+        let schema_state = NP_Option::get_schema_state(&ptr.schema);
 
-                {
-                    let mut ct: u16 = 0;
+        let mut value_num: i32 = -1;
 
-                    for opt in choices {
-                        if value.value == Some(opt.to_string()) {
-                            value_num = ct as i32;
-                        }
-                        ct += 1;
-                    };
+        {
+            let mut ct: u16 = 0;
 
-                    if value_num == -1 {
-                        return Err(NP_Error::new("Option not found, cannot set uknown option!"));
-                    }
+            for opt in schema_state.choices {
+                if value.value == Some(opt.to_string()) {
+                    value_num = ct as i32;
                 }
+                ct += 1;
+            };
 
-                let bytes = (value_num as u8).to_be_bytes();
-
-                if addr != 0 { // existing value, replace
-
-                    let write_bytes = ptr.memory.write_bytes();
-
-                    // overwrite existing values in buffer
-                    for x in 0..bytes.len() {
-                        write_bytes[(addr + x as u32) as usize] = bytes[x as usize];
-                    }
-                    return Ok(ptr.kind);
-
-                } else { // new value
-
-                    addr = ptr.memory.malloc(bytes.to_vec())?;
-
-                    return Ok(ptr.memory.set_value_address(ptr.location, addr as u32, &ptr.kind));
-                }                    
-                
-                
-            },
-            _ => {
-                let mut err = "TypeError: Attempted to cast type (".to_owned();
-                err.push_str("option");
-                err.push_str(") to schema of type (");
-                err.push_str(ptr.schema.type_data.1.as_str());
-                err.push_str(")");
-                Err(NP_Error::new(err))
+            if value_num == -1 {
+                return Err(NP_Error::new("Option not found, cannot set uknown option!"));
             }
         }
+
+        let bytes = (value_num as u8).to_be_bytes();
+
+        if addr != 0 { // existing value, replace
+
+            let write_bytes = ptr.memory.write_bytes();
+
+            // overwrite existing values in buffer
+            for x in 0..bytes.len() {
+                write_bytes[(addr + x as u32) as usize] = bytes[x as usize];
+            }
+            return Ok(ptr.kind);
+
+        } else { // new value
+
+            addr = ptr.memory.malloc(bytes.to_vec())?;
+
+            return Ok(ptr.memory.set_value_address(ptr.location, addr as u32, &ptr.kind));
+        }                    
     }
 
     fn into_value(ptr: NP_Lite_Ptr) -> Result<Option<Box<Self>>, NP_Error> {
@@ -1967,31 +2056,20 @@ impl NP_Value for NP_Option {
 
         let memory = ptr.memory;
 
-        match &*ptr.schema.kind {
-            NP_SchemaKinds::Enum { choices } => {
+        let schema_state = NP_Option::get_schema_state(&ptr.schema);
 
-                Ok(match memory.get_1_byte(addr) {
-                    Some(x) => {
-                        let value_num = u8::from_be_bytes([x]) as usize;
-        
-                        if value_num > choices.len() {
-                            None
-                        } else {
-                            Some(Box::new(NP_Option { value: Some(choices[value_num].clone()) }))
-                        }
-                    },
-                    None => None
-                })
+        Ok(match memory.get_1_byte(addr) {
+            Some(x) => {
+                let value_num = u8::from_be_bytes([x]) as usize;
+
+                if value_num > schema_state.choices.len() {
+                    None
+                } else {
+                    Some(Box::new(NP_Option { value: Some(schema_state.choices[value_num]) }))
+                }
             },
-            _ => {
-                let mut err = "TypeError: Attempted to cast type (".to_owned();
-                err.push_str("option");
-                err.push_str(") to schema of type (");
-                err.push_str(ptr.schema.type_data.1.as_str());
-                err.push_str(")");
-                Err(NP_Error::new(err))
-            }
-        }
+            None => None
+        })
     }
 
     fn to_json(ptr: NP_Lite_Ptr) -> NP_JSON {
@@ -2006,17 +2084,21 @@ impl NP_Value for NP_Option {
                                 NP_JSON::String(str_value)
                             },
                             None => {
-                                match &ptr.schema.default {
-                                    Some(x) => x.clone(),
-                                    None => NP_JSON::Null
+                                let schema_state = NP_Option::get_schema_state(&ptr.schema);
+                                if let Some(x) = schema_state.default {
+                                    NP_JSON::String(schema_state.choices[x as usize])
+                                } else {
+                                    NP_JSON::Null
                                 }
                             }
                         }
                     },
                     None => {
-                        match &ptr.schema.default {
-                            Some(x) => x.clone(),
-                            None => NP_JSON::Null
+                        let schema_state = NP_Option::get_schema_state(&ptr.schema);
+                        if let Some(x) = schema_state.default {
+                            NP_JSON::String(schema_state.choices[x as usize])
+                        } else {
+                            NP_JSON::Null
                         }
                     }
                 }
