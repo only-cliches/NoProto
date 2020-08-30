@@ -483,3 +483,14 @@
 //!
 //! # Ok::<(), NP_Error>(()) 
 //! ```
+//! 
+//! 
+//! # NoProto Schema Format Documentation
+//! 
+//! NoProto JSON schemas are compiled into a byte array as part of the parsing process.
+//! 
+//! The compiled byte array is a significantly more compact and efficient way to store the schema.  It also takes *zero* time to parse a byte schema, where parsing a JSON schema can be an expensive operation.
+//! 
+//! You can use the runtime to parse JSON schemas into byte array schemas at any time, and the JSON/byte array schemas can be used interchangebly.
+//! 
+//! The byte array schema will store default values and all other supported properties.

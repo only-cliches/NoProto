@@ -758,8 +758,8 @@ impl<T: NP_Value + Default> NP_Value for NP_List<T> {
     fn is_type( _type_str: &str) -> bool { // not needed for collection types
         unreachable!()
     }
-    fn type_idx() -> (i64, String) { (NP_TypeKeys::List as i64, "list".to_owned()) }
-    fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::List as i64, "list".to_owned()) }
+    fn type_idx() -> (u8, String) { (NP_TypeKeys::List as i64, "list".to_owned()) }
+    fn self_type_idx(&self) -> (u8, String) { (NP_TypeKeys::List as i64, "list".to_owned()) }
     fn set_value(_pointer: NP_Lite_Ptr, _value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
         Err(NP_Error::new("Type (list) doesn't support .set()! Use .into() instead."))
     }

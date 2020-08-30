@@ -1,7 +1,7 @@
 use alloc::rc::Rc;
 use crate::pointer::NP_PtrKinds;
 use crate::pointer::{NP_Value, NP_Ptr, any::NP_Any, NP_Lite_Ptr};
-use crate::{memory::{NP_Size, NP_Memory}, schema::{NP_SchemaKinds, NP_Schema, NP_TypeKeys}, error::NP_Error, json_flex::NP_JSON};
+use crate::{memory::{NP_Size, NP_Memory}, schema::{NP_Schema, NP_TypeKeys}, error::NP_Error, json_flex::NP_JSON};
 
 use alloc::vec::Vec;
 use alloc::string::String;
@@ -20,11 +20,9 @@ pub struct NP_Map<T> {
 }
 
 impl<T: NP_Value + Default> NP_Value for NP_Map<T> {
-    fn is_type( _type_str: &str) -> bool {  // not needed for collection types
-        unreachable!()
-    }
-    fn type_idx() -> (i64, String) { (NP_TypeKeys::Map as i64, "map".to_owned()) }
-    fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Map as i64, "map".to_owned()) }
+
+    fn type_idx() -> (u8, String) { (NP_TypeKeys::Map as i64, "map".to_owned()) }
+    fn self_type_idx(&self) -> (u8, String) { (NP_TypeKeys::Map as i64, "map".to_owned()) }
     fn set_value(_pointer: NP_Lite_Ptr, _value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
         Err(NP_Error::new("Type (map) doesn't support .set()! Use .into() instead."))
     }

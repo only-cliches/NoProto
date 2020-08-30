@@ -126,8 +126,6 @@ pub enum NP_JSON {
 }
 
 impl NP_Value for NP_JSON {
-    fn type_idx() -> (i64, String) { (NP_TypeKeys::JSON as i64, "json".to_owned()) }
-    fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::JSON as i64, "json".to_owned()) }
     fn into_value(pointer: NP_Lite_Ptr) -> Result<Option<Box<Self>>, NP_Error> {
         let root = pointer.into::<NP_Any>();
         Ok(Some(Box::new(root.json_encode())))

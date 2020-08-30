@@ -24,7 +24,7 @@ pub mod numbers;
 use crate::json_flex::NP_JSON;
 use crate::memory::{NP_Size, NP_Memory};
 use crate::NP_Error;
-use crate::{schema::{NP_Schema, NP_TypeKeys}, collection::{map::NP_Map, table::NP_Table, list::NP_List, tuple::NP_Tuple}, utils::{overflow_error, print_path, type_error}};
+use crate::{schema::{NP_TypeKeys, NP_Schema_Ptr, NP_Schema}, collection::{map::NP_Map, table::NP_Table, list::NP_List, tuple::NP_Tuple}, utils::{overflow_error, print_path, type_error}};
 
 use alloc::string::String;
 use alloc::boxed::Box;
@@ -66,27 +66,20 @@ impl NP_PtrKinds {
 /// This trait is used to implement types as NoProto buffer types.
 /// This includes all the type data, encoding and decoding methods.
 pub trait NP_Value {
-    /// Check if a specific string "type" in the schema matches this data type
-    /// 
-    fn is_type(_type_str: &str) -> bool { false }
 
     /// Get the type information for this type (static)
     /// 
-    fn type_idx() -> (i64, String) { (-1, "null".to_owned()) }
+    fn type_idx() -> (u8, String) { (0, "null".to_owned()) }
 
     /// Get the type information for this type (instance)
     /// 
-    fn self_type_idx(&self) -> (i64, String) { (-1, "null".to_owned()) }
-
-    /// Called for each declaration in the schema for a given type, useful for storing configuration details about the schema
-    /// 
-    fn schema_state(_type_string: &str, _json_schema: &NP_JSON) -> Result<i64, NP_Error> { Ok(0) }
+    fn self_type_idx(&self) -> (u8, String) { (0, "null".to_owned()) }
 
     /// Set the value of this scalar into the buffer
     /// 
     fn set_value(_pointer: NP_Lite_Ptr, _value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
         let mut message = "This type (".to_owned();
-        message.push_str(Self::type_idx().1.as_str());
+        // message.push_str();
         message.push_str(") doesn't support .set()!");
         Err(NP_Error::new(message.as_str()))
     }
@@ -109,12 +102,6 @@ pub trait NP_Value {
     fn get_size(_pointer: NP_Lite_Ptr) -> Result<u32, NP_Error> {
          Err(NP_Error::new("Size not supported for this type!"))
     }
-
-    /// Get the default value from the schema
-    /// 
-    fn schema_default(_schema: Rc<NP_Schema>) -> Option<Box<Self>> {
-        None
-    }
     
     /// Handle copying from old pointer/buffer to new pointer/buffer (recursive for collections)
     /// 
@@ -132,6 +119,12 @@ pub trait NP_Value {
 
         Ok(())
     }
+
+    /// Get the default schema value for this type
+    /// 
+    fn schema_default(schema: &NP_Schema_Ptr) -> Option<Box<Self>> {
+        None
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -145,13 +138,13 @@ pub struct NP_Lite_Ptr {
     /// the underlying buffer this pointer is a part of
     pub memory: Rc<NP_Memory>, 
     /// schema stores the *actual* schema data for this pointer, regardless of type casting
-    pub schema: Rc<NP_Schema>
+    pub schema: NP_Schema_Ptr
 }
 
 impl NP_Lite_Ptr {
 
     /// New standard lite pointer  
-    pub fn new_standard(location: u32, schema: Rc<NP_Schema>, memory: Rc<NP_Memory>) -> Self {
+    pub fn new_standard(location: u32, schema: NP_Schema_Ptr, memory: Rc<NP_Memory>) -> Self {
 
         let addr = location as usize;
         
@@ -193,7 +186,7 @@ impl NP_Lite_Ptr {
                 NP_Size::U8 => u8::from_be_bytes([ptr.memory.get_1_byte(addr).unwrap_or(0)]) as u32
             }},
             memory: Rc::clone(&ptr.memory),
-            schema: Rc::clone(&ptr.schema)
+            schema: ptr.schema
         }
     }
 
@@ -213,7 +206,8 @@ impl NP_Lite_Ptr {
     /// Use NP_Factory methods of `compact` and `maybe_compact`.
     pub fn compact(self, copy_to: NP_Lite_Ptr) -> Result<(), NP_Error> {
 
-        match NP_TypeKeys::from(self.schema.type_data.0) {
+
+        match self.schema.to_type_key() {
             NP_TypeKeys::Any => {
                 Ok(())
             },
@@ -394,7 +388,7 @@ pub struct NP_Ptr<T: NP_Value + Default> {
     /// the underlying buffer this pointer is a part of
     pub memory: Rc<NP_Memory>, 
     /// schema stores the *actual* schema data for this pointer, regardless of type casting
-    pub schema: Rc<NP_Schema>, 
+    pub schema: NP_Schema_Ptr, 
     /// a static invocation of the pointer type
     pub value: T 
 }
@@ -419,7 +413,7 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
                 Some(*x)
             },
             None => {
-                match T::schema_default(Rc::clone(&self.schema)) {
+                match T::schema_default(&self.schema) {
                     Some(x) => Some(*x),
                     None => None
                 }
@@ -445,7 +439,7 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
     }
 
     #[doc(hidden)]
-    pub fn _new_standard_ptr(location: u32, schema: Rc<NP_Schema>, memory: Rc<NP_Memory>) -> Self {
+    pub fn _new_standard_ptr(location: u32, schema: NP_Schema_Ptr, memory: Rc<NP_Memory>) -> Self {
 
         let addr = location as usize;
         
@@ -463,7 +457,7 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
     }
 
     #[doc(hidden)]
-    pub fn _new_table_item_ptr(location: u32, schema: Rc<NP_Schema>, memory: Rc<NP_Memory>) -> Self {
+    pub fn _new_table_item_ptr(location: u32, schema: NP_Schema_Ptr, memory: Rc<NP_Memory>) -> Self {
 
         let addr = location as usize;
         let b_bytes = &memory.read_bytes();
@@ -494,7 +488,7 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
     }
 
     #[doc(hidden)]
-    pub fn _new_map_item_ptr(location: u32, schema: Rc<NP_Schema>, memory: Rc<NP_Memory>) -> Self {
+    pub fn _new_map_item_ptr(location: u32, schema: NP_Schema_Ptr, memory: Rc<NP_Memory>) -> Self {
 
         let addr = location as usize;
 
@@ -524,7 +518,7 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
     }
 
     #[doc(hidden)]
-    pub fn _new_list_item_ptr(location: u32, schema: Rc<NP_Schema>, memory: Rc<NP_Memory>) -> Self {
+    pub fn _new_list_item_ptr(location: u32, schema: NP_Schema_Ptr, memory: Rc<NP_Memory>) -> Self {
 
         let addr = location as usize;
 
@@ -582,15 +576,17 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
     /// 
     pub fn into(self) -> Result<Option<T>, NP_Error> {
 
+        let type_data = self.schema.to_type_data();
+
         // make sure the type we're casting to isn't ANY or the cast itself isn't ANY
-        if T::type_idx().0 != NP_TypeKeys::Any as i64 && self.schema.type_data.0 != NP_TypeKeys::Any as i64  {
+        if T::type_idx().0 != NP_TypeKeys::Any as u8 && type_data.0 != NP_TypeKeys::Any as u8  {
 
             // not using ANY casting, check type
-            if self.schema.type_data.0 != T::type_idx().0 {
+            if type_data.0 != T::type_idx().0 {
                 let mut err = "TypeError: Attempted to cast type (".to_owned();
                 err.push_str(T::type_idx().1.as_str());
                 err.push_str(") into schema of type (");
-                err.push_str(self.schema.type_data.1.as_str());
+                err.push_str(type_data.1.as_str());
                 err.push_str(")");
                 return Err(NP_Error::new(err));
             }
@@ -601,7 +597,7 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
         Ok(match result {
             Some(x) => Some(*x),
             None => {
-                match T::schema_default(Rc::clone(&self.schema)) {
+                match T::schema_default(&self.schema) {
                     Some(x) => Some(*x),
                     None => None
                 }
@@ -626,7 +622,7 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
             NP_TypeKeys::Tuple => { Err(NP_Error::new("Can't deep set tuple type!")) },
             _ => {
                 let vec_path: Vec<&str> = path.split(".").filter(|v| { v.len() > 0 }).collect();
-                let pointer: NP_Ptr<NP_Any> = NP_Ptr::_new_standard_ptr(self.location, Rc::clone(&self.schema), Rc::clone(&self.memory));
+                let pointer: NP_Ptr<NP_Any> = NP_Ptr::_new_standard_ptr(self.location, self.schema.copy(), Rc::clone(&self.memory));
                 pointer._deep_set::<X>(vec_path, 0, value)
             }
         }
@@ -639,7 +635,7 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
     /// 
     pub fn deep_clear(&self, path: &str) -> Result<(), NP_Error> {
         let vec_path: Vec<&str> = path.split(".").filter(|v| { v.len() > 0 }).collect();
-        let pointer: NP_Ptr<NP_Any> = NP_Ptr::_new_standard_ptr(self.location, Rc::clone(&self.schema), Rc::clone(&self.memory));
+        let pointer: NP_Ptr<NP_Any> = NP_Ptr::_new_standard_ptr(self.location, self.schema.copy(), Rc::clone(&self.memory));
         pointer._deep_clear(vec_path, 0)
     }
   
@@ -652,7 +648,7 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
     /// The type that you cast the request to will be compared to the schema, if it doesn't match the schema the request will fail.
     pub fn deep_get<X: NP_Value + Default>(&self, path: &str) -> Result<Option<Box<X>>, NP_Error> {
         let vec_path: Vec<&str> = path.split(".").filter(|v| { v.len() > 0 }).collect();
-        let pointer: NP_Ptr<NP_Any> = NP_Ptr::_new_standard_ptr(self.location, Rc::clone(&self.schema), Rc::clone(&self.memory));
+        let pointer: NP_Ptr<NP_Any> = NP_Ptr::_new_standard_ptr(self.location, self.schema.copy(), Rc::clone(&self.memory));
         pointer._deep_get::<X>(vec_path, 0)
     }
 
@@ -665,7 +661,7 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
             return Ok(());
         }
 
-        match NP_TypeKeys::from(self.schema.type_data.0) {
+        match self.schema.to_type_key() {
             NP_TypeKeys::Table => {
 
                 let result = NP_Table::into_value(NP_Lite_Ptr::from(self))?;
@@ -762,7 +758,9 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
             _ => { }
         };
 
-        match NP_TypeKeys::from(self.schema.type_data.0) {
+        let type_data = self.schema.to_type_data();
+
+        match self.schema.to_type_key() {
             NP_TypeKeys::Table => {
 
                 overflow_error("deep set", &path, path_index)?;
@@ -859,7 +857,7 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
             _ => { // scalar type
                 if path.len() != path_index { // reached scalar value but not at end of path
                     let mut err = "TypeError: Attempted to deep set into collection but found scalar type (".to_owned();
-                    err.push_str(self.schema.type_data.1.as_str());
+                    err.push_str(type_data.1.as_str());
                     err.push_str(")\n Path: ");
                     err.push_str(print_path(&path, path_index).as_str());
                     return Err(NP_Error::new(err));
@@ -867,11 +865,11 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
 
                 // if schema is ANY then allow any type to set this value
                 // otherwise make sure the schema and type match
-                if self.schema.type_data.0 != NP_Any::type_idx().0 && self.schema.type_data.0 != X::type_idx().0 {
+                if type_data.0 != NP_Any::type_idx().0 && type_data.0 != X::type_idx().0 {
                     let mut err = "TypeError: Attempted to set value for type (".to_owned();
                     err.push_str(X::type_idx().1.as_str());
                     err.push_str(") into schema of type (");
-                    err.push_str(self.schema.type_data.1.as_str());
+                    err.push_str(type_data.1.as_str());
                     err.push_str(")\n Path: ");
                     err.push_str(print_path(&path, path_index).as_str());
                     return Err(NP_Error::new(err));
@@ -893,7 +891,9 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
             _ => false
         };
 
-        match NP_TypeKeys::from(self.schema.type_data.0) {
+        let type_data = self.schema.to_type_data();
+
+        match self.schema.to_type_key() {
             NP_TypeKeys::Table => {
 
                 if is_json_req == false {
@@ -906,7 +906,7 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
                     Some(mut table) => {
                         if path.len() == path_index && is_json_req {
                             // make sure the schema and type match
-                            if is_json_req == false { type_error(&self.schema.type_data, &X::type_idx(), &path, path_index)?; };
+                            if is_json_req == false { type_error(&type_data, &X::type_idx(), &path, path_index)?; };
                             X::into_value(NP_Lite_Ptr::from(self))
                         } else {
                             let table_key = path[path_index];
@@ -930,7 +930,7 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
                     Some(mut map) => {
                         if path.len() == path_index {
                             // make sure the schema and type match
-                            if is_json_req == false { type_error(&self.schema.type_data, &X::type_idx(), &path, path_index)?; };
+                            if is_json_req == false { type_error(&type_data, &X::type_idx(), &path, path_index)?; };
                             X::into_value(NP_Lite_Ptr::from(self))
                         } else {
                             let map_key = path[path_index];
@@ -955,7 +955,7 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
                     Some(mut list) => {
                         if path.len() == path_index {
                             // make sure the schema and type match
-                            if is_json_req == false { type_error(&self.schema.type_data, &X::type_idx(), &path, path_index)?; };
+                            if is_json_req == false { type_error(&type_data, &X::type_idx(), &path, path_index)?; };
                             X::into_value(NP_Lite_Ptr::from(self))
                         } else {
                             let list_key = path[path_index];
@@ -989,7 +989,7 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
                     Some(tuple) => {
                         if path.len() == path_index {
                             // make sure the schema and type match
-                            if is_json_req == false { type_error(&self.schema.type_data, &X::type_idx(), &path, path_index)?; };
+                            if is_json_req == false { type_error(&type_data, &X::type_idx(), &path, path_index)?; };
                             X::into_value(NP_Lite_Ptr::from(self))
                         } else {
                             let list_key = path[path_index];
@@ -1016,21 +1016,21 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
 
                 if path.len() != path_index { // reached scalar type but not at end of path
                     let mut err = "TypeError: Attempted to deep get into collection but found scalar type (".to_owned();
-                    err.push_str(self.schema.type_data.1.as_str());
+                    err.push_str(type_data.1.as_str());
                     err.push_str(") Path: ");
                     err.push_str(print_path(&path, path_index).as_str());
                     return Err(NP_Error::new(err));
                 }
 
                 // make sure the schema and type match
-                if is_json_req == false { type_error(&self.schema.type_data, &X::type_idx(), &path, path_index)?; }
+                if is_json_req == false { type_error(&type_data, &X::type_idx(), &path, path_index)?; }
 
                 match X::into_value(NP_Lite_Ptr::from_borrowed(&self))? {
                     Some(x) => {
                         Ok(Some(x))
                     },
                     None => {
-                        Ok(X::schema_default(Rc::clone(&self.schema)))
+                        Ok(X::schema_default(&self.schema))
                     }
                 }
             }
@@ -1043,7 +1043,7 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
     /// This is NOT related to the `default` key in the schema, this is the default for the underlying Rust data type.
     pub fn set_default(&self) -> Result<(), NP_Error> {
 
-        match NP_TypeKeys::from(self.schema.type_data.0) {
+        match self.schema.to_type_key() {
             NP_TypeKeys::Any => { },
             NP_TypeKeys::JSON => { },
             NP_TypeKeys::UTF8String => {
@@ -1130,7 +1130,7 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
             return Ok(base_size);
         }
 
-        let type_size = match NP_TypeKeys::from(self.schema.type_data.0) {
+        let type_size = match self.schema.to_type_key() {
             NP_TypeKeys::Any => {
                 Ok(0)
             },
@@ -1219,7 +1219,7 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
             return NP_JSON::Null;
         }
 
-        let type_key = NP_TypeKeys::from(self.schema.type_data.0);
+        let type_key = self.schema.to_type_key();
 
         match type_key {
             NP_TypeKeys::Any => {

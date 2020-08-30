@@ -136,6 +136,11 @@
 //! # Ok::<(), NP_Error>(()) 
 //! ```
 //! 
+//! ## Non Goals / Known Tradeoffs
+//! There are formats that focus on being as comapct as possible.  While NoProto is not intentially wasteful with space, it will likely never be the most compact way to store data.  If you need the smallest possible format MessagePack is a good choice.
+//! 
+//! If every CPU cycle counts, FlatBuffers/CapnProto is probably the way to go.  While NoProto makes good tradeoffs with flexibility and performance, it cannot be as fast as languages that compile the schema into source code.  In the future compiling schema to source code could be a feature, but for now I'm happy leaving that edge to the other libraries.
+//! 
 //! ## Guided Learning / Next Steps:
 //! 1. [`Schemas`](https://docs.rs/no_proto/latest/no_proto/schema/index.html) - Learn how to build & work with schemas.
 //! 2. [`Factories`](https://docs.rs/no_proto/latest/no_proto/struct.NP_Factory.html) - Parsing schemas into something you can work with.
@@ -278,6 +283,20 @@ impl NP_Factory {
                 Err(NP_Error::new("Schema JSON Parse Error"))
             }
         }
+    }
+
+    /// Create a new factory from a compiled schema
+    /// 
+    pub fn new_compiled(schema: Vec<u8>) -> NP_Factory {
+        NP_Factory {
+            schema:  Rc::new(NP_Schema { bytes: schema })
+        }
+    }
+
+    /// Exports the compiled byte array schema
+    /// 
+    pub fn compile_schema(&self) -> Vec<u8> {
+        self.schema.bytes.clone()
     }
 
     /// Open existing Vec<u8> as buffer for this factory.  

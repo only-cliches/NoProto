@@ -1,9 +1,11 @@
+use crate::schema::NP_Schema_Parser;
+use crate::schema::NP_Schema_Ptr;
 use alloc::vec::Vec;
 use crate::utils::to_signed;
 use crate::utils::to_unsigned;
 use crate::utils::to_base32;
 use crate::json_flex::{JSMAP, NP_JSON};
-use crate::schema::{NP_SchemaKinds, NP_Schema, NP_TypeKeys};
+use crate::schema::{NP_Schema, NP_TypeKeys};
 use crate::pointer::NP_PtrKinds;
 use crate::{pointer::NP_Value, error::NP_Error, utils::{Rand, to_hex}};
 use core::fmt;
@@ -68,6 +70,13 @@ pub struct NP_Dec {
     pub exp: u8
 }
 
+/// Schema state for NP_Dec
+#[derive(Clone, Copy, Debug)]
+pub struct NP_Dec_Schema_State {
+    pub exp: u8,
+    pub default: Option<i64>
+}
+
 impl NP_Dec {
     /// Convert an NP_Dec into a native floating point value.
     /// 
@@ -90,6 +99,23 @@ impl NP_Dec {
             step -= 1;
         }
         m / s
+    }
+
+    /// Get the schema data for this type
+    pub fn get_schema_state(schema_ptr: &NP_Schema_Ptr) -> NP_Dec_Schema_State {
+
+        let exp = schema_ptr.schema.bytes[schema_ptr.address + 1];
+
+        let default = if schema_ptr.schema.bytes[schema_ptr.address + 2] == 0 {
+            None
+        } else {
+            let mut bytes = 0i64.to_be_bytes();
+            bytes.copy_from_slice(&schema_ptr.schema.bytes[(schema_ptr.address + 3)..schema_ptr.address + 11]);
+            let value = i64::from_be_bytes(bytes);
+            Some(value)
+        };
+
+        return NP_Dec_Schema_State { exp: exp, default: default }
     }
 
     /// Shift the exponent of this NP_Dec to a new value.
@@ -642,97 +668,86 @@ impl Default for NP_Dec {
      }
 }
 
+impl NP_Schema_Parser for NP_Dec {
+
+    fn type_key(&self) -> u8 { NP_TypeKeys::Bytes as u8 }
+
+    fn from_json_to_state(&self, json_schema: &NP_JSON) -> Result<Option<Vec<u8>>, NP_Error> {
+
+        let type_str = NP_Schema::get_type(json_schema)?;
+
+        if "decimal" == type_str || "dec" == type_str {
+            let mut schema_data: Vec<u8> = Vec::new();
+            schema_data.push(NP_TypeKeys::Decimal as u8);
+
+            let mut exp: u8 = 0;
+
+
+            match json_schema["exp"] {
+                NP_JSON::Integer(x) => {
+                    if x > 255 || x < 0 {
+                        return Err(NP_Error::new("Decimal 'exp' property must be between 0 and 255!"))
+                    }
+                    exp = x as u8;
+                    schema_data.push(x as u8);
+                },
+                _ => {
+                    return Err(NP_Error::new("Decimal type requires 'exp' property!"))
+                }
+            }
+
+            let mult = 10i64.pow(exp as u32);
+
+            match json_schema["default"] {
+                NP_JSON::Float(x) => {
+                    schema_data.push(1);
+                    let value = x * (mult as f64);
+                    schema_data.extend((value as i64).to_be_bytes().to_vec())
+                },
+                NP_JSON::Integer(x) => {
+                    schema_data.push(1);
+                    let value = x * (mult as i64);
+                    schema_data.extend((value as i64).to_be_bytes().to_vec())
+                },
+                _ => {
+                    schema_data.push(0);
+                    schema_data.extend(0i64.to_be_bytes().to_vec())
+                }
+            }
+
+
+            return Ok(Some(schema_data))
+        }
+
+        Ok(None)
+    }
+}
+
 impl NP_Value for NP_Dec {
 
-    fn is_type( type_str: &str) -> bool {
-        "decimal" == type_str || "dec" == type_str
-    }
+    fn type_idx() -> (u8, String) { (NP_TypeKeys::Decimal as u8, "decimal".to_owned()) }
+    fn self_type_idx(&self) -> (u8, String) { (NP_TypeKeys::Decimal as u8, "decimal".to_owned()) }
 
-    fn type_idx() -> (i64, String) { (NP_TypeKeys::Decimal as i64, "decimal".to_owned()) }
-    fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Decimal as i64, "decimal".to_owned()) }
+    fn schema_default(schema: &NP_Schema_Ptr) -> Option<Box<Self>> {
 
-    fn schema_state(_type_string: &str, _json_schema: &NP_JSON) -> Result<i64, NP_Error> {
+        let schema_data = NP_Dec::get_schema_state(&schema);
 
-        match _json_schema["exp"].into_i64() {
+        match schema_data.default {
             Some(x) => {
-                if *x > 255 || *x < 0 {
-                    return Err(NP_Error::new("Decimal 'exp' property must be between 0 and 255"));
-                }
-                return Ok(*x);
+                Some(Box::new(NP_Dec::new(x, schema_data.exp)))
             },
-            None => {
-                return Err(NP_Error::new("Decimal types must have 'exp' property!"))
-            }
-        }
-    }
-
-    fn schema_default(schema: Rc<NP_Schema>) -> Option<Box<Self>> {
-        match &schema.default {
-            Some(x) => {
-                match x {
-                    NP_JSON::Integer(x) => {
-                        let mut y: NP_Dec = (*x).into();
-                        y.shift_exp(*&schema.type_state as u8);
-                        Some(Box::new(y))
-                    }
-                    NP_JSON::Float(x) => {
-                        let mut y: NP_Dec = (*x).into();
-                        y.shift_exp(*&schema.type_state as u8);
-                        Some(Box::new(y))
-                    },
-                    NP_JSON::Dictionary(value) => {
-                        let num = value.get("num").unwrap_or(&NP_JSON::Null);
-                        let exp = value.get("exp").unwrap_or(&NP_JSON::Null);
-                        
-                        let get_value = |json: &NP_JSON| -> i64 {
-                            match json {
-                                NP_JSON::Integer(x) => {
-                                    *x as i64
-                                },
-                                NP_JSON::Float(x) => {
-                                    *x as i64
-                                },
-                                _ => {
-                                    0
-                                }
-                            }
-                        };
-
-                        let has_num_exp = {
-                            match num {
-                                NP_JSON::Null => false,
-                                _ => {
-                                    match exp {
-                                        NP_JSON::Null => false,
-                                        _ => true
-                                    }
-                                }
-                            }
-                        };
-
-                        if has_num_exp {
-                            return Some(Box::new(NP_Dec::new(get_value(num), get_value(exp) as u8)));
-                        }
-
-                        None
-                    },
-                    _ => {
-                        None
-                    }
-                }
-            },
-            None => {
-                None
-            }
+            None => None
         }
     }
 
     fn set_value(ptr: NP_Lite_Ptr, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
 
+        let schema_data = NP_Dec::get_schema_state(&ptr.schema);
+
         let mut addr = ptr.kind.get_value_addr();
 
         let mut cloned_value = (*value).clone();
-        cloned_value.shift_exp(ptr.schema.type_state as u8);
+        cloned_value.shift_exp(schema_data.exp);
 
         let i64_value = cloned_value.num;
 
@@ -769,37 +784,46 @@ impl NP_Value for NP_Dec {
             return Ok(None);
         }
 
+        let schema_data = NP_Dec::get_schema_state(&ptr.schema);
+
         let memory = ptr.memory;
 
         Ok(match memory.get_8_bytes(addr) {
             Some(x) => {
                 let mut be_bytes = x.clone();
                 be_bytes[0] = to_signed(be_bytes[0]);
-                Some(Box::new(NP_Dec::new(i64::from_be_bytes(be_bytes), ptr.schema.type_state as u8)))
+                Some(Box::new(NP_Dec::new(i64::from_be_bytes(be_bytes), schema_data.exp)))
             },
             None => None
         })
     }
 
     fn to_json(ptr: NP_Lite_Ptr) -> NP_JSON {
-        let this_string = Self::into_value(ptr.clone());
+        let this_value = Self::into_value(ptr.clone());
 
-        let schema_clone = Rc::clone(&ptr.schema);
+        let schema_data = NP_Dec::get_schema_state(&ptr.schema);
 
-        match this_string {
+        match this_value {
             Ok(x) => {
                 match x {
                     Some(y) => {
                         let mut object = JSMAP::<NP_JSON>::new();
 
                         object.insert("num".to_owned(), NP_JSON::Integer(y.num));
-                        object.insert("exp".to_owned(), NP_JSON::Integer(schema_clone.type_state));
+                        object.insert("exp".to_owned(), NP_JSON::Integer(schema_data.exp as i64));
                         
                         NP_JSON::Dictionary(object)
                     },
                     None => {
-                        match &ptr.schema.default {
-                            Some(x) => x.clone(),
+                        match schema_data.default {
+                            Some(x) => {
+                                let mut object = JSMAP::<NP_JSON>::new();
+
+                                object.insert("num".to_owned(), NP_JSON::Integer(x));
+                                object.insert("exp".to_owned(), NP_JSON::Integer(schema_data.exp as i64));
+                                
+                                NP_JSON::Dictionary(object)
+                            },
                             None => NP_JSON::Null
                         }
                     }
@@ -897,17 +921,11 @@ impl Default for NP_Geo_Bytes {
 }
 
 impl NP_Value for NP_Geo_Bytes {
-    fn is_type( type_str: &str) -> bool {
-        NP_Geo::is_type(type_str)
-    }
-    fn schema_state(type_string: &str, json_schema: &NP_JSON) -> Result<i64, NP_Error> {
-        NP_Geo::schema_state(type_string, json_schema)
-    }
-    fn schema_default(_schema: Rc<NP_Schema>) -> Option<Box<Self>> {
+    fn schema_default(schema: &NP_Schema_Ptr) -> Option<Box<Self>> {
         None
     }
-    fn type_idx() -> (i64, String) { NP_Geo::type_idx() }
-    fn self_type_idx(&self) -> (i64, String) { NP_Geo::type_idx() }
+    fn type_idx() -> (u8, String) { NP_Geo::type_idx() }
+    fn self_type_idx(&self) -> (u8, String) { NP_Geo::type_idx() }
     fn set_value(_ptr: NP_Lite_Ptr, _value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
         Err(NP_Error::new("Can't set value with NP_Geo_Bytes, use NP_Geo instead!"))
     }
@@ -926,7 +944,9 @@ impl NP_Value for NP_Geo_Bytes {
             return Ok(None);
         }
 
-        Ok(Some(Box::new(match ptr.schema.type_state {
+        let state = NP_Geo::get_schema_state(&ptr.schema);
+
+        Ok(Some(Box::new(match state.size {
             16 => {
                 let bytes_lat: [u8; 8] = *ptr.memory.get_8_bytes(addr).unwrap_or(&[0; 8]);
                 let bytes_lon: [u8; 8] = *ptr.memory.get_8_bytes(addr + 8).unwrap_or(&[0; 8]);
@@ -966,11 +986,63 @@ pub struct NP_Geo {
     pub lng: f64
 }
 
+/// Schema state for NP_Geo
+#[derive(Debug)]
+pub struct NP_Geo_Schema_State {
+    /// 0 for dynamic size, anything greater than 0 is for fixed size
+    pub size: u8,
+    /// The default bytes
+    pub default: Option<NP_Geo>
+}
+
 impl NP_Geo {
 
     /// Create a new NP_Geo value, make sure the size matches the schema
     pub fn new(size: u8, lat: f64, lng: f64) -> Self {
         NP_Geo { size, lat, lng}
+    }
+
+    /// Get the schema state struct from the schema bytes
+    /// 
+    pub fn get_schema_state(schema_ptr: &NP_Schema_Ptr) -> NP_Geo_Schema_State {
+        let size = schema_ptr.schema.bytes[schema_ptr.address + 1];
+
+        if schema_ptr.schema.bytes[schema_ptr.address + 2] == 0 {
+            return NP_Geo_Schema_State {
+                size: size,
+                default: None
+            }
+        }
+
+        match size {
+            4 => {
+                let lat = &schema_ptr.schema.bytes[(schema_ptr.address + 3)..(schema_ptr.address + 5)];
+                let lng = &schema_ptr.schema.bytes[(schema_ptr.address + 6)..(schema_ptr.address + 8)];
+                let default_value = NP_Geo_Bytes { size: size, lat: lat.to_vec(), lng: lng.to_vec()};
+                NP_Geo_Schema_State {
+                    size: size,
+                    default: Some(default_value.into_geo().unwrap())
+                }
+            },
+            8 => {
+                let lat = &schema_ptr.schema.bytes[(schema_ptr.address + 3)..(schema_ptr.address + 7)];
+                let lng = &schema_ptr.schema.bytes[(schema_ptr.address + 7)..(schema_ptr.address + 11)];
+                let default_value = NP_Geo_Bytes { size: size, lat: lat.to_vec(), lng: lng.to_vec()};
+                NP_Geo_Schema_State {
+                    size: size,
+                    default: Some(default_value.into_geo().unwrap())
+                }
+            },
+            16 => {
+                let lat = &schema_ptr.schema.bytes[(schema_ptr.address + 3)..(schema_ptr.address + 11)];
+                let lng = &schema_ptr.schema.bytes[(schema_ptr.address + 12)..(schema_ptr.address + 20)];
+                let default_value = NP_Geo_Bytes { size: size, lat: lat.to_vec(), lng: lng.to_vec()};
+                NP_Geo_Schema_State {
+                    size: size,
+                    default: Some(default_value.into_geo().unwrap())
+                }
+            }
+        }
     }
 
     /// Get the deviser value depending on the resolution of the type in the schema
@@ -1038,81 +1110,140 @@ impl Default for NP_Geo {
      }
 }
 
-impl NP_Value for NP_Geo {
+fn geo_default_value(size: u8, json: &NP_JSON) -> Result<Option<NP_Geo_Bytes>, NP_Error> {
+    match json["default"] {
+        NP_JSON::Dictionary(x) => {
+            let mut lat = 0f64;
+            match x.get("lat") {
+                Some(x) => {
+                    match x {
+                        NP_JSON::Integer(y) => {
+                            lat = *y as f64;
+                        },
+                        NP_JSON::Float(y) => {
+                            lat = *y as f64;
+                        },
+                        _ => {}
+                    }
+                },
+                None => {
+                    return Err(NP_Error::new("Default values for NP_Geo should have lat key!"))
+                }
+            };
+            let mut lng = 0f64;
+            match x.get("lng") {
+                Some(x) => {
+                    match x {
+                        NP_JSON::Integer(y) => {
+                            lng = *y as f64;
+                        },
+                        NP_JSON::Float(y) => {
+                            lng = *y as f64;
+                        },
+                        _ => {}
+                    }
+                },
+                None => {
+                    return Err(NP_Error::new("Default values for NP_Geo should have lng key!"))
+                }
+            };
 
-    fn is_type( type_str: &str) -> bool {
-        "geo4" == type_str || "geo8" == type_str || "geo16" == type_str 
+            match NP_Geo::new(size, lat, lng).get_bytes() {
+                Some(b) => return Ok(Some(b)),
+                None => return Ok(None)
+            }
+        },
+        _ => return Ok(None)
     }
+}
 
-    fn schema_state(type_string: &str, _json_schema: &NP_JSON) -> Result<i64, NP_Error> {
-        match type_string {
-            "geo4" => Ok(4),
-            "geo8" => Ok(8),
-            "geo16" => Ok(16),
-            _ => Err(NP_Error::new("Geo type must be geo4, geo8 or geo16!"))
-        }
-    }
+impl NP_Schema_Parser for NP_Geo {
 
-    fn schema_default(schema: Rc<NP_Schema>) -> Option<Box<Self>> {
-        let size = schema.type_state as u8;
-        match &schema.default {
-            Some(x) => {
-                match x {
-                    NP_JSON::Dictionary(value) => {
-                        let lat = value.get("lat").unwrap_or(&NP_JSON::Null);
-                        let lon = value.get("lng").unwrap_or(&NP_JSON::Null);
-                        
-                        let get_value = |json: &NP_JSON| -> f64 {
-                            match json {
-                                NP_JSON::Integer(x) => {
-                                    *x as f64
-                                },
-                                NP_JSON::Float(x) => {
-                                    *x
-                                },
-                                _ => {
-                                    0.0
-                                }
-                            }
-                        };
+    fn type_key(&self) -> u8 { NP_TypeKeys::Geo as u8 }
 
-                        let has_lat_lon = {
-                            match lat {
-                                NP_JSON::Null => false,
-                                _ => {
-                                    match lon {
-                                        NP_JSON::Null => false,
-                                        _ => true
-                                    }
-                                }
-                            }
-                        };
+    fn from_json_to_state(&self, json_schema: &NP_JSON) -> Result<Option<Vec<u8>>, NP_Error> {
 
-                        if has_lat_lon {
-                            return Some(Box::new(NP_Geo { lat: get_value(lat), lng: get_value(lon), size: size }));
-                        }
+        let type_str = NP_Schema::get_type(json_schema)?;
 
-                        None
+        match type_str.as_str() {
+            "geo4" => {
+                let mut schema_data: Vec<u8> = Vec::new();
+                schema_data.push(NP_TypeKeys::Geo as u8);
+                schema_data.push(4);
+                match geo_default_value(4, json_schema)? {
+                    Some(x) => {
+                        schema_data.push(1);
+                        schema_data.extend(x.lat);
+                        schema_data.extend(x.lng);
                     },
-                    _ => {
-                        None
+                    None => {
+                        schema_data.push(0);
                     }
                 }
+                Ok(Some(schema_data))
             },
-            None => {
-                None
+            "geo8" => {
+                let mut schema_data: Vec<u8> = Vec::new();
+                schema_data.push(NP_TypeKeys::Geo as u8);
+                schema_data.push(8);
+                match geo_default_value(8, json_schema)? {
+                    Some(x) => {
+                        schema_data.push(1);
+                        schema_data.extend(x.lat);
+                        schema_data.extend(x.lng);
+                    },
+                    None => {
+                        schema_data.push(0);
+                    }
+                }
+                Ok(Some(schema_data))
+            },
+            "geo16" => {
+                let mut schema_data: Vec<u8> = Vec::new();
+                schema_data.push(NP_TypeKeys::Geo as u8);
+                schema_data.push(16);
+                match geo_default_value(16, json_schema)? {
+                    Some(x) => {
+                        schema_data.push(1);
+                        schema_data.extend(x.lat);
+                        schema_data.extend(x.lng);
+                    },
+                    None => {
+                        schema_data.push(0);
+                    }
+                }
+                Ok(Some(schema_data))
+            },
+            _ => {
+                Ok(None)
             }
         }
     }
+}
 
-    fn type_idx() -> (i64, String) { (NP_TypeKeys::Geo as i64, "geo".to_owned()) }
-    fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Geo as i64, "geo".to_owned()) }
+impl NP_Value for NP_Geo {
+
+    fn schema_default(schema: &NP_Schema_Ptr) -> Option<Box<Self>> {
+        let schema_state = NP_Geo::get_schema_state(schema);
+
+        match schema_state.default {
+            Some(x) => {
+                Some(Box::new(x))
+            },
+            None => None
+        }
+    }
+
+    fn type_idx() -> (u8, String) { (NP_TypeKeys::Geo as u8, "geo".to_owned()) }
+    fn self_type_idx(&self) -> (u8, String) { (NP_TypeKeys::Geo as u8, "geo".to_owned()) }
 
     fn set_value(ptr: NP_Lite_Ptr, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
 
         let mut addr = ptr.kind.get_value_addr();
 
-        let value_bytes_size = ptr.schema.type_state as usize;
+        let schema_state = NP_Geo::get_schema_state(&ptr.schema);
+
+        let value_bytes_size = schema_state.size as usize;
 
         if value_bytes_size == 0 {
             unreachable!();
@@ -1123,7 +1254,7 @@ impl NP_Value for NP_Geo {
         let half_value_bytes = value_bytes_size / 2;
 
         // convert input values into bytes
-        let value_bytes = match ptr.schema.type_state {
+        let value_bytes = match schema_state.size {
             16 => {
                 let dev = NP_Geo::get_deviser(16);
 
@@ -1202,7 +1333,7 @@ impl NP_Value for NP_Geo {
 
         } else { // new value
 
-            addr = match ptr.schema.type_state {
+            addr = match schema_state.size {
                 16 => { ptr.memory.malloc([0; 16].to_vec())? },
                 8 => { ptr.memory.malloc([0; 8].to_vec())? },
                 4 => { ptr.memory.malloc([0; 4].to_vec())? },
@@ -1230,7 +1361,9 @@ impl NP_Value for NP_Geo {
             return Ok(None);
         }
 
-        Ok(Some(Box::new(match ptr.schema.type_state {
+        let schema_state = NP_Geo::get_schema_state(&ptr.schema);
+
+        Ok(Some(Box::new(match schema_state.size {
             16 => {
          
                 let mut bytes_lat: [u8; 8] = *ptr.memory.get_8_bytes(addr).unwrap_or(&[0; 8]);
@@ -1298,8 +1431,17 @@ impl NP_Value for NP_Geo {
                         NP_JSON::Dictionary(object)
                     },
                     None => {
-                        match &ptr.schema.default {
-                            Some(x) => x.clone(),
+                        let schema_state = NP_Geo::get_schema_state(&ptr.schema);
+
+                        match schema_state.default {
+                            Some(k) => {
+                                let mut object = JSMAP::<NP_JSON>::new();
+
+                                object.insert("lat".to_owned(), NP_JSON::Float(k.lat));
+                                object.insert("lng".to_owned(), NP_JSON::Float(k.lng));
+                                
+                                NP_JSON::Dictionary(object)
+                            },
                             None => NP_JSON::Null
                         }
                     }
@@ -1317,12 +1459,10 @@ impl NP_Value for NP_Geo {
         if addr == 0 {
             return Ok(0) 
         } else {
-            Ok(ptr.schema.type_state as u32)
+            let schema_state = NP_Geo::get_schema_state(&ptr.schema);
+            Ok(schema_state.size as u32)
         }
     }
-
-
-
 }
 
 /// Represents a ULID type which has a 6 byte timestamp and 10 bytes of randomness
@@ -1401,12 +1541,8 @@ impl fmt::Debug for NP_ULID {
 
 impl NP_Value for NP_ULID {
 
-    fn is_type( type_str: &str) -> bool {
-        "ulid" == type_str
-    }
-
-    fn type_idx() -> (i64, String) { (NP_TypeKeys::Ulid as i64, "ulid".to_owned()) }
-    fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Ulid as i64, "ulid".to_owned()) }
+    fn type_idx() -> (u8, String) { (NP_TypeKeys::Ulid as u8, "ulid".to_owned()) }
+    fn self_type_idx(&self) -> (u8, String) { (NP_TypeKeys::Ulid as u8, "ulid".to_owned()) }
 
     fn set_value(ptr: NP_Lite_Ptr, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
 
@@ -1600,8 +1736,8 @@ impl NP_Value for NP_UUID {
         "uuid" == type_str
     }
 
-    fn type_idx() -> (i64, String) { (NP_TypeKeys::Uuid as i64, "uuid".to_owned()) }
-    fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Uuid as i64, "uuid".to_owned()) }
+    fn type_idx() -> (u8, String) { (NP_TypeKeys::Uuid as i64, "uuid".to_owned()) }
+    fn self_type_idx(&self) -> (u8, String) { (NP_TypeKeys::Uuid as i64, "uuid".to_owned()) }
 
     fn set_value(ptr: NP_Lite_Ptr, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
 
@@ -1724,10 +1860,10 @@ impl NP_Value for NP_Option {
         "option" == type_str || "enum" == type_str
     }
 
-    fn type_idx() -> (i64, String) { (NP_TypeKeys::Enum as i64, "option".to_owned()) }
-    fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Enum as i64, "option".to_owned()) }
+    fn type_idx() -> (u8, String) { (NP_TypeKeys::Enum as i64, "option".to_owned()) }
+    fn self_type_idx(&self) -> (u8, String) { (NP_TypeKeys::Enum as i64, "option".to_owned()) }
 
-    fn schema_default(schema: Rc<NP_Schema>) -> Option<Box<Self>> {
+    fn schema_default(schema: &NP_Schema_Ptr) -> Option<Box<Self>> {
         match &schema.default {
             Some(x) => {
                 match x {
@@ -1911,10 +2047,10 @@ impl NP_Value for bool {
         "bool" == type_str || "boolean" == type_str
     }
 
-    fn type_idx() -> (i64, String) { (NP_TypeKeys::Boolean as i64, "bool".to_owned()) }
-    fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Boolean as i64, "bool".to_owned()) }
+    fn type_idx() -> (u8, String) { (NP_TypeKeys::Boolean as i64, "bool".to_owned()) }
+    fn self_type_idx(&self) -> (u8, String) { (NP_TypeKeys::Boolean as i64, "bool".to_owned()) }
 
-    fn schema_default(schema: Rc<NP_Schema>) -> Option<Box<Self>> {
+    fn schema_default(schema: &NP_Schema_Ptr) -> Option<Box<Self>> {
         match &schema.default {
             Some(x) => {
                 match x {
@@ -2061,10 +2197,10 @@ impl NP_Value for NP_Date {
         "date" == type_str
     }
 
-    fn type_idx() -> (i64, String) { (NP_TypeKeys::Date as i64, "date".to_owned()) }
-    fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Date as i64, "date".to_owned()) }
+    fn type_idx() -> (u8, String) { (NP_TypeKeys::Date as i64, "date".to_owned()) }
+    fn self_type_idx(&self) -> (u8, String) { (NP_TypeKeys::Date as i64, "date".to_owned()) }
 
-    fn schema_default(schema: Rc<NP_Schema>) -> Option<Box<Self>> {
+    fn schema_default(schema: &NP_Schema_Ptr) -> Option<Box<Self>> {
         match &schema.default {
             Some(x) => {
                 match x {

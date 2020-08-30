@@ -6,7 +6,7 @@ use crate::pointer::NP_Value;
 use crate::error::NP_Error;
 use crate::pointer::{any::NP_Any, NP_Ptr, NP_Lite_Ptr};
 use crate::memory::{NP_Size, NP_Memory};
-use crate::{schema::{NP_TypeKeys, NP_Schema}, json_flex::NP_JSON};
+use crate::{schema::{NP_TypeKeys, NP_Schema, NP_Schema_Ptr}, json_flex::NP_JSON};
 use alloc::{borrow::ToOwned, rc::Rc};
 
 /// The address location of the root pointer.
@@ -55,22 +55,25 @@ impl NP_Buffer {
     /// 
     pub fn open<ROOT: NP_Value + Default>(&mut self, callback: &mut (dyn FnMut(NP_Ptr<ROOT>) -> Result<(), NP_Error>)) -> Result<(), NP_Error>
     {   
-        let pointer: NP_Ptr<ROOT> = NP_Ptr::_new_standard_ptr(ROOT_PTR_ADDR, Rc::clone(&self.schema), Rc::clone(&self.memory));
+
+        let root_schema: NP_Schema_Ptr = NP_Schema_Ptr { address: 0, schema: Rc::clone(&self.schema)};
+        let root_type =  root_schema.to_type_data();
+        let pointer: NP_Ptr<ROOT> = NP_Ptr::_new_standard_ptr(ROOT_PTR_ADDR, root_schema, Rc::clone(&self.memory));
     
         // casting to ANY type -OR- schema is ANY type
-        if ROOT::type_idx().0 == NP_TypeKeys::Any as i64 || self.schema.type_data.0 == NP_TypeKeys::Any as i64  {
+        if ROOT::type_idx().0 == NP_TypeKeys::Any as u8 || root_type.0 == NP_TypeKeys::Any as u8  {
             return callback(pointer);
         }
 
         // casting matches root schema
-        if ROOT::type_idx().0 == self.schema.type_data.0 {
+        if ROOT::type_idx().0 == root_type.0 {
             return callback(pointer);
         }
 
         let mut err = "TypeError: Attempted to cast type (".to_owned();
         err.push_str(ROOT::type_idx().1.as_str());
         err.push_str(") to schema of type (");
-        err.push_str(self.schema.type_data.1.as_str());
+        err.push_str(root_type.1.as_str());
         err.push_str(")");
         Err(NP_Error::new(err))
     }
@@ -91,22 +94,25 @@ impl NP_Buffer {
             NP_TypeKeys::Tuple => { Err(NP_Error::new("Can't extract tuple type!")) },
             _ => {
 
-                let pointer: NP_Ptr<ROOT> = NP_Ptr::_new_standard_ptr(ROOT_PTR_ADDR, Rc::clone(&self.schema), Rc::clone(&self.memory));
+                let root_schema: NP_Schema_Ptr = NP_Schema_Ptr { address: 0, schema: Rc::clone(&self.schema)};
+                let root_type =  root_schema.to_type_data();
+
+                let pointer: NP_Ptr<ROOT> = NP_Ptr::_new_standard_ptr(ROOT_PTR_ADDR, root_schema, Rc::clone(&self.memory));
     
                 // casting to ANY type -OR- schema is ANY type
-                if ROOT::type_idx().0 == NP_TypeKeys::Any as i64 || self.schema.type_data.0 == NP_TypeKeys::Any as i64  {
+                if ROOT::type_idx().0 == NP_TypeKeys::Any as u8 || root_type.0 == NP_TypeKeys::Any as u8  {
                     return callback(pointer);
                 }
         
                 // casting matches root schema
-                if ROOT::type_idx().0 == self.schema.type_data.0 {
+                if ROOT::type_idx().0 == root_type.0 {
                     return callback(pointer);
                 }
         
                 let mut err = "TypeError: Attempted to cast type (".to_owned();
                 err.push_str(ROOT::type_idx().1.as_str());
                 err.push_str(") to schema of type (");
-                err.push_str(self.schema.type_data.1.as_str());
+                err.push_str(root_type.1.as_str());
                 err.push_str(")");
                 Err(NP_Error::new(err))
             }
@@ -116,7 +122,8 @@ impl NP_Buffer {
     /// Copy the entire buffer into a JSON object
     /// 
     pub fn json_encode(&self) -> NP_JSON {
-        let root = NP_Ptr::<NP_Any>::_new_standard_ptr(ROOT_PTR_ADDR, Rc::clone(&self.schema), Rc::clone(&self.memory));
+        let root_schema: NP_Schema_Ptr = NP_Schema_Ptr { address: 0, schema: Rc::clone(&self.schema)};
+        let root = NP_Ptr::<NP_Any>::_new_standard_ptr(ROOT_PTR_ADDR, root_schema, Rc::clone(&self.memory));
         root.json_encode()
     }
 
@@ -140,8 +147,10 @@ impl NP_Buffer {
             NP_TypeKeys::List => { Err(NP_Error::new("Can't deep set list type!")) },
             NP_TypeKeys::Tuple => { Err(NP_Error::new("Can't deep set tuple type!")) },
             _ => {
+                let root_schema: NP_Schema_Ptr = NP_Schema_Ptr { address: 0, schema: Rc::clone(&self.schema)};
+
                 let vec_path: Vec<&str> = path.split(".").filter(|v| { v.len() > 0 }).collect();
-                let pointer: NP_Ptr<NP_Any> = NP_Ptr::_new_standard_ptr(ROOT_PTR_ADDR, Rc::clone(&self.schema), Rc::clone(&self.memory));
+                let pointer: NP_Ptr<NP_Any> = NP_Ptr::_new_standard_ptr(ROOT_PTR_ADDR, root_schema, Rc::clone(&self.memory));
                 pointer._deep_set::<X>(vec_path, 0, value)
             }
         }
@@ -151,8 +160,9 @@ impl NP_Buffer {
     /// This can also be used to clear deeply nested collection objects or scalar objects.
     /// 
     pub fn deep_clear(&self, path: &str) -> Result<(), NP_Error> {
+        let root_schema: NP_Schema_Ptr = NP_Schema_Ptr { address: 0, schema: Rc::clone(&self.schema)};
         let vec_path: Vec<&str> = path.split(".").filter(|v| { v.len() > 0 }).collect();
-        let pointer: NP_Ptr<NP_Any> = NP_Ptr::_new_standard_ptr(ROOT_PTR_ADDR, Rc::clone(&self.schema), Rc::clone(&self.memory));
+        let pointer: NP_Ptr<NP_Any> = NP_Ptr::_new_standard_ptr(ROOT_PTR_ADDR, root_schema, Rc::clone(&self.memory));
         pointer._deep_clear(vec_path, 0)
     }
   
@@ -170,8 +180,9 @@ impl NP_Buffer {
             NP_TypeKeys::List => { Err(NP_Error::new("Can't deep get list type from here!")) },
             NP_TypeKeys::Tuple => { Err(NP_Error::new("Can't deep get tuple type from here!")) },
             _ => {
+                let root_schema: NP_Schema_Ptr = NP_Schema_Ptr { address: 0, schema: Rc::clone(&self.schema)};
                 let vec_path: Vec<&str> = path.split(".").filter(|v| { v.len() > 0 }).collect();
-                let pointer: NP_Ptr<NP_Any> = NP_Ptr::_new_standard_ptr(ROOT_PTR_ADDR, Rc::clone(&self.schema), Rc::clone(&self.memory));
+                let pointer: NP_Ptr<NP_Any> = NP_Ptr::_new_standard_ptr(ROOT_PTR_ADDR, root_schema, Rc::clone(&self.memory));
                 pointer._deep_get::<X>(vec_path, 0)
             }
         }
@@ -217,10 +228,14 @@ impl NP_Buffer {
             Some(x) => { x }
         };
 
-        let old_root = NP_Lite_Ptr::new_standard(ROOT_PTR_ADDR, Rc::clone(&self.schema), Rc::clone(&self.memory));
+        let root_schema: NP_Schema_Ptr = NP_Schema_Ptr { address: 0, schema: Rc::clone(&self.schema)};
+
+        let old_root = NP_Lite_Ptr::new_standard(ROOT_PTR_ADDR, root_schema, Rc::clone(&self.memory));
+
+        let root_schema2: NP_Schema_Ptr = NP_Schema_Ptr { address: 0, schema: Rc::clone(&self.schema)};
 
         let new_bytes = Rc::new(NP_Memory::new(Some(capacity), size));
-        let new_root = NP_Lite_Ptr::new_standard(ROOT_PTR_ADDR, Rc::clone(&self.schema), Rc::clone(&new_bytes));
+        let new_root = NP_Lite_Ptr::new_standard(ROOT_PTR_ADDR, root_schema2, Rc::clone(&new_bytes));
 
         old_root.compact(new_root)?;
 
@@ -234,7 +249,9 @@ impl NP_Buffer {
     /// 
     pub fn calc_bytes(&self) -> Result<NP_Compact_Data, NP_Error> {
 
-        let root: NP_Ptr<NP_Any> = NP_Ptr::_new_standard_ptr(ROOT_PTR_ADDR, Rc::clone(&self.schema), Rc::clone(&self.memory));
+        let root_schema: NP_Schema_Ptr = NP_Schema_Ptr { address: 0, schema: Rc::clone(&self.schema)};
+
+        let root: NP_Ptr<NP_Any> = NP_Ptr::_new_standard_ptr(ROOT_PTR_ADDR, root_schema, Rc::clone(&self.memory));
 
         let real_bytes = root.calc_size()? + ROOT_PTR_ADDR;
         let old_size = self.memory.read_bytes().len() as u32;

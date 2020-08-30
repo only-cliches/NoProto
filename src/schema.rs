@@ -538,6 +538,7 @@
 //! 
 //! [Go to NP_Factory docs](../struct.NP_Factory.html)
 //! 
+use core::{convert::TryFrom, fmt::Debug};
 use crate::json_flex::NP_JSON;
 use crate::pointer::any::NP_Any;
 use crate::pointer::misc::NP_Date;
@@ -557,7 +558,7 @@ use alloc::boxed::Box;
 use alloc::borrow::ToOwned;
 use alloc::{rc::Rc, string::ToString};
 
-
+/*
 /// Stores the kind of each schema and any property details related to the schema.  Users of the library should never need to create or manipulate this data type.
 #[doc(hidden)]
 #[derive(Debug)]
@@ -569,71 +570,49 @@ pub enum NP_SchemaKinds {
     List { of: Rc<NP_Schema> },
     Map { value: Rc<NP_Schema> },
     Tuple { sorted: bool, values: Rc<Vec<Rc<NP_Schema>>>}
-}
+}*/
 
 #[derive(Debug)]
 #[doc(hidden)]
+#[repr(u8)]
 // These are just used for runtime type comparison, the type information is never stored in the buffer.
 // When you cast a pointer to some type, this enum is used as comparing numbers is very efficient.
 pub enum NP_TypeKeys {
-    Any = 0,
-    UTF8String = 1,
-    Bytes = 2,
-    Int8 = 3,
-    Int16 = 4,
-    Int32 = 5,
-    Int64 = 6,
-    Uint8 = 7,
-    Uint16 = 8,
-    Uint32 = 9,
-    Uint64 = 10,
-    Float = 11,
-    Double = 12,
-    Decimal = 13,
-    Boolean = 14,
-    Geo = 15,
-    Uuid = 16,
-    Ulid = 17,
-    Date = 18,
-    Enum = 19,
-    Table = 20,
-    Map = 21, 
-    List = 22,
-    Tuple = 23,
-    JSON = 24
+    Any = 1,
+    UTF8String = 2,
+    Bytes = 3,
+    Int8 = 4,
+    Int16 = 5,
+    Int32 = 6,
+    Int64 = 7,
+    Uint8 = 8,
+    Uint16 =9,
+    Uint32 = 10,
+    Uint64 = 11,
+    Float = 12,
+    Double = 13,
+    Decimal = 14,
+    Boolean = 15,
+    Geo = 16,
+    Uuid = 17,
+    Ulid = 18,
+    Date = 19,
+    Enum = 20,
+    Table = 21,
+    Map = 22, 
+    List = 23,
+    Tuple = 24,
+    JSON = 25
 }
 
-impl From<i64> for NP_TypeKeys {
-    fn from(value: i64) -> Self {
-        if value == NP_TypeKeys::Any as i64        { return NP_TypeKeys::Any }
-        if value == NP_TypeKeys::UTF8String as i64 { return NP_TypeKeys::UTF8String }
-        if value == NP_TypeKeys::Bytes as i64      { return NP_TypeKeys::Bytes }
-        if value == NP_TypeKeys::Int8 as i64       { return NP_TypeKeys::Int8 }
-        if value == NP_TypeKeys::Int16 as i64      { return NP_TypeKeys::Int16 }
-        if value == NP_TypeKeys::Int32 as i64      { return NP_TypeKeys::Int32 }
-        if value == NP_TypeKeys::Int64 as i64      { return NP_TypeKeys::Int64 }
-        if value == NP_TypeKeys::Uint8 as i64      { return NP_TypeKeys::Uint8 }
-        if value == NP_TypeKeys::Uint16 as i64     { return NP_TypeKeys::Uint16 }
-        if value == NP_TypeKeys::Uint32 as i64     { return NP_TypeKeys::Uint32 }
-        if value == NP_TypeKeys::Uint64 as i64     { return NP_TypeKeys::Uint64 }
-        if value == NP_TypeKeys::Float as i64      { return NP_TypeKeys::Float }
-        if value == NP_TypeKeys::Double as i64     { return NP_TypeKeys::Double }
-        if value == NP_TypeKeys::Decimal as i64    { return NP_TypeKeys::Decimal }
-        if value == NP_TypeKeys::Boolean as i64    { return NP_TypeKeys::Boolean }
-        if value == NP_TypeKeys::Geo as i64        { return NP_TypeKeys::Geo }
-        if value == NP_TypeKeys::Uuid as i64       { return NP_TypeKeys::Uuid }
-        if value == NP_TypeKeys::Ulid as i64       { return NP_TypeKeys::Ulid }
-        if value == NP_TypeKeys::Date as i64       { return NP_TypeKeys::Date }
-        if value == NP_TypeKeys::Enum as i64       { return NP_TypeKeys::Enum }
-        if value == NP_TypeKeys::Table as i64      { return NP_TypeKeys::Table }
-        if value == NP_TypeKeys::Map as i64        { return NP_TypeKeys::Map }
-        if value == NP_TypeKeys::List as i64       { return NP_TypeKeys::List }
-        if value == NP_TypeKeys::Tuple as i64      { return NP_TypeKeys::Tuple }
-        if value == NP_TypeKeys::JSON as i64       { return NP_TypeKeys::JSON }
-        NP_TypeKeys::Any
+impl From<u8> for NP_TypeKeys {
+    fn from(value: u8) -> Self {
+        if value > 25 { panic!() }
+        unsafe { core::mem::transmute(value) }
     }
 }
 
+/*
 #[doc(hidden)]
 /// Used to parse JSON into valid schema objects used internally by the library.
 /// Users of the library should never need to create or manipulate this data type.
@@ -642,11 +621,128 @@ impl From<i64> for NP_TypeKeys {
 #[derive(Debug)]
 pub struct NP_Schema {
     pub kind: Box<NP_SchemaKinds>,
-    pub type_data: (i64, String),
+    pub type_data: (u8, String),
     pub type_state: i64,
     pub default: Option<NP_JSON>
 }
+*/
 
+/// Trait implmented by types that support schema parsing
+pub trait NP_Schema_Parser {
+
+    /// Get the key for this type
+    fn type_key(&self) -> u8 { 0 }
+
+    /// Parse JSON schema into bytes
+    fn from_json_to_state(&self, _json_schema: &NP_JSON) -> Result<Option<Vec<u8>>, NP_Error> {
+        Err(NP_Error::new("No parsing for this type!"))
+    }
+    
+}
+
+/// New NP Schema
+#[derive(Debug, Clone)]
+pub struct NP_Schema_Ptr {
+    /// The address of this schema
+    pub address: usize,
+    /// The bytes for the schema
+    pub schema: Rc<NP_Schema>
+}
+
+impl NP_Schema_Ptr {
+
+    pub fn copy(&self) -> Self {
+        NP_Schema_Ptr {
+            address: self.address,
+            schema: Rc::clone(&self.schema)
+        }
+    }
+
+    /// Get the type for this address
+    pub fn to_type_key(&self) -> NP_TypeKeys {
+        let type_u8 = (*self.schema).bytes[self.address] as u8;
+        if type_u8 > 25 { panic!(); }
+        let value: NP_TypeKeys = unsafe { core::mem::transmute(type_u8) };
+        value
+    }
+
+    /// Convert to type data
+    pub fn to_type_data(&self) -> (u8, String) {
+        match self.to_type_key() {
+            NP_TypeKeys::Any =>        { return (1, String::from(""))}
+            NP_TypeKeys::UTF8String => { return String::type_idx() }
+            NP_TypeKeys::Bytes =>      { return NP_Bytes::type_idx() }
+            NP_TypeKeys::Int8 =>       { return i8::type_idx() }
+            NP_TypeKeys::Int16 =>      { return i16::type_idx()}
+            NP_TypeKeys::Int32 =>      { return i32::type_idx() }
+            NP_TypeKeys::Int64 =>      { return i64::type_idx() }
+            NP_TypeKeys::Uint8 =>      { return u8::type_idx() }
+            NP_TypeKeys::Uint16 =>     { return u16::type_idx() }
+            NP_TypeKeys::Uint32 =>     { return u32::type_idx() }
+            NP_TypeKeys::Uint64 =>     { return u64::type_idx() }
+            NP_TypeKeys::Float =>      { return f32::type_idx() }
+            NP_TypeKeys::Double =>     { return f64::type_idx() }
+            NP_TypeKeys::Decimal =>    { return NP_Dec::type_idx() }
+            NP_TypeKeys::Boolean =>    { return bool::type_idx() }
+            NP_TypeKeys::Geo =>        { return NP_Geo::type_idx() }
+            NP_TypeKeys::Uuid =>       { return NP_UUID::type_idx() }
+            NP_TypeKeys::Ulid =>       { return NP_ULID::type_idx() }
+            NP_TypeKeys::Date =>       { return NP_Date::type_idx() }
+            NP_TypeKeys::Enum =>       { return NP_Option::type_idx() }
+            NP_TypeKeys::Table =>      { return NP_Table::type_idx() }
+            NP_TypeKeys::Map =>        { return NP_Map::<NP_Any>::type_idx() }
+            NP_TypeKeys::List =>       { return NP_List::<NP_Any>::type_idx() }
+            NP_TypeKeys::Tuple =>      { return NP_Tuple::type_idx() }
+            NP_TypeKeys::JSON =>       { return NP_JSON::type_idx() }
+        }
+    }
+}
+
+/// New NP Schema Parsed
+#[derive(Debug, Clone)]
+pub struct NP_Schema {
+    /// schema data
+    pub bytes: Vec<u8>
+}
+
+impl NP_Schema {
+    /// testing
+    pub fn new() -> Self {
+        NP_Schema {
+            bytes: vec!{}
+        }
+    }
+
+    pub fn get_type(json_schema: &NP_JSON) -> Result<String, NP_Error> {
+        match json_schema["type"] {
+            NP_JSON::String(x) => {
+                Ok(x.clone())
+            },
+            _ => {
+                Err(NP_Error::new("Schemas must have a 'type' property!"))
+            }
+        }
+    }
+
+    /// parse schema from JSON object
+    pub fn from_json(json_schema: Box<NP_JSON>) -> Result<NP_Schema, NP_Error> {
+
+        let mut types: Vec<Box<dyn NP_Schema_Parser>> = Vec::new();
+
+        types.push(Box::new(String::default()));
+
+        for this_type in types {
+            match this_type.from_json_to_state(&json_schema)? {
+                Some(x) => return Ok(NP_Schema { bytes: x}),
+                None => {}
+            }
+        }
+
+        Err(NP_Error::new("Can't find a type that matches this schema!"))
+    }
+}
+
+/*
 #[doc(hidden)]
 #[derive(Debug)]
 pub struct NP_Types { }
@@ -990,3 +1086,4 @@ impl NP_Schema {
         }
     }
 }
+*/

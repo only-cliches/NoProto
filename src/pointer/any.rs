@@ -21,13 +21,15 @@ impl<'a> NP_Any {
     /// 
     pub fn cast<T: NP_Value + Default>(pointer: NP_Ptr<NP_Any>) -> Result<NP_Ptr<T>, NP_Error> {
 
+        let this_type = pointer.schema.schema.bytes[pointer.schema.address];
+
         // schema is "any" type, all casting permitted
-        if pointer.schema.type_data.0 == NP_TypeKeys::Any as i64 {
+        if this_type == NP_TypeKeys::Any as u8 {
             return Ok(NP_Ptr::_new_standard_ptr(pointer.location, pointer.schema, pointer.memory));
         }
 
         // schema matches type
-        if T::type_idx().0 == pointer.schema.type_data.0 { 
+        if T::type_idx().0 == this_type { 
             return Ok(NP_Ptr::_new_standard_ptr(pointer.location, pointer.schema, pointer.memory));
         }
 
@@ -35,7 +37,7 @@ impl<'a> NP_Any {
         let mut err = "TypeError: Attempted to cast type (".to_owned();
         err.push_str(T::type_idx().1.as_str());
         err.push_str(") to schema of type (");
-        err.push_str(pointer.schema.type_data.1.as_str());
+        // err.push_str(NP_TypeKeys::from(this_type));
         err.push_str(")");
         Err(NP_Error::new(err))
     }
@@ -43,12 +45,8 @@ impl<'a> NP_Any {
 
 impl NP_Value for NP_Any {
 
-    fn is_type(type_str: &str) -> bool {
-        type_str == "*" || type_str == "any"
-    }
-
-    fn type_idx() -> (i64, String) { (NP_TypeKeys::Any as i64, "any".to_owned()) }
-    fn self_type_idx(&self) -> (i64, String) { (NP_TypeKeys::Any as i64, "any".to_owned()) }
+    fn type_idx() -> (u8, String) { (NP_TypeKeys::Any as u8, "any".to_owned()) }
+    fn self_type_idx(&self) -> (u8, String) { (NP_TypeKeys::Any as u8, "any".to_owned()) }
 
     fn set_value(_pointer: NP_Lite_Ptr, _value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
         Err(NP_Error::new("Can't use .set() with (Any), must cast first with NP_Any::cast<T>(pointer)."))

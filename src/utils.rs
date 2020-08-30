@@ -121,7 +121,7 @@ pub fn overflow_error(kind: &str, path: &Vec<&str>, path_index: usize) -> Result
     Ok(())
 }
 
-pub fn type_error(schema_type: &(i64, String), casting_type: &(i64, String), path: &Vec<&str>, path_index: usize) -> Result<(), NP_Error> {
+pub fn type_error(schema_type: &(u8, String), casting_type: &(u8, String), path: &Vec<&str>, path_index: usize) -> Result<(), NP_Error> {
     if schema_type.0 != casting_type.0 {
         let mut err = "TypeError: Attempted to get value for type (".to_owned();
         err.push_str(casting_type.1.as_str());
