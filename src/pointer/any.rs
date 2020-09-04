@@ -1,7 +1,8 @@
 
+use alloc::vec::Vec;
 use crate::pointer::NP_Ptr;
 use crate::error::NP_Error;
-use crate::{schema::NP_TypeKeys, pointer::NP_Value, json_flex::NP_JSON};
+use crate::{schema::{NP_Schema, NP_TypeKeys}, pointer::NP_Value, json_flex::NP_JSON};
 use super::{NP_Lite_Ptr, NP_PtrKinds};
 
 use alloc::string::String;
@@ -37,7 +38,7 @@ impl<'a> NP_Any {
         let mut err = "TypeError: Attempted to cast type (".to_owned();
         err.push_str(T::type_idx().1.as_str());
         err.push_str(") to schema of type (");
-        // err.push_str(NP_TypeKeys::from(this_type));
+        err.push_str(NP_TypeKeys::from(this_type).into_type_idx().1.as_str());
         err.push_str(")");
         Err(NP_Error::new(err))
     }
@@ -62,6 +63,18 @@ impl NP_Value for NP_Any {
     }
     fn do_compact(_from_ptr: NP_Lite_Ptr, _to_ptr: NP_Lite_Ptr) -> Result<(), NP_Error> where Self: NP_Value + Default {
         Err(NP_Error::new("Cannot compact an ANY field!"))
+    }
+    fn from_json_to_schema(json_schema: &NP_JSON) -> Result<Option<Vec<u8>>, NP_Error> {
+
+        let type_str = NP_Schema::get_type(json_schema)?;
+
+        if "any" == type_str {
+            let mut schema_data: Vec<u8> = Vec::new();
+            schema_data.push(NP_TypeKeys::Any as u8);
+            return Ok(Some(schema_data));
+        }
+
+        Ok(None)
     }
 }
 

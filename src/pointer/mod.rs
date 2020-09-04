@@ -125,6 +125,12 @@ pub trait NP_Value {
     fn schema_default(schema: &NP_Schema_Ptr) -> Option<Box<Self>> {
         None
     }
+
+    /// Parse JSON schema into bytes
+    /// 
+    fn from_json_to_schema(_json_schema: &NP_JSON) -> Result<Option<Vec<u8>>, NP_Error> {
+        Err(NP_Error::new("No parsing for this type!"))
+    }
 }
 
 #[derive(Debug, Clone)]

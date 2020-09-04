@@ -538,7 +538,7 @@
 //! 
 //! [Go to NP_Factory docs](../struct.NP_Factory.html)
 //! 
-use core::{convert::TryFrom, fmt::Debug};
+use core::{fmt::Debug};
 use crate::json_flex::NP_JSON;
 use crate::pointer::any::NP_Any;
 use crate::pointer::misc::NP_Date;
@@ -555,22 +555,7 @@ use alloc::vec::Vec;
 use alloc::vec;
 use alloc::string::String;
 use alloc::boxed::Box;
-use alloc::borrow::ToOwned;
-use alloc::{rc::Rc, string::ToString};
-
-/*
-/// Stores the kind of each schema and any property details related to the schema.  Users of the library should never need to create or manipulate this data type.
-#[doc(hidden)]
-#[derive(Debug)]
-pub enum NP_SchemaKinds {
-    None,
-    Scalar,
-    Enum { choices: Vec<String> },
-    Table { columns: Rc<Vec<Option<(u8, String, Rc<NP_Schema>)>>> },
-    List { of: Rc<NP_Schema> },
-    Map { value: Rc<NP_Schema> },
-    Tuple { sorted: bool, values: Rc<Vec<Rc<NP_Schema>>>}
-}*/
+use alloc::{rc::Rc};
 
 #[derive(Debug)]
 #[doc(hidden)]
@@ -612,64 +597,10 @@ impl From<u8> for NP_TypeKeys {
     }
 }
 
-/*
-#[doc(hidden)]
-/// Used to parse JSON into valid schema objects used internally by the library.
-/// Users of the library should never need to create or manipulate this data type.
-/// 
-/// 
-#[derive(Debug)]
-pub struct NP_Schema {
-    pub kind: Box<NP_SchemaKinds>,
-    pub type_data: (u8, String),
-    pub type_state: i64,
-    pub default: Option<NP_JSON>
-}
-*/
-
-/// Trait implmented by types that support schema parsing
-pub trait NP_Schema_Parser {
-
-    /// Get the key for this type
-    fn type_key(&self) -> u8 { 0 }
-
-    /// Parse JSON schema into bytes
-    fn from_json_to_state(&self, _json_schema: &NP_JSON) -> Result<Option<Vec<u8>>, NP_Error> {
-        Err(NP_Error::new("No parsing for this type!"))
-    }
-    
-}
-
-/// New NP Schema
-#[derive(Debug, Clone)]
-pub struct NP_Schema_Ptr {
-    /// The address of this schema
-    pub address: usize,
-    /// The bytes for the schema
-    pub schema: Rc<NP_Schema>
-}
-
-impl NP_Schema_Ptr {
-
-    pub fn copy(&self) -> Self {
-        NP_Schema_Ptr {
-            address: self.address,
-            schema: Rc::clone(&self.schema)
-        }
-    }
-
-    /// Get the type for this address
-    pub fn to_type_key(&self) -> NP_TypeKeys {
-        let type_u8 = (*self.schema).bytes[self.address] as u8;
-        if type_u8 > 25 { panic!(); }
-        let value: NP_TypeKeys = unsafe { core::mem::transmute(type_u8) };
-        value
-    }
-
-    /// Convert to type data
-    pub fn to_type_data(&self) -> (u8, String) {
-        match self.to_type_key() {
-            NP_TypeKeys::Any =>        { return (1, String::from(""))}
+impl NP_TypeKeys {
+    pub fn into_type_idx(&self) -> (u8, String) {
+        match self {
+            NP_TypeKeys::Any =>        { return NP_Any::type_idx() }
             NP_TypeKeys::UTF8String => { return String::type_idx() }
             NP_TypeKeys::Bytes =>      { return NP_Bytes::type_idx() }
             NP_TypeKeys::Int8 =>       { return i8::type_idx() }
@@ -698,11 +629,58 @@ impl NP_Schema_Ptr {
     }
 }
 
+/// New NP Schema
+#[derive(Debug, Clone)]
+pub struct NP_Schema_Ptr {
+    /// The address of this schema
+    pub address: usize,
+    /// The bytes for the schema
+    pub schema: Rc<NP_Schema>
+}
+
+impl NP_Schema_Ptr {
+
+    pub fn copy(&self) -> Self {
+        NP_Schema_Ptr {
+            address: self.address,
+            schema: Rc::clone(&self.schema)
+        }
+    }
+
+    pub fn copy_with_addr(&self, new_addr: usize) -> Self {
+        NP_Schema_Ptr {
+            address: new_addr,
+            schema: Rc::clone(&self.schema)
+        }
+    }
+
+    /// Get the type for this address
+    pub fn to_type_key(&self) -> NP_TypeKeys {
+        let type_u8 = (*self.schema).bytes[self.address] as u8;
+        if type_u8 > 25 { panic!(); }
+        let value: NP_TypeKeys = unsafe { core::mem::transmute(type_u8) };
+        value
+    }
+
+    /// Convert to type data
+    pub fn to_type_data(&self) -> (u8, String) {
+        self.to_type_key().into_type_idx()
+    }
+}
+
 /// New NP Schema Parsed
 #[derive(Debug, Clone)]
 pub struct NP_Schema {
     /// schema data
     pub bytes: Vec<u8>
+}
+
+macro_rules! schema_check {
+    ($t: ty, $json: expr) => {
+        match <$t>::from_json_to_schema($json)? {
+            Some(x) => return Ok(NP_Schema { bytes: x}), None => {}
+        }
+    }
 }
 
 impl NP_Schema {
@@ -727,363 +705,36 @@ impl NP_Schema {
     /// parse schema from JSON object
     pub fn from_json(json_schema: Box<NP_JSON>) -> Result<NP_Schema, NP_Error> {
 
-        let mut types: Vec<Box<dyn NP_Schema_Parser>> = Vec::new();
+        schema_check!(NP_Any,          &json_schema);
+        schema_check!(String,          &json_schema);
+        schema_check!(NP_Bytes,        &json_schema);
 
-        types.push(Box::new(String::default()));
+        schema_check!(i8,              &json_schema);
+        schema_check!(i16,             &json_schema);
+        schema_check!(i32,             &json_schema);
+        schema_check!(i64,             &json_schema);
 
-        for this_type in types {
-            match this_type.from_json_to_state(&json_schema)? {
-                Some(x) => return Ok(NP_Schema { bytes: x}),
-                None => {}
-            }
-        }
+        schema_check!(u8,              &json_schema);
+        schema_check!(u16,             &json_schema);
+        schema_check!(u32,             &json_schema);
+        schema_check!(u64,             &json_schema);
+        
+        schema_check!(f32,             &json_schema);
+        schema_check!(f64,             &json_schema);
+
+        schema_check!(NP_Dec,          &json_schema);
+        schema_check!(bool,            &json_schema);
+        schema_check!(NP_Geo,          &json_schema);
+        schema_check!(NP_ULID,         &json_schema);
+        schema_check!(NP_UUID,         &json_schema);
+        schema_check!(NP_Date,         &json_schema);
+        schema_check!(NP_Option,       &json_schema);
+
+        schema_check!(NP_Table,        &json_schema);
+        schema_check!(NP_Map<NP_Any>,  &json_schema);
+        schema_check!(NP_List<NP_Any>, &json_schema);
+        schema_check!(NP_Tuple,        &json_schema);
 
         Err(NP_Error::new("Can't find a type that matches this schema!"))
     }
 }
-
-/*
-#[doc(hidden)]
-#[derive(Debug)]
-pub struct NP_Types { }
-
-impl<'a> NP_Types {
-    /// check if a given type matches the schema
-    pub fn do_check<T: NP_Value + Default>(type_string: &str, json_schema: &NP_JSON)-> Result<Option<NP_Schema>, NP_Error>{
-        if T::is_type(type_string) {
-            Ok(Some(NP_Schema { 
-                kind: Box::new(NP_SchemaKinds::Scalar),
-                type_data: T::type_idx(),
-                type_state: T::schema_state(type_string, json_schema)?,
-                default: Some(json_schema["default"].clone())
-            }))
-        } else {
-            Ok(None)
-        }
-    }
-
-    /// Compile the JSON schema into a NP_Schema
-    pub fn compile_schema(type_string: &str, json_schema: &NP_JSON)-> Result<NP_Schema, NP_Error> {
-
-        let check = NP_Types::do_check::<NP_Any>(type_string, json_schema)?;
-        match check { Some(x) => return Ok(x), None => {} };
-    
-        let check = NP_Types::do_check::<String>(type_string, json_schema)?;
-        match check { Some(x) => return Ok(x), None => {} };
-
-        let check = NP_Types::do_check::<NP_Bytes>(type_string, json_schema)?;
-        match check { Some(x) => return Ok(x), None => {} };
-
-        let check = NP_Types::do_check::<i8>(type_string, json_schema)?;
-        match check { Some(x) => return Ok(x), None => {} };
-
-        let check = NP_Types::do_check::<i16>(type_string, json_schema)?;
-        match check { Some(x) => return Ok(x), None => {} };
-
-        let check = NP_Types::do_check::<i32>(type_string, json_schema)?;
-        match check { Some(x) => return Ok(x), None => {} };
-
-        let check = NP_Types::do_check::<i64>(type_string, json_schema)?;
-        match check { Some(x) => return Ok(x), None => {} };
-
-        let check = NP_Types::do_check::<u8>(type_string, json_schema)?;
-        match check { Some(x) => return Ok(x), None => {} };
-
-        let check = NP_Types::do_check::<u16>(type_string, json_schema)?;
-        match check { Some(x) => return Ok(x), None => {} };
-
-        let check = NP_Types::do_check::<u32>(type_string, json_schema)?;
-        match check { Some(x) => return Ok(x), None => {} };
-
-        let check = NP_Types::do_check::<u64>(type_string, json_schema)?;
-        match check { Some(x) => return Ok(x), None => {} };
-
-        let check = NP_Types::do_check::<f32>(type_string, json_schema)?;
-        match check { Some(x) => return Ok(x), None => {} };
-
-        let check = NP_Types::do_check::<f64>(type_string, json_schema)?;
-        match check { Some(x) => return Ok(x), None => {} };
-
-        let check = NP_Types::do_check::<bool>(type_string, json_schema)?;
-        match check { Some(x) => return Ok(x), None => {} };
-
-        let check = NP_Types::do_check::<NP_Dec>(type_string, json_schema)?;
-        match check { Some(x) => return Ok(x), None => {} };
-
-        let check = NP_Types::do_check::<NP_Geo>(type_string, json_schema)?;
-        match check { Some(x) => return Ok(x), None => {} };
-
-        let check = NP_Types::do_check::<NP_ULID>(type_string, json_schema)?;
-        match check { Some(x) => return Ok(x), None => {} };
-    
-        let check = NP_Types::do_check::<NP_UUID>(type_string, json_schema)?;
-        match check { Some(x) => return Ok(x), None => {} };
-
-        let check = NP_Types::do_check::<NP_Date>(type_string, json_schema)?;
-        match check { Some(x) => return Ok(x), None => {} };
-
-        let mut err = type_string.to_owned();
-        err.push_str(" is not a valid type!");
-        Err(NP_Error::new(err))
-    }
-}
-
-impl NP_Schema {
-
-    /// Get a blank schema
-    pub fn blank() -> NP_Schema {
-
-        NP_Schema {
-            kind: Box::new(NP_SchemaKinds::None),
-            type_data: (-1, "".to_owned()),
-            type_state: 0,
-            default: None
-        }
-    }
-
-    /// Attempt to convert JSON into a valid schema.
-    pub fn from_json(json: Box<NP_JSON>) -> Result<Self, NP_Error> {
-        NP_Schema::validate_model(&*json)
-    }
-
-    /// Validate the JSON as schema.
-    pub fn validate_model(json_schema: &NP_JSON) -> Result<Self, NP_Error> {
-
-        if json_schema.is_dictionary() == false {
-            return Err(NP_Error::new("Object not found at root of schema!"));
-        }
-
-
-        if json_schema["type"].is_string() == false {
-            return Err(NP_Error::new("Must declare a type for every schema!"));
-        }
-
-        let type_string = (*json_schema["type"].into_string().unwrap()).as_str();
-
-        if type_string.len() == 0 {
-            return Err(NP_Error::new("Must declare a type for every schema!"));
-        }
-
-
-        // validate required properties are in place for each kind
-        match type_string {
-            "table" => {
-                
-                let mut columns: Vec<Option<(u8, String, Rc<NP_Schema>)>> = vec![];
-
-                for _x in 0..255 {
-                    columns.push(None);
-                }
-
-                {
-                    let borrowed_schema = json_schema;
-
-                    if borrowed_schema["columns"].is_array() == false {
-                        return Err(NP_Error::new("Table kind requires 'columns' property as array!"));
-                    }
-
-                    let mut index = 0;
-                    for column in borrowed_schema["columns"].into_vec().unwrap() {
-
-                        if column[0].is_string() == false {
-                            return Err(NP_Error::new("Table kind requires all columns have a name!"));
-                        }
-
-                        let column_name = column[0].into_string().unwrap();
-                        
-
-                        if column_name.len() == 0 {
-                            return Err(NP_Error::new("Table kind requires all columns have a name!"));
-                        }
-
-                        if column[1].is_dictionary() == false {
-                            return Err(NP_Error::new("Table kind requires all columns have a type!"));
-                        }
-
-                        let good_schema = NP_Schema::validate_model(&column[1])?;
-                        
-                        let this_col_obj = &column[1].into_hashmap().unwrap();
-
-                        let use_index = match this_col_obj.get("i") {
-                            Some(obj) => {
-                                match obj {
-                                    NP_JSON::Integer(x) => {
-                                        *x as usize
-                                    },
-                                    _ => index as usize
-                                }
-                            },
-                            None => index as usize
-                        };
-
-
-                        if use_index > 255 {
-                            return Err(NP_Error::new("Table cannot have column index above 255!"));
-                        }
-
-                        match &columns[use_index] {
-                            Some(_x) => {
-                                return Err(NP_Error::new("Table column index numbering conflict!"));
-                            },
-                            None => {
-                                columns[use_index] = Some((use_index as u8, column_name.to_string(), Rc::new(good_schema)));
-                            }
-                        };
-
-                        index += 1;
-                    }
-                }
-
-                Ok(NP_Schema {
-                    kind: Box::new(NP_SchemaKinds::Table { 
-                        columns: Rc::new(columns) 
-                    }),
-                    type_data: NP_Table::type_idx(),
-                    type_state: 0,
-                    default: None
-                })
-            },
-            "list" => {
-
-                {
-                    let borrowed_schema = json_schema;
-                    if borrowed_schema["of"].is_null() || borrowed_schema["of"].is_dictionary() == false {
-                        return Err(NP_Error::new("List kind requires 'of' property as schema object!"));
-                    }
-                }
-
-                Ok(NP_Schema {
-                    kind: Box::new(NP_SchemaKinds::List { 
-                        of: Rc::new(NP_Schema::validate_model(&json_schema["of"])?) 
-                    }),
-                    type_data: NP_List::<NP_Any>::type_idx(),
-                    type_state: 0,
-                    default: None
-                })
-            },
-            "map" => {
-
-                {
-                    let borrowed_schema = json_schema;
-
-                    if borrowed_schema["value"].is_null() || borrowed_schema["value"].is_dictionary() == false {
-                        return Err(NP_Error::new("Map kind requires 'value' property as schema object!"));
-                    }
-                }
-                Ok(NP_Schema {
-                    kind: Box::new(NP_SchemaKinds::Map { 
-                        value: Rc::new(NP_Schema::validate_model(&json_schema["value"])?)
-                    }),
-                    type_data: NP_Map::<NP_Any>::type_idx(),
-                    type_state: 0,
-                    default: None
-                })
-            },
-            "tuple" => {
-
-                let mut schemas: Vec<Rc<NP_Schema>> = vec![];
-
-                let sorted;
-
-                {
-                    let borrowed_schema = json_schema;
-
-                    sorted = borrowed_schema["sorted"].is_true();
-
-                    if borrowed_schema["values"].is_null() || borrowed_schema["values"].is_array() == false  {
-                        return Err(NP_Error::new("Tuple type requires 'values' property as array of schema objects!"));
-                    }
-
-                    for schema in borrowed_schema["values"].into_vec().unwrap().into_iter() {
-                        let good_schema = NP_Schema::validate_model(schema)?;
-                        if sorted {
-                            match *good_schema.kind {
-                                NP_SchemaKinds::Scalar => { // scalar string and bytes must have fixed sizes
-
-                                    match NP_TypeKeys::from(good_schema.type_data.0) {
-                                        NP_TypeKeys::UTF8String => {
-                                            if good_schema.type_state == -1 { // no fixed length
-                                                return Err(NP_Error::new("String must have `size` property when child of sorted tuple!"));
-                                            }
-                                        },
-                                        NP_TypeKeys::Bytes => {
-                                            if good_schema.type_state == -1 { // no fixed length
-                                                return Err(NP_Error::new("Bytes must have `size` property when child of sorted tuple!"));
-                                            }
-                                        },
-                                        NP_TypeKeys::Float => {
-                                            return Err(NP_Error::new("Float is not a supported child for sorted tuples!"));
-                                        },
-                                        NP_TypeKeys::Double => {
-                                            return Err(NP_Error::new("Double is not a supported child for sorted tuples!"));
-                                        },
-                                        NP_TypeKeys::Geo => {
-                                            return Err(NP_Error::new("Geo is not a supported child for sorted tuples!"));
-                                        },
-                                        _ => {
-
-                                        }
-                                    }
-                                },
-                                NP_SchemaKinds::Enum { choices: _ } => {
-                 
-                                },
-                                _ => { // table, tuple, list or map
-                                    return Err(NP_Error::new("Sorted tuples cannot have a collection type (List, Tuple, Map or Table) as child!"));
-                                }
-                            }
-                        }
-
-                        schemas.push(Rc::new(good_schema));
-                    }
-                }
-            
-                Ok(NP_Schema {
-                    kind: Box::new(NP_SchemaKinds::Tuple {
-                        sorted: sorted,
-                        values: Rc::new(schemas)
-                    }),
-                    type_data: NP_Tuple::type_idx(),
-                    type_state: 0,
-                    default: None
-                })
-            },
-            "option" => { 
-
-                let mut options: Vec<String> = vec![];
-
-                {
-                    let borrowed_schema = json_schema;
-
-                    if borrowed_schema["choices"].is_array() == false  {
-                        return Err(NP_Error::new("Option kind requires 'choices' property as array of string choices!"));
-                    }
-
-                    for option in borrowed_schema["choices"].into_vec().unwrap().into_iter() {
-                        if option.is_string() == false {
-                            return Err(NP_Error::new("Option kind requires 'choices' property as array of string choices!"));
-                        }
-                        options.push(option.into_string().unwrap().to_string());
-                    }
-                }
-
-                if options.len() > 255 {
-                    return Err(NP_Error::new("Cannot have more than 255 choices for option type!"));
-                }
-
-                Ok(NP_Schema {
-                    kind: Box::new(NP_SchemaKinds::Enum {
-                        choices: options
-                    }),
-                    type_data: NP_Option::type_idx(),
-                    type_state: 0,
-                    default: Some(json_schema["default"].clone())
-                })
-            },
-            _ => {
-                NP_Types::compile_schema(type_string, json_schema)
-            }
-        }
-    }
-}
-*/

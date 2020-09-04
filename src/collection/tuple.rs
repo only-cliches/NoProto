@@ -1,7 +1,7 @@
 use crate::pointer::any::NP_Any;
 use crate::pointer::NP_Ptr;
 use crate::pointer::{NP_PtrKinds, NP_Value, NP_Lite_Ptr};
-use crate::{memory::{NP_Size, NP_Memory}, schema::{NP_SchemaKinds, NP_Schema, NP_TypeKeys}, error::NP_Error, json_flex::NP_JSON};
+use crate::{memory::{NP_Size, NP_Memory}, schema::{NP_Schema, NP_TypeKeys}, error::NP_Error, json_flex::NP_JSON};
 
 use alloc::vec::Vec;
 use alloc::string::String;
@@ -136,8 +136,8 @@ impl NP_Value for NP_Tuple {
     fn is_type(_type_str: &str) -> bool {  // not needed for collection types
         unreachable!()
     }
-    fn type_idx() -> (u8, String) { (NP_TypeKeys::Tuple as i64, "tuple".to_owned()) }
-    fn self_type_idx(&self) -> (u8, String) { (NP_TypeKeys::Tuple as i64, "tuple".to_owned()) }
+    fn type_idx() -> (u8, String) { (NP_TypeKeys::Tuple as u8, "tuple".to_owned()) }
+    fn self_type_idx(&self) -> (u8, String) { (NP_TypeKeys::Tuple as u8, "tuple".to_owned()) }
     fn set_value(_pointer: NP_Lite_Ptr, _value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
         Err(NP_Error::new("Type (tuple) doesn't support .set()! Use .into() instead."))
     }

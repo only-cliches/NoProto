@@ -1,4 +1,3 @@
-use crate::schema::NP_Schema_Parser;
 use crate::schema::NP_Schema_Ptr;
 use alloc::vec::Vec;
 use crate::utils::to_signed;
@@ -668,60 +667,6 @@ impl Default for NP_Dec {
      }
 }
 
-impl NP_Schema_Parser for NP_Dec {
-
-    fn type_key(&self) -> u8 { NP_TypeKeys::Bytes as u8 }
-
-    fn from_json_to_state(&self, json_schema: &NP_JSON) -> Result<Option<Vec<u8>>, NP_Error> {
-
-        let type_str = NP_Schema::get_type(json_schema)?;
-
-        if "decimal" == type_str || "dec" == type_str {
-            let mut schema_data: Vec<u8> = Vec::new();
-            schema_data.push(NP_TypeKeys::Decimal as u8);
-
-            let mut exp: u8 = 0;
-
-
-            match json_schema["exp"] {
-                NP_JSON::Integer(x) => {
-                    if x > 255 || x < 0 {
-                        return Err(NP_Error::new("Decimal 'exp' property must be between 0 and 255!"))
-                    }
-                    exp = x as u8;
-                    schema_data.push(x as u8);
-                },
-                _ => {
-                    return Err(NP_Error::new("Decimal type requires 'exp' property!"))
-                }
-            }
-
-            let mult = 10i64.pow(exp as u32);
-
-            match json_schema["default"] {
-                NP_JSON::Float(x) => {
-                    schema_data.push(1);
-                    let value = x * (mult as f64);
-                    schema_data.extend((value as i64).to_be_bytes().to_vec())
-                },
-                NP_JSON::Integer(x) => {
-                    schema_data.push(1);
-                    let value = x * (mult as i64);
-                    schema_data.extend((value as i64).to_be_bytes().to_vec())
-                },
-                _ => {
-                    schema_data.push(0);
-                    schema_data.extend(0i64.to_be_bytes().to_vec())
-                }
-            }
-
-
-            return Ok(Some(schema_data))
-        }
-
-        Ok(None)
-    }
-}
 
 impl NP_Value for NP_Dec {
 
@@ -843,6 +788,56 @@ impl NP_Value for NP_Dec {
         } else {
             Ok(core::mem::size_of::<i64>() as u32)
         }
+    }
+
+    fn from_json_to_schema(json_schema: &NP_JSON) -> Result<Option<Vec<u8>>, NP_Error> {
+
+        let type_str = NP_Schema::get_type(json_schema)?;
+
+        if "decimal" == type_str || "dec" == type_str {
+            let mut schema_data: Vec<u8> = Vec::new();
+            schema_data.push(NP_TypeKeys::Decimal as u8);
+
+            let mut exp: u8 = 0;
+
+
+            match json_schema["exp"] {
+                NP_JSON::Integer(x) => {
+                    if x > 255 || x < 0 {
+                        return Err(NP_Error::new("Decimal 'exp' property must be between 0 and 255!"))
+                    }
+                    exp = x as u8;
+                    schema_data.push(x as u8);
+                },
+                _ => {
+                    return Err(NP_Error::new("Decimal type requires 'exp' property!"))
+                }
+            }
+
+            let mult = 10i64.pow(exp as u32);
+
+            match json_schema["default"] {
+                NP_JSON::Float(x) => {
+                    schema_data.push(1);
+                    let value = x * (mult as f64);
+                    schema_data.extend((value as i64).to_be_bytes().to_vec())
+                },
+                NP_JSON::Integer(x) => {
+                    schema_data.push(1);
+                    let value = x * (mult as i64);
+                    schema_data.extend((value as i64).to_be_bytes().to_vec())
+                },
+                _ => {
+                    schema_data.push(0);
+                    schema_data.extend(0i64.to_be_bytes().to_vec())
+                }
+            }
+
+
+            return Ok(Some(schema_data))
+        }
+
+        Ok(None)
     }
 }
 
@@ -1157,70 +1152,6 @@ fn geo_default_value(size: u8, json: &NP_JSON) -> Result<Option<NP_Geo_Bytes>, N
     }
 }
 
-impl NP_Schema_Parser for NP_Geo {
-
-    fn type_key(&self) -> u8 { NP_TypeKeys::Geo as u8 }
-
-    fn from_json_to_state(&self, json_schema: &NP_JSON) -> Result<Option<Vec<u8>>, NP_Error> {
-
-        let type_str = NP_Schema::get_type(json_schema)?;
-
-        match type_str.as_str() {
-            "geo4" => {
-                let mut schema_data: Vec<u8> = Vec::new();
-                schema_data.push(NP_TypeKeys::Geo as u8);
-                schema_data.push(4);
-                match geo_default_value(4, json_schema)? {
-                    Some(x) => {
-                        schema_data.push(1);
-                        schema_data.extend(x.lat);
-                        schema_data.extend(x.lng);
-                    },
-                    None => {
-                        schema_data.push(0);
-                    }
-                }
-                Ok(Some(schema_data))
-            },
-            "geo8" => {
-                let mut schema_data: Vec<u8> = Vec::new();
-                schema_data.push(NP_TypeKeys::Geo as u8);
-                schema_data.push(8);
-                match geo_default_value(8, json_schema)? {
-                    Some(x) => {
-                        schema_data.push(1);
-                        schema_data.extend(x.lat);
-                        schema_data.extend(x.lng);
-                    },
-                    None => {
-                        schema_data.push(0);
-                    }
-                }
-                Ok(Some(schema_data))
-            },
-            "geo16" => {
-                let mut schema_data: Vec<u8> = Vec::new();
-                schema_data.push(NP_TypeKeys::Geo as u8);
-                schema_data.push(16);
-                match geo_default_value(16, json_schema)? {
-                    Some(x) => {
-                        schema_data.push(1);
-                        schema_data.extend(x.lat);
-                        schema_data.extend(x.lng);
-                    },
-                    None => {
-                        schema_data.push(0);
-                    }
-                }
-                Ok(Some(schema_data))
-            },
-            _ => {
-                Ok(None)
-            }
-        }
-    }
-}
-
 impl NP_Value for NP_Geo {
 
     fn schema_default(schema: &NP_Schema_Ptr) -> Option<Box<Self>> {
@@ -1463,6 +1394,65 @@ impl NP_Value for NP_Geo {
             Ok(schema_state.size as u32)
         }
     }
+
+    fn from_json_to_schema(json_schema: &NP_JSON) -> Result<Option<Vec<u8>>, NP_Error> {
+
+        let type_str = NP_Schema::get_type(json_schema)?;
+
+        match type_str.as_str() {
+            "geo4" => {
+                let mut schema_data: Vec<u8> = Vec::new();
+                schema_data.push(NP_TypeKeys::Geo as u8);
+                schema_data.push(4);
+                match geo_default_value(4, json_schema)? {
+                    Some(x) => {
+                        schema_data.push(1);
+                        schema_data.extend(x.lat);
+                        schema_data.extend(x.lng);
+                    },
+                    None => {
+                        schema_data.push(0);
+                    }
+                }
+                Ok(Some(schema_data))
+            },
+            "geo8" => {
+                let mut schema_data: Vec<u8> = Vec::new();
+                schema_data.push(NP_TypeKeys::Geo as u8);
+                schema_data.push(8);
+                match geo_default_value(8, json_schema)? {
+                    Some(x) => {
+                        schema_data.push(1);
+                        schema_data.extend(x.lat);
+                        schema_data.extend(x.lng);
+                    },
+                    None => {
+                        schema_data.push(0);
+                    }
+                }
+                Ok(Some(schema_data))
+            },
+            "geo16" => {
+                let mut schema_data: Vec<u8> = Vec::new();
+                schema_data.push(NP_TypeKeys::Geo as u8);
+                schema_data.push(16);
+                match geo_default_value(16, json_schema)? {
+                    Some(x) => {
+                        schema_data.push(1);
+                        schema_data.extend(x.lat);
+                        schema_data.extend(x.lng);
+                    },
+                    None => {
+                        schema_data.push(0);
+                    }
+                }
+                Ok(Some(schema_data))
+            },
+            _ => {
+                Ok(None)
+            }
+        }
+    }
 }
 
 /// Represents a ULID type which has a 6 byte timestamp and 10 bytes of randomness
@@ -1523,25 +1513,6 @@ impl NP_ULID {
         result.push_str(to_base32(self.id, 16).as_str());
 
         result
-    }
-}
-
-
-impl NP_Schema_Parser for NP_ULID {
-
-    fn type_key(&self) -> u8 { NP_TypeKeys::Ulid as u8 }
-
-    fn from_json_to_state(&self, json_schema: &NP_JSON) -> Result<Option<Vec<u8>>, NP_Error> {
-
-        let type_str = NP_Schema::get_type(json_schema)?;
-
-        if "ulid" == type_str {
-            let mut schema_data: Vec<u8> = Vec::new();
-            schema_data.push(NP_TypeKeys::Ulid as u8);
-            return Ok(Some(schema_data));
-        }
-        
-        Ok(None)
     }
 }
 
@@ -1662,6 +1633,18 @@ impl NP_Value for NP_ULID {
         }
     }
 
+    fn from_json_to_schema(json_schema: &NP_JSON) -> Result<Option<Vec<u8>>, NP_Error> {
+
+        let type_str = NP_Schema::get_type(json_schema)?;
+
+        if "ulid" == type_str {
+            let mut schema_data: Vec<u8> = Vec::new();
+            schema_data.push(NP_TypeKeys::Ulid as u8);
+            return Ok(Some(schema_data));
+        }
+        
+        Ok(None)
+    }
 
 }
 
@@ -1746,25 +1729,6 @@ impl Default for NP_UUID {
      }
 }
 
-
-impl NP_Schema_Parser for NP_UUID {
-
-    fn type_key(&self) -> u8 { NP_TypeKeys::Uuid as u8 }
-
-    fn from_json_to_state(&self, json_schema: &NP_JSON) -> Result<Option<Vec<u8>>, NP_Error> {
-
-        let type_str = NP_Schema::get_type(json_schema)?;
-
-        if "ulid" == type_str {
-            let mut schema_data: Vec<u8> = Vec::new();
-            schema_data.push(NP_TypeKeys::Uuid as u8);
-            return Ok(Some(schema_data));
-        }
-        
-        Ok(None)
-    }
-}
-
 impl NP_Value for NP_UUID {
 
     fn type_idx() -> (u8, String) { (NP_TypeKeys::Uuid as u8, "uuid".to_owned()) }
@@ -1845,6 +1809,18 @@ impl NP_Value for NP_UUID {
         }
     }
 
+    fn from_json_to_schema(json_schema: &NP_JSON) -> Result<Option<Vec<u8>>, NP_Error> {
+
+        let type_str = NP_Schema::get_type(json_schema)?;
+
+        if "ulid" == type_str {
+            let mut schema_data: Vec<u8> = Vec::new();
+            schema_data.push(NP_TypeKeys::Uuid as u8);
+            return Ok(Some(schema_data));
+        }
+        
+        Ok(None)
+    }
 
 }
 
@@ -1914,78 +1890,6 @@ struct NP_Option_Schema_State {
     pub choices: Vec<String>
 }
 
-impl NP_Schema_Parser for NP_Option {
-
-    fn type_key(&self) -> u8 { NP_TypeKeys::Enum as u8 }
-
-    fn from_json_to_state(&self, json_schema: &NP_JSON) -> Result<Option<Vec<u8>>, NP_Error> {
-
-        let type_str = NP_Schema::get_type(json_schema)?;
-
-        if "option" == type_str || "enum" == type_str {
-            let mut schema_data: Vec<u8> = Vec::new();
-            schema_data.push(NP_TypeKeys::Enum as u8);
-
-            let mut choices: Vec<String> = Vec::new();
-
-            let default_stir: Option<String> = None;
-
-            match json_schema["default"] {
-                NP_JSON::String(def) => {
-                    default_stir = Some(def);
-                },
-                _ => {}
-            }
-
-            let default_index: Option<u8> = None;
-
-            match json_schema["choices"] {
-                NP_JSON::Array(x) => {
-                    for opt in x {
-                        match opt {
-                            NP_JSON::String(stir) => {
-                                if stir.len() > 255 {
-                                    return Err(NP_Error::new("'option' choices cannot be longer than 255 characters each!"))
-                                }
-                                if let Some(def) = default_stir {
-                                    if def == stir {
-                                        default_index = Some(choices.len() as u8);
-                                    }
-                                }
-                                choices.push(stir);
-                            },
-                            _ => {}
-                        }
-                    }
-                },
-                _ => {
-                    return Err(NP_Error::new("'option' type requires a 'choices' key with an array of strings!"))
-                }
-            }
-
-            if choices.len() > 254 {
-                return Err(NP_Error::new("'option' type cannot have more than 254 choices!"))
-            }
-
-            // default value
-            match default_index {
-                Some(x) => schema_data.push(x + 1),
-                None => schema_data.push(0)
-            }
-
-            // choices
-            schema_data.push(choices.len() as u8);
-            for choice in choices {
-                schema_data.push(choice.len() as u8);
-                schema_data.extend(choice.as_bytes().to_vec())
-            }
-
-            return Ok(Some(schema_data));
-        }
-        
-        Ok(None)
-    }
-}
 
 impl NP_Value for NP_Option {
 
@@ -2119,37 +2023,99 @@ impl NP_Value for NP_Option {
         }
     }
 
+    fn from_json_to_schema(json_schema: &NP_JSON) -> Result<Option<Vec<u8>>, NP_Error> {
+
+        let type_str = NP_Schema::get_type(json_schema)?;
+
+        if "option" == type_str || "enum" == type_str {
+            let mut schema_data: Vec<u8> = Vec::new();
+            schema_data.push(NP_TypeKeys::Enum as u8);
+
+            let mut choices: Vec<String> = Vec::new();
+
+            let default_stir: Option<String> = None;
+
+            match json_schema["default"] {
+                NP_JSON::String(def) => {
+                    default_stir = Some(def);
+                },
+                _ => {}
+            }
+
+            let default_index: Option<u8> = None;
+
+            match json_schema["choices"] {
+                NP_JSON::Array(x) => {
+                    for opt in x {
+                        match opt {
+                            NP_JSON::String(stir) => {
+                                if stir.len() > 255 {
+                                    return Err(NP_Error::new("'option' choices cannot be longer than 255 characters each!"))
+                                }
+                                if let Some(def) = default_stir {
+                                    if def == stir {
+                                        default_index = Some(choices.len() as u8);
+                                    }
+                                }
+                                choices.push(stir);
+                            },
+                            _ => {}
+                        }
+                    }
+                },
+                _ => {
+                    return Err(NP_Error::new("'option' type requires a 'choices' key with an array of strings!"))
+                }
+            }
+
+            if choices.len() > 254 {
+                return Err(NP_Error::new("'option' type cannot have more than 254 choices!"))
+            }
+
+            // default value
+            match default_index {
+                Some(x) => schema_data.push(x + 1),
+                None => schema_data.push(0)
+            }
+
+            // choices
+            schema_data.push(choices.len() as u8);
+            for choice in choices {
+                schema_data.push(choice.len() as u8);
+                schema_data.extend(choice.as_bytes().to_vec())
+            }
+
+            return Ok(Some(schema_data));
+        }
+        
+        Ok(None)
+    }
 
 }
 
+fn bool_get_schema_state(schema_ptr: &NP_Schema_Ptr) -> Option<bool> {
+
+    match schema_ptr.schema.bytes[schema_ptr.address + 1] {
+        0 => None,
+        1 => Some(true),
+        2 => Some(false)
+    }
+}
 
 impl NP_Value for bool {
 
-    fn is_type( type_str: &str) -> bool {
-        "bool" == type_str || "boolean" == type_str
-    }
-
-    fn type_idx() -> (u8, String) { (NP_TypeKeys::Boolean as i64, "bool".to_owned()) }
-    fn self_type_idx(&self) -> (u8, String) { (NP_TypeKeys::Boolean as i64, "bool".to_owned()) }
+    fn type_idx() -> (u8, String) { (NP_TypeKeys::Boolean as u8, "bool".to_owned()) }
+    fn self_type_idx(&self) -> (u8, String) { (NP_TypeKeys::Boolean as u8, "bool".to_owned()) }
 
     fn schema_default(schema: &NP_Schema_Ptr) -> Option<Box<Self>> {
-        match &schema.default {
+
+        let state = bool_get_schema_state(&schema);
+
+        match state {
             Some(x) => {
-                match x {
-                    NP_JSON::True => {
-                        Some(Box::new(true))
-                    },
-                    NP_JSON::False => {
-                        Some(Box::new(false))
-                    },
-                    _ => {
-                        None
-                    }
-                }
+                Some(Box::new(x))
             },
-            None => {
-                None
-            }
+            None => None
         }
     }
 
@@ -2215,8 +2181,15 @@ impl NP_Value for bool {
                         }
                     },
                     None => {
-                        match &ptr.schema.default {
-                            Some(x) => x.clone(),
+                        let state = bool_get_schema_state(&ptr.schema);
+                        match state {
+                            Some(x) => {
+                                if x == true {
+                                    NP_JSON::True
+                                } else {
+                                    NP_JSON::False
+                                }
+                            },
                             None => NP_JSON::Null
                         }
                     }
@@ -2238,7 +2211,31 @@ impl NP_Value for bool {
         }
     }
 
+    fn from_json_to_schema(json_schema: &NP_JSON) -> Result<Option<Vec<u8>>, NP_Error> {
 
+        let type_str = NP_Schema::get_type(json_schema)?;
+
+        if type_str == "bool" || type_str == "boolean" {
+            let mut schema_data: Vec<u8> = Vec::new();
+            schema_data.push(NP_TypeKeys::Boolean as u8);
+
+            match json_schema["default"] {
+                NP_JSON::False => {
+                    schema_data.push(2);
+                },
+                NP_JSON::True => {
+                    schema_data.push(1);
+                },
+                _ => {
+                    schema_data.push(0);
+                }
+            };
+
+            return Ok(Some(schema_data));
+        }
+
+        Ok(None)
+    }
 }
 
 /// Stores the current unix epoch in u64
@@ -2252,6 +2249,21 @@ impl NP_Date {
     /// Create a new date type with the given time
     pub fn new(time: u64) -> Self {
         NP_Date { value: time }
+    }
+
+    pub fn get_schema_state(schema_ptr: &NP_Schema_Ptr) -> Option<NP_Date> {
+
+        let has_default = schema_ptr.schema.bytes[schema_ptr.address + 1];
+
+        if has_default == 0 {
+            None
+        } else {
+            let bytes_slice = &schema_ptr.schema.bytes[(schema_ptr.address + 2)..(schema_ptr.address + 10)];
+
+            let u64_bytes = 0u64.to_be_bytes();
+            u64_bytes.copy_from_slice(bytes_slice);
+            Some(NP_Date { value: u64::from_be_bytes(u64_bytes)})
+        }
     }
 }
 
@@ -2275,31 +2287,16 @@ impl fmt::Debug for NP_Date {
 
 impl NP_Value for NP_Date {
 
-    fn is_type( type_str: &str) -> bool {
-        "date" == type_str
-    }
-
-    fn type_idx() -> (u8, String) { (NP_TypeKeys::Date as i64, "date".to_owned()) }
-    fn self_type_idx(&self) -> (u8, String) { (NP_TypeKeys::Date as i64, "date".to_owned()) }
+    fn type_idx() -> (u8, String) { (NP_TypeKeys::Date as u8, "date".to_owned()) }
+    fn self_type_idx(&self) -> (u8, String) { (NP_TypeKeys::Date as u8, "date".to_owned()) }
 
     fn schema_default(schema: &NP_Schema_Ptr) -> Option<Box<Self>> {
-        match &schema.default {
+
+        match NP_Date::get_schema_state(&schema) {
             Some(x) => {
-                match x {
-                    NP_JSON::Float(value) => {
-                        Some(Box::new(NP_Date::new(*value as u64)))
-                    },
-                    NP_JSON::Integer(value) => {
-                        Some(Box::new(NP_Date::new(*value as u64)))
-                    },
-                    _ => {
-                        None
-                    }
-                }
+                Some(Box::new(x))
             },
-            None => {
-                None
-            }
+            None => None
         }
     }
 
@@ -2354,8 +2351,8 @@ impl NP_Value for NP_Date {
                         NP_JSON::Integer(y.value as i64)
                     },
                     None => {
-                        match &ptr.schema.default {
-                            Some(x) => x.clone(),
+                        match NP_Date::get_schema_state(&ptr.schema) {
+                            Some(x) => NP_JSON::Integer(x.value as i64),
                             None => NP_JSON::Null
                         }
                     }
@@ -2375,5 +2372,30 @@ impl NP_Value for NP_Date {
         } else {
             Ok(core::mem::size_of::<u64>() as u32)
         }
+    }
+
+    fn from_json_to_schema(json_schema: &NP_JSON) -> Result<Option<Vec<u8>>, NP_Error> {
+
+        let type_str = NP_Schema::get_type(json_schema)?;
+
+        if "date" == type_str {
+
+            let mut schema_data: Vec<u8> = Vec::new();
+            schema_data.push(NP_TypeKeys::Date as u8);
+
+            match json_schema["default"] {
+                NP_JSON::Integer(x) => {
+                    schema_data.push(1);
+                    schema_data.extend((x as u64).to_be_bytes().to_vec())
+                },
+                _ => {
+                    schema_data.push(0);
+                }
+            }
+
+            return Ok(Some(schema_data));
+        }
+
+        Ok(None)
     }
 }

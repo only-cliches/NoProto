@@ -493,4 +493,7 @@
 //! 
 //! You can use the runtime to parse JSON schemas into byte array schemas at any time, and the JSON/byte array schemas can be used interchangebly.
 //! 
-//! The byte array schema will store default values and all other supported properties.
+//! The byte array schema stores default values and all other supported properties.
+//! 
+//! 
+//! 

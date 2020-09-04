@@ -1,5 +1,4 @@
 use crate::schema::NP_Schema_Ptr;
-use crate::schema::NP_Schema_Parser;
 use alloc::vec::Vec;
 use crate::utils::to_unsigned;
 use crate::utils::to_signed;
@@ -22,42 +21,6 @@ pub enum NP_NumType {
 
 macro_rules! noproto_number {
     ($t:ty, $str1: tt, $str2: tt, $tkey: expr, $numType: expr) => {
-
-        impl NP_Schema_Parser for $t {
-
-            fn type_key(&self) -> u8 { $tkey as u8 }
-
-            fn from_json_to_state(&self, json_schema: &NP_JSON) -> Result<Option<Vec<u8>>, NP_Error> {
-        
-                let type_str = NP_Schema::get_type(json_schema)?;
-        
-                if type_str == $str1 || type_str == $str2 {
-        
-                    let mut schema_data: Vec<u8> = Vec::new();
-                    schema_data.push($tkey as u8);
-        
-                    match json_schema["default"] {
-                        NP_JSON::Float(x) => {
-                            schema_data.push(1);
-                            schema_data.extend((x as $t).to_be_bytes().to_vec());
-                        },
-                        NP_JSON::Integer(x) => {
-                            schema_data.push(1);
-                            schema_data.extend((x as $t).to_be_bytes().to_vec());
-                        },
-                        _ => {
-                            schema_data.push(0);
-                        }
-                    }
-        
-                    return Ok(Some(schema_data));
-                }
-                
-                Ok(None)
-            }
-        }
-
-
 
         impl NP_Value for $t {
 
@@ -178,6 +141,35 @@ macro_rules! noproto_number {
                 } else {
                     Ok(core::mem::size_of::<Self>() as u32)
                 }
+            }
+
+            fn from_json_to_schema(json_schema: &NP_JSON) -> Result<Option<Vec<u8>>, NP_Error> {
+        
+                let type_str = NP_Schema::get_type(json_schema)?;
+        
+                if type_str == $str1 || type_str == $str2 {
+        
+                    let mut schema_data: Vec<u8> = Vec::new();
+                    schema_data.push($tkey as u8);
+        
+                    match json_schema["default"] {
+                        NP_JSON::Float(x) => {
+                            schema_data.push(1);
+                            schema_data.extend((x as $t).to_be_bytes().to_vec());
+                        },
+                        NP_JSON::Integer(x) => {
+                            schema_data.push(1);
+                            schema_data.extend((x as $t).to_be_bytes().to_vec());
+                        },
+                        _ => {
+                            schema_data.push(0);
+                        }
+                    }
+        
+                    return Ok(Some(schema_data));
+                }
+                
+                Ok(None)
             }
         }
     }

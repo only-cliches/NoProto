@@ -1,9 +1,10 @@
-use crate::{memory::{NP_Size, NP_Memory}, pointer::{NP_Value, NP_Ptr, NP_PtrKinds, any::NP_Any, NP_Lite_Ptr}, error::NP_Error, schema::{NP_SchemaKinds, NP_Schema, NP_TypeKeys}, json_flex::NP_JSON};
+use crate::{memory::{NP_Size, NP_Memory}, pointer::{NP_Value, NP_Ptr, NP_PtrKinds, any::NP_Any, NP_Lite_Ptr}, error::NP_Error, schema::{NP_Schema, NP_TypeKeys, NP_Schema_Ptr}, json_flex::NP_JSON};
 
 use alloc::string::String;
 use alloc::borrow::ToOwned;
 use alloc::boxed::Box;
 use alloc::{rc::Rc, vec::*};
+use core::marker::PhantomData;
 /// List data type [Using collections with pointers](../pointer/struct.NP_Ptr.html#using-collection-types-with-pointers).
 #[derive(Debug)]
 pub struct NP_List<T> {
@@ -11,24 +12,26 @@ pub struct NP_List<T> {
     head: u32,
     tail: u32,
     memory: Option<Rc<NP_Memory>>,
-    of: Option<Rc<NP_Schema>>,
+    schema: Option<NP_Schema_Ptr>,
     _value: T
 }
 
 impl<T: NP_Value + Default> NP_List<T> {
 
     #[doc(hidden)]
-    pub fn new(address: u32, head: u32, tail:u32,  memory: Rc<NP_Memory>, of: Rc<NP_Schema>) -> Result<Self, NP_Error> {
+    pub fn new(address: u32, head: u32, tail:u32,  memory: Rc<NP_Memory>, schema: NP_Schema_Ptr) -> Result<Self, NP_Error> {
+
+        let of_type = schema.schema.bytes[schema.address + 1];
 
         // make sure the type we're casting to isn't ANY or the cast itself isn't ANY
-        if T::type_idx().0 != NP_TypeKeys::Any as i64 && of.type_data.0 != NP_TypeKeys::Any as i64  {
+        if T::type_idx().0 != NP_TypeKeys::Any as u8 && of_type != NP_TypeKeys::Any as u8  {
 
             // not using ANY casting, check type
-            if of.type_data.0 != T::type_idx().0 {
+            if of_type != T::type_idx().0 {
                 let mut err = "TypeError: Attempted to cast type (".to_owned();
                 err.push_str(T::type_idx().1.as_str());
                 err.push_str(") to schema of type (");
-                err.push_str(of.type_data.1.as_str());
+                err.push_str(NP_TypeKeys::from(of_type).into_type_idx().1.as_str());
                 err.push_str(")");
                 return Err(NP_Error::new(err));
             }
@@ -39,14 +42,14 @@ impl<T: NP_Value + Default> NP_List<T> {
             head,
             tail,
             memory: Some(memory),
-            of: Some(of),
+            schema: Some(schema),
             _value: T::default()
         })
     }
 
     /// Convert the list data type into an iterator
     pub fn it(self) -> NP_List_Iterator<T> {
-        NP_List_Iterator::new(self.address, self.head, self.tail, self.memory.unwrap(), self.of.unwrap())
+        NP_List_Iterator::new(self.address, self.head, self.tail, self.memory.unwrap(), self.schema.unwrap())
     }
 
     /// Select a value from the list.  If the value doesn't exist you'll get an empty pointer back.
@@ -57,10 +60,8 @@ impl<T: NP_Value + Default> NP_List<T> {
             None => unreachable!()
         };
 
-        let list_of = match &self.of {
-            Some(x) => Rc::clone(x),
-            None => unreachable!()
-        };
+        let schema = self.schema.unwrap();
+        let list_of = schema.copy_with_addr(schema.address + 1);
 
         if self.head == 0 { // no values, create one
 
@@ -487,10 +488,8 @@ impl<T: NP_Value + Default> NP_List<T> {
             None => unreachable!()
         };
 
-        let list_of = match &self.of {
-            Some(x) => Rc::clone(x),
-            None => unreachable!()
-        };
+        let schema = self.schema.unwrap();
+        let list_of = schema.copy_with_addr(schema.address + 1);
 
         // no more values in this list
         if self.head == 0 { return Ok(None) }
@@ -546,10 +545,8 @@ impl<T: NP_Value + Default> NP_List<T> {
             None => unreachable!()
         };
 
-        let list_of = match &self.of {
-            Some(x) => Rc::clone(x),
-            None => unreachable!()
-        };
+        let schema = self.schema.unwrap();
+        let list_of = schema.copy_with_addr(schema.address + 1);
 
         if self.tail == 0 { // no values, create one
        
@@ -750,87 +747,78 @@ impl<T: NP_Value + Default> NP_List<T> {
 impl<T: NP_Value + Default> Default for NP_List<T> {
 
     fn default() -> Self {
-        NP_List { address: 0, head: 0, tail: 0, memory: None, of: None, _value: T::default()}
+        NP_List { address: 0, head: 0, tail: 0, memory: None, schema: None, _value: T::default()}
     }
 }
 
 impl<T: NP_Value + Default> NP_Value for NP_List<T> {
-    fn is_type( _type_str: &str) -> bool { // not needed for collection types
-        unreachable!()
-    }
-    fn type_idx() -> (u8, String) { (NP_TypeKeys::List as i64, "list".to_owned()) }
-    fn self_type_idx(&self) -> (u8, String) { (NP_TypeKeys::List as i64, "list".to_owned()) }
+
+    fn type_idx() -> (u8, String) { (NP_TypeKeys::List as u8, "list".to_owned()) }
+    fn self_type_idx(&self) -> (u8, String) { (NP_TypeKeys::List as u8, "list".to_owned()) }
     fn set_value(_pointer: NP_Lite_Ptr, _value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
         Err(NP_Error::new("Type (list) doesn't support .set()! Use .into() instead."))
     }
 
     fn into_value(ptr: NP_Lite_Ptr) -> Result<Option<Box<Self>>, NP_Error> {
-        
-        match &*ptr.schema.kind {
-            NP_SchemaKinds::List { of } => {
+       
+        let mut addr = ptr.kind.get_value_addr(); // get pointer of list (head/tail)
 
-                let mut addr = ptr.kind.get_value_addr(); // get pointer of list (head/tail)
+        match &ptr.memory.size {
+            NP_Size::U8 => {
+                let mut head: [u8; 1] = [0; 1];
+                let mut tail: [u8; 1] = [0; 1];
 
-                match &ptr.memory.size {
-                    NP_Size::U8 => {
-                        let mut head: [u8; 1] = [0; 1];
-                        let mut tail: [u8; 1] = [0; 1];
-
-                        if addr == 0 {
-                            // no list here, make one
-                            addr = ptr.memory.malloc([0u8; 2].to_vec())?; // stores HEAD & TAIL for list
-                            ptr.memory.set_value_address(ptr.location, addr, &ptr.kind);
-                        } else {
-                            // existing head, read value
-                            let a = addr as usize;
-                            head = [ptr.memory.get_1_byte(a).unwrap_or(0)];
-                            tail = [ptr.memory.get_1_byte(a + 1).unwrap_or(0)];
-                        }
-
-        
-                        Ok(Some(Box::new(Self::new(addr, u8::from_be_bytes(head) as u32, u8::from_be_bytes(tail) as u32, ptr.memory, Rc::clone(of ))?)))
-                    },
-                    NP_Size::U16 => {
-                        let mut head: [u8; 2] = [0; 2];
-                        let mut tail: [u8; 2] = [0; 2];
-
-                        if addr == 0 {
-                            // no list here, make one
-                            addr = ptr.memory.malloc([0u8; 4].to_vec())?; // stores HEAD & TAIL for list
-                            ptr.memory.set_value_address(ptr.location, addr, &ptr.kind);
-                        } else {
-                            // existing head, read value
-                            let a = addr as usize;
-                            head = *ptr.memory.get_2_bytes(a).unwrap_or(&[0; 2]);
-                            tail = *ptr.memory.get_2_bytes(a + 2).unwrap_or(&[0; 2]);
-                        }
-
-        
-                        Ok(Some(Box::new(Self::new(addr, u16::from_be_bytes(head) as u32, u16::from_be_bytes(tail) as u32, ptr.memory, Rc::clone(of ))?)))
-                    },
-                    NP_Size::U32 => {
-                        let mut head: [u8; 4] = [0; 4];
-                        let mut tail: [u8; 4] = [0; 4];
-        
-                        if addr == 0 {
-                            // no list here, make one
-                            addr = ptr.memory.malloc([0u8; 8].to_vec())?; // stores HEAD & TAIL for list
-                            ptr.memory.set_value_address(ptr.location, addr, &ptr.kind);
-                        } else {
-                            // existing head, read value
-                            let a = addr as usize;
-                            head = *ptr.memory.get_4_bytes(a).unwrap_or(&[0; 4]);
-                            tail = *ptr.memory.get_4_bytes(a + 4).unwrap_or(&[0; 4]);
-                        }
-        
-                        Ok(Some(Box::new(Self::new(addr, u32::from_be_bytes(head), u32::from_be_bytes(tail), ptr.memory, Rc::clone(of ))?)))
-                    }
+                if addr == 0 {
+                    // no list here, make one
+                    addr = ptr.memory.malloc([0u8; 2].to_vec())?; // stores HEAD & TAIL for list
+                    ptr.memory.set_value_address(ptr.location, addr, &ptr.kind);
+                } else {
+                    // existing head, read value
+                    let a = addr as usize;
+                    head = [ptr.memory.get_1_byte(a).unwrap_or(0)];
+                    tail = [ptr.memory.get_1_byte(a + 1).unwrap_or(0)];
                 }
+
+
+                Ok(Some(Box::new(Self::new(addr, u8::from_be_bytes(head) as u32, u8::from_be_bytes(tail) as u32, ptr.memory, ptr.schema)?)))
             },
-            _ => {
-                unreachable!();
+            NP_Size::U16 => {
+                let mut head: [u8; 2] = [0; 2];
+                let mut tail: [u8; 2] = [0; 2];
+
+                if addr == 0 {
+                    // no list here, make one
+                    addr = ptr.memory.malloc([0u8; 4].to_vec())?; // stores HEAD & TAIL for list
+                    ptr.memory.set_value_address(ptr.location, addr, &ptr.kind);
+                } else {
+                    // existing head, read value
+                    let a = addr as usize;
+                    head = *ptr.memory.get_2_bytes(a).unwrap_or(&[0; 2]);
+                    tail = *ptr.memory.get_2_bytes(a + 2).unwrap_or(&[0; 2]);
+                }
+
+
+                Ok(Some(Box::new(Self::new(addr, u16::from_be_bytes(head) as u32, u16::from_be_bytes(tail) as u32, ptr.memory, ptr.schema)?)))
+            },
+            NP_Size::U32 => {
+                let mut head: [u8; 4] = [0; 4];
+                let mut tail: [u8; 4] = [0; 4];
+
+                if addr == 0 {
+                    // no list here, make one
+                    addr = ptr.memory.malloc([0u8; 8].to_vec())?; // stores HEAD & TAIL for list
+                    ptr.memory.set_value_address(ptr.location, addr, &ptr.kind);
+                } else {
+                    // existing head, read value
+                    let a = addr as usize;
+                    head = *ptr.memory.get_4_bytes(a).unwrap_or(&[0; 4]);
+                    tail = *ptr.memory.get_4_bytes(a + 4).unwrap_or(&[0; 4]);
+                }
+
+                Ok(Some(Box::new(Self::new(addr, u32::from_be_bytes(head), u32::from_be_bytes(tail), ptr.memory, ptr.schema)?)))
             }
         }
+        
     }
 
     fn get_size(ptr: NP_Lite_Ptr) -> Result<u32, NP_Error> {
@@ -841,111 +829,80 @@ impl<T: NP_Value + Default> NP_Value for NP_List<T> {
             NP_Size::U8 => 2u32
         };
 
-        match &*ptr.schema.kind {
-            NP_SchemaKinds::List { of } => {
+        let addr = ptr.kind.get_value_addr();
 
-                let addr = ptr.kind.get_value_addr();
+        if addr == 0 {
+            return Ok(0);
+        }
 
-                if addr == 0 {
-                    return Ok(0);
-                }
+        // existing head, read value
+        let a = addr as usize;
+        let head = match &ptr.memory.size {
+            NP_Size::U8 => u8::from_be_bytes([ptr.memory.get_1_byte(a).unwrap_or(0)]) as u32,
+            NP_Size::U16 => u16::from_be_bytes(*ptr.memory.get_2_bytes(a).unwrap_or(&[0; 2])) as u32,
+            NP_Size::U32 => u32::from_be_bytes(*ptr.memory.get_4_bytes(a).unwrap_or(&[0; 4]))
+        };
+        let tail = match &ptr.memory.size {
+            NP_Size::U8 => u8::from_be_bytes([ptr.memory.get_1_byte(a + 1).unwrap_or(0)]) as u32,
+            NP_Size::U16 => u16::from_be_bytes(*ptr.memory.get_2_bytes(a + 2).unwrap_or(&[0; 2])) as u32,
+            NP_Size::U32 => u32::from_be_bytes(*ptr.memory.get_4_bytes(a + 4).unwrap_or(&[0; 4]))
+        };
+    
+        let list = Self::new(addr, head, tail, ptr.memory, ptr.schema).unwrap();
 
-                // existing head, read value
-                let a = addr as usize;
-                let head = match &ptr.memory.size {
-                    NP_Size::U8 => u8::from_be_bytes([ptr.memory.get_1_byte(a).unwrap_or(0)]) as u32,
-                    NP_Size::U16 => u16::from_be_bytes(*ptr.memory.get_2_bytes(a).unwrap_or(&[0; 2])) as u32,
-                    NP_Size::U32 => u32::from_be_bytes(*ptr.memory.get_4_bytes(a).unwrap_or(&[0; 4]))
-                };
-                let tail = match &ptr.memory.size {
-                    NP_Size::U8 => u8::from_be_bytes([ptr.memory.get_1_byte(a + 1).unwrap_or(0)]) as u32,
-                    NP_Size::U16 => u16::from_be_bytes(*ptr.memory.get_2_bytes(a + 2).unwrap_or(&[0; 2])) as u32,
-                    NP_Size::U32 => u32::from_be_bytes(*ptr.memory.get_4_bytes(a + 4).unwrap_or(&[0; 4]))
-                };
-            
-                let list = Self::new(addr, head, tail, ptr.memory, Rc::clone(of) ).unwrap();
+        let mut acc_size = 0u32;
 
-                let mut acc_size = 0u32;
-
-                for mut l in list.it().into_iter() {
-                    if l.has_value.1 == true {
-                        let ptr = l.select()?;
-                        acc_size += ptr.calc_size()?;
-                    }
-                }
-
-                Ok(acc_size + base_size)
-            },
-            _ => {
-                unreachable!();
+        for mut l in list.it().into_iter() {
+            if l.has_value.1 == true {
+                let ptr = l.select()?;
+                acc_size += ptr.calc_size()?;
             }
         }
+
+        Ok(acc_size + base_size)
     }
     
     fn to_json(ptr: NP_Lite_Ptr) -> NP_JSON {
 
-        match &*ptr.schema.kind {
-            NP_SchemaKinds::List { of } => {
+        let addr = ptr.kind.get_value_addr();
 
-                let addr = ptr.kind.get_value_addr();
+        if addr == 0 {
+            return NP_JSON::Null;
+        }
 
-                if addr == 0 {
-                    return NP_JSON::Null;
-                }
+        let a = addr as usize;
+        let head = match &ptr.memory.size {
+            NP_Size::U8 => u8::from_be_bytes([ptr.memory.get_1_byte(a).unwrap_or(0)]) as u32,
+            NP_Size::U16 => u16::from_be_bytes(*ptr.memory.get_2_bytes(a).unwrap_or(&[0; 2])) as u32,
+            NP_Size::U32 => u32::from_be_bytes(*ptr.memory.get_4_bytes(a).unwrap_or(&[0; 4]))
+        };
+        let tail = match &ptr.memory.size {
+            NP_Size::U8 => u8::from_be_bytes([ptr.memory.get_1_byte(a + 1).unwrap_or(0)]) as u32,
+            NP_Size::U16 => u16::from_be_bytes(*ptr.memory.get_2_bytes(a + 2).unwrap_or(&[0; 2])) as u32,
+            NP_Size::U32 => u32::from_be_bytes(*ptr.memory.get_4_bytes(a + 4).unwrap_or(&[0; 4]))
+        };
 
-                let a = addr as usize;
-                let head = match &ptr.memory.size {
-                    NP_Size::U8 => u8::from_be_bytes([ptr.memory.get_1_byte(a).unwrap_or(0)]) as u32,
-                    NP_Size::U16 => u16::from_be_bytes(*ptr.memory.get_2_bytes(a).unwrap_or(&[0; 2])) as u32,
-                    NP_Size::U32 => u32::from_be_bytes(*ptr.memory.get_4_bytes(a).unwrap_or(&[0; 4]))
-                };
-                let tail = match &ptr.memory.size {
-                    NP_Size::U8 => u8::from_be_bytes([ptr.memory.get_1_byte(a + 1).unwrap_or(0)]) as u32,
-                    NP_Size::U16 => u16::from_be_bytes(*ptr.memory.get_2_bytes(a + 2).unwrap_or(&[0; 2])) as u32,
-                    NP_Size::U32 => u32::from_be_bytes(*ptr.memory.get_4_bytes(a + 4).unwrap_or(&[0; 4]))
-                };
+        let list = Self::new(addr, head, tail, ptr.memory, ptr.schema).unwrap_or(NP_List::default());
 
-                let list = Self::new(addr, head, tail, ptr.memory, Rc::clone(of) ).unwrap_or(NP_List::default());
+        let mut json_list = Vec::new();
 
-                let mut json_list = Vec::new();
-
-                for mut l in list.it().into_iter() {
-                    if l.has_value.1 == true && l.has_value.0 == true {
-                        let ptr = l.select();
-                        match ptr {
-                            Ok(p) => {
-                                json_list.push(p.json_encode());
-                            },
-                            Err (_e) => {
-                                json_list.push(NP_JSON::Null);
-                            }
-                        }
-                    } else {
+        for mut l in list.it().into_iter() {
+            if l.has_value.1 == true && l.has_value.0 == true {
+                let ptr = l.select();
+                match ptr {
+                    Ok(p) => {
+                        json_list.push(p.json_encode());
+                    },
+                    Err (_e) => {
                         json_list.push(NP_JSON::Null);
-                        
-                        /*match &schema.default.as_ref().unwrap_or(&NP_JSON::Null) {
-                            NP_JSON::True => {
-                                match ptr {
-                                    Ok(x) => {
-                                        json_list.push(x.json_encode());
-                                    },
-                                    _ => {}
-                                };
-                            },
-                            _ => {
-                                json_list.push(NP_JSON::Null);
-                            }
-                        }*/
-                        
                     }
                 }
-
-                NP_JSON::Array(json_list)
-            },
-            _ => {
-                unreachable!();
+            } else {
+                json_list.push(NP_JSON::Null);                
             }
         }
+
+        NP_JSON::Array(json_list)
     }
 
     fn do_compact(from_ptr: NP_Lite_Ptr, to_ptr: NP_Lite_Ptr) -> Result<(), NP_Error> where Self: NP_Value + Default {
@@ -979,6 +936,29 @@ impl<T: NP_Value + Default> NP_Value for NP_List<T> {
 
         Ok(())
     }
+
+    fn from_json_to_schema(json_schema: &NP_JSON) -> Result<Option<Vec<u8>>, NP_Error> {
+
+        let type_str = NP_Schema::get_type(json_schema)?;
+
+        if "list" == type_str {
+            let mut schema_data: Vec<u8> = Vec::new();
+            schema_data.push(NP_TypeKeys::List as u8);
+
+            match json_schema["of"] {
+                NP_JSON::Null => {
+                    return Err(NP_Error::new("Lists require an 'of' property that is a schema type!"))
+                },
+                _ => { }
+            }
+
+            let child_type = NP_Schema::from_json(Box::new(json_schema["of"]))?;
+            schema_data.extend(child_type.bytes);
+            return Ok(Some(schema_data))
+        }
+
+        Ok(None)
+    }
 }
 
 /// The iterator type for lists
@@ -988,30 +968,30 @@ pub struct NP_List_Iterator<T> {
     head: u32,
     tail: u32,
     memory: Rc<NP_Memory>,
-    of: Rc<NP_Schema>,
+    schema: NP_Schema_Ptr,
     current_index: u16,
     current_address: u32,
-    list: NP_List<T>
+    p: PhantomData<T>
 }
 
 impl<T: NP_Value + Default + > NP_List_Iterator<T> {
 
     #[doc(hidden)]
-    pub fn new(address: u32, head: u32, tail: u32, memory: Rc<NP_Memory>, of: Rc<NP_Schema>) -> Self {
+    pub fn new(address: u32, head: u32, tail: u32, memory: Rc<NP_Memory>, schema: NP_Schema_Ptr) -> Self {
         NP_List_Iterator {
             address,
             head,
             tail,
             memory: Rc::clone(&memory),
-            of: Rc::clone(&of),
+            schema: schema,
             current_index: 0,
             current_address: head,
-            list: NP_List::new(address, head, tail, memory, of).unwrap()
+            p: PhantomData::default()
         }
     }
     /// Convert the iterator back into a list
     pub fn into_list(self) -> NP_List<T> {
-        self.list
+        NP_List::new(self.address, self.head, self.tail, self.memory, self.schema).unwrap()
     }
 }
 
@@ -1055,9 +1035,9 @@ impl<T: NP_Value + Default + > Iterator for NP_List_Iterator<T> {
             return Some(NP_List_Item {
                 index: self.current_index - 1,
                 has_value: (true, value_address != 0),
-                of: Rc::clone(&self.of),
+                schema: self.schema.copy(),
                 address: this_address,
-                list: NP_List::new(self.address, self.head, self.tail, Rc::clone(&self.memory), Rc::clone(&self.of)).unwrap(),
+                list: NP_List::new(self.address, self.head, self.tail, Rc::clone(&self.memory), self.schema.copy()).unwrap(),
                 memory: Rc::clone(&self.memory)
             });
 
@@ -1066,9 +1046,9 @@ impl<T: NP_Value + Default + > Iterator for NP_List_Iterator<T> {
             return Some(NP_List_Item {
                 index: self.current_index - 1,
                 has_value: (false, false),
-                of: Rc::clone(&self.of),
+                schema: self.schema.copy(),
                 address: 0,
-                list: NP_List::new(self.address, self.head, self.tail, Rc::clone(&self.memory), Rc::clone(&self.of)).unwrap(),
+                list: NP_List::new(self.address, self.head, self.tail, Rc::clone(&self.memory), self.schema.copy()).unwrap(),
                 memory: Rc::clone(&self.memory)
             });
         }
@@ -1084,7 +1064,7 @@ pub struct NP_List_Item<T> {
     pub index: u16,
     /// (has pointer at this index, his value at this index)
     pub has_value: (bool, bool),
-    of: Rc<NP_Schema>,
+    schema: NP_Schema_Ptr,
     address: u32,
     list: NP_List<T>,
     memory: Rc<NP_Memory>

@@ -2,7 +2,7 @@ use crate::schema::NP_Schema_Ptr;
 use crate::schema::NP_Schema;
 use crate::error::NP_Error;
 use crate::memory::{NP_Size};
-use crate::{schema::{NP_Schema_Parser, NP_TypeKeys}, pointer::NP_Value, json_flex::NP_JSON};
+use crate::{schema::{NP_TypeKeys}, pointer::NP_Value, json_flex::NP_JSON};
 use super::{NP_PtrKinds, NP_Lite_Ptr};
 
 use alloc::vec::Vec;
@@ -24,7 +24,7 @@ pub struct NP_Bytes_Schema_State<'state> {
     /// 0 for dynamic size, anything greater than 0 is for fixed size
     pub size: u16,
     /// The default bytes
-    pub default: &'state [u8]
+    pub default: Option<&'state [u8]>
 }
 
 impl NP_Bytes {
@@ -48,80 +48,21 @@ impl NP_Bytes {
             schema_ptr.schema.bytes[schema_ptr.address + 4]
         ]) as usize;
 
-        let default_bytes: &[u8] = if default_size > 0 {
-            &schema_ptr.schema.bytes[(schema_ptr.address + 5)..(schema_ptr.address + 5 + default_size)]
-        } else {
-            &[]
+        if default_size == 0 {
+            return NP_Bytes_Schema_State {
+                size: fixed_size,
+                default: None
+            }
+        }
+
+        let default_bytes: &[u8] = {
+            &schema_ptr.schema.bytes[(schema_ptr.address + 5)..(schema_ptr.address + 5 + default_size - 1)]
         };
 
-        return NP_Bytes_Schema_State { size: fixed_size, default: default_bytes }
+        return NP_Bytes_Schema_State { size: fixed_size, default: Some(default_bytes) }
     }
 }
 
-impl NP_Schema_Parser for NP_Bytes {
-
-    fn type_key(&self) -> u8 { NP_TypeKeys::Bytes as u8 }
-
-    fn from_json_to_state(&self, json_schema: &NP_JSON) -> Result<Option<Vec<u8>>, NP_Error> {
-
-        let type_str = NP_Schema::get_type(json_schema)?;
-
-        if "bytes" == type_str || "u8[]" == type_str || "[u8]" == type_str {
-
-            let mut schema_data: Vec<u8> = Vec::new();
-            schema_data.push(NP_TypeKeys::Bytes as u8);
-
-            match json_schema["size"] {
-                NP_JSON::Integer(x) => {
-                    if x < 1 {
-                        return Err(NP_Error::new("Fixed size for bytes must be larger than 1!"));
-                    }
-                    if x > u16::MAX.into() {
-                        return Err(NP_Error::new("Fixed size for bytes cannot be larger than 2^16!"));
-                    }
-                    schema_data.extend((x as u16).to_be_bytes().to_vec());
-                },
-                NP_JSON::Float(x) => {
-                    if x < 1.0 {
-                        return Err(NP_Error::new("Fixed size for bytes must be larger than 1!"));
-                    }
-                    if x > u16::MAX.into() {
-                        return Err(NP_Error::new("Fixed size for bytes cannot be larger than 2^16!"));
-                    }
-
-                    schema_data.extend((x as u16).to_be_bytes().to_vec());
-                },
-                _ => {
-                    schema_data.extend(0u16.to_be_bytes().to_vec());
-                }
-            }
-
-            match json_schema["default"] {
-                NP_JSON::Array(bytes) => {
-                    let mut default_bytes: Vec<u8> = Vec::new();
-                    for x in bytes {
-                        match x {
-                            NP_JSON::Integer(x) => {
-                                default_bytes.push(x as u8);
-                            },
-                            _ => {}
-                        }
-                    }
-                    let length = default_bytes.len() as u16;
-                    schema_data.extend(length.to_be_bytes().to_vec());
-                    schema_data.extend(default_bytes);
-                },
-                _ => {
-                    schema_data.extend(0u16.to_be_bytes().to_vec());
-                }
-            }
-
-            return Ok(Some(schema_data));
-        }
-        
-        Ok(None)
-    }
-}
 
 
 impl Default for NP_Bytes {
@@ -139,10 +80,11 @@ impl NP_Value for NP_Bytes {
     fn schema_default(schema: &NP_Schema_Ptr) -> Option<Box<Self>> {
 
         let state = NP_Bytes::get_schema_state(schema);
-        if state.default.len() > 0 {
-            Some(Box::new(NP_Bytes { bytes: state.default.to_vec() }))
-        } else {
-            None
+        match state.default {
+            Some(x) => {
+                Some(Box::new(NP_Bytes { bytes: x.to_vec() }))
+            },
+            None => None
         }
     }
 
@@ -318,14 +260,16 @@ impl NP_Value for NP_Bytes {
                     },
                     None => {
                         let schema_state = NP_Bytes::get_schema_state(&pointer.schema);
-                        if schema_state.default.len() > 0 {
-                            let mut copy_bytes: Vec<NP_JSON> = Vec::new();
-                            for b in schema_state.default {
-                                copy_bytes.push(NP_JSON::Integer(*b as i64));
-                            }
-                            NP_JSON::Array(copy_bytes)
-                        } else {
-                            NP_JSON::Null
+                        
+                        match schema_state.default {
+                            Some(x) => {
+                                let mut copy_bytes: Vec<NP_JSON> = Vec::new();
+                                for b in x {
+                                    copy_bytes.push(NP_JSON::Integer(*b as i64));
+                                }
+                                NP_JSON::Array(copy_bytes)
+                            },
+                            None => NP_JSON::Null
                         }
                     }
                 }
@@ -376,5 +320,65 @@ impl NP_Value for NP_Bytes {
             // return total size of this string
             return Ok(bytes_size);
         }
+    }
+
+    fn from_json_to_schema(json_schema: &NP_JSON) -> Result<Option<Vec<u8>>, NP_Error> {
+
+        let type_str = NP_Schema::get_type(json_schema)?;
+
+        if "bytes" == type_str || "u8[]" == type_str || "[u8]" == type_str {
+
+            let mut schema_data: Vec<u8> = Vec::new();
+            schema_data.push(NP_TypeKeys::Bytes as u8);
+
+            match json_schema["size"] {
+                NP_JSON::Integer(x) => {
+                    if x < 1 {
+                        return Err(NP_Error::new("Fixed size for bytes must be larger than 1!"));
+                    }
+                    if x > u16::MAX.into() {
+                        return Err(NP_Error::new("Fixed size for bytes cannot be larger than 2^16!"));
+                    }
+                    schema_data.extend((x as u16).to_be_bytes().to_vec());
+                },
+                NP_JSON::Float(x) => {
+                    if x < 1.0 {
+                        return Err(NP_Error::new("Fixed size for bytes must be larger than 1!"));
+                    }
+                    if x > u16::MAX.into() {
+                        return Err(NP_Error::new("Fixed size for bytes cannot be larger than 2^16!"));
+                    }
+
+                    schema_data.extend((x as u16).to_be_bytes().to_vec());
+                },
+                _ => {
+                    schema_data.extend(0u16.to_be_bytes().to_vec());
+                }
+            }
+
+            match json_schema["default"] {
+                NP_JSON::Array(bytes) => {
+                    let mut default_bytes: Vec<u8> = Vec::new();
+                    for x in bytes {
+                        match x {
+                            NP_JSON::Integer(x) => {
+                                default_bytes.push(x as u8);
+                            },
+                            _ => {}
+                        }
+                    }
+                    let length = default_bytes.len() as u16 + 1;
+                    schema_data.extend(length.to_be_bytes().to_vec());
+                    schema_data.extend(default_bytes);
+                },
+                _ => {
+                    schema_data.extend(0u16.to_be_bytes().to_vec());
+                }
+            }
+
+            return Ok(Some(schema_data));
+        }
+        
+        Ok(None)
     }
 }
