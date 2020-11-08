@@ -34,7 +34,6 @@
 //! SOFTWARE.
 
 
-
 use alloc::vec::Vec;
 use alloc::string::String;
 use alloc::boxed::Box;
@@ -46,12 +45,12 @@ use crate::{pointer::{NP_Value, any::NP_Any, NP_Lite_Ptr}, error::NP_Error};
 
 /// The JSON representation of a JS Map
 #[derive(Debug)]
-pub struct JSMAP<T> {
+pub struct JSMAP {
     /// The vec of values in the map
-    pub values: Vec<(String, T)>
+    pub values: Vec<(String, NP_JSON)>
 }
 
-impl<T> JSMAP<T> {
+impl JSMAP {
 
     /// Generate a new empty map
     pub fn new() -> Self {
@@ -59,7 +58,7 @@ impl<T> JSMAP<T> {
     }
 
     /// Insert a value into the map
-    pub fn insert(&mut self, key: String, value: T) -> usize {
+    pub fn insert(&mut self, key: String, value: NP_JSON) -> usize {
 
         for x in 0..self.values.len() {
             if self.values[x].0 == key {
@@ -74,7 +73,7 @@ impl<T> JSMAP<T> {
     }
 
     /// Get a mutable reference to a value in the map
-    pub fn get_mut(&mut self, key: &str) -> Option<&mut T> {
+    pub fn get_mut(&mut self, key: &str) -> Option<&mut NP_JSON> {
         for x in 0..self.values.len() {
             if self.values[x].0 == *key {
                 return Some(&mut self.values[x].1);
@@ -84,7 +83,7 @@ impl<T> JSMAP<T> {
     }
 
     /// Get an immutable reference to a value in the map
-    pub fn get(&self, key: &str) -> Option<&T> {
+    pub fn get(&self, key: &str) -> Option<&NP_JSON> {
         for x in 0..self.values.len() {
             if self.values[x].0 == *key {
                 return Some(&self.values[x].1);
@@ -114,7 +113,7 @@ pub enum NP_JSON {
     /// Float JSON type
     Float(f64), 
     /// Map JSON type
-    Dictionary(JSMAP<NP_JSON>), 
+    Dictionary(JSMAP), 
     /// List JSON type
     Array(Vec<NP_JSON>), 
     /// NULL json type
@@ -145,7 +144,7 @@ impl NP_JSON {
 
         match self {
             NP_JSON::Dictionary(map) => {
-                let mut new_map = JSMAP::<NP_JSON>::new();
+                let mut new_map = JSMAP::new();
 
                 for item in &map.values {
                     let cloned = {
@@ -208,7 +207,7 @@ impl NP_JSON {
         }
     }
     /// Get this value as a hashmap
-    pub fn into_hashmap(&self) -> Option<&JSMAP<NP_JSON>> {
+    pub fn into_hashmap(&self) -> Option<&JSMAP> {
         match self {
             &NP_JSON::Dictionary(ref v) => Some(v),
             _ => None,
@@ -299,7 +298,7 @@ impl NP_JSON {
         }
     }
     /// Get a reference to the hashmap in this value if it's a hashmap
-    pub fn unwrap_hashmap(&self) -> Option<&JSMAP<NP_JSON>> {
+    pub fn unwrap_hashmap(&self) -> Option<&JSMAP> {
         match self {
             &NP_JSON::Dictionary(ref v) => Some(v),
             _ => None,

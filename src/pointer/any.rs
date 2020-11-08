@@ -1,4 +1,5 @@
 
+use crate::{schema::NP_Schema_Ptr, json_flex::{JSMAP}};
 use alloc::vec::Vec;
 use crate::pointer::NP_Ptr;
 use crate::error::NP_Error;
@@ -48,6 +49,13 @@ impl NP_Value for NP_Any {
 
     fn type_idx() -> (u8, String) { (NP_TypeKeys::Any as u8, "any".to_owned()) }
     fn self_type_idx(&self) -> (u8, String) { (NP_TypeKeys::Any as u8, "any".to_owned()) }
+
+    fn schema_to_json(_schema_ptr: NP_Schema_Ptr)-> Result<NP_JSON, NP_Error> {
+        let mut schema_json = JSMAP::new();
+        schema_json.insert("type".to_owned(), NP_JSON::String("any".to_owned()));
+
+        Ok(NP_JSON::Dictionary(schema_json))
+    }
 
     fn set_value(_pointer: NP_Lite_Ptr, _value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
         Err(NP_Error::new("Can't use .set() with (Any), must cast first with NP_Any::cast<T>(pointer)."))

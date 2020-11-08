@@ -1,6 +1,6 @@
 #![warn(missing_docs, missing_debug_implementations)]
 #![allow(non_camel_case_types)]
-// #![no_std]
+#![no_std]
 
 //! ## High Performance Serialization Library
 //! Faster than JSON with Schemas and Native Types.  Like Mutable Protocol Buffers with Compile Free Schemas.
@@ -10,9 +10,9 @@
 //! ### Features  
 //! - Zero dependencies
 //! - #![no_std] support, WASM ready
-//! - Supports bytewise sorting of buffers
+//! - Supports byte-wise sorting of buffers
 //! - Thorough Documentation
-//! - Automatic & instant serilization
+//! - Automatic & instant sterilization
 //! - Nearly instant deserialization
 //! - Schemas are dynamic/flexible at runtime
 //! - Mutate/Insert/Delete values in existing buffers
@@ -23,7 +23,7 @@
 //! 
 //! NoProto allows you to store, read & mutate structured data with near zero overhead. It's like Cap'N Proto/Flatbuffers except buffers and schemas are dynamic at runtime instead of requiring compilation.  It's like JSON but faster, type safe and allows native types.
 //! 
-//! Bytewise sorting comes in the box and is a first class operation. The result is two NoProto buffers can be compared at the byte level *without deserializing* and a correct ordering between the buffer's internal values will be the result.  This is extremely useful for storing ordered keys in databases. 
+//! Byte-wise sorting comes in the box and is a first class operation. The result is two NoProto buffers can be compared at the byte level *without deserializing* and a correct ordering between the buffer's internal values will be the result.  This is extremely useful for storing ordered keys in databases. 
 //! 
 //! NoProto moves the cost of deserialization to the access methods instead of deserializing the entire object ahead of time. This makes it a perfect use case for things like database storage or file storage of structured data.
 //! 
@@ -32,31 +32,31 @@
 //! - Easier & Simpler API
 //! - Schemas are dynamic at runtime, no compilation step
 //! - Supports more types and better nested type support
-//! - Bytewise sorting is first class operation
+//! - Byte-wise sorting is first class operation
 //! - Mutate (add/delete/update) existing/imported buffers
 //! 
 //! *Compared to JSON*
 //! - Far more space efficient
 //! - Faster serialization & deserialization
 //! - Has schemas / type safe
-//! - Supports bytewise sorting
+//! - Supports byte-wise sorting
 //! - Supports raw bytes & other native types
 //! 
 //! *Compared to BSON*
 //! - Far more space efficient
 //! - Faster serialization & deserialization
 //! - Has schemas / type safe
-//! - Bytewise sorting is first class operation
+//! - Byte-wise sorting is first class operation
 //! - Supports much larger documents (4GB vs 16KB)
 //! - Better collection support & more supported types
 //! 
 //! *Compared to Serde*
-//! - Supports bytewise sorting
+//! - Supports byte-wise sorting
 //! - Objects & schemas are dynamic at runtime
 //! - Faster serialization & deserialization
 //! - Language agnostic
 //! 
-//! | Format           | Free De/Serialization | Size Limit | Mutatable | Schemas | Language Agnostic | No Compiling    | Bytewise Sorting |
+//! | Format           | Free De/Serialization | Size Limit | Mutable | Schemas | Language Agnostic | No Compiling    | Byte-wise Sorting |
 //! |------------------|-----------------------|------------|-----------|---------|-------------------|-----------------|------------------|
 //! | **NoProto**      | ✓                     | ~4GB       | ✓         | ✓       | ✓                 | ✓               | ✓                |
 //! | JSON             | 𐄂                     | Unlimited  | ✓         | 𐄂       | ✓                 | ✓               | 𐄂                |
@@ -130,14 +130,27 @@
 //! // close again
 //! let user_bytes: Vec<u8> = user_buffer.close();
 //! 
+//! 
 //! // we can now save user_bytes to disk, 
 //! // send it over the network, or whatever else is needed with the data
+//! 
+//! // The schema can also be compiled into a byte array for more efficient schema parsing.
+//! let byte_schema: Vec<u8> = user_factory.compile_schema();
+//! 
+//! // The byte schema can be used just like JSON schema, but it's WAY faster to parse.
+//! let user_factory2 = NP_Factory::new_compiled(byte_schema);
+//! 
+//! // confirm the new byte schema works with existing buffers
+//! let user_buffer = user_factory2.open_buffer(user_bytes);
+//! let tag = user_buffer.deep_get::<String>("tags.0")?;
+//! assert_eq!(tag, Some(Box::new(String::from("first tag"))));
+//! 
 //! 
 //! # Ok::<(), NP_Error>(()) 
 //! ```
 //! 
 //! ## Non Goals / Known Tradeoffs
-//! There are formats that focus on being as comapct as possible.  While NoProto is not intentially wasteful with space, it will likely never be the most compact way to store data.  If you need the smallest possible format MessagePack is a good choice.
+//! There are formats that focus on being as compact as possible.  While NoProto is not intentionally wasteful with space, it will likely never be the most compact way to store data.  If you need the smallest possible format MessagePack is a good choice.
 //! 
 //! If every CPU cycle counts, FlatBuffers/CapnProto is probably the way to go.  While NoProto makes good tradeoffs with flexibility and performance, it cannot be as fast as languages that compile the schema into source code.  In the future compiling schema to source code could be a feature, but for now I'm happy leaving that edge to the other libraries.
 //! 
@@ -185,6 +198,7 @@ mod utils;
 
 extern crate alloc;
 
+use crate::json_flex::NP_JSON;
 use crate::schema::NP_Schema;
 use crate::json_flex::json_decode;
 use crate::error::NP_Error;
@@ -245,6 +259,7 @@ const PROTOCOL_VERSION: u8 = 1;
 /// let todo_value = user_buffer_2.deep_get::<String>("todos.1")?;
 /// assert_eq!(todo_value, None);
 /// 
+/// 
 /// // close buffer again
 /// let user_vec: Vec<u8> = user_buffer_2.close();
 /// // user_vec is a Vec<u8> with our data
@@ -297,6 +312,13 @@ impl NP_Factory {
     /// 
     pub fn compile_schema(&self) -> Vec<u8> {
         self.schema.bytes.clone()
+    }
+
+
+    /// Exports the compiled byte array to JSON schema.  This works regardless of wether the imported schema is JSON or bytes.
+    /// 
+    pub fn export_schema(&self) -> Result<NP_JSON, NP_Error> {
+        self.schema.to_json()
     }
 
     /// Open existing Vec<u8> as buffer for this factory.  

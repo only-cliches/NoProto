@@ -185,15 +185,15 @@
 //! use no_proto::NP_Factory;
 //! 
 //! let factory: NP_Factory = NP_Factory::new(r#"{
-//!     "type": "tuple",
+//!    "type": "tuple",
 //!    "values": [
 //!        {"type": "u8"},
 //!        {"type": "string"}
 //!    ]
 //! }"#)?;
+//! 
 //!
 //! let mut new_buffer = factory.empty_buffer(None, None);
-//! println!("Schema: {:?}", factory.compile_schema());
 //! new_buffer.deep_set("0", 20u8)?;
 //! new_buffer.deep_set("1", String::from("hello"))?;
 //! assert_eq!(vec![1, 1, 0, 4, 0, 8, 0, 9, 20, 0, 5, 104, 101, 108, 108, 111], new_buffer.close());
@@ -497,5 +497,378 @@
 //! 
 //! The byte array schema stores default values and all other supported properties.
 //! 
+//! Schema data is stored in a recursive format, each nested schema contains at least one byte that describes the data type.  The single data type byte is usually but not always followed by schema data specific to that data type.  The document below describes all of the data types and their specifics.
 //! 
 //! 
+//! 
+//! ### int8, int16, int32, int64, uint8, uint16, uint32, uint64, float, double (Scalar)
+//! 
+//! Integer values store the data type followed by wether there is a default value or not, followed optionally by the default value
+//! 
+//! ```
+//! use no_proto::error::NP_Error;
+//! use no_proto::NP_Factory;
+//! 
+//! let factory: NP_Factory = NP_Factory::new(r#"{
+//!    "type": "i32",
+//!    "default": 56
+//! }"#)?;
+//!
+//! assert_eq!(vec![6, 1, 0, 0, 0, 56], factory.compile_schema());
+//! 
+//! // [       6,           1,      0, 0, 0, 56]
+//! // [i32 type, has default,    default value]
+//! 
+//! let factory: NP_Factory = NP_Factory::new(r#"{
+//!    "type": "i32"
+//! }"#)?;
+//!
+//! assert_eq!(vec![6, 0], factory.compile_schema());
+//! 
+//! // [       6,           0]
+//! // [i32 type,  no default]
+//!
+//! # Ok::<(), NP_Error>(()) 
+//! ```
+//! 
+//! ### option (Scalar)
+//! 
+//! Option types will store the list of options and the index of the default value, if there is one.
+//! 
+//! The second byte is `0` if there is no default, otherwise it contains the default index + 1.
+//! 
+//! The third byte contains a `u8` that is the number of options available.
+//! 
+//! The remaining bytes go on a loop for each option, with each loop containing 1 u8 byte at the begining describing the length of the string option, followed by the string value itself.
+//! 
+//! ```
+//! use no_proto::error::NP_Error;
+//! use no_proto::NP_Factory;
+//! use no_proto::pointer::NP_Option;
+//! 
+//! let factory: NP_Factory = NP_Factory::new(r#"{
+//!    "type": "option",
+//!    "choices": ["blue", "orange", "red"],
+//!    "default": "red"
+//! }"#)?;
+//!
+//! assert_eq!(vec![20, 3, 3, 4, 98, 108, 117, 101, 6, 111, 114, 97, 110, 103, 101, 3, 114, 101, 100], factory.compile_schema());
+//! 
+//! // [       20,                        3,            3, 4, 98, 108, 117, 101, 6, 111, 114, 97, 110, 103, 101, 3, 114, 101, 100]
+//! // [data type, 1 based index of default, # of options,     b,   l,   u,   e,      o,   r,  a,   n,   g,   e,      r,   e,   d]  
+//! 
+//! let factory: NP_Factory = NP_Factory::new(r#"{
+//!    "type": "option",
+//!    "choices": ["blue", "orange", "red"]
+//! }"#)?;
+//!
+//! assert_eq!(vec![20, 0, 3, 4, 98, 108, 117, 101, 6, 111, 114, 97, 110, 103, 101, 3, 114, 101, 100], factory.compile_schema());
+//! 
+//! // [       20,          0,             3, 4, 98, 108, 117, 101, 6, 111, 114, 97, 110, 103, 101, 3, 114, 101, 100]
+//! // [data type, no default,  # of options,     b,   l,   u,   e,      o,   r,  a,   n,   g,   e,      r,   e,   d]  
+//!
+//! # Ok::<(), NP_Error>(()) 
+//! ```
+//! 
+//! 
+//! ### bool (Scalar)
+//! 
+//! The second byte of a bool schema is used to store the default value.
+//! 
+//! If there is no default value, the second byte is 0.<br/>
+//! If the default is true, the second byte is 1.<br/>
+//! If the default is false, the second byte is 2.<br/>
+//! 
+//! ```
+//! use no_proto::error::NP_Error;
+//! use no_proto::NP_Factory;
+//! use no_proto::pointer::NP_Option;
+//! 
+//! let factory: NP_Factory = NP_Factory::new(r#"{
+//!    "type": "bool",
+//!    "default": true
+//! }"#)?;
+//!
+//! assert_eq!(vec![15, 1], factory.compile_schema());
+//! 
+//! // [       15,               1]
+//! // [data type, default is true]  
+//! 
+//! let factory: NP_Factory = NP_Factory::new(r#"{
+//!    "type": "bool",
+//!    "default": false
+//! }"#)?;
+//!
+//! assert_eq!(vec![15, 2], factory.compile_schema());
+//! 
+//! // [       15,               2]
+//! // [data type, default is true]  
+//! 
+//! 
+//! let factory: NP_Factory = NP_Factory::new(r#"{
+//!    "type": "bool"
+//! }"#)?;
+//!
+//! assert_eq!(vec![15, 0], factory.compile_schema());
+//! 
+//! // [       15,          0]
+//! // [data type, no default]  
+//! 
+//! # Ok::<(), NP_Error>(()) 
+//! ```
+//! 
+//! ### decimal (Scalar)
+//! 
+//! Decimal stores the expontent in the second byte.
+//! 
+//! The third byte is 0 if there is no default value, otherwise it is 1.
+//! 
+//! If there is a default value, multiply the default value by (10^exp) and convert it into an i64, then save it in the bytes following the default flag byte.
+//! 
+//! ```
+//! use no_proto::error::NP_Error;
+//! use no_proto::NP_Factory;
+//! use no_proto::pointer::NP_Dec;
+//! 
+//! let factory: NP_Factory = NP_Factory::new(r#"{
+//!    "type": "decimal",
+//!    "exp": 2
+//! }"#)?;
+//!
+//! assert_eq!(vec![14, 2, 0], factory.compile_schema());
+//! 
+//! // [       14,         2,                0]
+//! // [data type, expontent, no default value]
+//! 
+//! let factory: NP_Factory = NP_Factory::new(r#"{
+//!    "type": "decimal",
+//!    "exp": 2,
+//!    "default": 521.32
+//! }"#)?;
+//!
+//! assert_eq!(vec![14, 2, 1, 0, 0, 0, 0, 0, 0, 203, 164], factory.compile_schema());
+//! 
+//! // [       14,         2,                 1, 0, 0, 0, 0, 0, 0, 203, 164]
+//! // [data type, expontent, has default value,              default value]
+//!
+//! # Ok::<(), NP_Error>(()) 
+//! ```
+//! 
+//! ### geo4, geo8, geo16 (Scalar)
+//! 
+//! Geo stores the size of the data type in the second byte.
+//! The third byte is 0 if there is no default, and 1 if there is a default.
+//! The remaining bytes are the default value (if there is one) parsed in the specific size designated in the second byte.
+//! 
+//! ```
+//! use no_proto::error::NP_Error;
+//! use no_proto::NP_Factory;
+//! use no_proto::pointer::NP_Geo;
+//! 
+//! let factory: NP_Factory = NP_Factory::new(r#"{
+//!    "type": "geo8"
+//! }"#)?;
+//!
+//! assert_eq!(vec![16, 8, 0], factory.compile_schema());
+//! 
+//! // [       16,                 8,                0]
+//! // [data type, geo size (4/8/16), no default value]
+//! 
+//! 
+//! let factory: NP_Factory = NP_Factory::new(r#"{
+//!    "type": "geo8",
+//!    "default": {"lat": 29.2, "lng": -19.2}
+//! }"#)?;
+//!
+//! assert_eq!(vec![16, 8, 1, 145, 103, 145, 0, 116, 142, 80, 0], factory.compile_schema());
+//! 
+//! // [       16,                 8,                 1, 145, 103, 145, 0, 116, 142, 80, 0]
+//! // [data type, geo size (4/8/16), has default value,             geo8 value (lat/lng) ]
+//!
+//! # Ok::<(), NP_Error>(()) 
+//! ```
+//! 
+//! 
+//! ### ulid, uuid (Scalar)
+//! 
+//! UUID and ULID do not have default options, so this data type is very simple.
+//! 
+//! ```
+//! use no_proto::error::NP_Error;
+//! use no_proto::NP_Factory;
+//! use no_proto::pointer::NP_UUID;
+//! 
+//! let factory: NP_Factory = NP_Factory::new(r#"{
+//!    "type": "uuid"
+//! }"#)?;
+//!
+//! assert_eq!(vec![17], factory.compile_schema());
+//! 
+//! // [       17]
+//! // [data type]
+//!
+//! # Ok::<(), NP_Error>(()) 
+//! ```
+//! 
+//! ### bytes, string (Scalar)
+//! 
+//! The second and third bytes are a u16 of the fixed size.  If there is no fixed size, these two bytes are zero.
+//! 
+//! Thhe length of the default value follows as a u16, if there is no default value the u16 is zero.  If there is a default value, it follows the length bytes.
+//! 
+//! ```
+//! use no_proto::error::NP_Error;
+//! use no_proto::NP_Factory;
+//! 
+//! let factory: NP_Factory = NP_Factory::new(r#"{
+//!    "type": "string"
+//! }"#)?;
+//!
+//! assert_eq!(vec![2, 0, 0, 0, 0], factory.compile_schema());
+//! 
+//! // [        2,             0, 0,                 0, 0]
+//! // [data type, fixed size (u16),  default size (u16) ]
+//!
+//! let factory: NP_Factory = NP_Factory::new(r#"{
+//!    "type": "string",
+//!    "size": 20
+//! }"#)?;
+//!
+//! assert_eq!(vec![2, 0, 20, 0, 0], factory.compile_schema());
+//! 
+//! // [        2,             0, 20,                 0, 0]
+//! // [data type,  fixed size (u16),  default size (u16) ]
+//! 
+//! let factory: NP_Factory = NP_Factory::new(r#"{
+//!    "type": "string",
+//!    "size": 20,
+//!    "default": "hello"
+//! }"#)?;
+//!
+//! assert_eq!(vec![2, 0, 20, 0, 6, 104, 101, 108, 108, 111], factory.compile_schema());
+//! 
+//! // [        2,             0, 20,                0, 6, 104, 101, 108, 108, 111]
+//! // [data type,  fixed size (u16),  default size (u16),   h,   e,   l,   l,   o]
+//!
+//! # Ok::<(), NP_Error>(()) 
+//! ```
+//! 
+//! ### date (Scalar)
+//! 
+//! The second byte is a 1 if there is a default value, 0 otherwise.
+//! 
+//! If there is a default value it follows the second byte.
+//! 
+//! ```
+//! use no_proto::error::NP_Error;
+//! use no_proto::NP_Factory;
+//! use no_proto::pointer::NP_Date;
+//! 
+//! let factory: NP_Factory = NP_Factory::new(r#"{
+//!    "type": "date"
+//! }"#)?;
+//!
+//! assert_eq!(vec![19, 0], factory.compile_schema());
+//! 
+//! // [       19,             0]
+//! // [data type, default flag ]
+//! 
+//! let factory: NP_Factory = NP_Factory::new(r#"{
+//!    "type": "date",
+//!    "default": 1604862252
+//! }"#)?;
+//!
+//! assert_eq!(vec![19, 1, 0, 0, 0, 0, 95, 168, 65, 44], factory.compile_schema());
+//! 
+//! // [       19,            1, 0, 0, 0, 0, 95, 168, 65, 44]
+//! // [data type, default flag,        default value       ]
+//!
+//! # Ok::<(), NP_Error>(()) 
+//! ```
+//! 
+//! ## Collection Schemas
+//! 
+//! Collection based schemas nest schemas in a way that allows any type to be the child of any collection, including other collections.
+//! 
+//! ### Table (collection)
+//! 
+//! ```
+//! use no_proto::error::NP_Error;
+//! use no_proto::NP_Factory;
+//! 
+//! let factory: NP_Factory = NP_Factory::new(r#"{
+//!     "type": "table",
+//!     "columns": [
+//!         ["age",  {"type": "u8"}],
+//!         ["name", {"type": "string"}]
+//!     ]
+//! }"#)?;
+//!
+//!
+//! assert_eq!(vec![21, 2, 3, 97, 103, 101, 0, 2, 8, 0, 4, 110, 97, 109, 101, 0, 5, 2, 0, 0, 0, 0], factory.compile_schema());
+//! 
+//! // [       21,            2, 3, 97, 103, 101,                     0, 2,           8, 0, 4, 110, 97, 109, 101,                      0, 5,   2, 0, 0, 0, 0]
+//! // [data type, # of columns,     a,   g,   e, column schema size (u16),  column schema,      n,  a,   m,   e,  column schema size (u16),  column schema ]
+//!
+//! # Ok::<(), NP_Error>(()) 
+//! ```
+//! 
+//! ### List (Collection)
+//! 
+//! ```
+//! use no_proto::error::NP_Error;
+//! use no_proto::NP_Factory;
+//! 
+//! let factory: NP_Factory = NP_Factory::new(r#"{
+//!     "type": "list",
+//!     "of": {"type": "u8"}
+//! }"#)?;
+//!
+//! assert_eq!(vec![23, 8, 0], factory.compile_schema());
+//! 
+//! // [       23,        8, 0]
+//! // [data type, "of" schema]
+//!
+//! # Ok::<(), NP_Error>(()) 
+//! ```
+//! 
+//! ### Map (Collection)
+//! 
+//! ```
+//! use no_proto::error::NP_Error;
+//! use no_proto::NP_Factory;
+//! 
+//! let factory: NP_Factory = NP_Factory::new(r#"{
+//!     "type": "map",
+//!     "value": {"type": "u8"}
+//! }"#)?;
+//!
+//! assert_eq!(vec![22, 8, 0], factory.compile_schema());
+//! 
+//! // [       22,         8, 0]
+//! // [data type, value schema]
+//!
+//! # Ok::<(), NP_Error>(()) 
+//! ```
+//! 
+//! ### Tuple (Collection)
+//! 
+//! ```
+//! use no_proto::error::NP_Error;
+//! use no_proto::NP_Factory;
+//! 
+//! let factory: NP_Factory = NP_Factory::new(r#"{
+//!    "type": "tuple",
+//!    "values": [
+//!        {"type": "u8"},
+//!        {"type": "string"}
+//!    ]
+//! }"#)?;
+//!
+//! assert_eq!(vec![24, 0, 2, 0, 2, 8, 0, 0, 5, 2, 0, 0, 0, 0], factory.compile_schema());
+//! 
+//! // [       24,      0,           2,               0, 2,   8, 0,              0, 5,  2, 0, 0, 0, 0]
+//! // [data type, sorted, length (u8),  schema size (u16), schema, schema size (u16),    schema     ]
+//!
+//! # Ok::<(), NP_Error>(()) 
+//! ```

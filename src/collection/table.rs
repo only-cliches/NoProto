@@ -27,6 +27,26 @@ pub struct NP_Table_Schema_State {
 impl NP_Value for NP_Table {
     fn type_idx() -> (u8, String) { (NP_TypeKeys::Table as u8, "table".to_owned()) }
     fn self_type_idx(&self) -> (u8, String) { (NP_TypeKeys::Table as u8, "table".to_owned()) }
+
+
+    fn schema_to_json(schema_ptr: NP_Schema_Ptr)-> Result<NP_JSON, NP_Error> {
+        let mut schema_json = JSMAP::new();
+        schema_json.insert("type".to_owned(), NP_JSON::String(Self::type_idx().1));
+
+        let schema_state = NP_Table::get_schema_state(&schema_ptr);
+
+        let columns: Vec<NP_JSON> = schema_state.columns.into_iter().map(|column| {
+            let mut cols: Vec<NP_JSON> = Vec::new();
+            cols.push(NP_JSON::String(column.1));
+            cols.push(NP_Schema::_type_to_json(column.2).unwrap());
+            NP_JSON::Array(cols)
+        }).collect();
+
+        schema_json.insert("columns".to_owned(), NP_JSON::Array(columns));
+
+        Ok(NP_JSON::Dictionary(schema_json))
+    }
+
     fn set_value(_pointer: NP_Lite_Ptr, _value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
         Err(NP_Error::new("Type (table) doesn't support .set()! Use .into() instead."))
     }
@@ -136,7 +156,7 @@ impl NP_Value for NP_Table {
             return NP_JSON::Null;
         }
 
-        let mut object = JSMAP::<NP_JSON>::new();
+        let mut object = JSMAP::new();
 
         let table = NP_Table::into_value(ptr.clone());
 

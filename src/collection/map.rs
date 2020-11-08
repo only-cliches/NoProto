@@ -1,5 +1,5 @@
 use alloc::rc::Rc;
-use crate::pointer::NP_PtrKinds;
+use crate::{json_flex::JSMAP, pointer::NP_PtrKinds};
 use crate::pointer::{NP_Value, NP_Ptr, any::NP_Any, NP_Lite_Ptr};
 use crate::{memory::{NP_Size, NP_Memory}, schema::{NP_Schema, NP_TypeKeys, NP_Schema_Ptr}, error::NP_Error, json_flex::NP_JSON};
 
@@ -24,6 +24,18 @@ impl<T: NP_Value + Default> NP_Value for NP_Map<T> {
 
     fn type_idx() -> (u8, String) { (NP_TypeKeys::Map as u8, "map".to_owned()) }
     fn self_type_idx(&self) -> (u8, String) { (NP_TypeKeys::Map as u8, "map".to_owned()) }
+    
+    fn schema_to_json(schema_ptr: NP_Schema_Ptr)-> Result<NP_JSON, NP_Error> {
+        let mut schema_json = JSMAP::new();
+        schema_json.insert("type".to_owned(), NP_JSON::String(Self::type_idx().1));
+
+        let value_of = schema_ptr.copy_with_addr(schema_ptr.address + 1);
+
+        schema_json.insert("value".to_owned(), NP_Schema::_type_to_json(value_of)?);
+
+        Ok(NP_JSON::Dictionary(schema_json))
+    }
+    
     fn set_value(_pointer: NP_Lite_Ptr, _value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
         Err(NP_Error::new("Type (map) doesn't support .set()! Use .into() instead."))
     }

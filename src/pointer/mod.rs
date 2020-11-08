@@ -75,6 +75,12 @@ pub trait NP_Value {
     /// 
     fn self_type_idx(&self) -> (u8, String) { (0, "null".to_owned()) }
 
+    /// Convert the schema byte array for this type into JSON
+    /// 
+    fn schema_to_json(_schema_ptr: NP_Schema_Ptr)-> Result<NP_JSON, NP_Error> {
+        Err(NP_Error::new("Attempted to convert schema to JSON for unsupported type!"))
+    }
+
     /// Set the value of this scalar into the buffer
     /// 
     fn set_value(_pointer: NP_Lite_Ptr, _value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {

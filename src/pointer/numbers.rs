@@ -4,7 +4,7 @@ use crate::utils::to_unsigned;
 use crate::utils::to_signed;
 use crate::schema::NP_Schema;
 use crate::error::NP_Error;
-use crate::{schema::NP_TypeKeys, pointer::NP_Value, json_flex::NP_JSON};
+use crate::{schema::NP_TypeKeys, pointer::NP_Value, json_flex::NP_JSON, json_flex::JSMAP};
 use super::{NP_PtrKinds, NP_Lite_Ptr};
 
 use alloc::string::String;
@@ -32,6 +32,29 @@ macro_rules! noproto_number {
             fn type_idx() -> (u8, String) { ($tkey as u8, $str1.to_owned()) }
 
             fn self_type_idx(&self) -> (u8, String) { ($tkey as u8, $str1.to_owned()) }
+
+            fn schema_to_json(schema_ptr: NP_Schema_Ptr)-> Result<NP_JSON, NP_Error> {
+                let mut schema_json = JSMAP::new();
+                schema_json.insert("type".to_owned(), NP_JSON::String(Self::type_idx().1));
+            
+                if let Some(default) = Self::schema_default(&schema_ptr) {
+                    let default_val = *default;
+                    match $numType {
+                        NP_NumType::signed => {
+                            schema_json.insert("default".to_owned(), NP_JSON::Integer(default_val as i64));
+                        },
+                        NP_NumType::unsigned => {
+                            schema_json.insert("default".to_owned(), NP_JSON::Integer(default_val as i64));
+                        },
+                        NP_NumType::floating => {
+                            schema_json.insert("default".to_owned(), NP_JSON::Float(default_val as f64));
+                        }
+                    };
+                    
+                }
+        
+                Ok(NP_JSON::Dictionary(schema_json))
+            }
 
             fn schema_default(ptr: &NP_Schema_Ptr) -> Option<Box<Self>> {
 

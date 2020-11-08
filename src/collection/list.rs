@@ -1,4 +1,4 @@
-use crate::{memory::{NP_Size, NP_Memory}, pointer::{NP_Value, NP_Ptr, NP_PtrKinds, any::NP_Any, NP_Lite_Ptr}, error::NP_Error, schema::{NP_Schema, NP_TypeKeys, NP_Schema_Ptr}, json_flex::NP_JSON};
+use crate::{error::NP_Error, json_flex::{JSMAP, NP_JSON}, memory::{NP_Size, NP_Memory}, pointer::{NP_Value, NP_Ptr, NP_PtrKinds, any::NP_Any, NP_Lite_Ptr}, schema::{NP_Schema, NP_TypeKeys, NP_Schema_Ptr}};
 
 use alloc::string::String;
 use alloc::borrow::ToOwned;
@@ -755,6 +755,18 @@ impl<T: NP_Value + Default> NP_Value for NP_List<T> {
 
     fn type_idx() -> (u8, String) { (NP_TypeKeys::List as u8, "list".to_owned()) }
     fn self_type_idx(&self) -> (u8, String) { (NP_TypeKeys::List as u8, "list".to_owned()) }
+
+    fn schema_to_json(schema_ptr: NP_Schema_Ptr)-> Result<NP_JSON, NP_Error> {
+        let mut schema_json = JSMAP::new();
+        schema_json.insert("type".to_owned(), NP_JSON::String(Self::type_idx().1));
+
+        let list_of = schema_ptr.copy_with_addr(schema_ptr.address + 1);
+
+        schema_json.insert("of".to_owned(), NP_Schema::_type_to_json(list_of)?);
+
+        Ok(NP_JSON::Dictionary(schema_json))
+    }
+
     fn set_value(_pointer: NP_Lite_Ptr, _value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
         Err(NP_Error::new("Type (list) doesn't support .set()! Use .into() instead."))
     }

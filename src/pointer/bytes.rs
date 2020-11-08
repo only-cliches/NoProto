@@ -1,4 +1,4 @@
-use crate::schema::NP_Schema_Ptr;
+use crate::{json_flex::JSMAP, schema::NP_Schema_Ptr};
 use crate::schema::NP_Schema;
 use crate::error::NP_Error;
 use crate::memory::{NP_Size};
@@ -76,6 +76,25 @@ impl NP_Value for NP_Bytes {
 
     fn type_idx() -> (u8, String) { (NP_TypeKeys::Bytes as u8, "bytes".to_owned()) }
     fn self_type_idx(&self) -> (u8, String) { (NP_TypeKeys::Bytes as u8, "bytes".to_owned()) }
+
+    fn schema_to_json(schema_ptr: NP_Schema_Ptr)-> Result<NP_JSON, NP_Error> {
+        let mut schema_json = JSMAP::new();
+        schema_json.insert("type".to_owned(), NP_JSON::String(Self::type_idx().1));
+
+        let schema_state = NP_Bytes::get_schema_state(&schema_ptr);
+        if schema_state.size > 0 {
+            schema_json.insert("size".to_owned(), NP_JSON::Integer(schema_state.size.into()));
+        }
+
+        if let Some(default) = schema_state.default {
+            let default_bytes: Vec<NP_JSON> = default.into_iter().map(|value| {
+                NP_JSON::Integer(i64::from(*value))
+            }).collect();
+            schema_json.insert("default".to_owned(), NP_JSON::Array(default_bytes));
+        }
+
+        Ok(NP_JSON::Dictionary(schema_json))
+    }
 
     fn schema_default(schema: &NP_Schema_Ptr) -> Option<Box<Self>> {
 

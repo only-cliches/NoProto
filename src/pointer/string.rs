@@ -1,5 +1,5 @@
 use alloc::vec::Vec;
-use crate::schema::NP_Schema;
+use crate::{json_flex::JSMAP, schema::NP_Schema};
 use crate::error::NP_Error;
 use crate::{schema::{NP_TypeKeys, NP_Schema_Ptr}, pointer::NP_Value, utils::from_utf8_lossy, json_flex::NP_JSON};
 use super::{NP_PtrKinds, NP_Lite_Ptr, bytes::NP_Bytes};
@@ -53,6 +53,22 @@ impl NP_Value for String {
 
     fn type_idx() -> (u8, String) { (NP_TypeKeys::UTF8String as u8, "string".to_owned()) }
     fn self_type_idx(&self) -> (u8, String) { (NP_TypeKeys::UTF8String as u8, "string".to_owned()) }
+
+    fn schema_to_json(schema_ptr: NP_Schema_Ptr)-> Result<NP_JSON, NP_Error> {
+        let mut schema_json = JSMAP::new();
+        schema_json.insert("type".to_owned(), NP_JSON::String(Self::type_idx().1));
+
+        let schema_state = str_get_schema_state(&schema_ptr);
+        if schema_state.size > 0 {
+            schema_json.insert("size".to_owned(), NP_JSON::Integer(schema_state.size.into()));
+        }
+
+        if let Some(default) = schema_state.default {
+            schema_json.insert("default".to_owned(), NP_JSON::String(default.clone()));
+        }
+
+        Ok(NP_JSON::Dictionary(schema_json))
+    }
 
     fn set_value(pointer: NP_Lite_Ptr, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
         let bytes = value.as_bytes().to_vec();

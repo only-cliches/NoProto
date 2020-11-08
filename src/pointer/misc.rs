@@ -675,6 +675,22 @@ impl NP_Value for NP_Dec {
     fn type_idx() -> (u8, String) { (NP_TypeKeys::Decimal as u8, "decimal".to_owned()) }
     fn self_type_idx(&self) -> (u8, String) { (NP_TypeKeys::Decimal as u8, "decimal".to_owned()) }
 
+    fn schema_to_json(schema_ptr: NP_Schema_Ptr)-> Result<NP_JSON, NP_Error> {
+        let mut schema_json = JSMAP::new();
+        schema_json.insert("type".to_owned(), NP_JSON::String(Self::type_idx().1));
+
+        let schema_state = NP_Dec::get_schema_state(&schema_ptr);
+
+        schema_json.insert("exp".to_owned(), NP_JSON::Integer(schema_state.exp.into()));
+    
+        if let Some(default) = schema_state.default {
+            let value = NP_Dec::new(default, schema_state.exp);
+            schema_json.insert("default".to_owned(), NP_JSON::Float(value.into()));
+        }
+
+        Ok(NP_JSON::Dictionary(schema_json))
+    }
+
     fn schema_default(schema: &NP_Schema_Ptr) -> Option<Box<Self>> {
 
         let schema_data = NP_Dec::get_schema_state(&schema);
@@ -754,7 +770,7 @@ impl NP_Value for NP_Dec {
             Ok(x) => {
                 match x {
                     Some(y) => {
-                        let mut object = JSMAP::<NP_JSON>::new();
+                        let mut object = JSMAP::new();
 
                         object.insert("num".to_owned(), NP_JSON::Integer(y.num));
                         object.insert("exp".to_owned(), NP_JSON::Integer(schema_data.exp as i64));
@@ -764,7 +780,7 @@ impl NP_Value for NP_Dec {
                     None => {
                         match schema_data.default {
                             Some(x) => {
-                                let mut object = JSMAP::<NP_JSON>::new();
+                                let mut object = JSMAP::new();
 
                                 object.insert("num".to_owned(), NP_JSON::Integer(x));
                                 object.insert("exp".to_owned(), NP_JSON::Integer(schema_data.exp as i64));
@@ -830,7 +846,7 @@ impl NP_Value for NP_Dec {
                 },
                 _ => {
                     schema_data.push(0);
-                    schema_data.extend(0i64.to_be_bytes().to_vec())
+                    // schema_data.extend(0i64.to_be_bytes().to_vec())
                 }
             }
 
@@ -922,6 +938,9 @@ impl NP_Value for NP_Geo_Bytes {
     }
     fn type_idx() -> (u8, String) { NP_Geo::type_idx() }
     fn self_type_idx(&self) -> (u8, String) { NP_Geo::type_idx() }
+
+    fn schema_to_json(schema_ptr: NP_Schema_Ptr)-> Result<NP_JSON, NP_Error> { NP_Geo::schema_to_json(schema_ptr)}
+
     fn set_value(_ptr: NP_Lite_Ptr, _value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
         Err(NP_Error::new("Can't set value with NP_Geo_Bytes, use NP_Geo instead!"))
     }
@@ -1159,7 +1178,7 @@ fn geo_default_value(size: u8, json: &NP_JSON) -> Result<Option<NP_Geo_Bytes>, N
 impl NP_Value for NP_Geo {
 
     fn schema_default(schema: &NP_Schema_Ptr) -> Option<Box<Self>> {
-        let schema_state = NP_Geo::get_schema_state(schema);
+        let schema_state = Self::get_schema_state(schema);
 
         match schema_state.default {
             Some(x) => {
@@ -1172,11 +1191,30 @@ impl NP_Value for NP_Geo {
     fn type_idx() -> (u8, String) { (NP_TypeKeys::Geo as u8, "geo".to_owned()) }
     fn self_type_idx(&self) -> (u8, String) { (NP_TypeKeys::Geo as u8, "geo".to_owned()) }
 
+    fn schema_to_json(schema_ptr: NP_Schema_Ptr)-> Result<NP_JSON, NP_Error> {
+        let mut schema_json = JSMAP::new();
+       
+        let schema_state = Self::get_schema_state(&schema_ptr);
+
+        let mut type_str = Self::type_idx().1;
+        type_str.push_str(schema_state.size.to_string().as_str());
+        schema_json.insert("type".to_owned(), NP_JSON::String(type_str));
+    
+        if let Some(default) = schema_state.default {
+            let mut default_map = JSMAP::new();
+            default_map.insert("lat".to_owned(), NP_JSON::Float(default.lat));
+            default_map.insert("lng".to_owned(), NP_JSON::Float(default.lng));
+            schema_json.insert("default".to_owned(), NP_JSON::Dictionary(default_map));
+        }
+
+        Ok(NP_JSON::Dictionary(schema_json))
+    }
+
     fn set_value(ptr: NP_Lite_Ptr, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
 
         let mut addr = ptr.kind.get_value_addr();
 
-        let schema_state = NP_Geo::get_schema_state(&ptr.schema);
+        let schema_state = Self::get_schema_state(&ptr.schema);
 
         let value_bytes_size = schema_state.size as usize;
 
@@ -1296,7 +1334,7 @@ impl NP_Value for NP_Geo {
             return Ok(None);
         }
 
-        let schema_state = NP_Geo::get_schema_state(&ptr.schema);
+        let schema_state = Self::get_schema_state(&ptr.schema);
 
         Ok(Some(Box::new(match schema_state.size {
             16 => {
@@ -1358,7 +1396,7 @@ impl NP_Value for NP_Geo {
             Ok(x) => {
                 match x {
                     Some(y) => {
-                        let mut object = JSMAP::<NP_JSON>::new();
+                        let mut object = JSMAP::new();
 
                         object.insert("lat".to_owned(), NP_JSON::Float(y.lat));
                         object.insert("lng".to_owned(), NP_JSON::Float(y.lng));
@@ -1366,11 +1404,11 @@ impl NP_Value for NP_Geo {
                         NP_JSON::Dictionary(object)
                     },
                     None => {
-                        let schema_state = NP_Geo::get_schema_state(&ptr.schema);
+                        let schema_state = Self::get_schema_state(&ptr.schema);
 
                         match schema_state.default {
                             Some(k) => {
-                                let mut object = JSMAP::<NP_JSON>::new();
+                                let mut object = JSMAP::new();
 
                                 object.insert("lat".to_owned(), NP_JSON::Float(k.lat));
                                 object.insert("lng".to_owned(), NP_JSON::Float(k.lng));
@@ -1394,7 +1432,7 @@ impl NP_Value for NP_Geo {
         if addr == 0 {
             return Ok(0) 
         } else {
-            let schema_state = NP_Geo::get_schema_state(&ptr.schema);
+            let schema_state = Self::get_schema_state(&ptr.schema);
             Ok(schema_state.size as u32)
         }
     }
@@ -1537,6 +1575,13 @@ impl NP_Value for NP_ULID {
 
     fn type_idx() -> (u8, String) { (NP_TypeKeys::Ulid as u8, "ulid".to_owned()) }
     fn self_type_idx(&self) -> (u8, String) { (NP_TypeKeys::Ulid as u8, "ulid".to_owned()) }
+
+    fn schema_to_json(_schema_ptr: NP_Schema_Ptr)-> Result<NP_JSON, NP_Error> {
+        let mut schema_json = JSMAP::new();
+        schema_json.insert("type".to_owned(), NP_JSON::String(Self::type_idx().1));
+
+        Ok(NP_JSON::Dictionary(schema_json))
+    }
 
     fn set_value(ptr: NP_Lite_Ptr, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
 
@@ -1738,6 +1783,13 @@ impl NP_Value for NP_UUID {
     fn type_idx() -> (u8, String) { (NP_TypeKeys::Uuid as u8, "uuid".to_owned()) }
     fn self_type_idx(&self) -> (u8, String) { (NP_TypeKeys::Uuid as u8, "uuid".to_owned()) }
 
+    fn schema_to_json(_schema_ptr: NP_Schema_Ptr)-> Result<NP_JSON, NP_Error> {
+        let mut schema_json = JSMAP::new();
+        schema_json.insert("type".to_owned(), NP_JSON::String(Self::type_idx().1));
+
+        Ok(NP_JSON::Dictionary(schema_json))
+    }
+
     fn set_value(ptr: NP_Lite_Ptr, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
 
         let mut addr = ptr.kind.get_value_addr();
@@ -1902,9 +1954,28 @@ impl NP_Value for NP_Option {
     fn type_idx() -> (u8, String) { (NP_TypeKeys::Enum as u8, "option".to_owned()) }
     fn self_type_idx(&self) -> (u8, String) { (NP_TypeKeys::Enum as u8, "option".to_owned()) }
 
+    fn schema_to_json(schema_ptr: NP_Schema_Ptr)-> Result<NP_JSON, NP_Error> {
+        let mut schema_json = JSMAP::new();
+        schema_json.insert("type".to_owned(), NP_JSON::String(Self::type_idx().1));
+
+        let schema_state = Self::get_schema_state(&schema_ptr);
+
+        let options: Vec<NP_JSON> = schema_state.choices.into_iter().map(|value| {
+            NP_JSON::String(value)
+        }).collect();
+    
+        if let Some(default) = schema_state.default {
+            schema_json.insert("default".to_owned(), options[default as usize].clone());
+        }
+
+        schema_json.insert("choices".to_owned(), NP_JSON::Array(options));
+
+        Ok(NP_JSON::Dictionary(schema_json))
+    }
+
     fn schema_default(schema: &NP_Schema_Ptr) -> Option<Box<Self>> {
 
-        let schema_state = NP_Option::get_schema_state(&schema);
+        let schema_state = Self::get_schema_state(&schema);
 
         if let Some(idx) = schema_state.default {
             Some(Box::new(NP_Option { value: Some(schema_state.choices[idx as usize].clone()) }))
@@ -1917,7 +1988,7 @@ impl NP_Value for NP_Option {
 
         let mut addr = ptr.kind.get_value_addr();
 
-        let schema_state = NP_Option::get_schema_state(&ptr.schema);
+        let schema_state = Self::get_schema_state(&ptr.schema);
 
         let mut value_num: i32 = -1;
 
@@ -2115,6 +2186,22 @@ impl NP_Value for bool {
     fn type_idx() -> (u8, String) { (NP_TypeKeys::Boolean as u8, "bool".to_owned()) }
     fn self_type_idx(&self) -> (u8, String) { (NP_TypeKeys::Boolean as u8, "bool".to_owned()) }
 
+    fn schema_to_json(schema_ptr: NP_Schema_Ptr)-> Result<NP_JSON, NP_Error> {
+        let mut schema_json = JSMAP::new();
+        schema_json.insert("type".to_owned(), NP_JSON::String(Self::type_idx().1));
+
+        let schema_state = bool_get_schema_state(&schema_ptr);
+
+        if let Some(default) = schema_state {
+            schema_json.insert("default".to_owned(), match default {
+                true => NP_JSON::True,
+                false => NP_JSON::False
+            });
+        }
+
+        Ok(NP_JSON::Dictionary(schema_json))
+    }
+
     fn schema_default(schema: &NP_Schema_Ptr) -> Option<Box<Self>> {
 
         let state = bool_get_schema_state(&schema);
@@ -2298,6 +2385,19 @@ impl NP_Value for NP_Date {
 
     fn type_idx() -> (u8, String) { (NP_TypeKeys::Date as u8, "date".to_owned()) }
     fn self_type_idx(&self) -> (u8, String) { (NP_TypeKeys::Date as u8, "date".to_owned()) }
+
+    fn schema_to_json(schema_ptr: NP_Schema_Ptr)-> Result<NP_JSON, NP_Error> {
+        let mut schema_json = JSMAP::new();
+        schema_json.insert("type".to_owned(), NP_JSON::String(Self::type_idx().1));
+
+        let schema_state = Self::get_schema_state(&schema_ptr);
+    
+        if let Some(default) = schema_state {
+            schema_json.insert("default".to_owned(), NP_JSON::Integer(default.value as i64));
+        }
+
+        Ok(NP_JSON::Dictionary(schema_json))
+    }
 
     fn schema_default(schema: &NP_Schema_Ptr) -> Option<Box<Self>> {
 
