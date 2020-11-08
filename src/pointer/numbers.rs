@@ -11,9 +11,14 @@ use alloc::string::String;
 use alloc::boxed::Box;
 use alloc::{borrow::ToOwned};
 
+/// The type of number being used
+#[derive(Debug)]
 pub enum NP_NumType {
+    /// Unsigned integer type (only positive whole numbers)
     unsigned,
+    /// Signed integer type (positive or negative whole numbers)
     signed,
+    /// Decimal point numbers
     floating
 }
 
@@ -192,12 +197,12 @@ noproto_number!(f32,  "float", "f32", NP_TypeKeys::Float , NP_NumType::floating)
 noproto_number!(f64, "double", "f64", NP_TypeKeys::Double, NP_NumType::floating);
 
 trait NP_BigEndian {
-    fn np_from_be_bytes(bytes: &[u8]) -> Box<Self> { panic!() }
+    fn np_from_be_bytes(_bytes: &[u8]) -> Box<Self> { panic!() }
 }
 
 impl NP_BigEndian for i8 {
     fn np_from_be_bytes(bytes: &[u8]) -> Box<Self> {
-        let slice: [u8; 1] = Default::default();
+        let mut slice: [u8; 1] = Default::default();
         slice.copy_from_slice(bytes);
         Box::new(i8::from_be_bytes(slice))
     }
@@ -205,7 +210,7 @@ impl NP_BigEndian for i8 {
 
 impl NP_BigEndian for i16 {
     fn np_from_be_bytes(bytes: &[u8]) -> Box<Self> {
-        let slice: [u8; 2] = Default::default();
+        let mut slice: [u8; 2] = Default::default();
         slice.copy_from_slice(bytes);
         Box::new(i16::from_be_bytes(slice))
     }
@@ -213,7 +218,7 @@ impl NP_BigEndian for i16 {
 
 impl NP_BigEndian for i32 {
     fn np_from_be_bytes(bytes: &[u8]) -> Box<Self> {
-        let slice: [u8; 4] = Default::default();
+        let mut slice: [u8; 4] = Default::default();
         slice.copy_from_slice(bytes);
         Box::new(i32::from_be_bytes(slice))
     }
@@ -221,7 +226,7 @@ impl NP_BigEndian for i32 {
 
 impl NP_BigEndian for i64 {
     fn np_from_be_bytes(bytes: &[u8]) -> Box<Self> {
-        let slice: [u8; 8] = Default::default();
+        let mut slice: [u8; 8] = Default::default();
         slice.copy_from_slice(bytes);
         Box::new(i64::from_be_bytes(slice))
     }
@@ -229,7 +234,7 @@ impl NP_BigEndian for i64 {
 
 impl NP_BigEndian for u8 {
     fn np_from_be_bytes(bytes: &[u8]) -> Box<Self> {
-        let slice: [u8; 1] = Default::default();
+        let mut slice: [u8; 1] = Default::default();
         slice.copy_from_slice(bytes);
         Box::new(u8::from_be_bytes(slice))
     }
@@ -237,7 +242,7 @@ impl NP_BigEndian for u8 {
 
 impl NP_BigEndian for u16 {
     fn np_from_be_bytes(bytes: &[u8]) -> Box<Self> {
-        let slice: [u8; 2] = Default::default();
+        let mut slice: [u8; 2] = Default::default();
         slice.copy_from_slice(bytes);
         Box::new(u16::from_be_bytes(slice))
     }
@@ -245,7 +250,7 @@ impl NP_BigEndian for u16 {
 
 impl NP_BigEndian for u32 {
     fn np_from_be_bytes(bytes: &[u8]) -> Box<Self> {
-        let slice: [u8; 4] = Default::default();
+        let mut slice: [u8; 4] = Default::default();
         slice.copy_from_slice(bytes);
         Box::new(u32::from_be_bytes(slice))
     }
@@ -253,7 +258,7 @@ impl NP_BigEndian for u32 {
 
 impl NP_BigEndian for u64 {
     fn np_from_be_bytes(bytes: &[u8]) -> Box<Self> {
-        let slice: [u8; 8] = Default::default();
+        let mut slice: [u8; 8] = Default::default();
         slice.copy_from_slice(bytes);
         Box::new(u64::from_be_bytes(slice))
     }
@@ -261,7 +266,7 @@ impl NP_BigEndian for u64 {
 
 impl NP_BigEndian for f32 {
     fn np_from_be_bytes(bytes: &[u8]) -> Box<Self> {
-        let slice: [u8; 4] = Default::default();
+        let mut slice: [u8; 4] = Default::default();
         slice.copy_from_slice(bytes);
         Box::new(f32::from_be_bytes(slice))
     }
@@ -269,7 +274,7 @@ impl NP_BigEndian for f32 {
 
 impl NP_BigEndian for f64 {
     fn np_from_be_bytes(bytes: &[u8]) -> Box<Self> {
-        let slice: [u8; 8] = Default::default();
+        let mut slice: [u8; 8] = Default::default();
         slice.copy_from_slice(bytes);
         Box::new(f64::from_be_bytes(slice))
     }

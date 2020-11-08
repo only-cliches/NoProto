@@ -60,7 +60,7 @@ impl<T: NP_Value + Default> NP_List<T> {
             None => unreachable!()
         };
 
-        let schema = self.schema.unwrap();
+        let schema = self.schema.as_ref().unwrap();
         let list_of = schema.copy_with_addr(schema.address + 1);
 
         if self.head == 0 { // no values, create one
@@ -488,7 +488,7 @@ impl<T: NP_Value + Default> NP_List<T> {
             None => unreachable!()
         };
 
-        let schema = self.schema.unwrap();
+        let schema = self.schema.as_ref().unwrap();
         let list_of = schema.copy_with_addr(schema.address + 1);
 
         // no more values in this list
@@ -545,7 +545,7 @@ impl<T: NP_Value + Default> NP_List<T> {
             None => unreachable!()
         };
 
-        let schema = self.schema.unwrap();
+        let schema = self.schema.as_ref().unwrap();
         let list_of = schema.copy_with_addr(schema.address + 1);
 
         if self.tail == 0 { // no values, create one
@@ -952,7 +952,7 @@ impl<T: NP_Value + Default> NP_Value for NP_List<T> {
                 _ => { }
             }
 
-            let child_type = NP_Schema::from_json(Box::new(json_schema["of"]))?;
+            let child_type = NP_Schema::from_json(Box::new(json_schema["of"].clone()))?;
             schema_data.extend(child_type.bytes);
             return Ok(Some(schema_data))
         }

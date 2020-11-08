@@ -356,13 +356,13 @@ impl NP_Value for NP_Bytes {
                 }
             }
 
-            match json_schema["default"] {
+            match &json_schema["default"] {
                 NP_JSON::Array(bytes) => {
                     let mut default_bytes: Vec<u8> = Vec::new();
                     for x in bytes {
                         match x {
                             NP_JSON::Integer(x) => {
-                                default_bytes.push(x as u8);
+                                default_bytes.push(*x as u8);
                             },
                             _ => {}
                         }

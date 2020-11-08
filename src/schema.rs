@@ -557,7 +557,7 @@ use alloc::string::String;
 use alloc::boxed::Box;
 use alloc::{rc::Rc};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[doc(hidden)]
 #[repr(u8)]
 // These are just used for runtime type comparison, the type information is never stored in the buffer.
@@ -598,6 +598,7 @@ impl From<u8> for NP_TypeKeys {
 }
 
 impl NP_TypeKeys {
+    /// Convert this NP_TypeKey into a specific type index
     pub fn into_type_idx(&self) -> (u8, String) {
         match self {
             NP_TypeKeys::Any =>        { return NP_Any::type_idx() }
@@ -640,6 +641,7 @@ pub struct NP_Schema_Ptr {
 
 impl NP_Schema_Ptr {
 
+    /// Copy schema address and RC Clone the schema itself
     pub fn copy(&self) -> Self {
         NP_Schema_Ptr {
             address: self.address,
@@ -647,6 +649,7 @@ impl NP_Schema_Ptr {
         }
     }
 
+    /// Copy schema but use different address
     pub fn copy_with_addr(&self, new_addr: usize) -> Self {
         NP_Schema_Ptr {
             address: new_addr,
@@ -691,8 +694,9 @@ impl NP_Schema {
         }
     }
 
+    /// Get type string for this schema
     pub fn get_type(json_schema: &NP_JSON) -> Result<String, NP_Error> {
-        match json_schema["type"] {
+        match &json_schema["type"] {
             NP_JSON::String(x) => {
                 Ok(x.clone())
             },

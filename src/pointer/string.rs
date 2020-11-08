@@ -6,18 +6,20 @@ use super::{NP_PtrKinds, NP_Lite_Ptr, bytes::NP_Bytes};
 
 use alloc::string::String;
 use alloc::boxed::Box;
-use alloc::{rc::Rc, borrow::ToOwned};
+use alloc::{borrow::ToOwned};
+use alloc::string::ToString;
 
 /// Schema state for String
 #[derive(Debug)]
-pub struct NP_String_Schema_State<'state> {
+pub struct NP_String_Schema_State {
     /// 0 for dynamic size, anything greater than 0 is for fixed size
     pub size: u16,
     /// The default bytes
-    pub default: Option<&'state str>
+    pub default: Option<String>
 }
 
-pub fn str_get_schema_state<'state>(schema_ptr: &'state NP_Schema_Ptr) -> NP_String_Schema_State<'state> {
+/// Get schema state for string type
+pub fn str_get_schema_state(schema_ptr: &NP_Schema_Ptr) -> NP_String_Schema_State {
 
     // fixed size
     let fixed_size = u16::from_be_bytes([
@@ -38,9 +40,9 @@ pub fn str_get_schema_state<'state>(schema_ptr: &'state NP_Schema_Ptr) -> NP_Str
         }
     }
 
-    let default_bytes: &str = {
+    let default_bytes = {
         let bytes = &schema_ptr.schema.bytes[(schema_ptr.address + 5)..(schema_ptr.address + 5 + (default_size - 1))];
-        from_utf8_lossy(bytes).as_str()
+        from_utf8_lossy(bytes).to_string()
     };
 
     return NP_String_Schema_State { size: fixed_size, default: Some(default_bytes) }
@@ -114,24 +116,24 @@ impl NP_Value for String {
         if type_str == "string" || type_str == "str" || type_str == "utf8" || type_str == "utf-8" {
 
             let mut schema_data: Vec<u8> = Vec::new();
-            schema_data.push(NP_TypeKeys::Bytes as u8);
+            schema_data.push(NP_TypeKeys::UTF8String as u8);
 
             match json_schema["size"] {
                 NP_JSON::Integer(x) => {
                     if x < 1 {
-                        return Err(NP_Error::new("Fixed size for bytes must be larger than 1!"));
+                        return Err(NP_Error::new("Fixed size for string must be larger than 1!"));
                     }
                     if x > u16::MAX.into() {
-                        return Err(NP_Error::new("Fixed size for bytes cannot be larger than 2^16!"));
+                        return Err(NP_Error::new("Fixed size for string cannot be larger than 2^16!"));
                     }
                     schema_data.extend((x as u16).to_be_bytes().to_vec());
                 },
                 NP_JSON::Float(x) => {
                     if x < 1.0 {
-                        return Err(NP_Error::new("Fixed size for bytes must be larger than 1!"));
+                        return Err(NP_Error::new("Fixed size for string must be larger than 1!"));
                     }
                     if x > u16::MAX.into() {
-                        return Err(NP_Error::new("Fixed size for bytes cannot be larger than 2^16!"));
+                        return Err(NP_Error::new("Fixed size for string cannot be larger than 2^16!"));
                     }
 
                     schema_data.extend((x as u16).to_be_bytes().to_vec());
@@ -141,9 +143,9 @@ impl NP_Value for String {
                 }
             }
 
-            match json_schema["default"] {
+            match &json_schema["default"] {
                 NP_JSON::String(bytes) => {
-                    let str_bytes = bytes.into_bytes();
+                    let str_bytes = bytes.clone().into_bytes();
                     if str_bytes.len() > u16::max as usize - 1 {
                         return Err(NP_Error::new("Default string value cannot be larger than 2^16 bytes!"));
                     }

@@ -72,7 +72,9 @@ pub struct NP_Dec {
 /// Schema state for NP_Dec
 #[derive(Clone, Copy, Debug)]
 pub struct NP_Dec_Schema_State {
+    /// The expontent of this decimal
     pub exp: u8,
+    /// The default value for this decimal
     pub default: Option<i64>
 }
 
@@ -798,8 +800,7 @@ impl NP_Value for NP_Dec {
             let mut schema_data: Vec<u8> = Vec::new();
             schema_data.push(NP_TypeKeys::Decimal as u8);
 
-            let mut exp: u8 = 0;
-
+            let exp: u8;
 
             match json_schema["exp"] {
                 NP_JSON::Integer(x) => {
@@ -916,7 +917,7 @@ impl Default for NP_Geo_Bytes {
 }
 
 impl NP_Value for NP_Geo_Bytes {
-    fn schema_default(schema: &NP_Schema_Ptr) -> Option<Box<Self>> {
+    fn schema_default(_schema: &NP_Schema_Ptr) -> Option<Box<Self>> {
         None
     }
     fn type_idx() -> (u8, String) { NP_Geo::type_idx() }
@@ -1036,6 +1037,9 @@ impl NP_Geo {
                     size: size,
                     default: Some(default_value.into_geo().unwrap())
                 }
+            },
+            _ => {
+                unreachable!();
             }
         }
     }
@@ -1106,7 +1110,7 @@ impl Default for NP_Geo {
 }
 
 fn geo_default_value(size: u8, json: &NP_JSON) -> Result<Option<NP_Geo_Bytes>, NP_Error> {
-    match json["default"] {
+    match &json["default"] {
         NP_JSON::Dictionary(x) => {
             let mut lat = 0f64;
             match x.get("lat") {
@@ -1813,7 +1817,7 @@ impl NP_Value for NP_UUID {
 
         let type_str = NP_Schema::get_type(json_schema)?;
 
-        if "ulid" == type_str {
+        if "uuid" == type_str {
             let mut schema_data: Vec<u8> = Vec::new();
             schema_data.push(NP_TypeKeys::Uuid as u8);
             return Ok(Some(schema_data));
@@ -1851,8 +1855,9 @@ impl NP_Option {
         self.value = value;
     }
 
+    /// Get schema state
     pub fn get_schema_state(schema_ptr: &NP_Schema_Ptr) -> NP_Option_Schema_State {
-        let default_index: Option<u8> = None;
+        let mut default_index: Option<u8> = None;
 
         if schema_ptr.schema.bytes[schema_ptr.address + 1] > 0 {
             default_index = Some(schema_ptr.schema.bytes[schema_ptr.address + 1] - 1);
@@ -1862,13 +1867,12 @@ impl NP_Option {
 
         let mut choices: Vec<String> = Vec::new();
         let mut offset: usize = schema_ptr.address + 3;
-        for x in 0..choices_len {
+        for _x in 0..choices_len {
             let choice_size = schema_ptr.schema.bytes[offset] as usize;
             let choice_bytes = &schema_ptr.schema.bytes[(offset + 1)..(offset + 1 + choice_size)];
             choices.push(String::from_utf8_lossy(choice_bytes).into());
             offset += 1 + choice_size;
         }
-
 
         NP_Option_Schema_State {
             default: default_index,
@@ -1885,8 +1889,10 @@ impl Default for NP_Option {
 
 /// The schema state for NP_Option type
 #[derive(Clone, Debug)]
-struct NP_Option_Schema_State {
+pub struct NP_Option_Schema_State {
+    /// Default option index
     pub default: Option<u8>,
+    /// All choices for this option type
     pub choices: Vec<String>
 }
 
@@ -1901,7 +1907,7 @@ impl NP_Value for NP_Option {
         let schema_state = NP_Option::get_schema_state(&schema);
 
         if let Some(idx) = schema_state.default {
-            Some(Box::new(NP_Option { value: Some(schema_state.choices[idx as usize]) }))
+            Some(Box::new(NP_Option { value: Some(schema_state.choices[idx as usize].clone()) }))
         } else {
             None
         }
@@ -1969,7 +1975,7 @@ impl NP_Value for NP_Option {
                 if value_num > schema_state.choices.len() {
                     None
                 } else {
-                    Some(Box::new(NP_Option { value: Some(schema_state.choices[value_num]) }))
+                    Some(Box::new(NP_Option { value: Some(schema_state.choices[value_num].clone()) }))
                 }
             },
             None => None
@@ -1990,7 +1996,7 @@ impl NP_Value for NP_Option {
                             None => {
                                 let schema_state = NP_Option::get_schema_state(&ptr.schema);
                                 if let Some(x) = schema_state.default {
-                                    NP_JSON::String(schema_state.choices[x as usize])
+                                    NP_JSON::String(schema_state.choices[x as usize].clone())
                                 } else {
                                     NP_JSON::Null
                                 }
@@ -2000,7 +2006,7 @@ impl NP_Value for NP_Option {
                     None => {
                         let schema_state = NP_Option::get_schema_state(&ptr.schema);
                         if let Some(x) = schema_state.default {
-                            NP_JSON::String(schema_state.choices[x as usize])
+                            NP_JSON::String(schema_state.choices[x as usize].clone())
                         } else {
                             NP_JSON::Null
                         }
@@ -2033,18 +2039,18 @@ impl NP_Value for NP_Option {
 
             let mut choices: Vec<String> = Vec::new();
 
-            let default_stir: Option<String> = None;
+            let mut default_stir: Option<String> = None;
 
-            match json_schema["default"] {
+            match &json_schema["default"] {
                 NP_JSON::String(def) => {
-                    default_stir = Some(def);
+                    default_stir = Some(def.clone());
                 },
                 _ => {}
             }
 
-            let default_index: Option<u8> = None;
+            let mut default_index: Option<u8> = None;
 
-            match json_schema["choices"] {
+            match &json_schema["choices"] {
                 NP_JSON::Array(x) => {
                     for opt in x {
                         match opt {
@@ -2052,12 +2058,13 @@ impl NP_Value for NP_Option {
                                 if stir.len() > 255 {
                                     return Err(NP_Error::new("'option' choices cannot be longer than 255 characters each!"))
                                 }
-                                if let Some(def) = default_stir {
+
+                                if let Some(def) = &default_stir {
                                     if def == stir {
                                         default_index = Some(choices.len() as u8);
                                     }
                                 }
-                                choices.push(stir);
+                                choices.push(stir.clone());
                             },
                             _ => {}
                         }
@@ -2098,7 +2105,8 @@ fn bool_get_schema_state(schema_ptr: &NP_Schema_Ptr) -> Option<bool> {
     match schema_ptr.schema.bytes[schema_ptr.address + 1] {
         0 => None,
         1 => Some(true),
-        2 => Some(false)
+        2 => Some(false),
+        _ => unreachable!()
     }
 }
 
@@ -2251,6 +2259,7 @@ impl NP_Date {
         NP_Date { value: time }
     }
 
+    /// Get schema state for NP_Date
     pub fn get_schema_state(schema_ptr: &NP_Schema_Ptr) -> Option<NP_Date> {
 
         let has_default = schema_ptr.schema.bytes[schema_ptr.address + 1];
@@ -2260,7 +2269,7 @@ impl NP_Date {
         } else {
             let bytes_slice = &schema_ptr.schema.bytes[(schema_ptr.address + 2)..(schema_ptr.address + 10)];
 
-            let u64_bytes = 0u64.to_be_bytes();
+            let mut u64_bytes = 0u64.to_be_bytes();
             u64_bytes.copy_from_slice(bytes_slice);
             Some(NP_Date { value: u64::from_be_bytes(u64_bytes)})
         }

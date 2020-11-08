@@ -24,7 +24,7 @@ pub mod numbers;
 use crate::json_flex::NP_JSON;
 use crate::memory::{NP_Size, NP_Memory};
 use crate::NP_Error;
-use crate::{schema::{NP_TypeKeys, NP_Schema_Ptr, NP_Schema}, collection::{map::NP_Map, table::NP_Table, list::NP_List, tuple::NP_Tuple}, utils::{overflow_error, print_path, type_error}};
+use crate::{schema::{NP_TypeKeys, NP_Schema_Ptr}, collection::{map::NP_Map, table::NP_Table, list::NP_List, tuple::NP_Tuple}, utils::{overflow_error, print_path, type_error}};
 
 use alloc::string::String;
 use alloc::boxed::Box;
@@ -122,7 +122,7 @@ pub trait NP_Value {
 
     /// Get the default schema value for this type
     /// 
-    fn schema_default(schema: &NP_Schema_Ptr) -> Option<Box<Self>> {
+    fn schema_default(_schema: &NP_Schema_Ptr) -> Option<Box<Self>> {
         None
     }
 
@@ -192,7 +192,7 @@ impl NP_Lite_Ptr {
                 NP_Size::U8 => u8::from_be_bytes([ptr.memory.get_1_byte(addr).unwrap_or(0)]) as u32
             }},
             memory: Rc::clone(&ptr.memory),
-            schema: ptr.schema
+            schema: ptr.schema.clone()
         }
     }
 

@@ -2,7 +2,7 @@
 //! 
 //! NoProto buffers are built out of pointers and data.  
 //! 
-//! They are designed to hold a variable amount of data that is parsed based on a schema provided by the user.
+//! They are designed to hold a variable amount of data that is parsed based on a schema provided by the client.
 //! 
 //! 
 //! ## Pointers
@@ -17,7 +17,7 @@
 //! | Map Item     | 6                | 12               |
 //! | Table Item   | 5                | 9                |
 //! | List Item    | 6                | 10               |
-//! 
+//!  
 //! The first two bytes of every buffer are:
 //! 1. The protocol version used for this buffer, currently always 1.  This allows future breaking changes if needed.
 //! 2. The address sized used in this buffer.  0 for u32 addresses, 1 for u16 addresses.  All addresses in the buffer are the same size, deteremined by this flag.
@@ -26,7 +26,7 @@
 //! 
 //! Most of the time these bytes will point to the data immediately following them, but it's possible to clear the root object causing these bytes to be zero, or to update the root data which would cause this address to update to something else.
 //! 
-//! For example, here is a buffer with u16 size that contains the string `hello`, it's schema is just `{type: "string"}`.
+//! For example, here is a buffer with u16 address size that contains the string `hello`, it's schema is just `{type: "string"}`.
 //! 
 //! ```text
 //! [       1,        1,         0, 4,          0, 5, 104, 101, 108, 108, 111]
@@ -115,6 +115,7 @@
 //!
 //! let mut new_buffer = factory.empty_buffer(None, None);
 //! new_buffer.deep_set("age", 20u8)?;
+//!
 //! assert_eq!(vec![1, 1, 0, 4, 0, 6, 0, 11, 0, 0, 0, 20], new_buffer.close());
 //! 
 //! // [1, 1,   0, 4,    0, 6,  0, 11, 0, 0, 0,    20]
@@ -192,6 +193,7 @@
 //! }"#)?;
 //!
 //! let mut new_buffer = factory.empty_buffer(None, None);
+//! println!("Schema: {:?}", factory.compile_schema());
 //! new_buffer.deep_set("0", 20u8)?;
 //! new_buffer.deep_set("1", String::from("hello"))?;
 //! assert_eq!(vec![1, 1, 0, 4, 0, 8, 0, 9, 20, 0, 5, 104, 101, 108, 108, 111], new_buffer.close());
@@ -210,7 +212,7 @@
 //! 
 //! For example, an i8 of value -20 should be converted to 108, then saved as 108.
 //! 
-//! When it's requested by the user, it should be converted back to signed before being passed to the user.
+//! When it's requested by the client, it should be converted back to signed before being passed to the client.
 //! 
 //! ```
 //! use no_proto::error::NP_Error;
@@ -357,7 +359,7 @@
 //! ```
 //! 
 //! ### geo4, geo8, geo16 (Scalar)
-//! Each geo size uses two signed integers right next to eachother in the buffer.  i16/16 for geo4, i32/i32 for geo8 and i64/i64 for geo16
+//! Each geo size uses two signed integers right next to eachother in the buffer.  i16/i16 for geo4, i32/i32 for geo8 and i64/i64 for geo16
 //! 
 //! The two signed integers are converted to unsigned values before being saved into big endian format. 
 //! 
@@ -431,7 +433,7 @@
 //! 
 //! ### bytes, string (Scalar)
 //! 
-//! If there is a `size` property in the schema, store the provided data and zero out the rest of the space.
+//! If there is a `size` property in the schema, store the provided data and pad the remainder of the space with zeros.
 //! 
 //! If the provided data is too large, truncate it.
 //! 
@@ -489,7 +491,7 @@
 //! 
 //! NoProto JSON schemas are compiled into a byte array as part of the parsing process.
 //! 
-//! The compiled byte array is a significantly more compact and efficient way to store the schema.  It also takes *zero* time to parse a byte schema, where parsing a JSON schema can be an expensive operation.
+//! The compiled byte array is a significantly more compact and efficient way to store the schema.  It also takes *zero* time to parse a byte schema, where parsing a JSON schema can be a comparitively expensive operation.
 //! 
 //! You can use the runtime to parse JSON schemas into byte array schemas at any time, and the JSON/byte array schemas can be used interchangebly.
 //! 

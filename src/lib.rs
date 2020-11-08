@@ -1,6 +1,6 @@
 #![warn(missing_docs, missing_debug_implementations)]
 #![allow(non_camel_case_types)]
-#![no_std]
+// #![no_std]
 
 //! ## High Performance Serialization Library
 //! Faster than JSON with Schemas and Native Types.  Like Mutable Protocol Buffers with Compile Free Schemas.

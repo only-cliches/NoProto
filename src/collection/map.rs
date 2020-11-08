@@ -16,7 +16,7 @@ pub struct NP_Map<T> {
     head: u32,
     len: u16,
     memory: Option<Rc<NP_Memory>>,
-    value: Option<NP_Schema_Ptr>,
+    schema: Option<NP_Schema_Ptr>,
     p: PhantomData<T>
 }
 
@@ -176,6 +176,7 @@ impl<T: NP_Value + Default> NP_Value for NP_Map<T> {
                     u32::from_be_bytes(*ptr.memory.get_4_bytes(a).unwrap_or(&[0; 4]))
                 }
         }};
+
         let size = if addr == 0 { 0u16 } else {
             match &ptr.memory.size {
                 NP_Size::U8 => {
@@ -272,7 +273,7 @@ impl<T: NP_Value + Default> NP_Value for NP_Map<T> {
                 _ => { }
             }
 
-            let child_type = NP_Schema::from_json(Box::new(json_schema["value"]))?;
+            let child_type = NP_Schema::from_json(Box::new(json_schema["value"].clone()))?;
             schema_data.extend(child_type.bytes);
             return Ok(Some(schema_data))
         }
@@ -284,7 +285,7 @@ impl<T: NP_Value + Default> NP_Value for NP_Map<T> {
 impl<'a, T: NP_Value + Default> Default for NP_Map<T> {
 
     fn default() -> Self {
-        NP_Map { address: 0, head: 0, memory: None, value: None, p: PhantomData::default(), len: 0 }
+        NP_Map { address: 0, head: 0, memory: None, schema: None, p: PhantomData::default(), len: 0 }
     }
 }
 
@@ -296,7 +297,7 @@ impl<'a, T: NP_Value + Default> NP_Map<T> {
             address,
             head,
             memory: Some(memory),
-            value: Some(schema_ptr),
+            schema: Some(schema_ptr),
             p: PhantomData::default(),
             len: length
         }
@@ -304,7 +305,7 @@ impl<'a, T: NP_Value + Default> NP_Map<T> {
 
     /// Convert this map into an iterator
     pub fn it(self) -> NP_Map_Iterator<T> {
-        NP_Map_Iterator::new(self.address, self.head, self.len, self.memory.unwrap(), self.value.unwrap())
+        NP_Map_Iterator::new(self.address, self.head, self.len, self.memory.unwrap(), self.schema.unwrap())
     }
 
     /// Select a specific value at the given key
@@ -315,10 +316,7 @@ impl<'a, T: NP_Value + Default> NP_Map<T> {
             None => unreachable!()
         };
 
-        let self_schema = match &self.value {
-            Some(x) => Rc::clone(x),
-            None => unreachable!()
-        };
+        let self_schema = self.schema.clone().unwrap();
 
         if self.head == 0 { // no values, create one
 
@@ -359,7 +357,7 @@ impl<'a, T: NP_Value + Default> NP_Map<T> {
             self.set_len(1);
 
             // provide
-            return Ok(NP_Ptr::_new_map_item_ptr(self.head, self_schema, memory));
+            return Ok(NP_Ptr::_new_map_item_ptr(self.head, self_schema.copy_with_addr(self_schema.address + 1), memory));
         } else { // values exist, loop through them to see if we have an existing pointer for this column
 
             let mut next_addr = self.head as usize;
@@ -391,7 +389,7 @@ impl<'a, T: NP_Value + Default> NP_Map<T> {
 
                 // found our value!
                 if key_vec == *key {
-                    return Ok(NP_Ptr::_new_map_item_ptr(next_addr as u32, self_schema, memory));
+                    return Ok(NP_Ptr::_new_map_item_ptr(next_addr as u32, self_schema.clone(), memory));
                 }
                 
                 // not found yet, get next address
@@ -469,7 +467,7 @@ impl<'a, T: NP_Value + Default> NP_Map<T> {
             self.set_len(self.len + 1);
             
             // provide 
-            return Ok(NP_Ptr::_new_map_item_ptr(addr, self_schema, memory));
+            return Ok(NP_Ptr::_new_map_item_ptr(addr, self_schema.copy_with_addr(self_schema.address + 1), memory));
 
         }
     }
@@ -685,7 +683,7 @@ impl<'a, T: NP_Value + Default> NP_Map<T> {
             address: self.address,
             head: 0,
             memory: Some(memory),
-            value: self.value,
+            schema: self.schema,
             p: PhantomData::default(),
             len: 0
         }
@@ -811,7 +809,7 @@ impl<T: NP_Value + Default> NP_Map_Iterator<T> {
             head,
             memory: Rc::clone(&memory),
             current_address: head,
-            schema: schema,
+            schema: schema.clone(),
             length,
             map: NP_Map::new(address, head, length, memory, schema)
         }
@@ -873,7 +871,7 @@ impl<T: NP_Value + Default> Iterator for NP_Map_Iterator<T> {
             schema: self.schema.clone(),
             key: key_vec,
             address: this_address,
-            map: NP_Map::new(self.address, self.head, self.length, Rc::clone(&self.memory), self.schema),
+            map: NP_Map::new(self.address, self.head, self.length, Rc::clone(&self.memory), self.schema.clone()),
             memory: Rc::clone(&self.memory)
         });
     }
@@ -897,7 +895,7 @@ pub struct NP_Map_Item<T> {
 impl<T: NP_Value + Default> NP_Map_Item<T> {
     /// Select the pointer at this iterator
     pub fn select(&mut self) -> Result<NP_Ptr<T>, NP_Error> {
-        Ok(NP_Ptr::_new_map_item_ptr(self.address, self.schema, Rc::clone(&self.memory)))
+        Ok(NP_Ptr::_new_map_item_ptr(self.address, self.schema.clone(), Rc::clone(&self.memory)))
     }
     /// Delete the value at this iterator
     // TODO: Build a select statement that grabs the current index in place instead of seeking to it.
