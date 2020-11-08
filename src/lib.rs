@@ -215,6 +215,8 @@ const PROTOCOL_VERSION: u8 = 1;
 /// 
 /// The correct way to create a factory is to pass a JSON string schema into the static `new` method.  [Learn about schemas here.](./schema/index.html)
 /// 
+/// You can also create a factory with a compiled byte schema using the static `new_compiled` method.
+/// 
 /// # Example
 /// ```
 /// use no_proto::error::NP_Error;
@@ -300,7 +302,8 @@ impl NP_Factory {
         }
     }
 
-    /// Create a new factory from a compiled schema
+    /// Create a new factory from a compiled schema byte array.
+    /// No validation or checking is performed on the schema, you must make sure you're using a byte array that was generated with `compile_schema`.
     /// 
     pub fn new_compiled(schema: Vec<u8>) -> NP_Factory {
         NP_Factory {
@@ -308,21 +311,21 @@ impl NP_Factory {
         }
     }
 
-    /// Exports the compiled byte array schema
+    /// Get a copy of the compiled schema byte array
     /// 
     pub fn compile_schema(&self) -> Vec<u8> {
         self.schema.bytes.clone()
     }
 
 
-    /// Exports the compiled byte array to JSON schema.  This works regardless of wether the imported schema is JSON or bytes.
+    /// Exports this factorie's schema to JSON.  This works regardless of wether the factory was created with `NP_Factory::new` or `NP_Factory::new_compiled`.
     /// 
     pub fn export_schema(&self) -> Result<NP_JSON, NP_Error> {
         self.schema.to_json()
     }
 
     /// Open existing Vec<u8> as buffer for this factory.  
-    /// This just moves the Vec<u8> into the buffer object, no deserialization is done here.
+    /// This just moves the Vec<u8> into the buffer object, no deserialization or copying is done here.
     /// 
     pub fn open_buffer(&self, bytes: Vec<u8>) -> NP_Buffer {
         NP_Buffer::_new(Rc::clone(&self.schema), Rc::new(NP_Memory::existing(bytes)))
@@ -332,7 +335,7 @@ impl NP_Factory {
     /// 
     /// The first opional argument, capacity, can be used to set the space of the underlying Vec<u8> when it's created.  If you know you're going to be putting lots of data into the buffer, it's a good idea to set this to a large number comparable to the amount of data you're putting in.  The default is 1,024 bytes.
     /// 
-    /// The second optional argument, ptr_size, controls how much address space you get in the buffer.  `NP_Size::U16` (the default) gives you an address space of just over 16KB but is more space efficeint since the address pointers are only 2 bytes each.  `NP_Size::U32` gives you an address space of just over 4GB, but the addresses take up twice as much space in the buffer.
+    /// The second optional argument, ptr_size, controls how much address space you get in the buffer and how large the addresses are.  Every value in the buffer contains at least one address, sometimes more.  `NP_Size::U16` (the default) gives you an address space of just over 16KB but is more space efficeint since the address pointers are only 2 bytes each.  `NP_Size::U32` gives you an address space of just over 4GB, but the addresses take up twice as much space in the buffer compared to `NP_Size::U16`.
     /// You can change the address size through compaction after the buffer is created, so it's fine to start with a smaller address space and convert it to a larger one later as needed.  It's also possible to go the other way, you can convert larger address space down to a smaller one durring compaction.
     /// 
     pub fn empty_buffer(&self, capacity: Option<usize>, ptr_size: Option<NP_Size>) -> NP_Buffer {

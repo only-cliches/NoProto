@@ -142,7 +142,7 @@
 //! 
 //! Each type will have notes on how updates can lead to wasted bytes and require compaction to recover the wasted space.
 //! 
-//! - [How do you run compaction on a buffer?](../struct.NP_Factory.html#method.compact)
+//! - [How do you run compaction on a buffer?](../buffer/struct.NP_Buffer.html#method.compact)
 //! 
 //! **Schema Mutations**<br/> 
 //! Once a schema is created all the buffers it creates depend on that schema for reliable de/serialization, data access, and compaction.
