@@ -49,12 +49,12 @@ pub fn str_get_schema_state(schema_ptr: &NP_Schema_Ptr) -> NP_String_Schema_Stat
 }
 
 
-impl NP_Value for String {
+impl<'str> NP_Value<'str> for String {
 
     fn type_idx() -> (u8, String) { (NP_TypeKeys::UTF8String as u8, "string".to_owned()) }
     fn self_type_idx(&self) -> (u8, String) { (NP_TypeKeys::UTF8String as u8, "string".to_owned()) }
 
-    fn schema_to_json(schema_ptr: NP_Schema_Ptr)-> Result<NP_JSON, NP_Error> {
+    fn schema_to_json(schema_ptr: &NP_Schema_Ptr)-> Result<NP_JSON, NP_Error> {
         let mut schema_json = JSMAP::new();
         schema_json.insert("type".to_owned(), NP_JSON::String(Self::type_idx().1));
 

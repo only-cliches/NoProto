@@ -6,27 +6,27 @@ use crate::{memory::{NP_Size, NP_Memory}, schema::{NP_Schema, NP_TypeKeys, NP_Sc
 use alloc::vec::Vec;
 use alloc::string::String;
 use alloc::borrow::ToOwned;
-use alloc::{rc::Rc, boxed::Box};
+use alloc::{boxed::Box};
 
 /// Tuple data type [Using collections with pointers](../pointer/struct.NP_Ptr.html#using-collection-types-with-pointers).
 #[derive(Debug)]
-pub struct NP_Tuple {
+pub struct NP_Tuple<'tuple> {
     address: u32, // pointer location
-    memory: Option<Rc<NP_Memory>>,
-    schema: Option<NP_Schema_Ptr>,
+    memory: Option<&'tuple NP_Memory>,
+    schema: Option<NP_Schema_Ptr<'tuple>>,
     value_addrs: Option<Vec<u32>>
 }
 /// The struct that represents the schema for Tuples
 #[derive(Debug)]
-pub struct NP_Tuple_Schema_State {
+pub struct NP_Tuple_Schema_State<'tuple> {
     sorted: bool,
-    schemas: Vec<(u8, NP_Schema_Ptr)>
+    schemas: Vec<(u8, NP_Schema_Ptr<'tuple>)>
 }
 
-impl NP_Tuple {
+impl<'tuple> NP_Tuple<'tuple> {
 
     #[doc(hidden)]
-    pub fn new(address: u32, memory: Rc<NP_Memory>, schema: NP_Schema_Ptr, value_addrs: Vec<u32>) -> Self {
+    pub fn new(address: u32, memory: &'tuple NP_Memory, schema: NP_Schema_Ptr<'tuple>, value_addrs: Vec<u32>) -> Self {
         NP_Tuple {
             address,
             memory: Some(memory),
@@ -37,7 +37,7 @@ impl NP_Tuple {
 
     /// Convert schema bytes into Struct
     /// 
-    pub fn get_schema_state(schema_ptr: &NP_Schema_Ptr) -> NP_Tuple_Schema_State {
+    pub fn get_schema_state(schema_ptr: NP_Schema_Ptr<'tuple>) -> NP_Tuple_Schema_State<'tuple> {
 
         let is_sorted = schema_ptr.schema.bytes[schema_ptr.address + 1];
 
@@ -63,7 +63,7 @@ impl NP_Tuple {
     }
 
     /// Select a value at a given index in the tuple
-    pub fn select<T: NP_Value + Default>(&self, index: u8) -> Result<NP_Ptr<T>, NP_Error> {
+    pub fn select<T: NP_Value<'tuple> + Default>(&self, index: u8) -> Result<NP_Ptr<'tuple, T>, NP_Error> {
 
         let values = self.value_addrs.as_ref().unwrap();
 
@@ -73,7 +73,7 @@ impl NP_Tuple {
             return Err(NP_Error::new("Attempted to access tuple value outside length!"));
         }
 
-        let schema_ptr = self.schema.as_ref().unwrap();
+        let schema_ptr = self.schema.as_ref().unwrap().copy();
         let schema_type = schema_ptr.schema.bytes[schema_ptr.address];
     
 
@@ -91,14 +91,7 @@ impl NP_Tuple {
             }
         }
 
-        let rc_memory = match &self.memory {
-            Some(x) => {
-                Rc::clone(x)
-            },
-            None => {
-                unreachable!();
-            }
-        };
+        let rc_memory = self.memory.unwrap();
 
         let location = match rc_memory.size {
             NP_Size::U8 => {addr + (index as u32 * 1) },
@@ -106,13 +99,13 @@ impl NP_Tuple {
             NP_Size::U32 => {addr + (index as u32 * 4) } 
         };
 
-        let schema_state = NP_Tuple::get_schema_state(schema_ptr);
+        let schema_state = NP_Tuple::get_schema_state(schema_ptr.copy());
 
-        Ok(NP_Ptr::_new_standard_ptr(location, schema_state.schemas[index as usize].1.clone(), rc_memory))
+        Ok(NP_Ptr::_new_standard_ptr(location, schema_state.schemas[index as usize].1.copy(), rc_memory))
     }
 
     /// Convert the tuple into an iterator
-    pub fn it(self) -> NP_Tuple_Iterator {
+    pub fn it(self) -> NP_Tuple_Iterator<'tuple> {
         NP_Tuple_Iterator::new(self.address, self.memory.unwrap(), self.schema.unwrap(), self.value_addrs.unwrap())
     }
 
@@ -134,12 +127,7 @@ impl NP_Tuple {
             None => 0
         };
 
-        let memory = match &self.memory {
-            Some(x) => {
-                Rc::clone(x)
-            },
-            None => unreachable!()
-        };
+        let memory = self.memory.unwrap();
 
         let write_bytes = memory.write_bytes();
 
@@ -163,19 +151,19 @@ impl NP_Tuple {
 
 }
 
-impl NP_Value for NP_Tuple {
+impl<'tuple> NP_Value<'tuple> for NP_Tuple<'tuple> {
 
     fn type_idx() -> (u8, String) { (NP_TypeKeys::Tuple as u8, "tuple".to_owned()) }
     fn self_type_idx(&self) -> (u8, String) { (NP_TypeKeys::Tuple as u8, "tuple".to_owned()) }
 
-    fn schema_to_json(schema_ptr: NP_Schema_Ptr)-> Result<NP_JSON, NP_Error> {
+    fn schema_to_json(schema_ptr: &NP_Schema_Ptr)-> Result<NP_JSON, NP_Error> {
         let mut schema_json = JSMAP::new();
         schema_json.insert("type".to_owned(), NP_JSON::String(Self::type_idx().1));
 
-        let schema_state = NP_Tuple::get_schema_state(&schema_ptr);
+        let schema_state = NP_Tuple::get_schema_state(schema_ptr.copy());
 
         let columns: Vec<NP_JSON> = schema_state.schemas.into_iter().map(|column| {
-            NP_Schema::_type_to_json(column.1).unwrap()
+            NP_Schema::_type_to_json(&column.1).unwrap()
         }).collect();
 
         schema_json.insert("values".to_owned(), NP_JSON::Array(columns));
@@ -191,11 +179,11 @@ impl NP_Value for NP_Tuple {
         Err(NP_Error::new("Type (tuple) doesn't support .set()! Use .into() instead."))
     }
 
-    fn into_value(ptr: NP_Lite_Ptr) -> Result<Option<Box<Self>>, NP_Error> {
+    fn into_value(ptr: NP_Lite_Ptr<'tuple>) -> Result<Option<Box<Self>>, NP_Error> {
 
         let mut addr = ptr.kind.get_value_addr();
 
-        let tuple_schema = NP_Tuple::get_schema_state(&ptr.schema);
+        let tuple_schema = NP_Tuple::get_schema_state(ptr.schema.copy());
 
         let tuple_size = tuple_schema.schemas.len();
 
@@ -220,7 +208,7 @@ impl NP_Value for NP_Tuple {
 
             if tuple_schema.sorted { // write default values in sorted order
                 for x in 0..value_addrs.len() as usize {
-                    let ptr = NP_Ptr::<NP_Any>::_new_standard_ptr(value_addrs[x], ptr.schema.clone(), Rc::clone(&ptr.memory));
+                    let ptr = NP_Ptr::<NP_Any>::_new_standard_ptr(value_addrs[x], ptr.schema.copy(), &ptr.memory);
                     ptr.set_default()?;
                 }
             }
@@ -240,8 +228,13 @@ impl NP_Value for NP_Tuple {
                 };
             }
         }
- 
-        Ok(Some(Box::new(NP_Tuple::new(addr, ptr.memory, ptr.schema.clone(), value_addrs))))
+
+        Ok(Some(Box::new(NP_Tuple {
+            address: addr,
+            memory: Some(ptr.memory),
+            schema: Some(ptr.schema.copy()),
+            value_addrs: Some(value_addrs)
+        })))
     }
 
     fn get_size(ptr: NP_Lite_Ptr) -> Result<u32, NP_Error> {
@@ -307,7 +300,7 @@ impl NP_Value for NP_Tuple {
         
     }
 
-    fn do_compact(from_ptr: NP_Lite_Ptr, to_ptr: NP_Lite_Ptr) -> Result<(), NP_Error> where Self: NP_Value + Default {
+    fn do_compact(from_ptr: NP_Lite_Ptr<'tuple>, to_ptr: NP_Lite_Ptr<'tuple>) -> Result<(), NP_Error> where Self: NP_Value<'tuple> + Default {
 
         if from_ptr.location == 0 {
             return Ok(());
@@ -397,7 +390,7 @@ impl NP_Value for NP_Tuple {
     }
 }
 
-impl Default for NP_Tuple {
+impl<'tuple> Default for NP_Tuple<'tuple> {
 
     fn default() -> Self {
         NP_Tuple { address: 0, memory: None, schema: None, value_addrs: None}
@@ -406,18 +399,18 @@ impl Default for NP_Tuple {
 
 /// Tuple iterator data type
 #[derive(Debug)]
-pub struct NP_Tuple_Iterator {
+pub struct NP_Tuple_Iterator<'it> {
     address: u32, // pointer location
-    memory: Rc<NP_Memory>,
+    memory: &'it NP_Memory,
     current_index: u16,
-    schemas: NP_Schema_Ptr,
+    schemas: NP_Schema_Ptr<'it>,
     values: Vec<u32>
 }
 
-impl NP_Tuple_Iterator {
+impl<'it> NP_Tuple_Iterator<'it> {
 
     #[doc(hidden)]
-    pub fn new(address: u32, memory: Rc<NP_Memory>, schema: NP_Schema_Ptr, values: Vec<u32>) -> Self {
+    pub fn new(address: u32, memory: &'it NP_Memory, schema: NP_Schema_Ptr<'it>, values: Vec<u32>) -> Self {
         NP_Tuple_Iterator {
             address,
             memory,
@@ -428,13 +421,13 @@ impl NP_Tuple_Iterator {
     }
 
     /// Convert the iterator back into a tuple
-    pub fn into_tuple(self) -> NP_Tuple {
+    pub fn into_tuple(self) -> NP_Tuple<'it> {
         NP_Tuple::new(self.address, self.memory, self.schemas, self.values)
     }
 }
 
-impl Iterator for NP_Tuple_Iterator {
-    type Item = NP_Tuple_Item;
+impl<'it> Iterator for NP_Tuple_Iterator<'it> {
+    type Item = NP_Tuple_Item<'it>;
 
     fn next(&mut self) -> Option<Self::Item> {
 
@@ -445,35 +438,35 @@ impl Iterator for NP_Tuple_Iterator {
         let this_index = self.current_index;
         self.current_index += 1;
 
-        let tuple_schema = NP_Tuple::get_schema_state(&self.schemas);
+        let tuple_schema = NP_Tuple::get_schema_state(self.schemas.copy());
         
         Some(NP_Tuple_Item {
             index: this_index,
             has_value: self.values[this_index as usize] != 0,
             address: self.values[this_index as usize],
-            memory: Rc::clone(&self.memory),
-            schema: tuple_schema.schemas[this_index as usize].clone().1
+            memory: &self.memory,
+            schema: tuple_schema.schemas[this_index as usize].1.copy()
         })
     }
 }
 
 /// A single iterator item
 #[derive(Debug)]
-pub struct NP_Tuple_Item { 
+pub struct NP_Tuple_Item<'item> { 
     /// The index of this item in the list
     pub index: u16,
     /// If there is a value at this index
     pub has_value: bool,
     address: u32,
-    memory: Rc<NP_Memory>,
-    schema: NP_Schema_Ptr,
+    memory: &'item NP_Memory,
+    schema: NP_Schema_Ptr<'item>,
 }
 
-impl NP_Tuple_Item {
+impl<'item> NP_Tuple_Item<'item> {
 
     /// Get the pointer at this iterator location
-    pub fn select<T: NP_Value + Default>(&mut self) -> Result<NP_Ptr<T>, NP_Error> {
+    pub fn select<T: NP_Value<'item> + Default>(&mut self) -> Result<NP_Ptr<'item, T>, NP_Error> {
 
-        Ok(NP_Ptr::_new_standard_ptr(self.address, self.schema.clone(), Rc::clone(&self.memory)))
+        Ok(NP_Ptr::_new_standard_ptr(self.address, self.schema.copy(), &self.memory))
     }
 }

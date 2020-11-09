@@ -13,7 +13,6 @@ pub enum NP_Size {
 #[derive(Debug)]
 pub struct NP_Memory {
     bytes: UnsafeCell<Vec<u8>>,
-    
     pub size: NP_Size
 }
 

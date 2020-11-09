@@ -27,13 +27,13 @@ pub enum NP_NumType {
 macro_rules! noproto_number {
     ($t:ty, $str1: tt, $str2: tt, $tkey: expr, $numType: expr) => {
 
-        impl NP_Value for $t {
+        impl<'num> NP_Value<'num> for $t {
 
             fn type_idx() -> (u8, String) { ($tkey as u8, $str1.to_owned()) }
 
             fn self_type_idx(&self) -> (u8, String) { ($tkey as u8, $str1.to_owned()) }
 
-            fn schema_to_json(schema_ptr: NP_Schema_Ptr)-> Result<NP_JSON, NP_Error> {
+            fn schema_to_json(schema_ptr: &NP_Schema_Ptr)-> Result<NP_JSON, NP_Error> {
                 let mut schema_json = JSMAP::new();
                 schema_json.insert("type".to_owned(), NP_JSON::String(Self::type_idx().1));
             

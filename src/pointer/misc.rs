@@ -670,12 +670,12 @@ impl Default for NP_Dec {
 }
 
 
-impl NP_Value for NP_Dec {
+impl<'value> NP_Value<'value> for NP_Dec {
 
     fn type_idx() -> (u8, String) { (NP_TypeKeys::Decimal as u8, "decimal".to_owned()) }
     fn self_type_idx(&self) -> (u8, String) { (NP_TypeKeys::Decimal as u8, "decimal".to_owned()) }
 
-    fn schema_to_json(schema_ptr: NP_Schema_Ptr)-> Result<NP_JSON, NP_Error> {
+    fn schema_to_json(schema_ptr: &NP_Schema_Ptr)-> Result<NP_JSON, NP_Error> {
         let mut schema_json = JSMAP::new();
         schema_json.insert("type".to_owned(), NP_JSON::String(Self::type_idx().1));
 
@@ -932,14 +932,14 @@ impl Default for NP_Geo_Bytes {
      }
 }
 
-impl NP_Value for NP_Geo_Bytes {
+impl<'value> NP_Value<'value> for NP_Geo_Bytes {
     fn schema_default(_schema: &NP_Schema_Ptr) -> Option<Box<Self>> {
         None
     }
     fn type_idx() -> (u8, String) { NP_Geo::type_idx() }
     fn self_type_idx(&self) -> (u8, String) { NP_Geo::type_idx() }
 
-    fn schema_to_json(schema_ptr: NP_Schema_Ptr)-> Result<NP_JSON, NP_Error> { NP_Geo::schema_to_json(schema_ptr)}
+    fn schema_to_json(schema_ptr: &NP_Schema_Ptr)-> Result<NP_JSON, NP_Error> { NP_Geo::schema_to_json(&schema_ptr)}
 
     fn set_value(_ptr: NP_Lite_Ptr, _value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
         Err(NP_Error::new("Can't set value with NP_Geo_Bytes, use NP_Geo instead!"))
@@ -1175,7 +1175,7 @@ fn geo_default_value(size: u8, json: &NP_JSON) -> Result<Option<NP_Geo_Bytes>, N
     }
 }
 
-impl NP_Value for NP_Geo {
+impl<'value> NP_Value<'value> for NP_Geo {
 
     fn schema_default(schema: &NP_Schema_Ptr) -> Option<Box<Self>> {
         let schema_state = Self::get_schema_state(schema);
@@ -1191,7 +1191,7 @@ impl NP_Value for NP_Geo {
     fn type_idx() -> (u8, String) { (NP_TypeKeys::Geo as u8, "geo".to_owned()) }
     fn self_type_idx(&self) -> (u8, String) { (NP_TypeKeys::Geo as u8, "geo".to_owned()) }
 
-    fn schema_to_json(schema_ptr: NP_Schema_Ptr)-> Result<NP_JSON, NP_Error> {
+    fn schema_to_json(schema_ptr: &NP_Schema_Ptr)-> Result<NP_JSON, NP_Error> {
         let mut schema_json = JSMAP::new();
        
         let schema_state = Self::get_schema_state(&schema_ptr);
@@ -1571,12 +1571,12 @@ impl fmt::Debug for NP_ULID {
     }
 }
 
-impl NP_Value for NP_ULID {
+impl<'value> NP_Value<'value> for NP_ULID {
 
     fn type_idx() -> (u8, String) { (NP_TypeKeys::Ulid as u8, "ulid".to_owned()) }
     fn self_type_idx(&self) -> (u8, String) { (NP_TypeKeys::Ulid as u8, "ulid".to_owned()) }
 
-    fn schema_to_json(_schema_ptr: NP_Schema_Ptr)-> Result<NP_JSON, NP_Error> {
+    fn schema_to_json(_schema_ptr: &NP_Schema_Ptr)-> Result<NP_JSON, NP_Error> {
         let mut schema_json = JSMAP::new();
         schema_json.insert("type".to_owned(), NP_JSON::String(Self::type_idx().1));
 
@@ -1778,12 +1778,12 @@ impl Default for NP_UUID {
      }
 }
 
-impl NP_Value for NP_UUID {
+impl<'value> NP_Value<'value> for NP_UUID {
 
     fn type_idx() -> (u8, String) { (NP_TypeKeys::Uuid as u8, "uuid".to_owned()) }
     fn self_type_idx(&self) -> (u8, String) { (NP_TypeKeys::Uuid as u8, "uuid".to_owned()) }
 
-    fn schema_to_json(_schema_ptr: NP_Schema_Ptr)-> Result<NP_JSON, NP_Error> {
+    fn schema_to_json(_schema_ptr: &NP_Schema_Ptr)-> Result<NP_JSON, NP_Error> {
         let mut schema_json = JSMAP::new();
         schema_json.insert("type".to_owned(), NP_JSON::String(Self::type_idx().1));
 
@@ -1949,12 +1949,12 @@ pub struct NP_Option_Schema_State {
 }
 
 
-impl NP_Value for NP_Option {
+impl<'value> NP_Value<'value> for NP_Option {
 
     fn type_idx() -> (u8, String) { (NP_TypeKeys::Enum as u8, "option".to_owned()) }
     fn self_type_idx(&self) -> (u8, String) { (NP_TypeKeys::Enum as u8, "option".to_owned()) }
 
-    fn schema_to_json(schema_ptr: NP_Schema_Ptr)-> Result<NP_JSON, NP_Error> {
+    fn schema_to_json(schema_ptr: &NP_Schema_Ptr)-> Result<NP_JSON, NP_Error> {
         let mut schema_json = JSMAP::new();
         schema_json.insert("type".to_owned(), NP_JSON::String(Self::type_idx().1));
 
@@ -2181,12 +2181,12 @@ fn bool_get_schema_state(schema_ptr: &NP_Schema_Ptr) -> Option<bool> {
     }
 }
 
-impl NP_Value for bool {
+impl<'value> NP_Value<'value> for bool {
 
     fn type_idx() -> (u8, String) { (NP_TypeKeys::Boolean as u8, "bool".to_owned()) }
     fn self_type_idx(&self) -> (u8, String) { (NP_TypeKeys::Boolean as u8, "bool".to_owned()) }
 
-    fn schema_to_json(schema_ptr: NP_Schema_Ptr)-> Result<NP_JSON, NP_Error> {
+    fn schema_to_json(schema_ptr: &NP_Schema_Ptr)-> Result<NP_JSON, NP_Error> {
         let mut schema_json = JSMAP::new();
         schema_json.insert("type".to_owned(), NP_JSON::String(Self::type_idx().1));
 
@@ -2381,12 +2381,12 @@ impl fmt::Debug for NP_Date {
     }
 }
 
-impl NP_Value for NP_Date {
+impl<'value> NP_Value<'value> for NP_Date {
 
     fn type_idx() -> (u8, String) { (NP_TypeKeys::Date as u8, "date".to_owned()) }
     fn self_type_idx(&self) -> (u8, String) { (NP_TypeKeys::Date as u8, "date".to_owned()) }
 
-    fn schema_to_json(schema_ptr: NP_Schema_Ptr)-> Result<NP_JSON, NP_Error> {
+    fn schema_to_json(schema_ptr: &NP_Schema_Ptr)-> Result<NP_JSON, NP_Error> {
         let mut schema_json = JSMAP::new();
         schema_json.insert("type".to_owned(), NP_JSON::String(Self::type_idx().1));
 

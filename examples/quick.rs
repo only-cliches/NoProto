@@ -29,7 +29,7 @@ fn main() -> Result<(), NP_Error> {
     // show bytes (empty)
     println!("bytes: {:?}", user_bytes);
     // open the buffer again
-    let mut user_buffer = user_factory.open_buffer(user_bytes);
+    let user_buffer = user_factory.open_buffer(user_bytes);
 
 
     // set an internal value of the buffer, set the  "name" column
@@ -44,7 +44,7 @@ fn main() -> Result<(), NP_Error> {
     // show bytes
     let user_bytes: Vec<u8> = user_buffer.close();
     println!("bytes: {:?}", user_bytes);
-    let mut user_buffer = user_factory.open_buffer(user_bytes);
+    let user_buffer = user_factory.open_buffer(user_bytes);
 
 
     // assign nested internal values, sets the first tag element

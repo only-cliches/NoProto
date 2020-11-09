@@ -71,13 +71,13 @@ impl Default for NP_Bytes {
      }
 }
 
-impl NP_Value for NP_Bytes {
+impl<'value> NP_Value<'value> for NP_Bytes {
 
 
     fn type_idx() -> (u8, String) { (NP_TypeKeys::Bytes as u8, "bytes".to_owned()) }
     fn self_type_idx(&self) -> (u8, String) { (NP_TypeKeys::Bytes as u8, "bytes".to_owned()) }
 
-    fn schema_to_json(schema_ptr: NP_Schema_Ptr)-> Result<NP_JSON, NP_Error> {
+    fn schema_to_json(schema_ptr: &NP_Schema_Ptr)-> Result<NP_JSON, NP_Error> {
         let mut schema_json = JSMAP::new();
         schema_json.insert("type".to_owned(), NP_JSON::String(Self::type_idx().1));
 

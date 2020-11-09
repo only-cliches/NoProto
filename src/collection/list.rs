@@ -3,23 +3,23 @@ use crate::{error::NP_Error, json_flex::{JSMAP, NP_JSON}, memory::{NP_Size, NP_M
 use alloc::string::String;
 use alloc::borrow::ToOwned;
 use alloc::boxed::Box;
-use alloc::{rc::Rc, vec::*};
+use alloc::{vec::*};
 use core::marker::PhantomData;
 /// List data type [Using collections with pointers](../pointer/struct.NP_Ptr.html#using-collection-types-with-pointers).
 #[derive(Debug)]
-pub struct NP_List<T> {
+pub struct NP_List<'list, T> where T: NP_Value<'list> + Default {
     address: u32, // pointer location
     head: u32,
     tail: u32,
-    memory: Option<Rc<NP_Memory>>,
-    schema: Option<NP_Schema_Ptr>,
+    memory: Option<&'list NP_Memory>,
+    schema: Option<NP_Schema_Ptr<'list>>,
     _value: T
 }
 
-impl<T: NP_Value + Default> NP_List<T> {
+impl<'list, T: NP_Value<'list> + Default> NP_List<'list, T> {
 
     #[doc(hidden)]
-    pub fn new(address: u32, head: u32, tail:u32,  memory: Rc<NP_Memory>, schema: NP_Schema_Ptr) -> Result<Self, NP_Error> {
+    pub fn new(address: u32, head: u32, tail:u32,  memory: &'list NP_Memory, schema: NP_Schema_Ptr<'list>) -> Result<Self, NP_Error> {
 
         let of_type = schema.schema.bytes[schema.address + 1];
 
@@ -48,17 +48,14 @@ impl<T: NP_Value + Default> NP_List<T> {
     }
 
     /// Convert the list data type into an iterator
-    pub fn it(self) -> NP_List_Iterator<T> {
+    pub fn it(self) -> NP_List_Iterator<'list, T> {
         NP_List_Iterator::new(self.address, self.head, self.tail, self.memory.unwrap(), self.schema.unwrap())
     }
 
     /// Select a value from the list.  If the value doesn't exist you'll get an empty pointer back.
-    pub fn select(&mut self, index: u16) -> core::result::Result<NP_Ptr<T>, NP_Error> {
+    pub fn select(&mut self, index: u16) -> Result<NP_Ptr<'list, T>, NP_Error> {
 
-        let memory = match &self.memory {
-            Some(x) => Rc::clone(x),
-            None => unreachable!()
-        };
+        let memory = self.memory.unwrap();
 
         let schema = self.schema.as_ref().unwrap();
         let list_of = schema.copy_with_addr(schema.address + 1);
@@ -318,10 +315,7 @@ impl<T: NP_Value + Default> NP_List<T> {
 
             let mut do_continue = true;
 
-            let memory = match &self.memory {
-                Some(x) => Rc::clone(x),
-                None => unreachable!()
-            };
+            let memory = self.memory.unwrap();
 
             while do_continue {
 
@@ -463,10 +457,7 @@ impl<T: NP_Value + Default> NP_List<T> {
     pub fn len(&self) -> u16 {
         if self.tail == 0 { return 0u16; }
 
-        let memory = match &self.memory {
-            Some(x) => Rc::clone(x),
-            None => unreachable!()
-        };
+        let memory = self.memory.unwrap();
 
         let tail_index = match &memory.size {
             NP_Size::U8 => [0, memory.get_1_byte((self.tail + 2) as usize).unwrap_or(0)],
@@ -483,10 +474,7 @@ impl<T: NP_Value + Default> NP_List<T> {
     /// 
     pub fn shift(&mut self) -> Result<Option<(Option<T>, u16)>, NP_Error> {
 
-        let memory = match &self.memory {
-            Some(x) => Rc::clone(x),
-            None => unreachable!()
-        };
+        let memory = self.memory.unwrap();
 
         let schema = self.schema.as_ref().unwrap();
         let list_of = schema.copy_with_addr(schema.address + 1);
@@ -538,12 +526,9 @@ impl<T: NP_Value + Default> NP_List<T> {
     }
 
     /// Push a new value onto the back of the list
-    pub fn push(&mut self) -> core::result::Result<(NP_Ptr<T>, u16), NP_Error> {
+    pub fn push(&mut self) -> Result<(NP_Ptr<'list, T>, u16), NP_Error> {
 
-        let memory = match &self.memory {
-            Some(x) => Rc::clone(x),
-            None => unreachable!()
-        };
+        let memory = self.memory.unwrap();
 
         let schema = self.schema.as_ref().unwrap();
         let list_of = schema.copy_with_addr(schema.address + 1);
@@ -641,10 +626,7 @@ impl<T: NP_Value + Default> NP_List<T> {
 
             let mut do_continue = true;
 
-            let memory = match &self.memory {
-                Some(x) => Rc::clone(x),
-                None => unreachable!()
-            };
+            let memory = self.memory.unwrap();
 
             while do_continue {
 
@@ -696,10 +678,7 @@ impl<T: NP_Value + Default> NP_List<T> {
 
         self.head = addr;
 
-        let memory = match &self.memory {
-            Some(x) => Rc::clone(x),
-            None => unreachable!()
-        };
+        let memory = self.memory.unwrap();
 
         let addr_bytes = match &memory.size {
             NP_Size::U32 => addr.to_be_bytes().to_vec(),
@@ -718,10 +697,7 @@ impl<T: NP_Value + Default> NP_List<T> {
 
         self.tail = addr;
 
-        let memory = match &self.memory {
-            Some(x) => Rc::clone(x),
-            None => unreachable!()
-        };
+        let memory = self.memory.unwrap();
 
         let addr_bytes = match &memory.size {
             NP_Size::U32 => addr.to_be_bytes().to_vec(),
@@ -744,25 +720,25 @@ impl<T: NP_Value + Default> NP_List<T> {
     }
 }
 
-impl<T: NP_Value + Default> Default for NP_List<T> {
+impl<'list, T: NP_Value<'list> + Default> Default for NP_List<'list, T> {
 
     fn default() -> Self {
         NP_List { address: 0, head: 0, tail: 0, memory: None, schema: None, _value: T::default()}
     }
 }
 
-impl<T: NP_Value + Default> NP_Value for NP_List<T> {
+impl<'list, T: 'list> NP_Value<'list> for NP_List<'list, T> where T: NP_Value<'list> + Default {
 
     fn type_idx() -> (u8, String) { (NP_TypeKeys::List as u8, "list".to_owned()) }
     fn self_type_idx(&self) -> (u8, String) { (NP_TypeKeys::List as u8, "list".to_owned()) }
 
-    fn schema_to_json(schema_ptr: NP_Schema_Ptr)-> Result<NP_JSON, NP_Error> {
+    fn schema_to_json(schema_ptr: &NP_Schema_Ptr)-> Result<NP_JSON, NP_Error> {
         let mut schema_json = JSMAP::new();
         schema_json.insert("type".to_owned(), NP_JSON::String(Self::type_idx().1));
 
         let list_of = schema_ptr.copy_with_addr(schema_ptr.address + 1);
 
-        schema_json.insert("of".to_owned(), NP_Schema::_type_to_json(list_of)?);
+        schema_json.insert("of".to_owned(), NP_Schema::_type_to_json(&list_of)?);
 
         Ok(NP_JSON::Dictionary(schema_json))
     }
@@ -771,7 +747,7 @@ impl<T: NP_Value + Default> NP_Value for NP_List<T> {
         Err(NP_Error::new("Type (list) doesn't support .set()! Use .into() instead."))
     }
 
-    fn into_value(ptr: NP_Lite_Ptr) -> Result<Option<Box<Self>>, NP_Error> {
+    fn into_value(ptr: NP_Lite_Ptr<'list>) -> Result<Option<Box<Self>>, NP_Error> {
        
         let mut addr = ptr.kind.get_value_addr(); // get pointer of list (head/tail)
 
@@ -790,7 +766,6 @@ impl<T: NP_Value + Default> NP_Value for NP_List<T> {
                     head = [ptr.memory.get_1_byte(a).unwrap_or(0)];
                     tail = [ptr.memory.get_1_byte(a + 1).unwrap_or(0)];
                 }
-
 
                 Ok(Some(Box::new(Self::new(addr, u8::from_be_bytes(head) as u32, u8::from_be_bytes(tail) as u32, ptr.memory, ptr.schema)?)))
             },
@@ -833,7 +808,7 @@ impl<T: NP_Value + Default> NP_Value for NP_List<T> {
         
     }
 
-    fn get_size(ptr: NP_Lite_Ptr) -> Result<u32, NP_Error> {
+    fn get_size(ptr: NP_Lite_Ptr<'list>) -> Result<u32, NP_Error> {
         // head + tail;,
         let base_size = match ptr.memory.size {
             NP_Size::U32 => 8u32,
@@ -874,7 +849,7 @@ impl<T: NP_Value + Default> NP_Value for NP_List<T> {
         Ok(acc_size + base_size)
     }
     
-    fn to_json(ptr: NP_Lite_Ptr) -> NP_JSON {
+    fn to_json(ptr: NP_Lite_Ptr<'list>) -> NP_JSON {
 
         let addr = ptr.kind.get_value_addr();
 
@@ -917,7 +892,7 @@ impl<T: NP_Value + Default> NP_Value for NP_List<T> {
         NP_JSON::Array(json_list)
     }
 
-    fn do_compact(from_ptr: NP_Lite_Ptr, to_ptr: NP_Lite_Ptr) -> Result<(), NP_Error> where Self: NP_Value + Default {
+    fn do_compact(from_ptr: NP_Lite_Ptr<'list>, to_ptr: NP_Lite_Ptr<'list>) -> Result<(), NP_Error> where Self: NP_Value<'list> + Default {
 
         if from_ptr.location == 0 {
             return Ok(());
@@ -975,26 +950,26 @@ impl<T: NP_Value + Default> NP_Value for NP_List<T> {
 
 /// The iterator type for lists
 #[derive(Debug)]
-pub struct NP_List_Iterator<T> {
+pub struct NP_List_Iterator<'it, T> {
     address: u32, // pointer location
     head: u32,
     tail: u32,
-    memory: Rc<NP_Memory>,
-    schema: NP_Schema_Ptr,
+    memory: &'it NP_Memory,
+    schema: NP_Schema_Ptr<'it>,
     current_index: u16,
     current_address: u32,
     p: PhantomData<T>
 }
 
-impl<T: NP_Value + Default + > NP_List_Iterator<T> {
+impl<'it, T: NP_Value<'it> + Default> NP_List_Iterator<'it, T> {
 
     #[doc(hidden)]
-    pub fn new(address: u32, head: u32, tail: u32, memory: Rc<NP_Memory>, schema: NP_Schema_Ptr) -> Self {
+    pub fn new(address: u32, head: u32, tail: u32, memory: &'it NP_Memory, schema: NP_Schema_Ptr<'it>) -> Self {
         NP_List_Iterator {
             address,
             head,
             tail,
-            memory: Rc::clone(&memory),
+            memory: memory,
             schema: schema,
             current_index: 0,
             current_address: head,
@@ -1002,13 +977,13 @@ impl<T: NP_Value + Default + > NP_List_Iterator<T> {
         }
     }
     /// Convert the iterator back into a list
-    pub fn into_list(self) -> NP_List<T> {
+    pub fn into_list(self) -> NP_List<'it, T> {
         NP_List::new(self.address, self.head, self.tail, self.memory, self.schema).unwrap()
     }
 }
 
-impl<T: NP_Value + Default + > Iterator for NP_List_Iterator<T> {
-    type Item = NP_List_Item<T>;
+impl<'it, T: NP_Value<'it> + Default> Iterator for NP_List_Iterator<'it, T> {
+    type Item = NP_List_Item<'it, T>;
 
     fn next(&mut self) -> Option<Self::Item> {
 
@@ -1049,8 +1024,8 @@ impl<T: NP_Value + Default + > Iterator for NP_List_Iterator<T> {
                 has_value: (true, value_address != 0),
                 schema: self.schema.copy(),
                 address: this_address,
-                list: NP_List::new(self.address, self.head, self.tail, Rc::clone(&self.memory), self.schema.copy()).unwrap(),
-                memory: Rc::clone(&self.memory)
+                list: NP_List::new(self.address, self.head, self.tail, self.memory, self.schema.copy()).unwrap(),
+                memory: self.memory
             });
 
         } else if ptr_index > self.current_index { // pointer is above current index, loop through empty values
@@ -1060,9 +1035,9 @@ impl<T: NP_Value + Default + > Iterator for NP_List_Iterator<T> {
                 has_value: (false, false),
                 schema: self.schema.copy(),
                 address: 0,
-                list: NP_List::new(self.address, self.head, self.tail, Rc::clone(&self.memory), self.schema.copy()).unwrap(),
-                memory: Rc::clone(&self.memory)
-            });
+                list: NP_List::new(self.address, self.head, self.tail, &self.memory, self.schema.copy()).unwrap(),
+                memory: &self.memory
+            }); 
         }
 
         None
@@ -1071,20 +1046,20 @@ impl<T: NP_Value + Default + > Iterator for NP_List_Iterator<T> {
 
 /// A single iterator item
 #[derive(Debug)]
-pub struct NP_List_Item<T> {
+pub struct NP_List_Item<'item, T> where T: NP_Value<'item> + Default {
     /// The index of this item in the list
     pub index: u16,
     /// (has pointer at this index, his value at this index)
     pub has_value: (bool, bool),
-    schema: NP_Schema_Ptr,
+    schema: NP_Schema_Ptr<'item>,
     address: u32,
-    list: NP_List<T>,
-    memory: Rc<NP_Memory>
+    list: NP_List<'item, T>,
+    memory: &'item NP_Memory
 }
 
-impl<T: NP_Value + Default + > NP_List_Item<T> {
+impl<'item, T: NP_Value<'item> + Default + > NP_List_Item<'item, T> {
     /// Select the pointer at this item
-    pub fn select(&mut self) -> Result<NP_Ptr<T>, NP_Error> {
+    pub fn select(&mut self) -> Result<NP_Ptr<'item, T>, NP_Error> {
         self.list.select(self.index)
     }
     /// Delete the pointer and it's value at this item

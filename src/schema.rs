@@ -555,7 +555,6 @@ use alloc::vec::Vec;
 use alloc::vec;
 use alloc::string::String;
 use alloc::boxed::Box;
-use alloc::{rc::Rc};
 
 #[derive(Debug, Clone)]
 #[doc(hidden)]
@@ -632,20 +631,20 @@ impl NP_TypeKeys {
 
 /// New NP Schema
 #[derive(Debug, Clone)]
-pub struct NP_Schema_Ptr {
+pub struct NP_Schema_Ptr<'schema_ptr> {
     /// The address of this schema
     pub address: usize,
     /// The bytes for the schema
-    pub schema: Rc<NP_Schema>
+    pub schema: &'schema_ptr NP_Schema
 }
 
-impl NP_Schema_Ptr {
+impl<'schema_ptr> NP_Schema_Ptr<'schema_ptr> {
 
     /// Copy schema address and RC Clone the schema itself
     pub fn copy(&self) -> Self {
         NP_Schema_Ptr {
             address: self.address,
-            schema: Rc::clone(&self.schema)
+            schema: &self.schema
         }
     }
 
@@ -653,7 +652,7 @@ impl NP_Schema_Ptr {
     pub fn copy_with_addr(&self, new_addr: usize) -> Self {
         NP_Schema_Ptr {
             address: new_addr,
-            schema: Rc::clone(&self.schema)
+            schema: &self.schema
         }
     }
 
@@ -696,42 +695,42 @@ impl NP_Schema {
 
     /// Get a JSON represenatation of this schema
     pub fn to_json(&self) -> Result<NP_JSON, NP_Error> {
-        NP_Schema::_type_to_json(NP_Schema_Ptr {
+        NP_Schema::_type_to_json(&NP_Schema_Ptr {
             address: 0,
-            schema: Rc::new(NP_Schema { bytes: self.bytes.clone() })
+            schema: &NP_Schema { bytes: self.bytes.clone() }
         })
     }
 
     /// Recursive function parse schema into JSON
     #[doc(hidden)]
-    pub fn _type_to_json(schema_ptr: NP_Schema_Ptr) -> Result<NP_JSON, NP_Error> {
+    pub fn _type_to_json(schema_ptr: &NP_Schema_Ptr) -> Result<NP_JSON, NP_Error> {
         let data_type = schema_ptr.schema.bytes[schema_ptr.address];
         match NP_TypeKeys::from(data_type) {
-            NP_TypeKeys::Any =>        { return NP_Any::schema_to_json(schema_ptr.clone()) }
-            NP_TypeKeys::UTF8String => { return String::schema_to_json(schema_ptr.clone()) }
-            NP_TypeKeys::Bytes =>      { return NP_Bytes::schema_to_json(schema_ptr.clone()) }
-            NP_TypeKeys::Int8 =>       { return i8::schema_to_json(schema_ptr.clone()) }
-            NP_TypeKeys::Int16 =>      { return i16::schema_to_json(schema_ptr.clone())}
-            NP_TypeKeys::Int32 =>      { return i32::schema_to_json(schema_ptr.clone()) }
-            NP_TypeKeys::Int64 =>      { return i64::schema_to_json(schema_ptr.clone()) }
-            NP_TypeKeys::Uint8 =>      { return u8::schema_to_json(schema_ptr.clone()) }
-            NP_TypeKeys::Uint16 =>     { return u16::schema_to_json(schema_ptr.clone()) }
-            NP_TypeKeys::Uint32 =>     { return u32::schema_to_json(schema_ptr.clone()) }
-            NP_TypeKeys::Uint64 =>     { return u64::schema_to_json(schema_ptr.clone()) }
-            NP_TypeKeys::Float =>      { return f32::schema_to_json(schema_ptr.clone()) }
-            NP_TypeKeys::Double =>     { return f64::schema_to_json(schema_ptr.clone()) }
-            NP_TypeKeys::Decimal =>    { return NP_Dec::schema_to_json(schema_ptr.clone()) }
-            NP_TypeKeys::Boolean =>    { return bool::schema_to_json(schema_ptr.clone()) }
-            NP_TypeKeys::Geo =>        { return NP_Geo::schema_to_json(schema_ptr.clone()) }
-            NP_TypeKeys::Uuid =>       { return NP_UUID::schema_to_json(schema_ptr.clone()) }
-            NP_TypeKeys::Ulid =>       { return NP_ULID::schema_to_json(schema_ptr.clone()) }
-            NP_TypeKeys::Date =>       { return NP_Date::schema_to_json(schema_ptr.clone()) }
-            NP_TypeKeys::Enum =>       { return NP_Option::schema_to_json(schema_ptr.clone()) }
-            NP_TypeKeys::Table =>      { return NP_Table::schema_to_json(schema_ptr.clone()) }
-            NP_TypeKeys::Map =>        { return NP_Map::<NP_Any>::schema_to_json(schema_ptr.clone()) }
-            NP_TypeKeys::List =>       { return NP_List::<NP_Any>::schema_to_json(schema_ptr.clone()) }
-            NP_TypeKeys::Tuple =>      { return NP_Tuple::schema_to_json(schema_ptr.clone()) }
-            NP_TypeKeys::JSON =>       { return NP_JSON::schema_to_json(schema_ptr.clone()) }
+            NP_TypeKeys::Any =>        { return NP_Any::schema_to_json(schema_ptr) }
+            NP_TypeKeys::UTF8String => { return String::schema_to_json(schema_ptr) }
+            NP_TypeKeys::Bytes =>      { return NP_Bytes::schema_to_json(schema_ptr) }
+            NP_TypeKeys::Int8 =>       { return i8::schema_to_json(schema_ptr) }
+            NP_TypeKeys::Int16 =>      { return i16::schema_to_json(schema_ptr)}
+            NP_TypeKeys::Int32 =>      { return i32::schema_to_json(schema_ptr) }
+            NP_TypeKeys::Int64 =>      { return i64::schema_to_json(schema_ptr) }
+            NP_TypeKeys::Uint8 =>      { return u8::schema_to_json(schema_ptr) }
+            NP_TypeKeys::Uint16 =>     { return u16::schema_to_json(schema_ptr) }
+            NP_TypeKeys::Uint32 =>     { return u32::schema_to_json(schema_ptr) }
+            NP_TypeKeys::Uint64 =>     { return u64::schema_to_json(schema_ptr) }
+            NP_TypeKeys::Float =>      { return f32::schema_to_json(schema_ptr) }
+            NP_TypeKeys::Double =>     { return f64::schema_to_json(schema_ptr) }
+            NP_TypeKeys::Decimal =>    { return NP_Dec::schema_to_json(schema_ptr) }
+            NP_TypeKeys::Boolean =>    { return bool::schema_to_json(schema_ptr) }
+            NP_TypeKeys::Geo =>        { return NP_Geo::schema_to_json(schema_ptr) }
+            NP_TypeKeys::Uuid =>       { return NP_UUID::schema_to_json(schema_ptr) }
+            NP_TypeKeys::Ulid =>       { return NP_ULID::schema_to_json(schema_ptr) }
+            NP_TypeKeys::Date =>       { return NP_Date::schema_to_json(schema_ptr) }
+            NP_TypeKeys::Enum =>       { return NP_Option::schema_to_json(schema_ptr) }
+            NP_TypeKeys::Table =>      { return NP_Table::schema_to_json(schema_ptr) }
+            NP_TypeKeys::Map =>        { return NP_Map::<NP_Any>::schema_to_json(schema_ptr) }
+            NP_TypeKeys::List =>       { return NP_List::<NP_Any>::schema_to_json(schema_ptr) }
+            NP_TypeKeys::Tuple =>      { return NP_Tuple::schema_to_json(schema_ptr) }
+            NP_TypeKeys::JSON =>       { return NP_JSON::schema_to_json(schema_ptr) }
         }
     }
 

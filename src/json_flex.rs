@@ -124,7 +124,7 @@ pub enum NP_JSON {
     True,
 }
 
-impl NP_Value for NP_JSON {
+impl<'json> NP_Value<'json> for NP_JSON {
     fn into_value(pointer: NP_Lite_Ptr) -> Result<Option<Box<Self>>, NP_Error> {
         let root = pointer.into::<NP_Any>();
         Ok(Some(Box::new(root.json_encode())))

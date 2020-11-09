@@ -205,7 +205,7 @@ use crate::error::NP_Error;
 use crate::memory::NP_Memory;
 use buffer::{NP_Buffer};
 use alloc::vec::Vec;
-use alloc::{rc::Rc, borrow::ToOwned};
+use alloc::{borrow::ToOwned};
 use memory::NP_Size;
 
 const PROTOCOL_VERSION: u8 = 1;
@@ -277,7 +277,7 @@ const PROTOCOL_VERSION: u8 = 1;
 /// 
 #[derive(Debug)]
 pub struct NP_Factory {
-    schema: Rc<NP_Schema>
+    schema: NP_Schema
 }
 
 impl NP_Factory {
@@ -293,7 +293,7 @@ impl NP_Factory {
         match parsed {
             Ok(good_parsed) => {
                 Ok(NP_Factory {
-                    schema:  Rc::new(NP_Schema::from_json(good_parsed)?)
+                    schema:  NP_Schema::from_json(good_parsed)?
                 })
             },
             Err(_x) => {
@@ -307,7 +307,7 @@ impl NP_Factory {
     /// 
     pub fn new_compiled(schema: Vec<u8>) -> NP_Factory {
         NP_Factory {
-            schema:  Rc::new(NP_Schema { bytes: schema })
+            schema:  NP_Schema { bytes: schema }
         }
     }
 
@@ -327,8 +327,8 @@ impl NP_Factory {
     /// Open existing Vec<u8> as buffer for this factory.  
     /// This just moves the Vec<u8> into the buffer object, no deserialization or copying is done here.
     /// 
-    pub fn open_buffer(&self, bytes: Vec<u8>) -> NP_Buffer {
-        NP_Buffer::_new(Rc::clone(&self.schema), Rc::new(NP_Memory::existing(bytes)))
+    pub fn open_buffer<'buffer>(&'buffer self, bytes: Vec<u8>) -> NP_Buffer<'buffer> {
+        NP_Buffer::_new(&self.schema, NP_Memory::existing(bytes))
     }
 
     /// Generate a new empty buffer from this factory.
@@ -338,12 +338,12 @@ impl NP_Factory {
     /// The second optional argument, ptr_size, controls how much address space you get in the buffer and how large the addresses are.  Every value in the buffer contains at least one address, sometimes more.  `NP_Size::U16` (the default) gives you an address space of just over 16KB but is more space efficeint since the address pointers are only 2 bytes each.  `NP_Size::U32` gives you an address space of just over 4GB, but the addresses take up twice as much space in the buffer compared to `NP_Size::U16`.
     /// You can change the address size through compaction after the buffer is created, so it's fine to start with a smaller address space and convert it to a larger one later as needed.  It's also possible to go the other way, you can convert larger address space down to a smaller one durring compaction.
     /// 
-    pub fn empty_buffer(&self, capacity: Option<usize>, ptr_size: Option<NP_Size>) -> NP_Buffer {
+    pub fn empty_buffer<'buffer>(&'buffer self, capacity: Option<usize>, ptr_size: Option<NP_Size>) -> NP_Buffer<'buffer> {
         let use_size = match ptr_size {
             Some(x) => x,
             None => NP_Size::U16
         };
-        NP_Buffer::_new(Rc::clone(&self.schema), Rc::new(NP_Memory::new(capacity, use_size)))
+        NP_Buffer::_new(&self.schema, NP_Memory::new(capacity, use_size))
     }
 }
 

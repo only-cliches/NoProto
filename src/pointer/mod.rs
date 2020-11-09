@@ -29,7 +29,7 @@ use crate::{schema::{NP_TypeKeys, NP_Schema_Ptr}, collection::{map::NP_Map, tabl
 use alloc::string::String;
 use alloc::boxed::Box;
 use alloc::borrow::ToOwned;
-use alloc::{rc::Rc, vec::Vec};
+use alloc::{vec::Vec};
 use bytes::NP_Bytes;
 pub use misc::{NP_Geo, NP_Dec, NP_UUID, NP_ULID, NP_Date, NP_Option};
 use any::NP_Any;
@@ -65,7 +65,7 @@ impl NP_PtrKinds {
 
 /// This trait is used to implement types as NoProto buffer types.
 /// This includes all the type data, encoding and decoding methods.
-pub trait NP_Value {
+pub trait NP_Value<'value> {
 
     /// Get the type information for this type (static)
     /// 
@@ -77,7 +77,7 @@ pub trait NP_Value {
 
     /// Convert the schema byte array for this type into JSON
     /// 
-    fn schema_to_json(_schema_ptr: NP_Schema_Ptr)-> Result<NP_JSON, NP_Error> {
+    fn schema_to_json(_schema_ptr: &NP_Schema_Ptr)-> Result<NP_JSON, NP_Error> {
         Err(NP_Error::new("Attempted to convert schema to JSON for unsupported type!"))
     }
 
@@ -92,26 +92,26 @@ pub trait NP_Value {
 
     /// Pull the data from the buffer and convert into type
     /// 
-    fn into_value(_pointer: NP_Lite_Ptr) -> Result<Option<Box<Self>>, NP_Error> {
+    fn into_value(_pointer: NP_Lite_Ptr<'value>) -> Result<Option<Box<Self>>, NP_Error> where Self: NP_Value<'value> + Default {
         let message = "This type  doesn't support into!".to_owned();
         Err(NP_Error::new(message.as_str()))
     }
 
     /// Convert this type into a JSON value (recursive for collections)
     /// 
-    fn to_json(_pointer: NP_Lite_Ptr) -> NP_JSON {
+    fn to_json(_pointer: NP_Lite_Ptr<'value>) -> NP_JSON {
          NP_JSON::Null
     }
 
     /// Calculate the size of this pointer and it's children (recursive for collections)
     /// 
-    fn get_size(_pointer: NP_Lite_Ptr) -> Result<u32, NP_Error> {
+    fn get_size(_pointer: NP_Lite_Ptr<'value>) -> Result<u32, NP_Error> {
          Err(NP_Error::new("Size not supported for this type!"))
     }
     
     /// Handle copying from old pointer/buffer to new pointer/buffer (recursive for collections)
     /// 
-    fn do_compact(from_ptr: NP_Lite_Ptr, to_ptr: NP_Lite_Ptr) -> Result<(), NP_Error> where Self: NP_Value + Default {
+    fn do_compact(from_ptr: NP_Lite_Ptr<'value>, to_ptr: NP_Lite_Ptr<'value>) -> Result<(), NP_Error> where Self: NP_Value<'value> + Default {
         if from_ptr.location == 0 {
             return Ok(());
         }
@@ -142,21 +142,21 @@ pub trait NP_Value {
 #[derive(Debug, Clone)]
 #[doc(hidden)]
 /// Lite pointer for manipulating non typed pointer data
-pub struct NP_Lite_Ptr {
+pub struct NP_Lite_Ptr<'lite> {
     /// pointer location in buffer 
     pub location: u32, 
     /// the kind of pointer this is (standard, list item, map item, etc).  Includes value address
     pub kind: NP_PtrKinds, 
     /// the underlying buffer this pointer is a part of
-    pub memory: Rc<NP_Memory>, 
+    pub memory: &'lite NP_Memory, 
     /// schema stores the *actual* schema data for this pointer, regardless of type casting
-    pub schema: NP_Schema_Ptr
+    pub schema: NP_Schema_Ptr<'lite>
 }
 
-impl NP_Lite_Ptr {
+impl<'lite> NP_Lite_Ptr<'lite> {
 
     /// New standard lite pointer  
-    pub fn new_standard(location: u32, schema: NP_Schema_Ptr, memory: Rc<NP_Memory>) -> Self {
+    pub fn new_standard(location: u32, schema: NP_Schema_Ptr<'lite>, memory: &'lite NP_Memory) -> Self {
 
         let addr = location as usize;
         
@@ -173,7 +173,7 @@ impl NP_Lite_Ptr {
     }
 
     /// Convert a normal pointer into a lite one
-    pub fn from<X: NP_Value + Default>(ptr: NP_Ptr<X>) -> Self {
+    pub fn from<X: NP_Value<'lite> + Default>(ptr: NP_Ptr<'lite, X>) -> Self {
         let addr = ptr.location as usize;
         NP_Lite_Ptr {
             location: ptr.location,
@@ -188,7 +188,7 @@ impl NP_Lite_Ptr {
     }
 
     /// Convert into a Lite pointer from borrowed pointer
-    pub fn from_borrowed<X: NP_Value + Default>(ptr: &NP_Ptr<X>) -> Self {
+    pub fn from_borrowed<X: NP_Value<'lite> + Default>(ptr: &NP_Ptr<'lite, X>) -> Self {
         let addr = ptr.location as usize;
         NP_Lite_Ptr {
             location: ptr.location,
@@ -197,13 +197,13 @@ impl NP_Lite_Ptr {
                 NP_Size::U16 => u16::from_be_bytes(*ptr.memory.get_2_bytes(addr).unwrap_or(&[0; 2])) as u32,
                 NP_Size::U8 => u8::from_be_bytes([ptr.memory.get_1_byte(addr).unwrap_or(0)]) as u32
             }},
-            memory: Rc::clone(&ptr.memory),
+            memory: ptr.memory,
             schema: ptr.schema.clone()
         }
     }
 
     /// Convert a lite pointer into a normal one
-    pub fn into<X: NP_Value + Default>(self) -> NP_Ptr<X> {
+    pub fn into<X: NP_Value<'lite> + Default>(self) -> NP_Ptr<'lite, X> {
         NP_Ptr {
             location: self.location,
             kind: self.kind,
@@ -392,20 +392,24 @@ impl NP_Lite_Ptr {
 /// 
 /// 
 #[derive(Debug)]
-pub struct NP_Ptr<T: NP_Value + Default> {
+pub struct NP_Ptr<'ptr, T: NP_Value<'ptr> + Default> {
     /// pointer address in buffer 
     pub location: u32, 
     /// the kind of pointer this is (standard, list item, map item, etc).  Includes value address
     pub kind: NP_PtrKinds, 
     /// the underlying buffer this pointer is a part of
-    pub memory: Rc<NP_Memory>, 
+    pub memory: &'ptr NP_Memory, 
     /// schema stores the *actual* schema data for this pointer, regardless of type casting
-    pub schema: NP_Schema_Ptr, 
+    pub schema: NP_Schema_Ptr<'ptr>, 
     /// a static invocation of the pointer type
-    pub value: T 
+    pub value: T
 }
+/*
+impl<'ptr, T: NP_Value<'ptr> + Default> Copy for NP_Ptr<'ptr, T> {
 
-impl<T: NP_Value + Default> NP_Ptr<T> {
+}*/
+
+impl<'ptr, T: NP_Value<'ptr> + Default> NP_Ptr<'ptr, T> {
 
     /// Retrieves the value at this pointer, only useful for scalar values (not collections).
     pub fn get(&mut self) -> Result<Option<T>, NP_Error> {
@@ -451,7 +455,7 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
     }
 
     #[doc(hidden)]
-    pub fn _new_standard_ptr(location: u32, schema: NP_Schema_Ptr, memory: Rc<NP_Memory>) -> Self {
+    pub fn _new_standard_ptr(location: u32, schema: NP_Schema_Ptr<'ptr>, memory: &'ptr NP_Memory) -> Self {
 
         let addr = location as usize;
         
@@ -469,7 +473,7 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
     }
 
     #[doc(hidden)]
-    pub fn _new_table_item_ptr(location: u32, schema: NP_Schema_Ptr, memory: Rc<NP_Memory>) -> Self {
+    pub fn _new_table_item_ptr(location: u32, schema: NP_Schema_Ptr<'ptr>, memory: &'ptr NP_Memory) -> Self {
 
         let addr = location as usize;
         let b_bytes = &memory.read_bytes();
@@ -500,7 +504,7 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
     }
 
     #[doc(hidden)]
-    pub fn _new_map_item_ptr(location: u32, schema: NP_Schema_Ptr, memory: Rc<NP_Memory>) -> Self {
+    pub fn _new_map_item_ptr(location: u32, schema: NP_Schema_Ptr<'ptr>, memory: &'ptr NP_Memory) -> Self {
 
         let addr = location as usize;
 
@@ -530,7 +534,7 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
     }
 
     #[doc(hidden)]
-    pub fn _new_list_item_ptr(location: u32, schema: NP_Schema_Ptr, memory: Rc<NP_Memory>) -> Self {
+    pub fn _new_list_item_ptr(location: u32, schema: NP_Schema_Ptr<'ptr>, memory: &'ptr NP_Memory) -> Self {
 
         let addr = location as usize;
 
@@ -573,7 +577,7 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
     /// 
     /// If you clear a large object it's probably a good idea to run compaction to recover the free space.
     /// 
-    pub fn clear(self) -> Result<NP_Ptr<T>, NP_Error> {
+    pub fn clear(self) -> Result<NP_Ptr<'ptr, T>, NP_Error> {
         Ok(NP_Ptr {
             location: self.location,
             kind: self.memory.set_value_address(self.location, 0, &self.kind),
@@ -624,7 +628,7 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
     /// 
     /// The type that you cast the request to will be compared to the schema, if it doesn't match the schema the request will fail.
     /// 
-    pub fn deep_set<X: NP_Value + Default>(&mut self, path: &str, value: X) -> Result<(), NP_Error> {
+    pub fn deep_set<X: NP_Value<'ptr> + Default>(&mut self, path: &str, value: X) -> Result<(), NP_Error> {
 
         match NP_TypeKeys::from(X::type_idx().0) {
             NP_TypeKeys::JSON => { Err(NP_Error::new("Can't deep set with JSON type!")) },
@@ -634,7 +638,7 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
             NP_TypeKeys::Tuple => { Err(NP_Error::new("Can't deep set tuple type!")) },
             _ => {
                 let vec_path: Vec<&str> = path.split(".").filter(|v| { v.len() > 0 }).collect();
-                let pointer: NP_Ptr<NP_Any> = NP_Ptr::_new_standard_ptr(self.location, self.schema.copy(), Rc::clone(&self.memory));
+                let pointer = Self::_new_standard_ptr(self.location, self.schema.copy(), self.memory);
                 pointer._deep_set::<X>(vec_path, 0, value)
             }
         }
@@ -645,9 +649,9 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
     /// 
     /// The request path will start from the location of this pointer.
     /// 
-    pub fn deep_clear(&self, path: &str) -> Result<(), NP_Error> {
+    pub fn deep_clear(&'ptr mut self, path: &str) -> Result<(), NP_Error> {
         let vec_path: Vec<&str> = path.split(".").filter(|v| { v.len() > 0 }).collect();
-        let pointer: NP_Ptr<NP_Any> = NP_Ptr::_new_standard_ptr(self.location, self.schema.copy(), Rc::clone(&self.memory));
+        let pointer = Self::_new_standard_ptr(self.location, self.schema.copy(), &self.memory);
         pointer._deep_clear(vec_path, 0)
     }
   
@@ -658,9 +662,9 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
     /// The request path will start from the location of this pointer.
     /// 
     /// The type that you cast the request to will be compared to the schema, if it doesn't match the schema the request will fail.
-    pub fn deep_get<X: NP_Value + Default>(&self, path: &str) -> Result<Option<Box<X>>, NP_Error> {
+    pub fn deep_get<X: NP_Value<'ptr> + Default>(&mut self, path: &str) -> Result<Option<Box<X>>, NP_Error> {
         let vec_path: Vec<&str> = path.split(".").filter(|v| { v.len() > 0 }).collect();
-        let pointer: NP_Ptr<NP_Any> = NP_Ptr::_new_standard_ptr(self.location, self.schema.copy(), Rc::clone(&self.memory));
+        let pointer = Self::_new_standard_ptr(self.location, self.schema.copy(), &self.memory);
         pointer._deep_get::<X>(vec_path, 0)
     }
 
@@ -763,7 +767,7 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
     }
 
     #[doc(hidden)]
-    pub fn _deep_set<X: NP_Value + Default>(self, path: Vec<&str>, path_index: usize, value: X) -> Result<(), NP_Error> {
+    pub fn _deep_set<X: NP_Value<'ptr> + Default>(self, path: Vec<&str>, path_index: usize, value: X) -> Result<(), NP_Error> {
 
         match NP_TypeKeys::from(X::type_idx().0) {
             NP_TypeKeys::JSON => { return Err(NP_Error::new("Can't set with JSON Object!")) },
@@ -815,10 +819,10 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
 
                 overflow_error("deep set", &path, path_index)?;
 
-                let result = NP_List::<NP_Any>::into_value(NP_Lite_Ptr::from(self))?;
+                let temp_list = NP_List::<NP_Any>::into_value(NP_Lite_Ptr::from_borrowed(&self))?;
 
-                match result {
-                    Some(mut list) => {
+                match temp_list {
+                    Some(mut list)=> {
                         let list_key = path[path_index];
                         let list_key_int = list_key.parse::<u16>();
                         match list_key_int {
@@ -830,6 +834,7 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
                                 return Err(NP_Error::new("Can't query list with string, need number!".to_owned()))
                             }
                         }
+                    
                     },
                     None => {
                         unreachable!();
@@ -842,9 +847,9 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
 
                 overflow_error("deep set", &path, path_index)?;
 
-                let result = NP_Tuple::into_value(NP_Lite_Ptr::from(self))?;
+                let temp_tuple = NP_Tuple::into_value(NP_Lite_Ptr::from_borrowed(&self))?;
 
-                match result {
+                match temp_tuple {
                     Some(tuple) => {
                         let list_key = path[path_index];
                         let list_key_int = list_key.parse::<u8>();
@@ -895,7 +900,7 @@ impl<T: NP_Value + Default> NP_Ptr<T> {
     }
 
     #[doc(hidden)]
-    pub fn _deep_get<X: NP_Value + Default>(self, path: Vec<&str>, path_index: usize) -> Result<Option<Box<X>>, NP_Error> {
+    pub fn _deep_get<X: NP_Value<'ptr> + Default>(self, path: Vec<&str>, path_index: usize) -> Result<Option<Box<X>>, NP_Error> {
 
 
         let is_json_req = match NP_TypeKeys::from(X::type_idx().0) {

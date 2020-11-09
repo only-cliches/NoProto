@@ -16,12 +16,12 @@ pub struct NP_Any {
 
 }
 
-impl<'a> NP_Any {
+impl NP_Any {
 
     /// Casts a pointer from NP_Any to any other type.
     /// 
     /// 
-    pub fn cast<T: NP_Value + Default>(pointer: NP_Ptr<NP_Any>) -> Result<NP_Ptr<T>, NP_Error> {
+    pub fn cast<'any, T: NP_Value<'any> + Default>(pointer: NP_Ptr<'any, NP_Any>) -> Result<NP_Ptr<'any, T>, NP_Error> {
 
         let this_type = pointer.schema.schema.bytes[pointer.schema.address];
 
@@ -45,12 +45,12 @@ impl<'a> NP_Any {
     }
 }
 
-impl NP_Value for NP_Any {
+impl<'any> NP_Value<'any> for NP_Any {
 
     fn type_idx() -> (u8, String) { (NP_TypeKeys::Any as u8, "any".to_owned()) }
     fn self_type_idx(&self) -> (u8, String) { (NP_TypeKeys::Any as u8, "any".to_owned()) }
 
-    fn schema_to_json(_schema_ptr: NP_Schema_Ptr)-> Result<NP_JSON, NP_Error> {
+    fn schema_to_json(_schema_ptr: &NP_Schema_Ptr)-> Result<NP_JSON, NP_Error> {
         let mut schema_json = JSMAP::new();
         schema_json.insert("type".to_owned(), NP_JSON::String("any".to_owned()));
 
@@ -69,7 +69,7 @@ impl NP_Value for NP_Any {
     fn get_size(_pointer: NP_Lite_Ptr) -> Result<u32, NP_Error> {
         Ok(0)
     }
-    fn do_compact(_from_ptr: NP_Lite_Ptr, _to_ptr: NP_Lite_Ptr) -> Result<(), NP_Error> where Self: NP_Value + Default {
+    fn do_compact(_from_ptr: NP_Lite_Ptr, _to_ptr: NP_Lite_Ptr) -> Result<(), NP_Error> where Self: NP_Value<'any> + Default {
         Err(NP_Error::new("Cannot compact an ANY field!"))
     }
     fn from_json_to_schema(json_schema: &NP_JSON) -> Result<Option<Vec<u8>>, NP_Error> {
@@ -86,8 +86,8 @@ impl NP_Value for NP_Any {
     }
 }
 
-impl Default for NP_Any {
+impl<'any> Default for NP_Any {
     fn default() -> Self { 
-        NP_Any { }
+        NP_Any {}
     }
 }
