@@ -34,6 +34,7 @@ impl NP_Bytes {
     }
 
     /// Get the schema data for this type
+    #[doc(hidden)]
     pub fn get_schema_state<'state>(schema_ptr: &'state NP_Schema_Ptr) -> NP_Bytes_Schema_State<'state> {
 
         // fixed size

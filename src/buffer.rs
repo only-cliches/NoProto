@@ -222,17 +222,18 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// 
     /// The second argument, new_size, can be used to change the size of the address space in the new buffer.  Default behavior is to copy the address size of the old buffer.  Be careful, if you're going from a larg address space down to a smaller one the data might not fit in the new buffer.
     /// 
-    pub fn maybe_compact<F>(&'buffer mut self, new_capacity: Option<u32>, new_size: Option<NP_Size>, mut callback: F) -> Result<(), NP_Error> where F: FnMut(NP_Compact_Data) -> bool {
+    pub fn maybe_compact<F>(self, new_capacity: Option<u32>, new_size: Option<NP_Size>, mut callback: F) -> Result<Self, NP_Error> where F: FnMut(NP_Compact_Data) -> bool {
 
         let bytes_data = self.calc_bytes()?;
 
-        let do_compact = callback(bytes_data);
-
-        if do_compact {
-            self.compact(new_capacity, new_size)?
+        if callback(bytes_data) {
+            return self.compact(new_capacity, new_size);
         }
 
-        Ok(())
+        return Ok(NP_Buffer {
+            memory: self.memory,
+            schema_ptr: self.schema_ptr
+        });
     }
 
     /// Compacts a buffer to remove an unused bytes or free space after a mutation.
@@ -242,7 +243,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// 
     /// The second argument, new_size, can be used to change the size of the address space in the new buffer.  Default behavior is to copy the address size of the old buffer.  Be careful, if you're going from a larg address space down to a smaller one the data might not fit in the new buffer.
     /// 
-    pub fn compact(&'buffer mut self, new_capacity: Option<u32>, new_size: Option<NP_Size>) -> Result<(), NP_Error> {
+    pub fn compact(self, new_capacity: Option<u32>, new_size: Option<NP_Size>) -> Result<Self, NP_Error> {
 
         let capacity = match new_capacity {
             Some(x) => { x as usize },
@@ -261,9 +262,10 @@ impl<'buffer> NP_Buffer<'buffer> {
 
         old_root.compact(new_root)?;
 
-        self.memory = new_bytes;
-
-        Ok(())
+        Ok(NP_Buffer {
+            memory: new_bytes,
+            schema_ptr: self.schema_ptr
+        })
     }
 
     /// Recursively measures how many bytes each element in the buffer is using and subtracts that from the size of the buffer.

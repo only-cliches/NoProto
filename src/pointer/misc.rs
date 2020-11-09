@@ -103,6 +103,7 @@ impl NP_Dec {
     }
 
     /// Get the schema data for this type
+    #[doc(hidden)]
     pub fn get_schema_state(schema_ptr: &NP_Schema_Ptr) -> NP_Dec_Schema_State {
 
         let exp = schema_ptr.schema.bytes[schema_ptr.address + 1];
@@ -1018,7 +1019,7 @@ impl NP_Geo {
     }
 
     /// Get the schema state struct from the schema bytes
-    /// 
+    #[doc(hidden)]
     pub fn get_schema_state(schema_ptr: &NP_Schema_Ptr) -> NP_Geo_Schema_State {
         let size = schema_ptr.schema.bytes[schema_ptr.address + 1];
 
@@ -1908,6 +1909,7 @@ impl NP_Option {
     }
 
     /// Get schema state
+    #[doc(hidden)]
     pub fn get_schema_state(schema_ptr: &NP_Schema_Ptr) -> NP_Option_Schema_State {
         let mut default_index: Option<u8> = None;
 
@@ -2347,6 +2349,7 @@ impl NP_Date {
     }
 
     /// Get schema state for NP_Date
+    #[doc(hidden)]
     pub fn get_schema_state(schema_ptr: &NP_Schema_Ptr) -> Option<NP_Date> {
 
         let has_default = schema_ptr.schema.bytes[schema_ptr.address + 1];

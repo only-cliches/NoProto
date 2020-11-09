@@ -52,7 +52,7 @@ NoProto moves the cost of deserialization to the access methods instead of deser
 - Faster serialization & deserialization
 - Language agnostic
 
-| Format           | Free De/Serialization | Size Limit | Mutable | Schemas | Language Agnostic | No Compiling    | Byte-wise Sorting |
+| Format           | Incrimental De/Serialization | Size Limit | Mutable | Schemas | Language Agnostic | No Compiling    | Byte-wise Sorting |
 |------------------|-----------------------|------------|-----------|---------|-------------------|-----------------|------------------|
 | **NoProto**      | ✓                     | ~4GB       | ✓         | ✓       | ✓                 | ✓               | ✓                |
 | JSON             | 𐄂                     | Unlimited  | ✓         | 𐄂       | ✓                 | ✓               | 𐄂                |
@@ -62,6 +62,7 @@ NoProto moves the cost of deserialization to the access methods instead of deser
 | Protocol Buffers | 𐄂                     | ~2GB       | 𐄂         | ✓       | ✓                 | 𐄂               | 𐄂                |
 | Cap'N Proto      | ✓                     | 2^64 Bytes | 𐄂         | ✓       | ✓                 | 𐄂               | 𐄂                |
 | Serde            | 𐄂                     | ?          | 𐄂         | ✓       | 𐄂                 | 𐄂               | 𐄂                |
+| Veriform         | 𐄂                     | ?          | 𐄂         | 𐄂       | 𐄂                 | 𐄂               | 𐄂                |
 
 
 #### Limitations

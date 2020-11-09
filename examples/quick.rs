@@ -46,6 +46,8 @@ fn main() -> Result<(), NP_Error> {
     println!("bytes: {:?}", user_bytes);
     let user_buffer = user_factory.open_buffer(user_bytes);
 
+    let user_buffer = user_buffer.compact(None, None)?;
+
 
     // assign nested internal values, sets the first tag element
     user_buffer.deep_set("tags.0", String::from("first tag"))?;

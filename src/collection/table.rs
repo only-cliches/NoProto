@@ -326,6 +326,7 @@ impl<'table> NP_Table<'table> {
 
     /// Convert schema bytes into Struct
     /// 
+    #[doc(hidden)]
     pub fn get_schema_state(schema_ptr: NP_Schema_Ptr<'table>) -> NP_Table_Schema_State<'table> {
 
         let column_len = schema_ptr.schema.bytes[schema_ptr.address + 1];

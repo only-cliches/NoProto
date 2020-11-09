@@ -56,17 +56,17 @@
 //! - Faster serialization & deserialization
 //! - Language agnostic
 //! 
-//! | Format           | Free De/Serialization | Size Limit | Mutable | Schemas | Language Agnostic | No Compiling    | Byte-wise Sorting |
-//! |------------------|-----------------------|------------|-----------|---------|-------------------|-----------------|------------------|
-//! | **NoProto**      | ✓                     | ~4GB       | ✓         | ✓       | ✓                 | ✓               | ✓                |
-//! | JSON             | 𐄂                     | Unlimited  | ✓         | 𐄂       | ✓                 | ✓               | 𐄂                |
-//! | BSON             | 𐄂                     | ~16KB      | ✓         | 𐄂       | ✓                 | ✓               | 𐄂                |
-//! | MessagePack      | 𐄂                     | Unlimited  | ✓         | 𐄂       | ✓                 | ✓               | 𐄂                |
-//! | FlatBuffers      | ✓                     | ~2GB       | 𐄂         | ✓       | ✓                 | 𐄂               | 𐄂                |
-//! | Protocol Buffers | 𐄂                     | ~2GB       | 𐄂         | ✓       | ✓                 | 𐄂               | 𐄂                |
-//! | Cap'N Proto      | ✓                     | 2^64 Bytes | 𐄂         | ✓       | ✓                 | 𐄂               | 𐄂                |
-//! | Serde            | 𐄂                     | ?          | 𐄂         | ✓       | 𐄂                 | 𐄂               | 𐄂                |
-//! 
+//! | Format           | Incrimental De/Serialization | Size Limit | Mutable | Schemas | Language Agnostic | No Compiling    | Byte-wise Sorting |
+//! |------------------|-----------------------|------------|---------|---------|-------------------|-----------------|------------------|
+//! | **NoProto**      | ✓                     | ~4GB       | ✓       | ✓       | ✓                 | ✓               | ✓                |
+//! | JSON             | 𐄂                     | Unlimited  | ✓       | 𐄂       | ✓                 | ✓               | 𐄂                |
+//! | BSON             | 𐄂                     | ~16KB      | ✓       | 𐄂       | ✓                 | ✓               | 𐄂                |
+//! | MessagePack      | 𐄂                     | Unlimited  | ✓       | 𐄂       | ✓                 | ✓               | 𐄂                |
+//! | FlatBuffers      | ✓                     | ~2GB       | 𐄂       | ✓       | ✓                 | 𐄂               | 𐄂                |
+//! | Protocol Buffers | 𐄂                     | ~2GB       | 𐄂       | ✓       | ✓                 | 𐄂               | 𐄂                |
+//! | Cap'N Proto      | ✓                     | 2^64 Bytes | 𐄂       | ✓       | ✓                 | 𐄂               | 𐄂                |
+//! | Serde            | 𐄂                     | ?          | 𐄂       | ✓       | 𐄂                 | 𐄂               | 𐄂                |
+//! | Veriform         | 𐄂                     | ?          | 𐄂       | 𐄂       | 𐄂                 | 𐄂               | 𐄂                |
 //! 
 //! #### Limitations
 //! - Buffers cannot be larger than 2^32 bytes (~4GB).
