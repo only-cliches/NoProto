@@ -1,3 +1,35 @@
+//! NoProto supports a large number of native number types.
+//! 
+//! Signed Integers: <br/>
+//! [`i8`](https://doc.rust-lang.org/std/primitive.i8.html), [`i16`](https://doc.rust-lang.org/std/primitive.i16.html), [`i32`](https://doc.rust-lang.org/std/primitive.i32.html), [`i64`](https://doc.rust-lang.org/std/primitive.i64.html) <br/>
+//! <br/>
+//! Unsigned Integers: <br/>
+//! [`u8`](https://doc.rust-lang.org/std/primitive.u8.html), [`u16`](https://doc.rust-lang.org/std/primitive.u16.html), [`u32`](https://doc.rust-lang.org/std/primitive.u32.html), [`u64`](https://doc.rust-lang.org/std/primitive.u64.html) <br/>
+//! <br/>
+//! Floating Point: <br/>
+//! [`f32`](https://doc.rust-lang.org/std/primitive.f32.html), [`f64`](https://doc.rust-lang.org/std/primitive.f64.html)
+//! <br/>
+//! 
+//! The details of using each number type is identical to the pattern below.
+//! 
+//! ```
+//! use no_proto::error::NP_Error;
+//! use no_proto::NP_Factory;
+//! 
+//! let factory: NP_Factory = NP_Factory::new(r#"{
+//!    "type": "u32"
+//! }"#)?;
+//!
+//! let mut new_buffer = factory.empty_buffer(None, None);
+//! new_buffer.deep_set("", 20380u32)?;
+//! 
+//! assert_eq!(Box::new(20380u32), new_buffer.deep_get::<u32>("")?.unwrap());
+//!
+//! # Ok::<(), NP_Error>(()) 
+//! ```
+//! 
+//! 
+
 use crate::schema::NP_Schema_Ptr;
 use alloc::vec::Vec;
 use crate::utils::to_unsigned;
@@ -13,6 +45,7 @@ use alloc::{borrow::ToOwned};
 
 /// The type of number being used
 #[derive(Debug)]
+#[doc(hidden)]
 pub enum NP_NumType {
     /// Unsigned integer type (only positive whole numbers)
     unsigned,
@@ -171,9 +204,9 @@ macro_rules! noproto_number {
                 }
             }
 
-            fn from_json_to_schema(json_schema: &NP_JSON) -> Result<Option<Vec<u8>>, NP_Error> {
+            fn from_json_to_schema(json_schema: &NP_JSON) -> Result<Option<NP_Schema>, NP_Error> {
         
-                let type_str = NP_Schema::get_type(json_schema)?;
+                let type_str = NP_Schema::_get_type(json_schema)?;
         
                 if type_str == $str1 || type_str == $str2 {
         
@@ -193,8 +226,18 @@ macro_rules! noproto_number {
                             schema_data.push(0);
                         }
                     }
-        
-                    return Ok(Some(schema_data));
+
+                    match $numType {
+                        NP_NumType::signed => {
+                            return Ok(Some(NP_Schema { is_sortable: true, bytes: schema_data }));
+                        },
+                        NP_NumType::unsigned => {
+                            return Ok(Some(NP_Schema { is_sortable: true, bytes: schema_data }));
+                        },
+                        NP_NumType::floating => {
+                            return Ok(Some(NP_Schema { is_sortable: false, bytes: schema_data }));
+                        }
+                    };
                 }
                 
                 Ok(None)

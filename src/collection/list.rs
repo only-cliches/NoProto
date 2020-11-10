@@ -840,7 +840,7 @@ impl<'list, T: 'list> NP_Value<'list> for NP_List<'list, T> where T: NP_Value<'l
         let mut acc_size = 0u32;
 
         for mut l in list.it().into_iter() {
-            if l.has_value.1 == true {
+            if l.has_value == true {
                 let ptr = l.select()?;
                 acc_size += ptr.calc_size()?;
             }
@@ -874,7 +874,7 @@ impl<'list, T: 'list> NP_Value<'list> for NP_List<'list, T> where T: NP_Value<'l
         let mut json_list = Vec::new();
 
         for mut l in list.it().into_iter() {
-            if l.has_value.1 == true && l.has_value.0 == true {
+            if l.has_value == true {
                 let ptr = l.select();
                 match ptr {
                     Ok(p) => {
@@ -903,11 +903,11 @@ impl<'list, T: 'list> NP_Value<'list> for NP_List<'list, T> where T: NP_Value<'l
         match Self::into_value(from_ptr)? {
             Some(old_list) => {
 
-                match to_ptr_list.into()? {
+                match to_ptr_list.deref()? {
                     Some(mut new_list) => {
 
                         for mut item in old_list.it().into_iter() {
-                            if item.has_value.0 && item.has_value.1 {
+                            if item.has_value {
 
                                 let new_ptr = NP_Lite_Ptr::from(new_list.select(item.index)?);
                                 let old_ptr = NP_Lite_Ptr::from(item.select()?);
@@ -924,9 +924,9 @@ impl<'list, T: 'list> NP_Value<'list> for NP_List<'list, T> where T: NP_Value<'l
         Ok(())
     }
 
-    fn from_json_to_schema(json_schema: &NP_JSON) -> Result<Option<Vec<u8>>, NP_Error> {
+    fn from_json_to_schema(json_schema: &NP_JSON) -> Result<Option<NP_Schema>, NP_Error> {
 
-        let type_str = NP_Schema::get_type(json_schema)?;
+        let type_str = NP_Schema::_get_type(json_schema)?;
 
         if "list" == type_str {
             let mut schema_data: Vec<u8> = Vec::new();
@@ -941,7 +941,7 @@ impl<'list, T: 'list> NP_Value<'list> for NP_List<'list, T> where T: NP_Value<'l
 
             let child_type = NP_Schema::from_json(Box::new(json_schema["of"].clone()))?;
             schema_data.extend(child_type.bytes);
-            return Ok(Some(schema_data))
+            return Ok(Some(NP_Schema { is_sortable: false, bytes: schema_data}))
         }
 
         Ok(None)
@@ -1021,22 +1021,22 @@ impl<'it, T: NP_Value<'it> + Default> Iterator for NP_List_Iterator<'it, T> {
             self.current_index += 1;
             return Some(NP_List_Item {
                 index: self.current_index - 1,
-                has_value: (true, value_address != 0),
-                schema: self.schema.copy(),
-                address: this_address,
-                list: NP_List::new(self.address, self.head, self.tail, self.memory, self.schema.copy()).unwrap(),
-                memory: self.memory
+                has_value: value_address != 0,
+                _schema: self.schema.copy(),
+                _address: this_address,
+                _list: NP_List::new(self.address, self.head, self.tail, self.memory, self.schema.copy()).unwrap(),
+                _memory: self.memory
             });
 
         } else if ptr_index > self.current_index { // pointer is above current index, loop through empty values
             self.current_index += 1;
             return Some(NP_List_Item {
                 index: self.current_index - 1,
-                has_value: (false, false),
-                schema: self.schema.copy(),
-                address: 0,
-                list: NP_List::new(self.address, self.head, self.tail, &self.memory, self.schema.copy()).unwrap(),
-                memory: &self.memory
+                has_value: false,
+                _schema: self.schema.copy(),
+                _address: 0,
+                _list: NP_List::new(self.address, self.head, self.tail, &self.memory, self.schema.copy()).unwrap(),
+                _memory: &self.memory
             }); 
         }
 
@@ -1050,20 +1050,20 @@ pub struct NP_List_Item<'item, T> where T: NP_Value<'item> + Default {
     /// The index of this item in the list
     pub index: u16,
     /// (has pointer at this index, his value at this index)
-    pub has_value: (bool, bool),
-    schema: NP_Schema_Ptr<'item>,
-    address: u32,
-    list: NP_List<'item, T>,
-    memory: &'item NP_Memory
+    pub has_value: bool,
+    _schema: NP_Schema_Ptr<'item>,
+    _address: u32,
+    _list: NP_List<'item, T>,
+    _memory: &'item NP_Memory
 }
 
 impl<'item, T: NP_Value<'item> + Default + > NP_List_Item<'item, T> {
     /// Select the pointer at this item
     pub fn select(&mut self) -> Result<NP_Ptr<'item, T>, NP_Error> {
-        self.list.select(self.index)
+        self._list.select(self.index)
     }
     /// Delete the pointer and it's value at this item
     pub fn delete(&mut self) -> Result<bool, NP_Error> {
-        self.list.delete(self.index)
+        self._list.delete(self.index)
     }
 }

@@ -21,66 +21,91 @@ pub const ROOT_PTR_ADDR: u32 = 2;
 /// [Go to NP_Ptr docs](../pointer/struct.NP_Ptr.html)
 #[derive(Debug)]
 pub struct NP_Buffer<'buffer> {
-    /*memory: NP_Memory,
-    schema: &'buffer NP_Schema,
-    schema_ptr: NP_Schema_Ptr<'buffer>,
-    root_ptr: Option<NP_Ptr<'buffer, R>>*/
+    /// Schema data used by this buffer
+    pub schema: &'buffer NP_Schema,
     memory: NP_Memory,
     schema_ptr: NP_Schema_Ptr<'buffer>
 }
 
 /// When calling `maybe_compact` on a buffer, this struct is provided to help make a choice on wether to compact or not.
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct NP_Compact_Data {
-    /// The size of the old buffer
+    /// The size of the existing buffer
     pub current_buffer: u32,
-    /// The estimated size of the new buffer after compaction
+    /// The estimated size of buffer after compaction
     pub estimated_new_size: u32,
-    /// How many known wasted bytes in the old buffer
+    /// How many known wasted bytes in existing buffer
     pub wasted_bytes: u32
 }
 
 impl<'buffer> NP_Buffer<'buffer> {
 
     #[doc(hidden)]
-    pub fn _new(model: &'buffer NP_Schema, memory: NP_Memory) -> Self { // make new buffer
+    pub fn _new(schema: &'buffer NP_Schema, memory: NP_Memory) -> Self { // make new buffer
 
         NP_Buffer {
+            schema: &schema,
             memory: memory,
-            schema_ptr: NP_Schema_Ptr { address: 0, schema: &model}
+            schema_ptr: NP_Schema_Ptr { address: 1, schema: &schema}
         }
-        /*
-        NP_Buffer {
-            memory: memory,
-            schema: model,
-            root_ptr: None,
-            schema_ptr: NP_Schema_Ptr { address: 0, schema: &model}
-        };
-
-        let addr = ROOT_PTR_ADDR as usize;
-        
-        buffer.root_ptr = Some(NP_Ptr {
-            location: ROOT_PTR_ADDR,
-            kind: NP_PtrKinds::Standard { addr: match &buffer.memory.size {
-                NP_Size::U32 => u32::from_be_bytes(*buffer.memory.get_4_bytes(addr).unwrap_or(&[0; 4])),
-                NP_Size::U16 => u16::from_be_bytes(*buffer.memory.get_2_bytes(addr).unwrap_or(&[0; 2])) as u32,
-                NP_Size::U8 => u8::from_be_bytes([buffer.memory.get_1_byte(addr).unwrap_or(0)]) as u32
-            }},
-            memory: &buffer.memory,
-            schema: &buffer.schema_ptr,
-            value: R::default()
-        });
-
-        // buffer.root_ptr = Some(NP_Ptr::_new_standard_ptr(ROOT_PTR_ADDR, &buffer.schema_ptr, &buffer.memory));
-
-        buffer*/
     }
 
-    /// Open the buffer to do something fancy with the internals.
+    /// Open the buffer to do something with the internals.  Collections are only directly accessible using this method.
     /// 
     /// The type of the root schema should be provided, if the type provided does not match the root schema this operation will fail.
     /// 
     /// Opening the buffer is most common when you want to iterate through a collection or something similar.  [Read more here.](../pointer/struct.NP_Ptr.html#using-collection-types-with-pointers)
+    /// 
+    /// ```
+    /// use no_proto::error::NP_Error;
+    /// use no_proto::NP_Factory;
+    /// use no_proto::collection::list::NP_List;
+    /// use no_proto::pointer::NP_Ptr;
+    /// 
+    /// let factory: NP_Factory = NP_Factory::new(r#"{
+    ///    "type": "list",
+    ///    "of": {"type": "string"}
+    /// }"#)?;
+    ///
+    /// let mut new_buffer = factory.empty_buffer(None, None);
+    /// // set first item to "hello"
+    /// new_buffer.deep_set("0", String::from("hello"))?;
+    /// // set third item to "world"
+    /// new_buffer.deep_set("2", String::from("world"))?;
+    /// 
+    /// // root schema type ---v
+    /// new_buffer.open::<NP_List<String>>(&mut |root: NP_Ptr<NP_List<String>>| {
+    ///        
+    ///     // dereference pointer to get value
+    ///     let mut list: NP_List<String> = root.deref()?.unwrap();
+    ///     
+    ///     // loop through list
+    ///     for mut item in list.it().into_iter() {
+    ///         match item.index {
+    ///             0 => {
+    ///                 assert_eq!(true, item.has_value);
+    ///                 let value = item.select()?.deref()?.unwrap();
+    ///                 assert_eq!(String::from("hello"), value);
+    ///             },
+    ///             1 => {
+    ///                 assert_eq!(false, item.has_value);
+    ///             },
+    ///             2 => {
+    ///                 assert_eq!(true, item.has_value);
+    ///                 let value = item.select()?.deref()?.unwrap();
+    ///                 assert_eq!(String::from("world"), value);
+    ///             },
+    ///             _ => { unreachable!() }
+    ///         }
+    ///     }
+    ///     
+    ///     // close buffer
+    ///     Ok(())
+    /// })?;
+    ///
+    /// # Ok::<(), NP_Error>(()) 
+    /// ```
+    /// 
     /// 
     pub fn open<R: NP_Value<'buffer> + Default>(&'buffer mut self, callback: &mut (dyn FnMut(NP_Ptr<'buffer, R>) -> Result<(), NP_Error>)) -> Result<(), NP_Error>
     {   
@@ -109,13 +134,49 @@ impl<'buffer> NP_Buffer<'buffer> {
         Err(NP_Error::new(err))
     }
 
-    /// Open the buffer to extract an internal value using custom logic.  This does not work for collection types, only scalar types.
+    /// Open the buffer to extract an internal value using custom logic.  You cannot extract collection types, only scalar types.
     /// 
     /// The type of the root schema should be provided, if the type provided does not match the root schema this operation will fail.
     /// 
-    /// The type of the return value should be provided.
+    /// The type of the return value should also be provided.
     /// 
-    pub fn extract<R: NP_Value<'buffer> + Default, RESULT: NP_Value<'buffer> + Default, F>(&'buffer mut self, callback: &mut (dyn FnMut(NP_Ptr<'buffer, R>) -> Result<RESULT, NP_Error>)) -> Result<RESULT, NP_Error>
+    /// ```
+    /// use no_proto::error::NP_Error;
+    /// use no_proto::NP_Factory;
+    /// use no_proto::collection::list::NP_List;
+    /// use no_proto::pointer::NP_Ptr;
+    /// 
+    /// let factory: NP_Factory = NP_Factory::new(r#"{
+    ///    "type": "list",
+    ///    "of": {"type": "string"}
+    /// }"#)?;
+    ///
+    /// let mut new_buffer = factory.empty_buffer(None, None);
+    /// // set first item to "hello"
+    /// new_buffer.deep_set("0", String::from("hello"))?;
+    /// 
+    /// //                             root schema type ---v, return type --v
+    /// let hello_string: String = new_buffer.extract::<NP_List<String>, String>(&mut |root: NP_Ptr<NP_List<String>>| {
+    ///        
+    ///     // extract value from pointer
+    ///     let mut list: NP_List<String> = root.deref()?.unwrap();
+    ///     
+    ///     // get first item in list
+    ///     let mut first_item: NP_Ptr<String> = list.select(0)?;
+    ///     
+    ///     // close buffer and return value
+    ///     Ok(first_item.deref()?.unwrap())
+    /// })?;
+    /// 
+    /// assert_eq!(String::from("hello"), hello_string);
+    /// 
+    /// // normally deep_get is a much easier way to accomplish this
+    /// assert_eq!(Box::new(String::from("hello")), new_buffer.deep_get("0")?.unwrap());
+    ///
+    /// # Ok::<(), NP_Error>(()) 
+    /// ```
+    /// 
+    pub fn extract<R: NP_Value<'buffer> + Default, RESULT: NP_Value<'buffer> + Default>(&'buffer self, callback: &mut (dyn FnMut(NP_Ptr<'buffer, R>) -> Result<RESULT, NP_Error>)) -> Result<RESULT, NP_Error>
     {
 
         match NP_TypeKeys::from(RESULT::type_idx().0) {
@@ -151,13 +212,53 @@ impl<'buffer> NP_Buffer<'buffer> {
 
     /// Copy the entire buffer into a JSON object
     /// 
+    /// ```
+    /// use no_proto::error::NP_Error;
+    /// use no_proto::NP_Factory;
+    /// use no_proto::buffer::NP_Compact_Data;
+    /// 
+    /// let factory: NP_Factory = NP_Factory::new(r#"{
+    ///    "type": "table",
+    ///    "columns": [
+    ///         ["age", {"type": "uint8"}],
+    ///         ["name", {"type": "string"}]
+    ///     ]
+    /// }"#)?;
+    /// 
+    /// let mut new_buffer = factory.empty_buffer(None, None);
+    /// new_buffer.deep_set("age", 30u8);
+    /// new_buffer.deep_set("name", String::from("Jeb Kermin"));
+    /// 
+    /// assert_eq!("{\"age\":30,\"name\":\"Jeb Kermin\"}", new_buffer.json_encode().stringify());
+    /// 
+    /// # Ok::<(), NP_Error>(()) 
+    /// ```
+    /// 
     pub fn json_encode(&'buffer self) -> NP_JSON {
-        // let root_schema: NP_Schema_Ptr = NP_Schema_Ptr { address: 0, schema: &self.schema};
         let root: NP_Ptr<NP_Any> = NP_Ptr::<NP_Any>::_new_standard_ptr(ROOT_PTR_ADDR, self.schema_ptr.copy(), &self.memory);
         root.json_encode()
     }
 
     /// Moves the underlying bytes out of the buffer, consuming the buffer in the process.
+    /// 
+    /// ```
+    /// use no_proto::error::NP_Error;
+    /// use no_proto::NP_Factory;
+    /// use no_proto::buffer::NP_Compact_Data;
+    /// 
+    /// let factory: NP_Factory = NP_Factory::new(r#"{
+    ///    "type": "string"
+    /// }"#)?;
+    /// 
+    /// let mut new_buffer = factory.empty_buffer(None, None);
+    /// // set initial value
+    /// new_buffer.deep_set("", String::from("hello"))?;
+    /// // close buffer and get bytes
+    /// let bytes: Vec<u8> = new_buffer.close();
+    /// assert_eq!([1, 1, 0, 4, 0, 5, 104, 101, 108, 108, 111].to_vec(), bytes);
+    /// 
+    /// # Ok::<(), NP_Error>(()) 
+    /// ```
     /// 
     pub fn close(self) -> Vec<u8> {
         self.memory.dump()
@@ -214,13 +315,58 @@ impl<'buffer> NP_Buffer<'buffer> {
         }
     }
 
-    /// This performs a compaction if the closure provided as the second argument returns `true`.
+    /// This performs a compaction if the closure provided as the third argument returns `true`.
     /// Compaction is a pretty expensive operation (requires full copy of the whole buffer) so should be done sparingly.
     /// The closure is provided an argument that contains the original size of the buffer, how many bytes could be saved by compaction, and how large the new buffer would be after compaction.
     /// 
     /// The first argument, new_capacity, is the capacity of the underlying Vec<u8> that we'll be copying the data into.  The default is the size of the old buffer.
     /// 
     /// The second argument, new_size, can be used to change the size of the address space in the new buffer.  Default behavior is to copy the address size of the old buffer.  Be careful, if you're going from a larg address space down to a smaller one the data might not fit in the new buffer.
+    /// 
+    /// ```
+    /// use no_proto::error::NP_Error;
+    /// use no_proto::NP_Factory;
+    /// use no_proto::buffer::NP_Compact_Data;
+    /// 
+    /// let factory: NP_Factory = NP_Factory::new(r#"{
+    ///    "type": "string"
+    /// }"#)?;
+    /// 
+    /// let mut new_buffer = factory.empty_buffer(None, None);
+    /// // set initial value
+    /// new_buffer.deep_set("", String::from("hello"))?;
+    /// // using 11 bytes
+    /// assert_eq!(NP_Compact_Data {
+    ///     current_buffer: 11,
+    ///     estimated_new_size: 11,
+    ///     wasted_bytes: 0
+    /// }, new_buffer.calc_bytes()?);
+    /// // update the value
+    /// new_buffer.deep_set("", String::from("hello, world"))?;
+    /// // now using 25 bytes, with 7 bytes of wasted bytes
+    /// assert_eq!(NP_Compact_Data {
+    ///     current_buffer: 25,
+    ///     estimated_new_size: 18,
+    ///     wasted_bytes: 7
+    /// }, new_buffer.calc_bytes()?);
+    /// // compact to save space
+    /// new_buffer = new_buffer.maybe_compact(None, None, |compact_data| {
+    ///     // only compact if wasted bytes are greater than 5
+    ///     if compact_data.wasted_bytes > 5 {
+    ///         true
+    ///     } else {
+    ///         false
+    ///     }
+    /// })?;
+    /// // back down to 18 bytes with no wasted bytes
+    /// assert_eq!(NP_Compact_Data {
+    ///     current_buffer: 18,
+    ///     estimated_new_size: 18,
+    ///     wasted_bytes: 0
+    /// }, new_buffer.calc_bytes()?);
+    /// 
+    /// # Ok::<(), NP_Error>(()) 
+    /// ```
     /// 
     pub fn maybe_compact<F>(self, new_capacity: Option<u32>, new_size: Option<NP_Size>, mut callback: F) -> Result<Self, NP_Error> where F: FnMut(NP_Compact_Data) -> bool {
 
@@ -231,6 +377,7 @@ impl<'buffer> NP_Buffer<'buffer> {
         }
 
         return Ok(NP_Buffer {
+            schema: self.schema,
             memory: self.memory,
             schema_ptr: self.schema_ptr
         });
@@ -242,6 +389,44 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// The first argument, new_capacity, is the capacity of the underlying Vec<u8> that we'll be copying the data into.  The default is the size of the old buffer.
     /// 
     /// The second argument, new_size, can be used to change the size of the address space in the new buffer.  Default behavior is to copy the address size of the old buffer.  Be careful, if you're going from a larg address space down to a smaller one the data might not fit in the new buffer.
+    /// 
+    /// ```
+    /// use no_proto::error::NP_Error;
+    /// use no_proto::NP_Factory;
+    /// use no_proto::buffer::NP_Compact_Data;
+    /// 
+    /// let factory: NP_Factory = NP_Factory::new(r#"{
+    ///    "type": "string"
+    /// }"#)?;
+    /// 
+    /// let mut new_buffer = factory.empty_buffer(None, None);
+    /// // set initial value
+    /// new_buffer.deep_set("", String::from("hello"))?;
+    /// // using 11 bytes
+    /// assert_eq!(NP_Compact_Data {
+    ///     current_buffer: 11,
+    ///     estimated_new_size: 11,
+    ///     wasted_bytes: 0
+    /// }, new_buffer.calc_bytes()?);
+    /// // update the value
+    /// new_buffer.deep_set("", String::from("hello, world"))?;
+    /// // now using 25 bytes, with 7 bytes of wasted bytes
+    /// assert_eq!(NP_Compact_Data {
+    ///     current_buffer: 25,
+    ///     estimated_new_size: 18,
+    ///     wasted_bytes: 7
+    /// }, new_buffer.calc_bytes()?);
+    /// // compact to save space
+    /// new_buffer = new_buffer.compact(None, None)?;
+    /// // back down to 18 bytes with no wasted bytes
+    /// assert_eq!(NP_Compact_Data {
+    ///     current_buffer: 18,
+    ///     estimated_new_size: 18,
+    ///     wasted_bytes: 0
+    /// }, new_buffer.calc_bytes()?);
+    /// 
+    /// # Ok::<(), NP_Error>(()) 
+    /// ```
     /// 
     pub fn compact(self, new_capacity: Option<u32>, new_size: Option<NP_Size>) -> Result<Self, NP_Error> {
 
@@ -263,6 +448,7 @@ impl<'buffer> NP_Buffer<'buffer> {
         old_root.compact(new_root)?;
 
         Ok(NP_Buffer {
+            schema: self.schema,
             memory: new_bytes,
             schema_ptr: self.schema_ptr
         })
@@ -271,18 +457,39 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// Recursively measures how many bytes each element in the buffer is using and subtracts that from the size of the buffer.
     /// This will let you know how many bytes can be saved from a compaction.
     /// 
+    /// ```
+    /// use no_proto::error::NP_Error;
+    /// use no_proto::NP_Factory;
+    /// use no_proto::buffer::NP_Compact_Data;
+    /// 
+    /// let factory: NP_Factory = NP_Factory::new(r#"{
+    ///    "type": "string"
+    /// }"#)?;
+    /// 
+    /// let mut new_buffer = factory.empty_buffer(None, None);
+    /// new_buffer.deep_set("", String::from("hello"))?;
+    /// assert_eq!(NP_Compact_Data {
+    ///     current_buffer: 11,
+    ///     estimated_new_size: 11,
+    ///     wasted_bytes: 0
+    /// }, new_buffer.calc_bytes()?);
+    /// 
+    /// # Ok::<(), NP_Error>(()) 
+    /// ```
+    /// 
     pub fn calc_bytes(&'buffer self) -> Result<NP_Compact_Data, NP_Error> {
 
         let root: NP_Ptr<NP_Any> = NP_Ptr::_new_standard_ptr(ROOT_PTR_ADDR, self.schema_ptr.copy(), &self.memory);
 
+        // let total_size = root.memory.get_size();
         let real_bytes = root.calc_size()? + ROOT_PTR_ADDR;
-        let old_size = self.memory.read_bytes().len() as u32;
+        let total_size = self.memory.read_bytes().len() as u32;
 
-        if old_size >= real_bytes {
+        if total_size >= real_bytes {
             return Ok(NP_Compact_Data {
-                current_buffer: real_bytes,
-                estimated_new_size: real_bytes - (old_size - real_bytes),
-                wasted_bytes: old_size - real_bytes
+                current_buffer: total_size,
+                estimated_new_size: real_bytes,
+                wasted_bytes: total_size - real_bytes
             });
         } else {
             return Err(NP_Error::new("Error calculating wasted bytes!"));

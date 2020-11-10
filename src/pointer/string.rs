@@ -1,3 +1,23 @@
+//! NoProto supports Rust's native UTF8 [`String`](https://doc.rust-lang.org/std/string/struct.String.html) type.
+//! 
+//! ```
+//! use no_proto::error::NP_Error;
+//! use no_proto::NP_Factory;
+//! use no_proto::pointer::bytes::NP_Bytes;
+//! 
+//! let factory: NP_Factory = NP_Factory::new(r#"{
+//!    "type": "string"
+//! }"#)?;
+//!
+//! let mut new_buffer = factory.empty_buffer(None, None);
+//! new_buffer.deep_set("", String::from("I want to play a game"))?;
+//! 
+//! assert_eq!(Box::new(String::from("I want to play a game")), new_buffer.deep_get::<String>("")?.unwrap());
+//!
+//! # Ok::<(), NP_Error>(()) 
+//! ```
+
+
 use alloc::vec::Vec;
 use crate::{json_flex::JSMAP, schema::NP_Schema};
 use crate::error::NP_Error;
@@ -11,6 +31,7 @@ use alloc::string::ToString;
 
 /// Schema state for String
 #[derive(Debug)]
+#[doc(hidden)]
 pub struct NP_String_Schema_State {
     /// 0 for dynamic size, anything greater than 0 is for fixed size
     pub size: u16,
@@ -19,6 +40,7 @@ pub struct NP_String_Schema_State {
 }
 
 /// Get schema state for string type
+#[doc(hidden)]
 pub fn str_get_schema_state(schema_ptr: &NP_Schema_Ptr) -> NP_String_Schema_State {
 
     // fixed size
@@ -125,17 +147,20 @@ impl<'str> NP_Value<'str> for String {
         NP_Bytes::get_size(pointer)
     }
 
-    fn from_json_to_schema(json_schema: &NP_JSON) -> Result<Option<Vec<u8>>, NP_Error> {
+    fn from_json_to_schema(json_schema: &NP_JSON) -> Result<Option<NP_Schema>, NP_Error> {
 
-        let type_str = NP_Schema::get_type(json_schema)?;
+        let type_str = NP_Schema::_get_type(json_schema)?;
 
         if type_str == "string" || type_str == "str" || type_str == "utf8" || type_str == "utf-8" {
 
             let mut schema_data: Vec<u8> = Vec::new();
             schema_data.push(NP_TypeKeys::UTF8String as u8);
 
+            let mut has_fixed_size = false;
+
             match json_schema["size"] {
                 NP_JSON::Integer(x) => {
+                    has_fixed_size = true;
                     if x < 1 {
                         return Err(NP_Error::new("Fixed size for string must be larger than 1!"));
                     }
@@ -145,6 +170,7 @@ impl<'str> NP_Value<'str> for String {
                     schema_data.extend((x as u16).to_be_bytes().to_vec());
                 },
                 NP_JSON::Float(x) => {
+                    has_fixed_size = true;
                     if x < 1.0 {
                         return Err(NP_Error::new("Fixed size for string must be larger than 1!"));
                     }
@@ -173,7 +199,7 @@ impl<'str> NP_Value<'str> for String {
                 }
             }
 
-            return Ok(Some(schema_data));
+            return Ok(Some(NP_Schema { is_sortable: has_fixed_size, bytes: schema_data}));
         }
         
         Ok(None)

@@ -12,7 +12,25 @@ use alloc::boxed::Box;
 use alloc::{borrow::ToOwned};
 
 /// Represents arbitrary bytes type
-#[derive(Debug)]
+/// 
+/// ```
+/// use no_proto::error::NP_Error;
+/// use no_proto::NP_Factory;
+/// use no_proto::pointer::bytes::NP_Bytes;
+/// 
+/// let factory: NP_Factory = NP_Factory::new(r#"{
+///    "type": "bytes"
+/// }"#)?;
+///
+/// let mut new_buffer = factory.empty_buffer(None, None);
+/// new_buffer.deep_set("", NP_Bytes::new([0, 1, 2, 3, 4].to_vec()))?;
+/// 
+/// assert_eq!(Box::new(NP_Bytes::new([0, 1, 2, 3, 4].to_vec())), new_buffer.deep_get::<NP_Bytes>("")?.unwrap());
+///
+/// # Ok::<(), NP_Error>(()) 
+/// ```
+/// 
+#[derive(Debug, Eq, PartialEq)]
 pub struct NP_Bytes {
     /// The bytes of the vec in this type
     pub bytes: Vec<u8>
@@ -20,6 +38,7 @@ pub struct NP_Bytes {
 
 /// Schema state for NP_Bytes
 #[derive(Debug)]
+#[doc(hidden)]
 pub struct NP_Bytes_Schema_State<'state> {
     /// 0 for dynamic size, anything greater than 0 is for fixed size
     pub size: u16,
@@ -342,17 +361,19 @@ impl<'value> NP_Value<'value> for NP_Bytes {
         }
     }
 
-    fn from_json_to_schema(json_schema: &NP_JSON) -> Result<Option<Vec<u8>>, NP_Error> {
+    fn from_json_to_schema(json_schema: &NP_JSON) -> Result<Option<NP_Schema>, NP_Error> {
 
-        let type_str = NP_Schema::get_type(json_schema)?;
+        let type_str = NP_Schema::_get_type(json_schema)?;
 
         if "bytes" == type_str || "u8[]" == type_str || "[u8]" == type_str {
 
+            let mut has_fixed_size = false;
             let mut schema_data: Vec<u8> = Vec::new();
             schema_data.push(NP_TypeKeys::Bytes as u8);
 
             match json_schema["size"] {
                 NP_JSON::Integer(x) => {
+                    has_fixed_size = true;
                     if x < 1 {
                         return Err(NP_Error::new("Fixed size for bytes must be larger than 1!"));
                     }
@@ -362,6 +383,7 @@ impl<'value> NP_Value<'value> for NP_Bytes {
                     schema_data.extend((x as u16).to_be_bytes().to_vec());
                 },
                 NP_JSON::Float(x) => {
+                    has_fixed_size = true;
                     if x < 1.0 {
                         return Err(NP_Error::new("Fixed size for bytes must be larger than 1!"));
                     }
@@ -396,7 +418,7 @@ impl<'value> NP_Value<'value> for NP_Bytes {
                 }
             }
 
-            return Ok(Some(schema_data));
+            return Ok(Some(NP_Schema { is_sortable: has_fixed_size, bytes: schema_data}))
         }
         
         Ok(None)

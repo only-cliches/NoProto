@@ -55,7 +55,7 @@ impl<'tuple> NP_Tuple<'tuple> {
                 schema_ptr.schema.bytes[offset + 1]
             ]) as usize;
 
-            schemas.push((x as u8, schema_ptr.copy_with_addr(schema_ptr.address + offset + 2)));
+            schemas.push((x as u8, schema_ptr.copy_with_addr(offset + 2)));
 
             offset += schema_size + 2;
         }
@@ -312,7 +312,7 @@ impl<'tuple> NP_Value<'tuple> for NP_Tuple<'tuple> {
         match Self::into_value(from_ptr)? {
             Some(old_list) => {
 
-                match to_ptr_list.into()? {
+                match to_ptr_list.deref()? {
                     Some(new_tuple) => {
 
                         for mut item in old_list.it().into_iter() {
@@ -335,16 +335,19 @@ impl<'tuple> NP_Value<'tuple> for NP_Tuple<'tuple> {
     }
 
 
-    fn from_json_to_schema(json_schema: &NP_JSON) -> Result<Option<Vec<u8>>, NP_Error> {
+    fn from_json_to_schema(json_schema: &NP_JSON) -> Result<Option<NP_Schema>, NP_Error> {
 
-        let type_str = NP_Schema::get_type(json_schema)?;
+        let type_str = NP_Schema::_get_type(json_schema)?;
 
         if "tuple" == type_str {
             let mut schema_data: Vec<u8> = Vec::new();
             schema_data.push(NP_TypeKeys::Tuple as u8);
 
+            let mut sorted = false;
+
             match json_schema["sorted"] {
                 NP_JSON::True => {
+                    sorted = true;
                     schema_data.push(1);
                 },
                 _ => {
@@ -358,6 +361,9 @@ impl<'tuple> NP_Value<'tuple> for NP_Tuple<'tuple> {
                 NP_JSON::Array(cols) => {
                     for col in cols {
                         let column_type = NP_Schema::from_json(Box::new(col.clone()))?;
+                        if sorted && column_type.is_sortable == false {
+                            return Err(NP_Error::new("All children of a sorted tuple must be sortable items!"))
+                        }
                         schemas.push(column_type.bytes);
                     }
                 },
@@ -384,7 +390,7 @@ impl<'tuple> NP_Value<'tuple> for NP_Tuple<'tuple> {
                 schema_data.extend(col);
             }
 
-            return Ok(Some(schema_data))
+            return Ok(Some(NP_Schema { is_sortable: sorted, bytes: schema_data}))
         }
 
         Ok(None)

@@ -6,8 +6,8 @@ use crate::utils::to_base32;
 use crate::json_flex::{JSMAP, NP_JSON};
 use crate::schema::{NP_Schema, NP_TypeKeys};
 use crate::pointer::NP_PtrKinds;
-use crate::{pointer::NP_Value, error::NP_Error, utils::{Rand, to_hex}};
-use core::fmt;
+use crate::{pointer::NP_Value, error::NP_Error, utils::{Rand}};
+use core::fmt::{Debug, Formatter, Write};
 use core::convert::TryInto;
 
 use alloc::string::String;
@@ -61,6 +61,25 @@ use super::NP_Lite_Ptr;
 /// assert_eq!(dec.to_float(), 17.52_f64);
 /// 
 /// ```
+/// 
+/// ```
+/// use no_proto::error::NP_Error;
+/// use no_proto::NP_Factory;
+/// use no_proto::pointer::misc::NP_Dec;
+/// 
+/// let factory: NP_Factory = NP_Factory::new(r#"{
+///    "type": "dec",
+///    "exp": 2
+/// }"#)?;
+///
+/// let mut new_buffer = factory.empty_buffer(None, None);
+/// new_buffer.deep_set("", NP_Dec::new(50283, 2))?;
+/// 
+/// assert_eq!(502.83f64, new_buffer.deep_get::<NP_Dec>("")?.unwrap().to_float());
+///
+/// # Ok::<(), NP_Error>(()) 
+/// ```
+///
 #[derive(Clone, Copy, Debug)]
 pub struct NP_Dec {
     /// The number being stored, does not include decimal point data
@@ -71,6 +90,7 @@ pub struct NP_Dec {
 
 /// Schema state for NP_Dec
 #[derive(Clone, Copy, Debug)]
+#[doc(hidden)]
 pub struct NP_Dec_Schema_State {
     /// The expontent of this decimal
     pub exp: u8,
@@ -809,9 +829,9 @@ impl<'value> NP_Value<'value> for NP_Dec {
         }
     }
 
-    fn from_json_to_schema(json_schema: &NP_JSON) -> Result<Option<Vec<u8>>, NP_Error> {
+    fn from_json_to_schema(json_schema: &NP_JSON) -> Result<Option<NP_Schema>, NP_Error> {
 
-        let type_str = NP_Schema::get_type(json_schema)?;
+        let type_str = NP_Schema::_get_type(json_schema)?;
 
         if "decimal" == type_str || "dec" == type_str {
             let mut schema_data: Vec<u8> = Vec::new();
@@ -852,7 +872,7 @@ impl<'value> NP_Value<'value> for NP_Dec {
             }
 
 
-            return Ok(Some(schema_data))
+            return Ok(Some(NP_Schema { is_sortable: true, bytes: schema_data}))
         }
 
         Ok(None)
@@ -992,6 +1012,24 @@ impl<'value> NP_Value<'value> for NP_Geo_Bytes {
 /// Represents a Geographic Coordinate (lat / lon)
 /// 
 /// When `geo4`, `geo8`, or `geo16` types are used the data is saved and retrieved with this struct.
+/// 
+/// ```
+/// use no_proto::error::NP_Error;
+/// use no_proto::NP_Factory;
+/// use no_proto::pointer::misc::NP_Geo;
+/// 
+/// let factory: NP_Factory = NP_Factory::new(r#"{
+///    "type": "geo4"
+/// }"#)?;
+///
+/// let mut new_buffer = factory.empty_buffer(None, None);
+/// new_buffer.deep_set("", NP_Geo::new(4, 45.509616, -122.714625))?;
+/// 
+/// assert_eq!("{\"lat\":45.5,\"lng\":-122.71}", new_buffer.deep_get::<NP_Geo>("")?.unwrap().into_json().stringify());
+///
+/// # Ok::<(), NP_Error>(()) 
+/// ```
+/// 
 #[derive(Debug)]
 pub struct NP_Geo {
     /// The size of this geographic coordinate.  4, 8 or 16
@@ -1003,6 +1041,7 @@ pub struct NP_Geo {
 }
 
 /// Schema state for NP_Geo
+#[doc(hidden)]
 #[derive(Debug)]
 pub struct NP_Geo_Schema_State {
     /// 0 for dynamic size, anything greater than 0 is for fixed size
@@ -1072,6 +1111,15 @@ impl NP_Geo {
             4 =>  100f64,
             _ => 0.0
         }
+     }
+
+     /// Export this Geo point to JSON
+     /// 
+     pub fn into_json(&self) -> NP_JSON {
+        let mut result_json = JSMAP::new();
+        result_json.insert("lat".to_owned(), NP_JSON::Float(self.lat));
+        result_json.insert("lng".to_owned(), NP_JSON::Float(self.lng));
+        NP_JSON::Dictionary(result_json)
      }
 
      /// Get the bytes that represent this geographic coordinate
@@ -1438,9 +1486,9 @@ impl<'value> NP_Value<'value> for NP_Geo {
         }
     }
 
-    fn from_json_to_schema(json_schema: &NP_JSON) -> Result<Option<Vec<u8>>, NP_Error> {
+    fn from_json_to_schema(json_schema: &NP_JSON) -> Result<Option<NP_Schema>, NP_Error> {
 
-        let type_str = NP_Schema::get_type(json_schema)?;
+        let type_str = NP_Schema::_get_type(json_schema)?;
 
         match type_str.as_str() {
             "geo4" => {
@@ -1457,7 +1505,7 @@ impl<'value> NP_Value<'value> for NP_Geo {
                         schema_data.push(0);
                     }
                 }
-                Ok(Some(schema_data))
+                Ok(Some(NP_Schema { is_sortable: false, bytes: schema_data}))
             },
             "geo8" => {
                 let mut schema_data: Vec<u8> = Vec::new();
@@ -1473,7 +1521,7 @@ impl<'value> NP_Value<'value> for NP_Geo {
                         schema_data.push(0);
                     }
                 }
-                Ok(Some(schema_data))
+                Ok(Some(NP_Schema { is_sortable: false, bytes: schema_data}))
             },
             "geo16" => {
                 let mut schema_data: Vec<u8> = Vec::new();
@@ -1489,7 +1537,7 @@ impl<'value> NP_Value<'value> for NP_Geo {
                         schema_data.push(0);
                     }
                 }
-                Ok(Some(schema_data))
+                Ok(Some(NP_Schema { is_sortable: false, bytes: schema_data}))
             },
             _ => {
                 Ok(None)
@@ -1501,6 +1549,24 @@ impl<'value> NP_Value<'value> for NP_Geo {
 /// Represents a ULID type which has a 6 byte timestamp and 10 bytes of randomness
 /// 
 /// Useful for storing time stamp data that doesn't have collisions.
+/// 
+/// ```
+/// use no_proto::error::NP_Error;
+/// use no_proto::NP_Factory;
+/// use no_proto::pointer::misc::NP_ULID;
+/// 
+/// let factory: NP_Factory = NP_Factory::new(r#"{
+///    "type": "ulid"
+/// }"#)?;
+///
+/// let mut new_buffer = factory.empty_buffer(None, None);
+/// new_buffer.deep_set("", NP_ULID::generate(1604965249484, 50))?;
+/// 
+/// assert_eq!("1EPQP4CEC3KANC3XYNG9YKAQ", new_buffer.deep_get::<NP_ULID>("")?.unwrap().to_string());
+///
+/// # Ok::<(), NP_Error>(()) 
+/// ```
+/// 
 pub struct NP_ULID {
     /// The unix timestamp in milliseconds for this ULID
     pub time: u64,
@@ -1566,8 +1632,8 @@ impl Default for NP_ULID {
      }
 }
 
-impl fmt::Debug for NP_ULID {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl Debug for NP_ULID {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         write!(f, "{}", self.to_string())
     }
 }
@@ -1683,14 +1749,14 @@ impl<'value> NP_Value<'value> for NP_ULID {
         }
     }
 
-    fn from_json_to_schema(json_schema: &NP_JSON) -> Result<Option<Vec<u8>>, NP_Error> {
+    fn from_json_to_schema(json_schema: &NP_JSON) -> Result<Option<NP_Schema>, NP_Error> {
 
-        let type_str = NP_Schema::get_type(json_schema)?;
+        let type_str = NP_Schema::_get_type(json_schema)?;
 
         if "ulid" == type_str {
             let mut schema_data: Vec<u8> = Vec::new();
             schema_data.push(NP_TypeKeys::Ulid as u8);
-            return Ok(Some(schema_data));
+            return Ok(Some(NP_Schema { is_sortable: true, bytes: schema_data}))
         }
         
         Ok(None)
@@ -1701,6 +1767,24 @@ impl<'value> NP_Value<'value> for NP_ULID {
 /// Represents a V4 UUID, good for globally unique identifiers
 /// 
 /// `uuid` types are always represented with this struct.
+/// 
+/// ```
+/// use no_proto::error::NP_Error;
+/// use no_proto::NP_Factory;
+/// use no_proto::pointer::misc::NP_UUID;
+/// 
+/// let factory: NP_Factory = NP_Factory::new(r#"{
+///    "type": "uuid"
+/// }"#)?;
+///
+/// let mut new_buffer = factory.empty_buffer(None, None);
+/// new_buffer.deep_set("", NP_UUID::generate(50))?;
+/// 
+/// assert_eq!("48E6AAB0-7DF5-409F-4D57-4D969FA065EE", new_buffer.deep_get::<NP_UUID>("")?.unwrap().to_string());
+///
+/// # Ok::<(), NP_Error>(()) 
+/// ```
+/// 
 pub struct NP_UUID {
     /// The random bytes for this UUID
     pub value: [u8; 16]
@@ -1753,22 +1837,23 @@ impl NP_UUID {
     /// 
     pub fn to_string(&self) -> String {
 
-        let mut result: String = "".to_owned();
+        let mut result = String::with_capacity(32);
 
         for x in 0..self.value.len() {
             if x == 4 || x == 6 || x == 8 || x == 10 {
                 result.push_str("-");
             }
-            let value = self.value[x] as u64;
-            result.push_str(to_hex(value, 2).as_str());
+            let byte = self.value[x] as u8;
+            write!(result, "{:02X}", byte).unwrap();
+            // result.push_str(to_hex(value, 2).as_str());
         }
 
         result
     }
 }
 
-impl fmt::Debug for NP_UUID {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl Debug for NP_UUID {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         write!(f, "{}", self.to_string())
     }
 }
@@ -1866,14 +1951,14 @@ impl<'value> NP_Value<'value> for NP_UUID {
         }
     }
 
-    fn from_json_to_schema(json_schema: &NP_JSON) -> Result<Option<Vec<u8>>, NP_Error> {
+    fn from_json_to_schema(json_schema: &NP_JSON) -> Result<Option<NP_Schema>, NP_Error> {
 
-        let type_str = NP_Schema::get_type(json_schema)?;
+        let type_str = NP_Schema::_get_type(json_schema)?;
 
         if "uuid" == type_str {
             let mut schema_data: Vec<u8> = Vec::new();
             schema_data.push(NP_TypeKeys::Uuid as u8);
-            return Ok(Some(schema_data));
+            return Ok(Some(NP_Schema { is_sortable: true, bytes: schema_data}));
         }
         
         Ok(None)
@@ -1882,7 +1967,26 @@ impl<'value> NP_Value<'value> for NP_UUID {
 }
 
 /// Represents the string value of a choice in a schema
-#[derive(Clone, Debug)]
+/// 
+/// ```
+/// use no_proto::error::NP_Error;
+/// use no_proto::NP_Factory;
+/// use no_proto::pointer::misc::NP_Option;
+/// 
+/// let factory: NP_Factory = NP_Factory::new(r#"{
+///    "type": "option",
+///    "choices": ["red", "green", "blue"]
+/// }"#)?;
+///
+/// let mut new_buffer = factory.empty_buffer(None, None);
+/// new_buffer.deep_set("", NP_Option::new("green"))?;
+/// 
+/// assert_eq!(Box::new(NP_Option::new("green")), new_buffer.deep_get::<NP_Option>("")?.unwrap());
+///
+/// # Ok::<(), NP_Error>(()) 
+/// ```
+/// 
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct NP_Option {
     /// The value of this option type
     pub value: Option<String>
@@ -2102,9 +2206,9 @@ impl<'value> NP_Value<'value> for NP_Option {
         }
     }
 
-    fn from_json_to_schema(json_schema: &NP_JSON) -> Result<Option<Vec<u8>>, NP_Error> {
+    fn from_json_to_schema(json_schema: &NP_JSON) -> Result<Option<NP_Schema>, NP_Error> {
 
-        let type_str = NP_Schema::get_type(json_schema)?;
+        let type_str = NP_Schema::_get_type(json_schema)?;
 
         if "option" == type_str || "enum" == type_str {
             let mut schema_data: Vec<u8> = Vec::new();
@@ -2165,7 +2269,7 @@ impl<'value> NP_Value<'value> for NP_Option {
                 schema_data.extend(choice.as_bytes().to_vec())
             }
 
-            return Ok(Some(schema_data));
+            return Ok(Some(NP_Schema { is_sortable: true, bytes: schema_data}));
         }
         
         Ok(None)
@@ -2173,170 +2277,32 @@ impl<'value> NP_Value<'value> for NP_Option {
 
 }
 
-fn bool_get_schema_state(schema_ptr: &NP_Schema_Ptr) -> Option<bool> {
 
-    match schema_ptr.schema.bytes[schema_ptr.address + 1] {
-        0 => None,
-        1 => Some(true),
-        2 => Some(false),
-        _ => unreachable!()
-    }
-}
 
-impl<'value> NP_Value<'value> for bool {
 
-    fn type_idx() -> (u8, String) { (NP_TypeKeys::Boolean as u8, "bool".to_owned()) }
-    fn self_type_idx(&self) -> (u8, String) { (NP_TypeKeys::Boolean as u8, "bool".to_owned()) }
 
-    fn schema_to_json(schema_ptr: &NP_Schema_Ptr)-> Result<NP_JSON, NP_Error> {
-        let mut schema_json = JSMAP::new();
-        schema_json.insert("type".to_owned(), NP_JSON::String(Self::type_idx().1));
-
-        let schema_state = bool_get_schema_state(&schema_ptr);
-
-        if let Some(default) = schema_state {
-            schema_json.insert("default".to_owned(), match default {
-                true => NP_JSON::True,
-                false => NP_JSON::False
-            });
-        }
-
-        Ok(NP_JSON::Dictionary(schema_json))
-    }
-
-    fn schema_default(schema: &NP_Schema_Ptr) -> Option<Box<Self>> {
-
-        let state = bool_get_schema_state(&schema);
-
-        match state {
-            Some(x) => {
-                Some(Box::new(x))
-            },
-            None => None
-        }
-    }
-
-    fn set_value(ptr: NP_Lite_Ptr, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
-
-        let mut addr = ptr.kind.get_value_addr();
-
-        if addr != 0 { // existing value, replace
-            let bytes = if **value == true {
-                [1] as [u8; 1]
-            } else {
-                [0] as [u8; 1]
-            };
-
-            // overwrite existing values in buffer
-            ptr.memory.write_bytes()[addr as usize] = bytes[0];
-
-            return Ok(ptr.kind);
-
-        } else { // new value
-
-            let bytes = if **value == true {
-                [1] as [u8; 1]
-            } else {
-                [0] as [u8; 1]
-            };
-
-            addr = ptr.memory.malloc(bytes.to_vec())?;
-            return Ok(ptr.memory.set_value_address(ptr.location, addr as u32, &ptr.kind));
-        }
-        
-    }
-
-    fn into_value(ptr: NP_Lite_Ptr) -> Result<Option<Box<Self>>, NP_Error> {
-        let addr = ptr.kind.get_value_addr() as usize;
-
-        // empty value
-        if addr == 0 {
-            return Ok(None);
-        }
-
-        let memory = ptr.memory;
-
-        Ok(match memory.get_1_byte(addr) {
-            Some(x) => {
-                Some(Box::new(if x == 1 { true } else { false }))
-            },
-            None => None
-        })
-    }
-
-    fn to_json(ptr: NP_Lite_Ptr) -> NP_JSON {
-        let this_string = Self::into_value(ptr.clone());
-
-        match this_string {
-            Ok(x) => {
-                match x {
-                    Some(y) => {
-                        if *y == true {
-                            NP_JSON::True
-                        } else {
-                            NP_JSON::False
-                        }
-                    },
-                    None => {
-                        let state = bool_get_schema_state(&ptr.schema);
-                        match state {
-                            Some(x) => {
-                                if x == true {
-                                    NP_JSON::True
-                                } else {
-                                    NP_JSON::False
-                                }
-                            },
-                            None => NP_JSON::Null
-                        }
-                    }
-                }
-            },
-            Err(_e) => {
-                NP_JSON::Null
-            }
-        }
-    }
-
-    fn get_size(ptr: NP_Lite_Ptr) -> Result<u32, NP_Error> {
-        let addr = ptr.kind.get_value_addr() as usize;
-
-        if addr == 0 {
-            return Ok(0) 
-        } else {
-            Ok(core::mem::size_of::<u8>() as u32)
-        }
-    }
-
-    fn from_json_to_schema(json_schema: &NP_JSON) -> Result<Option<Vec<u8>>, NP_Error> {
-
-        let type_str = NP_Schema::get_type(json_schema)?;
-
-        if type_str == "bool" || type_str == "boolean" {
-            let mut schema_data: Vec<u8> = Vec::new();
-            schema_data.push(NP_TypeKeys::Boolean as u8);
-
-            match json_schema["default"] {
-                NP_JSON::False => {
-                    schema_data.push(2);
-                },
-                NP_JSON::True => {
-                    schema_data.push(1);
-                },
-                _ => {
-                    schema_data.push(0);
-                }
-            };
-
-            return Ok(Some(schema_data));
-        }
-
-        Ok(None)
-    }
-}
-
-/// Stores the current unix epoch in u64
-#[derive(Clone, Copy)]
+/// Stores the current unix epoch in u64.
+/// 
+/// Epoch should be stored in milliseconds.
+/// 
+/// ```
+/// use no_proto::error::NP_Error;
+/// use no_proto::NP_Factory;
+/// use no_proto::pointer::misc::NP_Date;
+/// 
+/// let factory: NP_Factory = NP_Factory::new(r#"{
+///    "type": "date"
+/// }"#)?;
+///
+/// let mut new_buffer = factory.empty_buffer(None, None);
+/// new_buffer.deep_set("", NP_Date::new(1604965249484))?;
+/// 
+/// assert_eq!(Box::new(NP_Date::new(1604965249484)), new_buffer.deep_get::<NP_Date>("")?.unwrap());
+///
+/// # Ok::<(), NP_Error>(()) 
+/// ```
+/// 
+#[derive(Clone, Copy, Eq, PartialEq)]
 pub struct NP_Date {
     /// The value of the date
     pub value: u64
@@ -2344,8 +2310,8 @@ pub struct NP_Date {
 
 impl NP_Date {
     /// Create a new date type with the given time
-    pub fn new(time: u64) -> Self {
-        NP_Date { value: time }
+    pub fn new(time_ms: u64) -> Self {
+        NP_Date { value: time_ms }
     }
 
     /// Get schema state for NP_Date
@@ -2366,20 +2332,14 @@ impl NP_Date {
     }
 }
 
-impl PartialEq for NP_Date {
-    fn eq(&self, other: &Self) -> bool {
-        self.value == other.value
-    }
-}
-
 impl Default for NP_Date {
     fn default() -> Self { 
         NP_Date { value: 0 }
      }
 }
 
-impl fmt::Debug for NP_Date {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl Debug for NP_Date {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         write!(f, "{}", self.value)
     }
 }
@@ -2486,9 +2446,9 @@ impl<'value> NP_Value<'value> for NP_Date {
         }
     }
 
-    fn from_json_to_schema(json_schema: &NP_JSON) -> Result<Option<Vec<u8>>, NP_Error> {
+    fn from_json_to_schema(json_schema: &NP_JSON) -> Result<Option<NP_Schema>, NP_Error> {
 
-        let type_str = NP_Schema::get_type(json_schema)?;
+        let type_str = NP_Schema::_get_type(json_schema)?;
 
         if "date" == type_str {
 
@@ -2505,7 +2465,7 @@ impl<'value> NP_Value<'value> for NP_Date {
                 }
             }
 
-            return Ok(Some(schema_data));
+            return Ok(Some(NP_Schema { is_sortable: true, bytes: schema_data}));
         }
 
         Ok(None)

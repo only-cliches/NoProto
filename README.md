@@ -7,21 +7,21 @@ Faster than JSON with Schemas and Native Types.  Like Mutable Protocol Buffers w
 - Zero dependencies
 - #![no_std] support, WASM ready
 - Supports byte-wise sorting of buffers
-- Thorough Documentation
+- Extensive documentation & testing
 - Automatic & instant sterilization
 - Nearly instant deserialization
 - Schemas are dynamic/flexible at runtime
 - Mutate/Insert/Delete values in existing buffers
-- Supports native data types
+- Supports most common native data types
 - Supports collection types (list, map, table & tuple)
 - Supports deep nesting of collection types
 - [Thoroughly documented](https://docs.rs/no_proto/latest/no_proto/format/index.html) & simple data storage format
 
 NoProto allows you to store, read & mutate structured data with near zero overhead. It's like Cap'N Proto/Flatbuffers except buffers and schemas are dynamic at runtime instead of requiring compilation.  It's like JSON but faster, type safe and allows native types.
 
-Byte-wise sorting comes in the box and is a first class operation. The result is two NoProto buffers can be compared at the byte level *without deserializing* and a correct ordering between the buffer's internal values will be the result.  This is extremely useful for storing ordered keys in databases. 
+Byte-wise sorting comes in the box and is a first class operation. Two NoProto buffers can be compared at the byte level *without deserializing* and a correct ordering between the buffer's internal values will be the result.  This is extremely useful for storing ordered keys in databases. 
 
-NoProto moves the cost of deserialization to the access methods instead of deserializing the entire object ahead of time. This makes it a perfect use case for things like database storage or file storage of structured data.
+NoProto moves the cost of deserialization to the access methods instead of deserializing the entire object ahead of time (Incremental Deserialization). This makes it a perfect use case for things like database storage or file storage of structured data.
 
 *Compared to FlatBuffers / Cap'N Proto / Protocol Buffers*
 - Comparable serialization & deserialization performance
@@ -52,24 +52,23 @@ NoProto moves the cost of deserialization to the access methods instead of deser
 - Faster serialization & deserialization
 - Language agnostic
 
-| Format           | Incrimental De/Serialization | Size Limit | Mutable | Schemas | Language Agnostic | No Compiling    | Byte-wise Sorting |
-|------------------|-----------------------|------------|-----------|---------|-------------------|-----------------|------------------|
-| **NoProto**      | ✓                     | ~4GB       | ✓         | ✓       | ✓                 | ✓               | ✓                |
-| JSON             | 𐄂                     | Unlimited  | ✓         | 𐄂       | ✓                 | ✓               | 𐄂                |
-| BSON             | 𐄂                     | ~16KB      | ✓         | 𐄂       | ✓                 | ✓               | 𐄂                |
-| MessagePack      | 𐄂                     | Unlimited  | ✓         | 𐄂       | ✓                 | ✓               | 𐄂                |
-| FlatBuffers      | ✓                     | ~2GB       | 𐄂         | ✓       | ✓                 | 𐄂               | 𐄂                |
-| Protocol Buffers | 𐄂                     | ~2GB       | 𐄂         | ✓       | ✓                 | 𐄂               | 𐄂                |
-| Cap'N Proto      | ✓                     | 2^64 Bytes | 𐄂         | ✓       | ✓                 | 𐄂               | 𐄂                |
-| Serde            | 𐄂                     | ?          | 𐄂         | ✓       | 𐄂                 | 𐄂               | 𐄂                |
-| Veriform         | 𐄂                     | ?          | 𐄂         | 𐄂       | 𐄂                 | 𐄂               | 𐄂                |
-
+| Format           | Incremental De/Serialization | Size Limit | Mutable | Schemas | Language Agnostic | No Compiling    | Byte-wise Sorting |
+|------------------|------------------------------|------------|---------|---------|-------------------|-----------------|-------------------|
+| **NoProto**      | ✓                            | ~4GB       | ✓       | ✓       | ✓                 | ✓               | ✓                 |
+| JSON             | 𐄂                            | Unlimited  | ✓       | 𐄂       | ✓                 | ✓               | 𐄂                 |
+| BSON             | 𐄂                            | ~16KB      | ✓       | 𐄂       | ✓                 | ✓               | 𐄂                 |
+| MessagePack      | 𐄂                            | Unlimited  | ✓       | 𐄂       | ✓                 | ✓               | 𐄂                 |
+| FlatBuffers      | ✓                            | ~2GB       | 𐄂       | ✓       | ✓                 | 𐄂               | 𐄂                 |
+| Protocol Buffers | 𐄂                            | ~2GB       | 𐄂       | ✓       | ✓                 | 𐄂               | 𐄂                 |
+| Cap'N Proto      | ✓                            | 2^64 Bytes | 𐄂       | ✓       | ✓                 | 𐄂               | 𐄂                 |
+| Serde            | 𐄂                            | ?          | 𐄂       | ✓       | 𐄂                 | 𐄂               | 𐄂                 |
+| Veriform         | 𐄂                            | ?          | 𐄂       | 𐄂       | 𐄂                 | 𐄂               | 𐄂                 |
 
 #### Limitations
 - Buffers cannot be larger than 2^32 bytes (~4GB).
 - Lists cannot have more than 65,535 items.
-- Enum/Option types are limited to 255 choices.
-- Tables are limited to 255 columns.
+- Enum/Option types are limited to 255 choices and choices cannot be larger than 255 bytes.
+- Tables are limited to 255 columns and column names cannot be larger than 255 bytes.
 - Tuple types are limited to 255 items.
 - Buffers are not validated or checked before deserializing.
 
@@ -126,6 +125,7 @@ assert_eq!(age, Some(Box::new(0u16)));
 
 // close again
 let user_bytes: Vec<u8> = user_buffer.close();
+
 
 // we can now save user_bytes to disk, 
 // send it over the network, or whatever else is needed with the data

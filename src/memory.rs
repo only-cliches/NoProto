@@ -1,16 +1,24 @@
+//! Internal buffer memory management
+
 use crate::pointer::NP_PtrKinds;
 use crate::{PROTOCOL_VERSION, error::NP_Error};
 use core::cell::UnsafeCell;
 use alloc::vec::Vec;
 
+/// The different address sizes availalbe for buffers
+/// 
 #[derive(Debug, Copy, Clone)]
 pub enum NP_Size {
+    /// 32 bit address, 4 bytes in size
     U32,
+    /// 16 bit address, 2 bytes in size
     U16,
+    /// 8 bit address, 1 byte in size
     U8
 }
 
 #[derive(Debug)]
+#[doc(hidden)]
 pub struct NP_Memory {
     bytes: UnsafeCell<Vec<u8>>,
     pub size: NP_Size
@@ -20,6 +28,7 @@ const MAX_SIZE_LARGE: usize = core::u32::MAX as usize;
 const MAX_SIZE_SMALL: usize = core::u16::MAX as usize;
 const MAX_SIZE_XSMALL: usize = core::u8::MAX as usize;
 
+#[doc(hidden)]
 impl<'a> NP_Memory {
 
     pub fn existing(bytes: Vec<u8>) -> Self {

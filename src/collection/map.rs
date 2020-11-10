@@ -246,7 +246,7 @@ impl<'map, T: NP_Value<'map> + Default> NP_Value<'map> for NP_Map<'map, T> {
         match Self::into_value(from_ptr)? {
             Some(old_list) => {
 
-                match to_ptr_list.into()? {
+                match to_ptr_list.deref()? {
                     Some(mut new_list) => {
 
                         for mut item in old_list.it().into_iter() {
@@ -270,8 +270,8 @@ impl<'map, T: NP_Value<'map> + Default> NP_Value<'map> for NP_Map<'map, T> {
         Ok(())
     }
 
-    fn from_json_to_schema(json_schema: &NP_JSON) -> Result<Option<Vec<u8>>, NP_Error> {
-        let type_str = NP_Schema::get_type(json_schema)?;
+    fn from_json_to_schema(json_schema: &NP_JSON) -> Result<Option<NP_Schema>, NP_Error> {
+        let type_str = NP_Schema::_get_type(json_schema)?;
 
         if "map" == type_str {
             let mut schema_data: Vec<u8> = Vec::new();
@@ -286,7 +286,7 @@ impl<'map, T: NP_Value<'map> + Default> NP_Value<'map> for NP_Map<'map, T> {
 
             let child_type = NP_Schema::from_json(Box::new(json_schema["value"].clone()))?;
             schema_data.extend(child_type.bytes);
-            return Ok(Some(schema_data))
+            return Ok(Some(NP_Schema { is_sortable: false, bytes: schema_data}))
         }
 
         Ok(None)

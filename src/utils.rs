@@ -73,41 +73,6 @@ pub fn from_utf8_lossy(input: &[u8]) -> String {
     empty
 }
 
-fn fract(num: f64) -> f64 {
-    if num == 0f64 {
-        0f64
-    } else {
-        num % 1f64
-    }
-}
-
-fn floor(num: f64) -> f64 {
-    let f = fract(num);
-    if f.is_nan() || f == 0f64 {
-        0f64
-    } else if num < 0f64 {
-        num - f - 1f64
-    } else {
-        num - f
-    }
-}
-
-pub fn to_hex(num: u64, length: i32) -> String {
-    let mut result: String = "".to_owned();
-
-    let hex_values = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "A", "B", "C", "D", "E", "F"];
-
-    let mut i = length - 1;
-    while i >= 0 {
-        let raise = (16i32).pow(i as u32) as f64;
-        let index = floor(num as f64 / raise) as i32;
-        result.push_str(hex_values[(index % 16i32) as usize]);
-        i -= 1 ;
-    }
-
-    result
-}
-
 pub fn overflow_error(kind: &str, path: &Vec<&str>, path_index: usize) -> Result<(), NP_Error> {
 
     if path.len() > 0 && (path.len() - 1) < path_index {

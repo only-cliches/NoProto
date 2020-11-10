@@ -218,7 +218,7 @@ impl<'table> NP_Value<'table> for NP_Table<'table> {
         match Self::into_value(from_ptr)? {
             Some(old_list) => {
 
-                match to_ptr_list.into()? {
+                match to_ptr_list.deref()? {
                     Some(mut new_list) => {
 
                         for mut item in old_list.it().into_iter() {
@@ -240,9 +240,9 @@ impl<'table> NP_Value<'table> for NP_Table<'table> {
         Ok(())
     }
 
-    fn from_json_to_schema(json_schema: &NP_JSON) -> Result<Option<Vec<u8>>, NP_Error> {
+    fn from_json_to_schema(json_schema: &NP_JSON) -> Result<Option<NP_Schema>, NP_Error> {
 
-        let type_str = NP_Schema::get_type(json_schema)?;
+        let type_str = NP_Schema::_get_type(json_schema)?;
 
         if "table" == type_str {
             let mut schema_data: Vec<u8> = Vec::new();
@@ -292,7 +292,7 @@ impl<'table> NP_Value<'table> for NP_Table<'table> {
                 schema_data.extend(col.1);
             }
 
-            return Ok(Some(schema_data))
+            return Ok(Some(NP_Schema { is_sortable: false, bytes: schema_data}))
         }
 
         Ok(None)
@@ -347,7 +347,7 @@ impl<'table> NP_Table<'table> {
                 schema_ptr.schema.bytes[offset + 1]
             ]) as usize;
     
-            columns.push((x as u8, col_name, schema_ptr.copy_with_addr(schema_ptr.address + offset + 2)));
+            columns.push((x as u8, col_name, schema_ptr.copy_with_addr(offset + 2)));
 
             offset += schema_size + 2;
         }
@@ -364,6 +364,7 @@ impl<'table> NP_Table<'table> {
         let mut column_schema: Option<(u8, String, NP_Schema_Ptr)> = None;
 
         let schema = self.schema.as_ref().unwrap().copy();
+        
 
         for col in NP_Table::get_schema_state(schema.copy()).columns {
             if col.1 == column {
@@ -375,6 +376,7 @@ impl<'table> NP_Table<'table> {
             Some(some_column_schema) => {
 
                 let memory = self.memory.unwrap();
+  
                 let type_data = NP_TypeKeys::from(some_column_schema.2.schema.bytes[some_column_schema.2.address]);
 
                 // make sure the type we're casting to isn't ANY or the cast itself isn't ANY
@@ -393,7 +395,7 @@ impl<'table> NP_Table<'table> {
 
                 if self.head == 0 { // no values, create one
 
-                    let mut ptr_bytes: Vec<u8> = memory.blank_ptr_bytes(&NP_PtrKinds::TableItem { addr: 0, i: 0, next: 0 }); // Map item pointer
+                    let mut ptr_bytes: Vec<u8> = memory.blank_ptr_bytes(&NP_PtrKinds::TableItem { addr: 0, i: 0, next: 0 }); // Table item pointer
     
                     // set column index in pointer
                     match &memory.size {

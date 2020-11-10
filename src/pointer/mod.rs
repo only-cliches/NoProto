@@ -12,16 +12,15 @@
 
 /// Misc types (NP_Dec, NP_Geo, etc)
 pub mod misc;
-/// String type
 pub mod string;
 /// Bytes type
 pub mod bytes;
 /// Any type
 pub mod any;
-/// Numbers types
 pub mod numbers;
+pub mod bool;
 
-use crate::json_flex::NP_JSON;
+use crate::{json_flex::NP_JSON, schema::NP_Schema};
 use crate::memory::{NP_Size, NP_Memory};
 use crate::NP_Error;
 use crate::{schema::{NP_TypeKeys, NP_Schema_Ptr}, collection::{map::NP_Map, table::NP_Table, list::NP_List, tuple::NP_Tuple}, utils::{overflow_error, print_path, type_error}};
@@ -133,8 +132,8 @@ pub trait NP_Value<'value> {
     }
 
     /// Parse JSON schema into bytes
-    /// 
-    fn from_json_to_schema(_json_schema: &NP_JSON) -> Result<Option<Vec<u8>>, NP_Error> {
+    ///  returns (isSortable, schema_bytes)
+    fn from_json_to_schema(_json_schema: &NP_JSON) -> Result<Option<NP_Schema>, NP_Error> {
         Err(NP_Error::new("No parsing for this type!"))
     }
 }
@@ -370,12 +369,12 @@ impl<'lite> NP_Lite_Ptr<'lite> {
 ///     // in this case root_ptr is NP_Ptr<NP_List<u32>>
 ///        
 ///     // convert the root pointer into a list.
-///     let root_list: NP_List<u32> = root_ptr.into()?.unwrap();
+///     let root_list: NP_List<u32> = root_ptr.deref()?.unwrap();
 ///     
 ///     // convert the list into an iterator, then loop over it.
 ///     for mut item in root_list.it() {
 ///         // will loop 10 times... 0 to 9 since we put item at the 9th index
-///         match item.select().unwrap().into().unwrap() {
+///         match item.select().unwrap().deref().unwrap() {
 ///             Some(x) => { which_items.push(x) },
 ///             None => { which_items.push(0) }
 ///         }
@@ -590,7 +589,7 @@ impl<'ptr, T: NP_Value<'ptr> + Default> NP_Ptr<'ptr, T> {
     /// Destroy this pointer and convert it into the underlying data type.
     /// This is mostly useful for collections but can also be used to copy scalar values out of the buffer.
     /// 
-    pub fn into(self) -> Result<Option<T>, NP_Error> {
+    pub fn deref(self) -> Result<Option<T>, NP_Error> {
 
         let type_data = self.schema.to_type_data();
 
@@ -872,6 +871,7 @@ impl<'ptr, T: NP_Value<'ptr> + Default> NP_Ptr<'ptr, T> {
                 Ok(())
             },
             _ => { // scalar type
+
                 if path.len() != path_index { // reached scalar value but not at end of path
                     let mut err = "TypeError: Attempted to deep set into collection but found scalar type (".to_owned();
                     err.push_str(type_data.1.as_str());

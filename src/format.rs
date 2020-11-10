@@ -499,7 +499,7 @@
 //! 
 //! Schema data is stored in a recursive format, each nested schema contains at least one byte that describes the data type.  The single data type byte is usually but not always followed by schema data specific to that data type.  The document below describes all of the data types and their specifics.
 //! 
-//! 
+//! The first byte of every schema byte array is wether the schema is sortable or not.
 //! 
 //! ### int8, int16, int32, int64, uint8, uint16, uint32, uint64, float, double (Scalar)
 //! 
@@ -514,19 +514,19 @@
 //!    "default": 56
 //! }"#)?;
 //!
-//! assert_eq!(vec![6, 1, 0, 0, 0, 56], factory.compile_schema());
+//! assert_eq!(vec![1, 6, 1, 0, 0, 0, 56], factory.compile_schema());
 //! 
-//! // [       6,           1,      0, 0, 0, 56]
-//! // [i32 type, has default,    default value]
+//! // [       1,        6,           1,      0, 0, 0, 56]
+//! // [sortable, i32 type, has default,    default value]
 //! 
 //! let factory: NP_Factory = NP_Factory::new(r#"{
 //!    "type": "i32"
 //! }"#)?;
 //!
-//! assert_eq!(vec![6, 0], factory.compile_schema());
+//! assert_eq!(vec![1, 6, 0], factory.compile_schema());
 //! 
-//! // [       6,           0]
-//! // [i32 type,  no default]
+//! // [       1,        6,           0]
+//! // [sortable, i32 type,  no default]
 //!
 //! # Ok::<(), NP_Error>(()) 
 //! ```
@@ -552,20 +552,20 @@
 //!    "default": "red"
 //! }"#)?;
 //!
-//! assert_eq!(vec![20, 3, 3, 4, 98, 108, 117, 101, 6, 111, 114, 97, 110, 103, 101, 3, 114, 101, 100], factory.compile_schema());
+//! assert_eq!(vec![1, 20, 3, 3, 4, 98, 108, 117, 101, 6, 111, 114, 97, 110, 103, 101, 3, 114, 101, 100], factory.compile_schema());
 //! 
-//! // [       20,                        3,            3, 4, 98, 108, 117, 101, 6, 111, 114, 97, 110, 103, 101, 3, 114, 101, 100]
-//! // [data type, 1 based index of default, # of options,     b,   l,   u,   e,      o,   r,  a,   n,   g,   e,      r,   e,   d]  
+//! // [       1,        20,                        3,            3, 4, 98, 108, 117, 101, 6, 111, 114, 97, 110, 103, 101, 3, 114, 101, 100]
+//! // [sortable, data type, 1 based index of default, # of options,     b,   l,   u,   e,      o,   r,  a,   n,   g,   e,      r,   e,   d]  
 //! 
 //! let factory: NP_Factory = NP_Factory::new(r#"{
 //!    "type": "option",
 //!    "choices": ["blue", "orange", "red"]
 //! }"#)?;
 //!
-//! assert_eq!(vec![20, 0, 3, 4, 98, 108, 117, 101, 6, 111, 114, 97, 110, 103, 101, 3, 114, 101, 100], factory.compile_schema());
+//! assert_eq!(vec![1, 20, 0, 3, 4, 98, 108, 117, 101, 6, 111, 114, 97, 110, 103, 101, 3, 114, 101, 100], factory.compile_schema());
 //! 
-//! // [       20,          0,             3, 4, 98, 108, 117, 101, 6, 111, 114, 97, 110, 103, 101, 3, 114, 101, 100]
-//! // [data type, no default,  # of options,     b,   l,   u,   e,      o,   r,  a,   n,   g,   e,      r,   e,   d]  
+//! // [       1,        20,          0,             3, 4, 98, 108, 117, 101, 6, 111, 114, 97, 110, 103, 101, 3, 114, 101, 100]
+//! // [sortable, data type, no default,  # of options,     b,   l,   u,   e,      o,   r,  a,   n,   g,   e,      r,   e,   d]  
 //!
 //! # Ok::<(), NP_Error>(()) 
 //! ```
@@ -589,30 +589,30 @@
 //!    "default": true
 //! }"#)?;
 //!
-//! assert_eq!(vec![15, 1], factory.compile_schema());
+//! assert_eq!(vec![1, 15, 1], factory.compile_schema());
 //! 
-//! // [       15,               1]
-//! // [data type, default is true]  
+//! // [       1,        15,               1]
+//! // [sortable, data type, default is true]  
 //! 
 //! let factory: NP_Factory = NP_Factory::new(r#"{
 //!    "type": "bool",
 //!    "default": false
 //! }"#)?;
 //!
-//! assert_eq!(vec![15, 2], factory.compile_schema());
+//! assert_eq!(vec![1, 15, 2], factory.compile_schema());
 //! 
-//! // [       15,               2]
-//! // [data type, default is true]  
+//! // [       1,        15,               2]
+//! // [sortable, data type, default is true]  
 //! 
 //! 
 //! let factory: NP_Factory = NP_Factory::new(r#"{
 //!    "type": "bool"
 //! }"#)?;
 //!
-//! assert_eq!(vec![15, 0], factory.compile_schema());
+//! assert_eq!(vec![1, 15, 0], factory.compile_schema());
 //! 
-//! // [       15,          0]
-//! // [data type, no default]  
+//! // [       1,        15,          0]
+//! // [sortable, data type, no default]  
 //! 
 //! # Ok::<(), NP_Error>(()) 
 //! ```
@@ -635,10 +635,10 @@
 //!    "exp": 2
 //! }"#)?;
 //!
-//! assert_eq!(vec![14, 2, 0], factory.compile_schema());
+//! assert_eq!(vec![1, 14, 2, 0], factory.compile_schema());
 //! 
-//! // [       14,         2,                0]
-//! // [data type, expontent, no default value]
+//! // [       1,        14,         2,                0]
+//! // [sortable, data type, expontent, no default value]
 //! 
 //! let factory: NP_Factory = NP_Factory::new(r#"{
 //!    "type": "decimal",
@@ -646,10 +646,10 @@
 //!    "default": 521.32
 //! }"#)?;
 //!
-//! assert_eq!(vec![14, 2, 1, 0, 0, 0, 0, 0, 0, 203, 164], factory.compile_schema());
+//! assert_eq!(vec![1, 14, 2, 1, 0, 0, 0, 0, 0, 0, 203, 164], factory.compile_schema());
 //! 
-//! // [       14,         2,                 1, 0, 0, 0, 0, 0, 0, 203, 164]
-//! // [data type, expontent, has default value,              default value]
+//! // [       1,        14,         2,                 1, 0, 0, 0, 0, 0, 0, 203, 164]
+//! // [sortable, data type, expontent, has default value,              default value]
 //!
 //! # Ok::<(), NP_Error>(()) 
 //! ```
@@ -669,10 +669,10 @@
 //!    "type": "geo8"
 //! }"#)?;
 //!
-//! assert_eq!(vec![16, 8, 0], factory.compile_schema());
+//! assert_eq!(vec![0, 16, 8, 0], factory.compile_schema());
 //! 
-//! // [       16,                 8,                0]
-//! // [data type, geo size (4/8/16), no default value]
+//! // [       0,        16,                 8,                0]
+//! // [sortable, data type, geo size (4/8/16), no default value]
 //! 
 //! 
 //! let factory: NP_Factory = NP_Factory::new(r#"{
@@ -680,10 +680,10 @@
 //!    "default": {"lat": 29.2, "lng": -19.2}
 //! }"#)?;
 //!
-//! assert_eq!(vec![16, 8, 1, 145, 103, 145, 0, 116, 142, 80, 0], factory.compile_schema());
+//! assert_eq!(vec![0, 16, 8, 1, 145, 103, 145, 0, 116, 142, 80, 0], factory.compile_schema());
 //! 
-//! // [       16,                 8,                 1, 145, 103, 145, 0, 116, 142, 80, 0]
-//! // [data type, geo size (4/8/16), has default value,             geo8 value (lat/lng) ]
+//! // [       0,        16,                 8,                 1, 145, 103, 145, 0, 116, 142, 80, 0]
+//! // [sortable, data type, geo size (4/8/16), has default value,             geo8 value (lat/lng) ]
 //!
 //! # Ok::<(), NP_Error>(()) 
 //! ```
@@ -702,10 +702,10 @@
 //!    "type": "uuid"
 //! }"#)?;
 //!
-//! assert_eq!(vec![17], factory.compile_schema());
+//! assert_eq!(vec![1, 17], factory.compile_schema());
 //! 
-//! // [       17]
-//! // [data type]
+//! // [       1,        17]
+//! // [sortable, data type]
 //!
 //! # Ok::<(), NP_Error>(()) 
 //! ```
@@ -724,20 +724,20 @@
 //!    "type": "string"
 //! }"#)?;
 //!
-//! assert_eq!(vec![2, 0, 0, 0, 0], factory.compile_schema());
+//! assert_eq!(vec![0, 2, 0, 0, 0, 0], factory.compile_schema());
 //! 
-//! // [        2,             0, 0,                 0, 0]
-//! // [data type, fixed size (u16),  default size (u16) ]
+//! // [       0,         2,             0, 0,                 0, 0]
+//! // [sortable, data type, fixed size (u16),  default size (u16) ]
 //!
 //! let factory: NP_Factory = NP_Factory::new(r#"{
 //!    "type": "string",
 //!    "size": 20
 //! }"#)?;
 //!
-//! assert_eq!(vec![2, 0, 20, 0, 0], factory.compile_schema());
+//! assert_eq!(vec![1, 2, 0, 20, 0, 0], factory.compile_schema());
 //! 
-//! // [        2,             0, 20,                 0, 0]
-//! // [data type,  fixed size (u16),  default size (u16) ]
+//! // [       1,         2,             0, 20,                 0, 0]
+//! // [sortable, data type,  fixed size (u16),  default size (u16) ]
 //! 
 //! let factory: NP_Factory = NP_Factory::new(r#"{
 //!    "type": "string",
@@ -745,10 +745,10 @@
 //!    "default": "hello"
 //! }"#)?;
 //!
-//! assert_eq!(vec![2, 0, 20, 0, 6, 104, 101, 108, 108, 111], factory.compile_schema());
+//! assert_eq!(vec![1, 2, 0, 20, 0, 6, 104, 101, 108, 108, 111], factory.compile_schema());
 //! 
-//! // [        2,             0, 20,                0, 6, 104, 101, 108, 108, 111]
-//! // [data type,  fixed size (u16),  default size (u16),   h,   e,   l,   l,   o]
+//! // [       1,         2,             0, 20,                0, 6, 104, 101, 108, 108, 111]
+//! // [sortable, data type,  fixed size (u16),  default size (u16),   h,   e,   l,   l,   o]
 //!
 //! # Ok::<(), NP_Error>(()) 
 //! ```
@@ -768,20 +768,20 @@
 //!    "type": "date"
 //! }"#)?;
 //!
-//! assert_eq!(vec![19, 0], factory.compile_schema());
+//! assert_eq!(vec![1, 19, 0], factory.compile_schema());
 //! 
-//! // [       19,             0]
-//! // [data type, default flag ]
+//! // [       1,        19,             0]
+//! // [sortable, data type, default flag ]
 //! 
 //! let factory: NP_Factory = NP_Factory::new(r#"{
 //!    "type": "date",
 //!    "default": 1604862252
 //! }"#)?;
 //!
-//! assert_eq!(vec![19, 1, 0, 0, 0, 0, 95, 168, 65, 44], factory.compile_schema());
+//! assert_eq!(vec![1, 19, 1, 0, 0, 0, 0, 95, 168, 65, 44], factory.compile_schema());
 //! 
-//! // [       19,            1, 0, 0, 0, 0, 95, 168, 65, 44]
-//! // [data type, default flag,        default value       ]
+//! // [       1,        19,            1, 0, 0, 0, 0, 95, 168, 65, 44]
+//! // [sortable, data type, default flag,        default value       ]
 //!
 //! # Ok::<(), NP_Error>(()) 
 //! ```
@@ -805,10 +805,10 @@
 //! }"#)?;
 //!
 //!
-//! assert_eq!(vec![21, 2, 3, 97, 103, 101, 0, 2, 8, 0, 4, 110, 97, 109, 101, 0, 5, 2, 0, 0, 0, 0], factory.compile_schema());
+//! assert_eq!(vec![0, 21, 2, 3, 97, 103, 101, 0, 2, 8, 0, 4, 110, 97, 109, 101, 0, 5, 2, 0, 0, 0, 0], factory.compile_schema());
 //! 
-//! // [       21,            2, 3, 97, 103, 101,                     0, 2,           8, 0, 4, 110, 97, 109, 101,                      0, 5,   2, 0, 0, 0, 0]
-//! // [data type, # of columns,     a,   g,   e, column schema size (u16),  column schema,      n,  a,   m,   e,  column schema size (u16),  column schema ]
+//! // [       0,        21,            2, 3, 97, 103, 101,                     0, 2,           8, 0, 4, 110, 97, 109, 101,                      0, 5,   2, 0, 0, 0, 0]
+//! // [sortable, data type, # of columns,     a,   g,   e, column schema size (u16),  column schema,      n,  a,   m,   e,  column schema size (u16),  column schema ]
 //!
 //! # Ok::<(), NP_Error>(()) 
 //! ```
@@ -824,10 +824,10 @@
 //!     "of": {"type": "u8"}
 //! }"#)?;
 //!
-//! assert_eq!(vec![23, 8, 0], factory.compile_schema());
+//! assert_eq!(vec![0, 23, 8, 0], factory.compile_schema());
 //! 
-//! // [       23,        8, 0]
-//! // [data type, "of" schema]
+//! // [       0,        23,        8, 0]
+//! // [sortable, data type, "of" schema]
 //!
 //! # Ok::<(), NP_Error>(()) 
 //! ```
@@ -843,10 +843,10 @@
 //!     "value": {"type": "u8"}
 //! }"#)?;
 //!
-//! assert_eq!(vec![22, 8, 0], factory.compile_schema());
+//! assert_eq!(vec![0, 22, 8, 0], factory.compile_schema());
 //! 
-//! // [       22,         8, 0]
-//! // [data type, value schema]
+//! // [       0,        22,         8, 0]
+//! // [sortable, data type, value schema]
 //!
 //! # Ok::<(), NP_Error>(()) 
 //! ```
@@ -865,10 +865,10 @@
 //!    ]
 //! }"#)?;
 //!
-//! assert_eq!(vec![24, 0, 2, 0, 2, 8, 0, 0, 5, 2, 0, 0, 0, 0], factory.compile_schema());
+//! assert_eq!(vec![0, 24, 0, 2, 0, 2, 8, 0, 0, 5, 2, 0, 0, 0, 0], factory.compile_schema());
 //! 
-//! // [       24,      0,           2,               0, 2,   8, 0,              0, 5,  2, 0, 0, 0, 0]
-//! // [data type, sorted, length (u8),  schema size (u16), schema, schema size (u16),    schema     ]
+//! // [       0,        24,      0,           2,               0, 2,   8, 0,              0, 5,  2, 0, 0, 0, 0]
+//! // [sortable, data type, sorted, length (u8),  schema size (u16), schema, schema size (u16),    schema     ]
 //!
 //! # Ok::<(), NP_Error>(()) 
 //! ```

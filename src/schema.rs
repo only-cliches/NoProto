@@ -99,27 +99,27 @@
 //! | [`map`](#map)                          | [`NP_Map`](../collection/map/struct.NP_Map.html)                         |𐄂                 | 2 bytes - ~4GB | Linked list with `Vec<u8>` keys.                                         |
 //! | [`tuple`](#tuple)                      | [`NP_Tuple`](../collection/tuple/struct.NP_Tuple.html)                   |✓ *               | 2 bytes - ~4GB | Static sized collection of specific values.                              |
 //! | [`any`](#any)                          | [`NP_Any`](../pointer/any/struct.NP_Any.html)                            |𐄂                 | 2 bytes - ~4GB | Generic type.                                                            |
-//! | [`string`](#string)                    | [`String`](https://doc.rust-lang.org/std/string/struct.String.html)      |✓ **              | 2 bytes - ~4GB | Utf-8 formatted string.                                                  |
+//! | [`string`](#string)                    | [`String`](../pointer/string/index.html)                                 |✓ **              | 2 bytes - ~4GB | Utf-8 formatted string.                                                  |
 //! | [`bytes`](#bytes)                      | [`NP_Bytes`](../pointer/bytes/struct.NP_Bytes.html)                      |✓ **              | 2 bytes - ~4GB | Arbitrary bytes.                                                         |
-//! | [`int8`](#int8-int16-int32-int64)      | [`i8`](https://doc.rust-lang.org/std/primitive.i8.html)                  |✓                 | 1 byte         | -127 to 127                                                              |
-//! | [`int16`](#int8-int16-int32-int64)     | [`i16`](https://doc.rust-lang.org/std/primitive.i16.html)                |✓                 | 2 bytes        | -32,768 to 32,768                                                        |
-//! | [`int32`](#int8-int16-int32-int64)     | [`i32`](https://doc.rust-lang.org/std/primitive.i32.html)                |✓                 | 4 bytes        | -2,147,483,648 to 2,147,483,648                                          |
-//! | [`int64`](#int8-int16-int32-int64)     | [`i64`](https://doc.rust-lang.org/std/primitive.i64.html)                |✓                 | 8 bytes        | -9,223,372,036,854,775,808 to 9,223,372,036,854,775,808                  |
-//! | [`uint8`](#uint8-uint16-uint32-uint64) | [`u8`](https://doc.rust-lang.org/std/primitive.u8.html)                  |✓                 | 1 byte         | 0 - 255                                                                  |
-//! | [`uint16`](#uint8-uint16-uint32-uint64)| [`u16`](https://doc.rust-lang.org/std/primitive.u16.html)                |✓                 | 2 bytes        | 0 - 65,535                                                               |
-//! | [`uint32`](#uint8-uint16-uint32-uint64)| [`u32`](https://doc.rust-lang.org/std/primitive.u32.html)                |✓                 | 4 bytes        | 0 - 4,294,967,295                                                        |
-//! | [`uint64`](#uint8-uint16-uint32-uint64)| [`u64`](https://doc.rust-lang.org/std/primitive.u64.html)                |✓                 | 8 bytes        | 0 - 18,446,744,073,709,551,616                                           |
-//! | [`float`](#float-double)               | [`f32`](https://doc.rust-lang.org/std/primitive.f32.html)                |𐄂                 | 4 bytes        | -3.4e38 to 3.4e38                                                        |
-//! | [`double`](#float-double)              | [`f64`](https://doc.rust-lang.org/std/primitive.f64.html)                |𐄂                 | 8 bytes        | -1.7e308 to 1.7e308                                                      |
+//! | [`int8`](#int8-int16-int32-int64)      | [`i8`](../pointer/numbers/index.html)                                    |✓                 | 1 byte         | -127 to 127                                                              |
+//! | [`int16`](#int8-int16-int32-int64)     | [`i16`](../pointer/numbers/index.html)                                   |✓                 | 2 bytes        | -32,768 to 32,768                                                        |
+//! | [`int32`](#int8-int16-int32-int64)     | [`i32`](../pointer/numbers/index.html)                                   |✓                 | 4 bytes        | -2,147,483,648 to 2,147,483,648                                          |
+//! | [`int64`](#int8-int16-int32-int64)     | [`i64`](../pointer/numbers/index.html)                                   |✓                 | 8 bytes        | -9,223,372,036,854,775,808 to 9,223,372,036,854,775,808                  |
+//! | [`uint8`](#uint8-uint16-uint32-uint64) | [`u8`](../pointer/numbers/index.html)                                    |✓                 | 1 byte         | 0 - 255                                                                  |
+//! | [`uint16`](#uint8-uint16-uint32-uint64)| [`u16`](../pointer/numbers/index.html)                                   |✓                 | 2 bytes        | 0 - 65,535                                                               |
+//! | [`uint32`](#uint8-uint16-uint32-uint64)| [`u32`](../pointer/numbers/index.html)                                   |✓                 | 4 bytes        | 0 - 4,294,967,295                                                        |
+//! | [`uint64`](#uint8-uint16-uint32-uint64)| [`u64`](../pointer/numbers/index.html)                                   |✓                 | 8 bytes        | 0 - 18,446,744,073,709,551,616                                           |
+//! | [`float`](#float-double)               | [`f32`](../pointer/numbers/index.html)                                   |𐄂                 | 4 bytes        | -3.4e38 to 3.4e38                                                        |
+//! | [`double`](#float-double)              | [`f64`](../pointer/numbers/index.html)                                   |𐄂                 | 8 bytes        | -1.7e308 to 1.7e308                                                      |
 //! | [`option`](#option)                    | [`NP_Option`](../pointer/misc/struct.NP_Option.html)                     |✓                 | 1 byte         | Up to 255 string based options in schema.                                |
-//! | [`bool`](#bool)                        | [`bool`](https://doc.rust-lang.org/std/primitive.bool.html)              |✓                 | 1 byte         |                                                                          |
+//! | [`bool`](#bool)                        | [`bool`](../pointer/bool/index.html)                                     |✓                 | 1 byte         |                                                                          |
 //! | [`decimal`](#decimal)                  | [`NP_Dec`](../pointer/misc/struct.NP_Dec.html)                           |✓                 | 8 bytes        | Fixed point decimal number based on i64.                                 |
 //! | [`geo4`](#geo4-geo8-geo16)             | [`NP_Geo`](../pointer/misc/struct.NP_Geo.html)                           |✓                 | 4 bytes        | 1.1km resolution (city) geographic coordinate                            |
 //! | [`geo8`](#geo4-geo8-geo16)             | [`NP_Geo`](../pointer/misc/struct.NP_Geo.html)                           |✓                 | 8 bytes        | 11mm resolution (marble) geographic coordinate                           |
 //! | [`geo16`](#geo4-geo8-geo16)            | [`NP_Geo`](../pointer/misc/struct.NP_Geo.html)                           |✓                 | 16 bytes       | 110 microns resolution (grain of sand) geographic coordinate             |
 //! | [`ulid`](#ulid)                        | [`NP_ULID`](../pointer/misc/struct.NP_ULID.html)                         |✓                 | 16 bytes       | 6 bytes for the timestamp, 10 bytes of randomness.                       |
 //! | [`uuid`](#uuid)                        | [`NP_UUID`](../pointer/misc/struct.NP_UUID.html)                         |✓                 | 16 bytes       | v4 UUID, 2e37 possible UUIDs                                             |
-//! | [`date`](#date)                        | [`NP_Date`](../pointer/misc/struct.NP_Date.html)                         |✓                 | 8 bytes        | Good to store unix epoch (in seconds) until the year 584,942,417,355     |
+//! | [`date`](#date)                        | [`NP_Date`](../pointer/misc/struct.NP_Date.html)                         |✓                 | 8 bytes        | Good to store unix epoch (in milliseconds) until the year 584,866,263    |
 //!  
 //! - \* `sorting` must be set to `true` in the schema for this object to enable sorting.
 //! - \*\* String & Bytes can be bytewise sorted only if they have a `size` property in the schema
@@ -327,6 +327,7 @@
 //! ```
 //! 
 //! More Details:
+//! - [Using String data type](../pointer/string/index.html)
 //! - [Using scalar values with pointers](../pointer/struct.NP_Ptr.html#using-scalar-types-with-pointers)
 //! 
 //! ## bytes
@@ -365,6 +366,7 @@
 //! - **Schema Mutations**: None
 //! 
 //! More Details:
+//! - [Using number data types](../pointer/numbers/index.html)
 //! - [Using scalar values with pointers](../pointer/struct.NP_Ptr.html#using-scalar-types-with-pointers)
 //! 
 //! ## uint8, uint16, uint32, uint64
@@ -381,6 +383,7 @@
 //! ```
 //! 
 //! More Details:
+//! - [Using number data types](../pointer/numbers/index.html)
 //! - [Using scalar values with pointers](../pointer/struct.NP_Ptr.html#using-scalar-types-with-pointers)
 //! 
 //! ## float, double
@@ -397,6 +400,7 @@
 //! ```
 //! 
 //! More Details:
+//! - [Using number data types](../pointer/numbers/index.html)
 //! - [Using scalar values with pointers](../pointer/struct.NP_Ptr.html#using-scalar-types-with-pointers)
 //! 
 //! ## option
@@ -552,7 +556,6 @@ use crate::collection::{list::NP_List, table::NP_Table, map::NP_Map};
 use crate::pointer::{misc::NP_Option, NP_Value};
 use crate::error::NP_Error;
 use alloc::vec::Vec;
-use alloc::vec;
 use alloc::string::String;
 use alloc::boxed::Box;
 
@@ -659,7 +662,7 @@ impl<'schema_ptr> NP_Schema_Ptr<'schema_ptr> {
     /// Get the type for this address
     pub fn to_type_key(&self) -> NP_TypeKeys {
         let type_u8 = (*self.schema).bytes[self.address] as u8;
-        if type_u8 > 25 { panic!(); }
+        if type_u8 > 25 || type_u8 < 1 { panic!(); }
         let value: NP_TypeKeys = unsafe { core::mem::transmute(type_u8) };
         value
     }
@@ -673,31 +676,27 @@ impl<'schema_ptr> NP_Schema_Ptr<'schema_ptr> {
 /// New NP Schema Parsed
 #[derive(Debug, Clone)]
 pub struct NP_Schema {
-    /// schema data
+    /// is this schema sortable?
+    pub is_sortable: bool,
+    /// schema bytes
     pub bytes: Vec<u8>
 }
 
 macro_rules! schema_check {
     ($t: ty, $json: expr) => {
         match <$t>::from_json_to_schema($json)? {
-            Some(x) => return Ok(NP_Schema { bytes: x}), None => {}
+            Some(x) => return Ok(x), None => {}
         }
     }
 }
 
 impl NP_Schema {
-    /// testing
-    pub fn new() -> Self {
-        NP_Schema {
-            bytes: vec!{}
-        }
-    }
 
     /// Get a JSON represenatation of this schema
     pub fn to_json(&self) -> Result<NP_JSON, NP_Error> {
         NP_Schema::_type_to_json(&NP_Schema_Ptr {
-            address: 0,
-            schema: &NP_Schema { bytes: self.bytes.clone() }
+            address: 1,
+            schema: &self
         })
     }
 
@@ -735,7 +734,8 @@ impl NP_Schema {
     }
 
     /// Get type string for this schema
-    pub fn get_type(json_schema: &NP_JSON) -> Result<String, NP_Error> {
+    #[doc(hidden)]
+    pub fn _get_type(json_schema: &NP_JSON) -> Result<String, NP_Error> {
         match &json_schema["type"] {
             NP_JSON::String(x) => {
                 Ok(x.clone())
@@ -746,7 +746,12 @@ impl NP_Schema {
         }
     }
 
-    /// parse schema from JSON object
+    /// Parse schema from JSON object
+    /// 
+    /// Given a valid JSON schema, parse and validate, then provide a compiled byte schema.
+    /// 
+    /// If you need a quick way to convert JSON to schema bytes without firing up an NP_Factory, this will do the trick.
+    /// 
     pub fn from_json(json_schema: Box<NP_JSON>) -> Result<NP_Schema, NP_Error> {
 
         schema_check!(NP_Any,          &json_schema);
@@ -779,6 +784,8 @@ impl NP_Schema {
         schema_check!(NP_List<NP_Any>, &json_schema);
         schema_check!(NP_Tuple,        &json_schema);
 
-        Err(NP_Error::new("Can't find a type that matches this schema!"))
+        let mut err_msg = String::from("Can't find a type that matches this schema! ");
+        err_msg.push_str(json_schema.stringify().as_str());
+        Err(NP_Error::new(err_msg.as_str()))
     }
 }

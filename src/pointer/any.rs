@@ -72,14 +72,14 @@ impl<'any> NP_Value<'any> for NP_Any {
     fn do_compact(_from_ptr: NP_Lite_Ptr, _to_ptr: NP_Lite_Ptr) -> Result<(), NP_Error> where Self: NP_Value<'any> + Default {
         Err(NP_Error::new("Cannot compact an ANY field!"))
     }
-    fn from_json_to_schema(json_schema: &NP_JSON) -> Result<Option<Vec<u8>>, NP_Error> {
+    fn from_json_to_schema(json_schema: &NP_JSON) -> Result<Option<NP_Schema>, NP_Error> {
 
-        let type_str = NP_Schema::get_type(json_schema)?;
+        let type_str = NP_Schema::_get_type(json_schema)?;
 
         if "any" == type_str {
             let mut schema_data: Vec<u8> = Vec::new();
             schema_data.push(NP_TypeKeys::Any as u8);
-            return Ok(Some(schema_data));
+            return Ok(Some(NP_Schema { is_sortable: false, bytes: schema_data}))
         }
 
         Ok(None)
