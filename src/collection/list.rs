@@ -1,10 +1,10 @@
-use crate::{error::NP_Error, json_flex::{JSMAP, NP_JSON}, memory::{NP_Size, NP_Memory}, pointer::{NP_Value, NP_Ptr, NP_PtrKinds, any::NP_Any, NP_Lite_Ptr}, schema::{NP_Schema, NP_TypeKeys, NP_Schema_Ptr}};
+use crate::{error::NP_Error, schema::NP_Parsed_Schema, json_flex::{JSMAP, NP_JSON}, memory::{NP_Size, NP_Memory}, pointer::{NP_Value, NP_Ptr, NP_PtrKinds, any::NP_Any, NP_Lite_Ptr}, schema::{NP_Schema, NP_TypeKeys}};
 
 use alloc::string::String;
 use alloc::borrow::ToOwned;
 use alloc::boxed::Box;
 use alloc::{vec::*};
-use core::marker::PhantomData;
+use core::{marker::PhantomData, hint::unreachable_unchecked};
 /// List data type [Using collections with pointers](../pointer/struct.NP_Ptr.html#using-collection-types-with-pointers).
 #[derive(Debug)]
 pub struct NP_List<'list, T> where T: NP_Value<'list> + Default {
@@ -12,39 +12,44 @@ pub struct NP_List<'list, T> where T: NP_Value<'list> + Default {
     head: u32,
     tail: u32,
     memory: Option<&'list NP_Memory>,
-    schema: Option<NP_Schema_Ptr<'list>>,
+    schema: Option<&'list Box<NP_Parsed_Schema>>,
     _value: T
 }
 
 impl<'list, T: NP_Value<'list> + Default> NP_List<'list, T> {
 
     #[doc(hidden)]
-    pub fn new(address: u32, head: u32, tail:u32,  memory: &'list NP_Memory, schema: NP_Schema_Ptr<'list>) -> Result<Self, NP_Error> {
+    pub fn new(address: u32, head: u32, tail:u32,  memory: &'list NP_Memory, schema: &'list Box<NP_Parsed_Schema>) -> Result<Self, NP_Error> {
 
-        let of_type = schema.schema.bytes[schema.address + 1];
+        match &**schema {
+            NP_Parsed_Schema::List { i: _, sortable: _, of} => {
+                let of_type = of.into_type_data();
 
-        // make sure the type we're casting to isn't ANY or the cast itself isn't ANY
-        if T::type_idx().0 != NP_TypeKeys::Any as u8 && of_type != NP_TypeKeys::Any as u8  {
+                // make sure the type we're casting to isn't ANY or the cast itself isn't ANY
+                if T::type_idx().0 != NP_TypeKeys::Any as u8 && of_type.0 != NP_TypeKeys::Any as u8  {
 
-            // not using ANY casting, check type
-            if of_type != T::type_idx().0 {
-                let mut err = "TypeError: Attempted to cast type (".to_owned();
-                err.push_str(T::type_idx().1.as_str());
-                err.push_str(") to schema of type (");
-                err.push_str(NP_TypeKeys::from(of_type).into_type_idx().1.as_str());
-                err.push_str(")");
-                return Err(NP_Error::new(err));
-            }
+                    // not using ANY casting, check type
+                    if of_type.0 != T::type_idx().0 {
+                        let mut err = "TypeError: Attempted to cast type (".to_owned();
+                        err.push_str(T::type_idx().1.as_str());
+                        err.push_str(") to schema of type (");
+                        err.push_str(of_type.1.as_str());
+                        err.push_str(") when loading list!");
+                        return Err(NP_Error::new(err));
+                    }
+                }
+
+                Ok(NP_List::<T> {
+                    address,
+                    head,
+                    tail,
+                    memory: Some(memory),
+                    schema: Some(schema),
+                    _value: T::default()
+                })
+            },
+            _ => { unsafe { unreachable_unchecked() } }
         }
-
-        Ok(NP_List::<T> {
-            address,
-            head,
-            tail,
-            memory: Some(memory),
-            schema: Some(schema),
-            _value: T::default()
-        })
     }
 
     /// Convert the list data type into an iterator
@@ -57,8 +62,12 @@ impl<'list, T: NP_Value<'list> + Default> NP_List<'list, T> {
 
         let memory = self.memory.unwrap();
 
-        let schema = self.schema.as_ref().unwrap();
-        let list_of = schema.copy_with_addr(schema.address + 1);
+        let list_of = match &**self.schema.unwrap() {
+            NP_Parsed_Schema::List { i: _, sortable: _, of} => {
+                of
+            },
+            _ => { unsafe { unreachable_unchecked() } }
+        };
 
         if self.head == 0 { // no values, create one
 
@@ -476,8 +485,12 @@ impl<'list, T: NP_Value<'list> + Default> NP_List<'list, T> {
 
         let memory = self.memory.unwrap();
 
-        let schema = self.schema.as_ref().unwrap();
-        let list_of = schema.copy_with_addr(schema.address + 1);
+        let list_of = match &**self.schema.unwrap() {
+            NP_Parsed_Schema::List { i: _, sortable: _, of} => {
+                of
+            },
+            _ => { unsafe { unreachable_unchecked() } }
+        };
 
         // no more values in this list
         if self.head == 0 { return Ok(None) }
@@ -530,8 +543,12 @@ impl<'list, T: NP_Value<'list> + Default> NP_List<'list, T> {
 
         let memory = self.memory.unwrap();
 
-        let schema = self.schema.as_ref().unwrap();
-        let list_of = schema.copy_with_addr(schema.address + 1);
+        let list_of = match &**self.schema.unwrap() {
+            NP_Parsed_Schema::List { i: _, sortable: _, of} => {
+                of
+            },
+            _ => { unsafe { unreachable_unchecked() } }
+        };
 
         if self.tail == 0 { // no values, create one
        
@@ -729,14 +746,20 @@ impl<'list, T: NP_Value<'list> + Default> Default for NP_List<'list, T> {
 
 impl<'list, T: 'list> NP_Value<'list> for NP_List<'list, T> where T: NP_Value<'list> + Default {
 
-    fn type_idx() -> (u8, String) { (NP_TypeKeys::List as u8, "list".to_owned()) }
-    fn self_type_idx(&self) -> (u8, String) { (NP_TypeKeys::List as u8, "list".to_owned()) }
+    fn type_idx() -> (u8, String, NP_TypeKeys) { (NP_TypeKeys::List as u8, "list".to_owned(), NP_TypeKeys::List) }
+    fn self_type_idx(&self) -> (u8, String, NP_TypeKeys) { (NP_TypeKeys::List as u8, "list".to_owned(), NP_TypeKeys::List) }
 
-    fn schema_to_json(schema_ptr: &NP_Schema_Ptr)-> Result<NP_JSON, NP_Error> {
+    fn schema_to_json(schema_ptr: &NP_Parsed_Schema)-> Result<NP_JSON, NP_Error> {
         let mut schema_json = JSMAP::new();
         schema_json.insert("type".to_owned(), NP_JSON::String(Self::type_idx().1));
 
-        let list_of = schema_ptr.copy_with_addr(schema_ptr.address + 1);
+
+        let list_of = match schema_ptr {
+            NP_Parsed_Schema::List { i: _, sortable: _, of} => {
+                of
+            },
+            _ => { unsafe { unreachable_unchecked() } }
+        };
 
         schema_json.insert("of".to_owned(), NP_Schema::_type_to_json(&list_of)?);
 
@@ -924,7 +947,7 @@ impl<'list, T: 'list> NP_Value<'list> for NP_List<'list, T> where T: NP_Value<'l
         Ok(())
     }
 
-    fn from_json_to_schema(json_schema: &NP_JSON) -> Result<Option<NP_Schema>, NP_Error> {
+    fn from_json_to_schema(json_schema: &NP_JSON) -> Result<Option<(Vec<u8>, NP_Parsed_Schema)>, NP_Error> {
 
         let type_str = NP_Schema::_get_type(json_schema)?;
 
@@ -940,11 +963,27 @@ impl<'list, T: 'list> NP_Value<'list> for NP_List<'list, T> where T: NP_Value<'l
             }
 
             let child_type = NP_Schema::from_json(Box::new(json_schema["of"].clone()))?;
-            schema_data.extend(child_type.bytes);
-            return Ok(Some(NP_Schema { is_sortable: false, bytes: schema_data}))
+            schema_data.extend(child_type.0);
+            return Ok(Some((schema_data, NP_Parsed_Schema::List {
+                i: NP_TypeKeys::List,
+                of: Box::new(child_type.1),
+                sortable: false
+            })))
         }
 
         Ok(None)
+    }
+
+    fn schema_default(_schema: &NP_Parsed_Schema) -> Option<Box<Self>> {
+        None
+    }
+
+    fn from_bytes_to_schema(address: usize, bytes: &Vec<u8>) -> NP_Parsed_Schema {
+        NP_Parsed_Schema::List {
+            i: NP_TypeKeys::List,
+            sortable: false,
+            of: Box::new(NP_Schema::from_bytes(address + 1, bytes))
+        }
     }
 }
 
@@ -955,7 +994,7 @@ pub struct NP_List_Iterator<'it, T> {
     head: u32,
     tail: u32,
     memory: &'it NP_Memory,
-    schema: NP_Schema_Ptr<'it>,
+    schema: &'it Box<NP_Parsed_Schema>,
     current_index: u16,
     current_address: u32,
     p: PhantomData<T>
@@ -964,7 +1003,7 @@ pub struct NP_List_Iterator<'it, T> {
 impl<'it, T: NP_Value<'it> + Default> NP_List_Iterator<'it, T> {
 
     #[doc(hidden)]
-    pub fn new(address: u32, head: u32, tail: u32, memory: &'it NP_Memory, schema: NP_Schema_Ptr<'it>) -> Self {
+    pub fn new(address: u32, head: u32, tail: u32, memory: &'it NP_Memory, schema: &'it Box<NP_Parsed_Schema>) -> Self {
         NP_List_Iterator {
             address,
             head,
@@ -1022,9 +1061,9 @@ impl<'it, T: NP_Value<'it> + Default> Iterator for NP_List_Iterator<'it, T> {
             return Some(NP_List_Item {
                 index: self.current_index - 1,
                 has_value: value_address != 0,
-                _schema: self.schema.copy(),
+                _schema: self.schema,
                 _address: this_address,
-                _list: NP_List::new(self.address, self.head, self.tail, self.memory, self.schema.copy()).unwrap(),
+                _list: NP_List::new(self.address, self.head, self.tail, self.memory, self.schema).unwrap(),
                 _memory: self.memory
             });
 
@@ -1033,9 +1072,9 @@ impl<'it, T: NP_Value<'it> + Default> Iterator for NP_List_Iterator<'it, T> {
             return Some(NP_List_Item {
                 index: self.current_index - 1,
                 has_value: false,
-                _schema: self.schema.copy(),
+                _schema: self.schema,
                 _address: 0,
-                _list: NP_List::new(self.address, self.head, self.tail, &self.memory, self.schema.copy()).unwrap(),
+                _list: NP_List::new(self.address, self.head, self.tail, &self.memory, self.schema).unwrap(),
                 _memory: &self.memory
             }); 
         }
@@ -1051,7 +1090,7 @@ pub struct NP_List_Item<'item, T> where T: NP_Value<'item> + Default {
     pub index: u16,
     /// (has pointer at this index, his value at this index)
     pub has_value: bool,
-    _schema: NP_Schema_Ptr<'item>,
+    _schema: &'item Box<NP_Parsed_Schema>,
     _address: u32,
     _list: NP_List<'item, T>,
     _memory: &'item NP_Memory
@@ -1066,4 +1105,27 @@ impl<'item, T: NP_Value<'item> + Default + > NP_List_Item<'item, T> {
     pub fn delete(&mut self) -> Result<bool, NP_Error> {
         self._list.delete(self.index)
     }
+}
+
+#[test]
+fn schema_parsing_works() -> Result<(), NP_Error> {
+    let schema = "{\"type\":\"list\",\"of\":{\"type\":\"string\"}}";
+    let factory = crate::NP_Factory::new(schema)?;
+    assert_eq!(schema, factory.schema.to_json()?.stringify());
+    
+    Ok(())
+}
+
+#[test]
+fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
+    let schema = "{\"type\":\"list\",\"of\":{\"type\":\"string\"}}";
+    let factory = crate::NP_Factory::new(schema)?;
+    let mut buffer = factory.empty_buffer(None, None);
+    buffer.deep_set("10", String::from("hello, world"))?;
+    assert_eq!(buffer.deep_get::<String>("10")?, Some(Box::new(String::from("hello, world"))));
+    buffer.deep_clear("")?;
+    buffer = buffer.compact(None, None)?;
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 8u32);
+
+    Ok(())
 }

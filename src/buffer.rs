@@ -6,7 +6,7 @@ use crate::pointer::{NP_Value};
 use crate::error::NP_Error;
 use crate::pointer::{any::NP_Any, NP_Ptr, NP_Lite_Ptr};
 use crate::memory::{NP_Size, NP_Memory};
-use crate::{schema::{NP_TypeKeys, NP_Schema, NP_Schema_Ptr}, json_flex::NP_JSON};
+use crate::{schema::{NP_TypeKeys, NP_Schema}, json_flex::NP_JSON};
 use alloc::{borrow::ToOwned};
 
 /// The address location of the root pointer.
@@ -23,8 +23,7 @@ pub const ROOT_PTR_ADDR: u32 = 2;
 pub struct NP_Buffer<'buffer> {
     /// Schema data used by this buffer
     pub schema: &'buffer NP_Schema,
-    memory: NP_Memory,
-    schema_ptr: NP_Schema_Ptr<'buffer>
+    memory: NP_Memory
 }
 
 /// When calling `maybe_compact` on a buffer, this struct is provided to help make a choice on wether to compact or not.
@@ -45,8 +44,7 @@ impl<'buffer> NP_Buffer<'buffer> {
 
         NP_Buffer {
             schema: &schema,
-            memory: memory,
-            schema_ptr: NP_Schema_Ptr { address: 1, schema: &schema}
+            memory: memory
         }
     }
 
@@ -110,9 +108,9 @@ impl<'buffer> NP_Buffer<'buffer> {
     pub fn open<R: NP_Value<'buffer> + Default>(&'buffer mut self, callback: &mut (dyn FnMut(NP_Ptr<'buffer, R>) -> Result<(), NP_Error>)) -> Result<(), NP_Error>
     {   
 
-        let root_type =  self.schema_ptr.to_type_data();
+        let root_type =  self.schema.parsed.into_type_data();
 
-        let root: NP_Ptr<R> = NP_Ptr::_new_standard_ptr(ROOT_PTR_ADDR, self.schema_ptr.copy(), &self.memory);
+        let root: NP_Ptr<R> = NP_Ptr::_new_standard_ptr(ROOT_PTR_ADDR, &self.schema.parsed, &self.memory);
 
     
         // casting to ANY type -OR- schema is ANY type
@@ -186,9 +184,9 @@ impl<'buffer> NP_Buffer<'buffer> {
             NP_TypeKeys::Tuple => { Err(NP_Error::new("Can't extract tuple type!")) },
             _ => {
 
-                let root_type =  self.schema_ptr.to_type_data();
+                let root_type =  self.schema.parsed.into_type_data();
 
-                let root: NP_Ptr<R> = NP_Ptr::_new_standard_ptr(ROOT_PTR_ADDR, self.schema_ptr.copy(), &self.memory);
+                let root: NP_Ptr<R> = NP_Ptr::_new_standard_ptr(ROOT_PTR_ADDR, &self.schema.parsed, &self.memory);
     
                 // casting to ANY type -OR- schema is ANY type
                 if R::type_idx().0 == NP_TypeKeys::Any as u8 || root_type.0 == NP_TypeKeys::Any as u8  {
@@ -235,7 +233,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// ```
     /// 
     pub fn json_encode(&'buffer self) -> NP_JSON {
-        let root: NP_Ptr<NP_Any> = NP_Ptr::<NP_Any>::_new_standard_ptr(ROOT_PTR_ADDR, self.schema_ptr.copy(), &self.memory);
+        let root: NP_Ptr<NP_Any> = NP_Ptr::<NP_Any>::_new_standard_ptr(ROOT_PTR_ADDR, &self.schema.parsed, &self.memory);
         root.json_encode()
     }
 
@@ -271,7 +269,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// 
     pub fn deep_set<X: NP_Value<'buffer> + Default>(&'buffer self, path: &str, value: X) -> Result<(), NP_Error> {
 
-        match NP_TypeKeys::from(X::type_idx().0) {
+        match X::type_idx().2 {
             NP_TypeKeys::JSON => { Err(NP_Error::new("Can't deep set with JSON type!")) },
             NP_TypeKeys::Table => { Err(NP_Error::new("Can't deep set table type!")) },
             NP_TypeKeys::Map => { Err(NP_Error::new("Can't deep set map type!")) },
@@ -279,7 +277,7 @@ impl<'buffer> NP_Buffer<'buffer> {
             NP_TypeKeys::Tuple => { Err(NP_Error::new("Can't deep set tuple type!")) },
             _ => {
                 let vec_path: Vec<&str> = path.split(".").filter(|v| { v.len() > 0 }).collect();
-                let root: NP_Ptr<NP_Any> = NP_Ptr::_new_standard_ptr(ROOT_PTR_ADDR, self.schema_ptr.copy(), &self.memory);
+                let root: NP_Ptr<NP_Any> = NP_Ptr::_new_standard_ptr(ROOT_PTR_ADDR, &self.schema.parsed, &self.memory);
                 root._deep_set(vec_path, 0, value)
             }
         }
@@ -290,7 +288,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// 
     pub fn deep_clear(&'buffer self, path: &str) -> Result<(), NP_Error> {
         let vec_path: Vec<&str> = path.split(".").filter(|v| { v.len() > 0 }).collect();
-        let root: NP_Ptr<NP_Any> = NP_Ptr::_new_standard_ptr(ROOT_PTR_ADDR, self.schema_ptr.copy(), &self.memory);
+        let root: NP_Ptr<NP_Any> = NP_Ptr::_new_standard_ptr(ROOT_PTR_ADDR, &self.schema.parsed, &self.memory);
         root._deep_clear(vec_path, 0)
     }
   
@@ -302,14 +300,14 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// 
     pub fn deep_get<X: NP_Value<'buffer> + Default>(&'buffer self, path: &str) -> Result<Option<Box<X>>, NP_Error> {
 
-        match NP_TypeKeys::from(X::type_idx().0) {
+        match X::type_idx().2 {
             NP_TypeKeys::Table => { Err(NP_Error::new("Can't deep get table type from here!")) },
             NP_TypeKeys::Map => { Err(NP_Error::new("Can't deep get map type from here!")) },
             NP_TypeKeys::List => { Err(NP_Error::new("Can't deep get list type from here!")) },
             NP_TypeKeys::Tuple => { Err(NP_Error::new("Can't deep get tuple type from here!")) },
             _ => {
                 let vec_path: Vec<&str> = path.split(".").filter(|v| { v.len() > 0 }).collect();
-                let root: NP_Ptr<NP_Any> = NP_Ptr::_new_standard_ptr(ROOT_PTR_ADDR, self.schema_ptr.copy(), &self.memory);
+                let root: NP_Ptr<NP_Any> = NP_Ptr::_new_standard_ptr(ROOT_PTR_ADDR, &self.schema.parsed, &self.memory);
                 root._deep_get::<X>(vec_path, 0)
             }
         }
@@ -378,8 +376,7 @@ impl<'buffer> NP_Buffer<'buffer> {
 
         return Ok(NP_Buffer {
             schema: self.schema,
-            memory: self.memory,
-            schema_ptr: self.schema_ptr
+            memory: self.memory
         });
     }
 
@@ -440,17 +437,16 @@ impl<'buffer> NP_Buffer<'buffer> {
             Some(x) => { x }
         };
 
-        let old_root = NP_Lite_Ptr::new_standard(ROOT_PTR_ADDR, self.schema_ptr.copy(), &self.memory);
+        let old_root = NP_Lite_Ptr::new_standard(ROOT_PTR_ADDR, &self.schema.parsed, &self.memory);
  
         let new_bytes = NP_Memory::new(Some(capacity), size);
-        let new_root = NP_Lite_Ptr::new_standard(ROOT_PTR_ADDR, self.schema_ptr.copy(), &new_bytes);
+        let new_root = NP_Lite_Ptr::new_standard(ROOT_PTR_ADDR, &self.schema.parsed, &new_bytes);
 
         old_root.compact(new_root)?;
 
         Ok(NP_Buffer {
             schema: self.schema,
-            memory: new_bytes,
-            schema_ptr: self.schema_ptr
+            memory: new_bytes
         })
     }
 
@@ -479,7 +475,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// 
     pub fn calc_bytes(&'buffer self) -> Result<NP_Compact_Data, NP_Error> {
 
-        let root: NP_Ptr<NP_Any> = NP_Ptr::_new_standard_ptr(ROOT_PTR_ADDR, self.schema_ptr.copy(), &self.memory);
+        let root: NP_Ptr<NP_Any> = NP_Ptr::_new_standard_ptr(ROOT_PTR_ADDR, &self.schema.parsed, &self.memory);
 
         // let total_size = root.memory.get_size();
         let real_bytes = root.calc_size()? + ROOT_PTR_ADDR;

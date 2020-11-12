@@ -1,12 +1,12 @@
 use crate::{json_flex::JSMAP, pointer::NP_PtrKinds};
 use crate::pointer::{NP_Value, NP_Ptr, any::NP_Any, NP_Lite_Ptr};
-use crate::{memory::{NP_Size, NP_Memory}, schema::{NP_Schema, NP_TypeKeys, NP_Schema_Ptr}, error::NP_Error, json_flex::NP_JSON};
+use crate::{memory::{NP_Size, NP_Memory}, schema::{NP_Schema, NP_TypeKeys, NP_Parsed_Schema}, error::NP_Error, json_flex::NP_JSON};
 
 use alloc::vec::Vec;
 use alloc::string::String;
 use alloc::boxed::Box;
 use alloc::borrow::ToOwned;
-use core::marker::PhantomData;
+use core::{marker::PhantomData, hint::unreachable_unchecked};
 
 /// The map type [Using collections with pointers](../pointer/struct.NP_Ptr.html#using-collection-types-with-pointers).
 #[derive(Debug)]
@@ -15,20 +15,25 @@ pub struct NP_Map<'map, T> {
     head: u32,
     len: u16,
     memory: Option<&'map NP_Memory>,
-    schema: Option<NP_Schema_Ptr<'map>>,
+    schema: Option<&'map Box<NP_Parsed_Schema>>,
     p: PhantomData<T>
 }
 
 impl<'map, T: NP_Value<'map> + Default> NP_Value<'map> for NP_Map<'map, T> {
 
-    fn type_idx() -> (u8, String) { (NP_TypeKeys::Map as u8, "map".to_owned()) }
-    fn self_type_idx(&self) -> (u8, String) { (NP_TypeKeys::Map as u8, "map".to_owned()) }
+    fn type_idx() -> (u8, String, NP_TypeKeys) { (NP_TypeKeys::Map as u8, "map".to_owned(), NP_TypeKeys::Map) }
+    fn self_type_idx(&self) -> (u8, String, NP_TypeKeys) { (NP_TypeKeys::Map as u8, "map".to_owned(), NP_TypeKeys::Map) }
     
-    fn schema_to_json(schema_ptr: &NP_Schema_Ptr)-> Result<NP_JSON, NP_Error> {
+    fn schema_to_json(schema_ptr: &NP_Parsed_Schema)-> Result<NP_JSON, NP_Error> {
         let mut schema_json = JSMAP::new();
         schema_json.insert("type".to_owned(), NP_JSON::String(Self::type_idx().1));
 
-        let value_of = schema_ptr.copy_with_addr(schema_ptr.address + 1);
+        let value_of = match &*schema_ptr {
+            NP_Parsed_Schema::Map { i: _, sortable: _, value} => {
+                value
+            },
+            _ => { unsafe { unreachable_unchecked() } }
+        };
 
         schema_json.insert("value".to_owned(), NP_Schema::_type_to_json(&value_of)?);
 
@@ -270,7 +275,7 @@ impl<'map, T: NP_Value<'map> + Default> NP_Value<'map> for NP_Map<'map, T> {
         Ok(())
     }
 
-    fn from_json_to_schema(json_schema: &NP_JSON) -> Result<Option<NP_Schema>, NP_Error> {
+    fn from_json_to_schema(json_schema: &NP_JSON) -> Result<Option<(Vec<u8>, NP_Parsed_Schema)>, NP_Error> {
         let type_str = NP_Schema::_get_type(json_schema)?;
 
         if "map" == type_str {
@@ -285,11 +290,27 @@ impl<'map, T: NP_Value<'map> + Default> NP_Value<'map> for NP_Map<'map, T> {
             }
 
             let child_type = NP_Schema::from_json(Box::new(json_schema["value"].clone()))?;
-            schema_data.extend(child_type.bytes);
-            return Ok(Some(NP_Schema { is_sortable: false, bytes: schema_data}))
+            schema_data.extend(child_type.0);
+            return Ok(Some((schema_data, NP_Parsed_Schema::Map {
+                i: NP_TypeKeys::Map,
+                value: Box::new(child_type.1),
+                sortable: false
+            })))
         }
 
         Ok(None)
+    }
+
+    fn schema_default(_schema: &NP_Parsed_Schema) -> Option<Box<Self>> {
+        None
+    }
+
+    fn from_bytes_to_schema(address: usize, bytes: &Vec<u8>) -> NP_Parsed_Schema {
+        NP_Parsed_Schema::List {
+            i: NP_TypeKeys::List,
+            sortable: false,
+            of: Box::new(NP_Schema::from_bytes(address + 1, bytes))
+        }
     }
 }
 
@@ -303,7 +324,7 @@ impl<'map, T: NP_Value<'map> + Default> Default for NP_Map<'map, T> {
 impl<'map, T: NP_Value<'map> + Default> NP_Map<'map, T> {
 
     #[doc(hidden)]
-    pub fn new(address: u32, head: u32, length: u16, memory: &'map NP_Memory, schema_ptr: NP_Schema_Ptr<'map>) -> Self {
+    pub fn new(address: u32, head: u32, length: u16, memory: &'map NP_Memory, schema_ptr: &'map Box<NP_Parsed_Schema>) -> Self {
         NP_Map {
             address,
             head,
@@ -324,7 +345,12 @@ impl<'map, T: NP_Value<'map> + Default> NP_Map<'map, T> {
 
         let memory = self.memory.unwrap();
 
-        let self_schema = self.schema.clone().unwrap();
+        let value_of = match &**self.schema.unwrap() {
+            NP_Parsed_Schema::Map { i: _, sortable: _, value} => {
+                value
+            },
+            _ => { unsafe { unreachable_unchecked() } }
+        };
 
         if self.head == 0 { // no values, create one
 
@@ -365,7 +391,7 @@ impl<'map, T: NP_Value<'map> + Default> NP_Map<'map, T> {
             self.set_len(1);
 
             // provide
-            return Ok(NP_Ptr::_new_map_item_ptr(self.head, self_schema.copy_with_addr(self_schema.address + 1), memory));
+            return Ok(NP_Ptr::_new_map_item_ptr(self.head, value_of, memory));
         } else { // values exist, loop through them to see if we have an existing pointer for this column
 
             let mut next_addr = self.head as usize;
@@ -397,7 +423,7 @@ impl<'map, T: NP_Value<'map> + Default> NP_Map<'map, T> {
 
                 // found our value!
                 if key_vec == *key {
-                    return Ok(NP_Ptr::_new_map_item_ptr(next_addr as u32, self_schema, memory));
+                    return Ok(NP_Ptr::_new_map_item_ptr(next_addr as u32, value_of, memory));
                 }
                 
                 // not found yet, get next address
@@ -475,7 +501,7 @@ impl<'map, T: NP_Value<'map> + Default> NP_Map<'map, T> {
             self.set_len(self.len + 1);
             
             // provide 
-            return Ok(NP_Ptr::_new_map_item_ptr(addr, self_schema.copy_with_addr(self_schema.address + 1), memory));
+            return Ok(NP_Ptr::_new_map_item_ptr(addr, value_of, memory));
 
         }
     }
@@ -655,11 +681,7 @@ impl<'map, T: NP_Value<'map> + Default> NP_Map<'map, T> {
     /// Remove all keys/values from this map
     pub fn empty(self) -> Self {
 
-        let memory = match self.memory {
-            Some(x) => x,
-            None => unreachable!()
-        };
-
+        let memory = self.memory.unwrap();
 
         let memory_bytes = memory.write_bytes();
 
@@ -790,23 +812,23 @@ pub struct NP_Map_Iterator<'it, T> {
     memory: &'it NP_Memory,
     length: u16,
     current_address: u32,
-    schema: NP_Schema_Ptr<'it>,
+    schema: &'it Box<NP_Parsed_Schema>,
     map: NP_Map<'it, T>
 }
 
 impl<'it, T: NP_Value<'it> + Default> NP_Map_Iterator<'it, T> {
 
     #[doc(hidden)]
-    pub fn new(address: u32, head: u32, length: u16, memory: &'it NP_Memory, schema: NP_Schema_Ptr<'it>) -> Self {
+    pub fn new(address: u32, head: u32, length: u16, memory: &'it NP_Memory, schema: &'it Box<NP_Parsed_Schema>) -> Self {
         NP_Map_Iterator {
             current_index: 0,
             address,
             head,
             memory: &memory,
             current_address: head,
-            schema: schema.copy(),
+            schema: schema,
             length,
-            map: NP_Map::new(address, head, length, &memory, schema.copy())
+            map: NP_Map::new(address, head, length, &memory, schema)
         }
     }
 
@@ -863,10 +885,10 @@ impl<'it, T: NP_Value<'it> + Default> Iterator for NP_Map_Iterator<'it, T> {
         return Some(NP_Map_Item {
             index: self.current_index - 1,
             has_value: value_address != 0,
-            schema: self.schema.copy(),
+            schema: self.schema,
             key: key_vec,
             address: this_address,
-            map: NP_Map::new(self.address, self.head, self.length, &self.memory, self.schema.copy()),
+            map: NP_Map::new(self.address, self.head, self.length, &self.memory, self.schema),
             memory: &self.memory
         });
     }
@@ -881,7 +903,7 @@ pub struct NP_Map_Item<'item, T> {
     pub key: Vec<u8>,
     /// if there is a value here or not
     pub has_value: bool,
-    schema: NP_Schema_Ptr<'item>,
+    schema: &'item Box<NP_Parsed_Schema>,
     address: u32,
     map: NP_Map<'item, T>,
     memory: &'item NP_Memory
@@ -890,7 +912,7 @@ pub struct NP_Map_Item<'item, T> {
 impl<'item, T: NP_Value<'item> + Default> NP_Map_Item<'item, T> {
     /// Select the pointer at this iterator
     pub fn select(&mut self) -> Result<NP_Ptr<'item, T>, NP_Error> {
-        Ok(NP_Ptr::_new_map_item_ptr(self.address, self.schema.copy(), &self.memory))
+        Ok(NP_Ptr::_new_map_item_ptr(self.address, self.schema, &self.memory))
     }
     /// Delete the value at this iterator
     // TODO: Build a select statement that grabs the current index in place instead of seeking to it.
@@ -899,3 +921,25 @@ impl<'item, T: NP_Value<'item> + Default> NP_Map_Item<'item, T> {
     }
 }
 
+#[test]
+fn schema_parsing_works() -> Result<(), NP_Error> {
+    let schema = "{\"type\":\"map\",\"value\":{\"type\":\"string\"}}";
+    let factory = crate::NP_Factory::new(schema)?;
+    assert_eq!(schema, factory.schema.to_json()?.stringify());
+    
+    Ok(())
+}
+
+#[test]
+fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
+    let schema = "{\"type\":\"map\",\"value\":{\"type\":\"string\"}}";
+    let factory = crate::NP_Factory::new(schema)?;
+    let mut buffer = factory.empty_buffer(None, None);
+    buffer.deep_set("name", String::from("hello, world"))?;
+    assert_eq!(buffer.deep_get::<String>("name")?, Some(Box::new(String::from("hello, world"))));
+    buffer.deep_clear("")?;
+    buffer = buffer.compact(None, None)?;
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 8u32);
+
+    Ok(())
+}

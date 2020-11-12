@@ -41,7 +41,7 @@ use alloc::borrow::ToOwned;
 use alloc::string::ToString;
 use core::str::FromStr;
 use core::ops::Index;
-use crate::{pointer::{NP_Value, any::NP_Any, NP_Lite_Ptr}, error::NP_Error};
+use crate::{error::NP_Error, schema::NP_Parsed_Schema, pointer::{NP_Value, any::NP_Any, NP_Lite_Ptr}, schema::NP_TypeKeys};
 
 /// The JSON representation of a JS Map
 #[derive(Debug)]
@@ -128,6 +128,38 @@ impl<'json> NP_Value<'json> for NP_JSON {
     fn into_value(pointer: NP_Lite_Ptr) -> Result<Option<Box<Self>>, NP_Error> {
         let root = pointer.into::<NP_Any>();
         Ok(Some(Box::new(root.json_encode())))
+    }
+
+    fn type_idx() -> (u8, String, NP_TypeKeys) {
+        panic!()
+    }
+
+    fn self_type_idx(&self) -> (u8, String, NP_TypeKeys) {
+        panic!()
+    }
+
+    fn schema_to_json(_schema_ptr: &NP_Parsed_Schema)-> Result<NP_JSON, NP_Error> {
+        panic!()
+    }
+
+    fn to_json(_pointer: NP_Lite_Ptr<'json>) -> NP_JSON {
+        panic!()
+    }
+
+    fn get_size(_pointer: NP_Lite_Ptr<'json>) -> Result<u32, NP_Error> {
+        panic!()
+    }
+
+    fn schema_default(_schema: &NP_Parsed_Schema) -> Option<Box<Self>> {
+        panic!()
+    }
+
+    fn from_json_to_schema(_json_schema: &NP_JSON) -> Result<Option<(Vec<u8>, NP_Parsed_Schema)>, NP_Error> {
+        panic!()
+    }
+
+    fn from_bytes_to_schema(_address: usize, _bytes: &Vec<u8>) -> NP_Parsed_Schema {
+        panic!()
     }
 }
 

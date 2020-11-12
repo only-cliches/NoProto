@@ -17,7 +17,9 @@
 //! # Ok::<(), NP_Error>(()) 
 //! ```
 
-use crate::{json_flex::JSMAP, schema::NP_Schema_Ptr};
+use core::hint::unreachable_unchecked;
+
+use crate::{json_flex::JSMAP, schema::{NP_Parsed_Schema}};
 use crate::schema::NP_Schema;
 use crate::error::NP_Error;
 use crate::{schema::{NP_TypeKeys}, pointer::NP_Value, json_flex::NP_JSON};
@@ -31,34 +33,35 @@ use alloc::{borrow::ToOwned};
 
 impl<'value> NP_Value<'value> for bool {
 
-    fn type_idx() -> (u8, String) { (NP_TypeKeys::Boolean as u8, "bool".to_owned()) }
-    fn self_type_idx(&self) -> (u8, String) { (NP_TypeKeys::Boolean as u8, "bool".to_owned()) }
+    fn type_idx() -> (u8, String, NP_TypeKeys) { (NP_TypeKeys::Boolean as u8, "bool".to_owned(), NP_TypeKeys::Boolean) }
+    fn self_type_idx(&self) -> (u8, String, NP_TypeKeys) { (NP_TypeKeys::Boolean as u8, "bool".to_owned(), NP_TypeKeys::Boolean) }
 
-    fn schema_to_json(schema_ptr: &NP_Schema_Ptr)-> Result<NP_JSON, NP_Error> {
+    fn schema_to_json(schema: &NP_Parsed_Schema)-> Result<NP_JSON, NP_Error> {
         let mut schema_json = JSMAP::new();
         schema_json.insert("type".to_owned(), NP_JSON::String(Self::type_idx().1));
 
-        let schema_state = bool_get_schema_state(&schema_ptr);
-
-        if let Some(default) = schema_state {
-            schema_json.insert("default".to_owned(), match default {
-                true => NP_JSON::True,
-                false => NP_JSON::False
-            });
+        match schema {
+            NP_Parsed_Schema::Boolean { i: _, sortable: _, default} => {
+                if let Some(d) = default {
+                    schema_json.insert("default".to_owned(), match **d {
+                        true => NP_JSON::True,
+                        false => NP_JSON::False
+                    });
+                }
+            },
+            _ => { unsafe { unreachable_unchecked() } }
         }
 
         Ok(NP_JSON::Dictionary(schema_json))
     }
 
-    fn schema_default(schema: &NP_Schema_Ptr) -> Option<Box<Self>> {
+    fn schema_default(schema: &NP_Parsed_Schema) -> Option<Box<Self>> {
 
-        let state = bool_get_schema_state(&schema);
-
-        match state {
-            Some(x) => {
-                Some(Box::new(x))
+        match schema {
+            NP_Parsed_Schema::Boolean { i: _, sortable: _, default} => {
+                default.clone()
             },
-            None => None
+            _ => { unsafe { unreachable_unchecked() } }
         }
     }
 
@@ -124,16 +127,19 @@ impl<'value> NP_Value<'value> for bool {
                         }
                     },
                     None => {
-                        let state = bool_get_schema_state(&ptr.schema);
-                        match state {
-                            Some(x) => {
-                                if x == true {
-                                    NP_JSON::True
+                        match &**ptr.schema {
+                            NP_Parsed_Schema::Boolean { i: _, sortable: _, default} => {
+                                if let Some(d) = default {
+                                    if **d == true {
+                                        NP_JSON::True
+                                    } else {
+                                        NP_JSON::False
+                                    }
                                 } else {
-                                    NP_JSON::False
+                                    NP_JSON::Null
                                 }
                             },
-                            None => NP_JSON::Null
+                            _ => { unsafe { unreachable_unchecked() } }
                         }
                     }
                 }
@@ -154,7 +160,7 @@ impl<'value> NP_Value<'value> for bool {
         }
     }
 
-    fn from_json_to_schema(json_schema: &NP_JSON) -> Result<Option<NP_Schema>, NP_Error> {
+    fn from_json_to_schema(json_schema: &NP_JSON) -> Result<Option<(Vec<u8>, NP_Parsed_Schema)>, NP_Error> {
 
         let type_str = NP_Schema::_get_type(json_schema)?;
 
@@ -162,31 +168,80 @@ impl<'value> NP_Value<'value> for bool {
             let mut schema_data: Vec<u8> = Vec::new();
             schema_data.push(NP_TypeKeys::Boolean as u8);
 
-            match json_schema["default"] {
+            let default = match json_schema["default"] {
                 NP_JSON::False => {
                     schema_data.push(2);
+                    Some(Box::new(false))
                 },
                 NP_JSON::True => {
                     schema_data.push(1);
+                    Some(Box::new(true))
                 },
                 _ => {
                     schema_data.push(0);
+                    None
                 }
             };
 
-            return Ok(Some(NP_Schema { is_sortable: true, bytes: schema_data}));
+            return Ok(Some((schema_data, NP_Parsed_Schema::Boolean {
+                i: NP_TypeKeys::Boolean,
+                default: default,
+                sortable: true
+            })));
         }
 
         Ok(None)
     }
+    fn from_bytes_to_schema(address: usize, bytes: &Vec<u8>) -> NP_Parsed_Schema { 
+        NP_Parsed_Schema::Boolean {
+            i: NP_TypeKeys::Boolean,
+            sortable: true,
+            default: match bytes[address] {
+                0 => None,
+                1 => Some(Box::new(true)),
+                2 => Some(Box::new(false)),
+                _ => unreachable!()
+            }
+        }
+     }
 }
 
-fn bool_get_schema_state(schema_ptr: &NP_Schema_Ptr) -> Option<bool> {
+#[test]
+fn schema_parsing_works() -> Result<(), NP_Error> {
+    let schema = "{\"type\":\"bool\",\"default\":false}";
+    let factory = crate::NP_Factory::new(schema)?;
+    assert_eq!(schema, factory.schema.to_json()?.stringify());
 
-    match schema_ptr.schema.bytes[schema_ptr.address + 1] {
-        0 => None,
-        1 => Some(true),
-        2 => Some(false),
-        _ => unreachable!()
-    }
+    let schema = "{\"type\":\"bool\"}";
+    let factory = crate::NP_Factory::new(schema)?;
+    assert_eq!(schema, factory.schema.to_json()?.stringify());
+    
+    Ok(())
+}
+
+#[test]
+fn default_value_works() -> Result<(), NP_Error> {
+    let schema = "{\"type\":\"bool\",\"default\":false}";
+    let factory = crate::NP_Factory::new(schema)?;
+    let buffer = factory.empty_buffer(None, None);
+    assert_eq!(buffer.deep_get("")?.unwrap(), Box::new(false));
+
+    Ok(())
+}
+
+
+#[test]
+fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
+    let schema = "{\"type\":\"bool\"}";
+    let factory = crate::NP_Factory::new(schema)?;
+    let mut buffer = factory.empty_buffer(None, None);
+    buffer.deep_set("", false)?;
+    assert_eq!(buffer.deep_get::<bool>("")?.unwrap(), Box::new(false));
+    buffer.deep_clear("")?;
+    assert_eq!(buffer.deep_get::<bool>("")?, None);
+
+    buffer = buffer.compact(None, None)?;
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 4u32);
+
+    Ok(())
 }

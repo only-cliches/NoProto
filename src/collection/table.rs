@@ -1,4 +1,4 @@
-use crate::schema::NP_Schema_Ptr;
+use crate::schema::{NP_Parsed_Schema};
 use crate::pointer::NP_PtrKinds;
 use crate::{memory::{NP_Size, NP_Memory}, pointer::{NP_Value, NP_Ptr, any::NP_Any, NP_Lite_Ptr}, error::NP_Error, schema::{NP_Schema, NP_TypeKeys}, json_flex::{JSMAP, NP_JSON}};
 
@@ -6,7 +6,7 @@ use alloc::vec::Vec;
 use alloc::string::String;
 use alloc::boxed::Box;
 use alloc::{borrow::ToOwned};
-use core::result::Result;
+use core::{result::Result, hint::unreachable_unchecked};
 
 /// The data type for tables in NoProto buffers. [Using collections with pointers](../pointer/struct.NP_Ptr.html#using-collection-types-with-pointers).
 #[derive(Debug)]
@@ -14,33 +14,59 @@ pub struct NP_Table<'table> {
     address: u32, // pointer location
     head: u32,
     memory: Option<&'table NP_Memory>,
-    schema: Option<NP_Schema_Ptr<'table>>
+    schema: Option<&'table Box<NP_Parsed_Schema>>
 }
-
-/// Schema state for Tables
-#[derive(Debug)]
-pub struct NP_Table_Schema_State<'table_schema> {
-    columns: Vec<(u8, String, NP_Schema_Ptr<'table_schema>)>
-}
-
 
 impl<'table> NP_Value<'table> for NP_Table<'table> {
-    fn type_idx() -> (u8, String) { (NP_TypeKeys::Table as u8, "table".to_owned()) }
-    fn self_type_idx(&self) -> (u8, String) { (NP_TypeKeys::Table as u8, "table".to_owned()) }
+    fn type_idx() -> (u8, String, NP_TypeKeys) { (NP_TypeKeys::Table as u8, "table".to_owned(), NP_TypeKeys::Table) }
+    fn self_type_idx(&self) -> (u8, String, NP_TypeKeys) { (NP_TypeKeys::Table as u8, "table".to_owned(), NP_TypeKeys::Table) }
 
+    fn from_bytes_to_schema(address: usize, bytes: &Vec<u8>) -> NP_Parsed_Schema {
+        let column_len = bytes[address + 1];
 
-    fn schema_to_json(schema_ptr: &NP_Schema_Ptr)-> Result<NP_JSON, NP_Error> {
+        let mut parsed_columns: Vec<(u8, String, Box<NP_Parsed_Schema>)> = Vec::new();
+
+        let mut offset = address + 2;
+
+        for x in 0..column_len as usize {
+            let col_name_len = bytes[offset] as usize;
+            let col_name_bytes = &bytes[(offset + 1)..(offset + 1 + col_name_len)];
+            let col_name: String = String::from_utf8_lossy(col_name_bytes).into();
+
+            offset += 1 + col_name_len;
+
+            let schema_size = u16::from_be_bytes([
+                bytes[offset],
+                bytes[offset + 1]
+            ]) as usize;
+
+            parsed_columns.push((x as u8, col_name, Box::new(NP_Schema::from_bytes(offset + 2, bytes))));
+
+            offset += schema_size + 2;
+        }
+
+        NP_Parsed_Schema::Table {
+            i: NP_TypeKeys::Table,
+            sortable: false,
+            columns: parsed_columns
+        }
+    }
+
+    fn schema_to_json(schema_ptr: &NP_Parsed_Schema)-> Result<NP_JSON, NP_Error> {
         let mut schema_json = JSMAP::new();
         schema_json.insert("type".to_owned(), NP_JSON::String(Self::type_idx().1));
 
-        let schema_state = NP_Table::get_schema_state(schema_ptr.copy());
-
-        let columns: Vec<NP_JSON> = schema_state.columns.into_iter().map(|column| {
-            let mut cols: Vec<NP_JSON> = Vec::new();
-            cols.push(NP_JSON::String(column.1));
-            cols.push(NP_Schema::_type_to_json(&column.2).unwrap());
-            NP_JSON::Array(cols)
-        }).collect();
+        let columns: Vec<NP_JSON> = match schema_ptr {
+            NP_Parsed_Schema::Table { i: _, columns, sortable: _ } => {
+                columns.into_iter().map(|column| {
+                    let mut cols: Vec<NP_JSON> = Vec::new();
+                    cols.push(NP_JSON::String(column.1.clone()));
+                    cols.push(NP_Schema::_type_to_json(&column.2).unwrap());
+                    NP_JSON::Array(cols)
+                }).collect()
+            },
+            _ => { unsafe { unreachable_unchecked() } }
+        };
 
         schema_json.insert("columns".to_owned(), NP_JSON::Array(columns));
 
@@ -142,18 +168,20 @@ impl<'table> NP_Value<'table> for NP_Table<'table> {
         match NP_Table::into_value(ptr.clone())? {
             Some(mut real_table) => {
 
-                let schema_state = NP_Table::get_schema_state(ptr.schema.copy());
+                match &**ptr.schema {
+                    NP_Parsed_Schema::Table { i: _, columns, sortable: _ } => {
+                        for c in columns {
+                            let has_value = real_table.has(&c.1)?;
 
-                for c in schema_state.columns {
-                    let has_value = real_table.has(&c.1)?;
-
-                    if has_value.1 {
-                        let col_ptr = real_table.select::<NP_Any>(&c.1)?;
-                        let size = col_ptr.calc_size()?;
-                        acc_size += size;
-                    }
-                }
-
+                            if has_value.1 {
+                                let col_ptr = real_table.select::<NP_Any>(&c.1)?;
+                                let size = col_ptr.calc_size()?;
+                                acc_size += size;
+                            }
+                        }                        
+                    },
+                    _ => { unsafe { unreachable_unchecked() } }
+                };
             },
             None => {
                 
@@ -179,20 +207,22 @@ impl<'table> NP_Value<'table> for NP_Table<'table> {
                 match good_table {
                     Some(mut real_table) => {
 
-                        let schema_state = NP_Table::get_schema_state(ptr.schema.copy());
-
-                        for c in schema_state.columns {
-                            let col_ptr = real_table.select::<NP_Any>(c.1.as_str());
-                            match col_ptr {
-                                Ok(ptr) => {
-                                    object.insert(c.1.to_owned(), ptr.json_encode());
-                                },
-                                Err(_e) => {
-                                    object.insert(c.1.to_owned(), NP_JSON::Null);
+                        match &**ptr.schema {
+                            NP_Parsed_Schema::Table { i: _, columns, sortable: _ } => {
+                                for c in columns {
+                                    let col_ptr = real_table.select::<NP_Any>(c.1.as_str());
+                                    match col_ptr {
+                                        Ok(ptr) => {
+                                            object.insert(c.1.to_owned(), ptr.json_encode());
+                                        },
+                                        Err(_e) => {
+                                            object.insert(c.1.to_owned(), NP_JSON::Null);
+                                        }
+                                    }
                                 }
-                            }
+                            },
+                            _ => { unsafe { unreachable_unchecked() } }
                         }
-
                     },
                     None => {
                         return NP_JSON::Null;
@@ -240,7 +270,7 @@ impl<'table> NP_Value<'table> for NP_Table<'table> {
         Ok(())
     }
 
-    fn from_json_to_schema(json_schema: &NP_JSON) -> Result<Option<NP_Schema>, NP_Error> {
+    fn from_json_to_schema(json_schema: &NP_JSON) -> Result<Option<(Vec<u8>, NP_Parsed_Schema)>, NP_Error> {
 
         let type_str = NP_Schema::_get_type(json_schema)?;
 
@@ -250,8 +280,11 @@ impl<'table> NP_Value<'table> for NP_Table<'table> {
 
             let mut column_data: Vec<(String, Vec<u8>)> = Vec::new();
 
+            let mut column_schemas: Vec<(u8, String, Box<NP_Parsed_Schema>)> = Vec::new();
+
             match &json_schema["columns"] {
                 NP_JSON::Array(cols) => {
+                    let mut x: u8 = 0;
                     for col in cols {
                         let column_name = match &col[0] {
                             NP_JSON::String(x) => x.clone(),
@@ -262,7 +295,9 @@ impl<'table> NP_Value<'table> for NP_Table<'table> {
                         }
  
                         let column_type = NP_Schema::from_json(Box::new(col[1].clone()))?;
-                        column_data.push((column_name, column_type.bytes));
+                        column_data.push((column_name.clone(), column_type.0));
+                        column_schemas.push((x, column_name, Box::new(column_type.1)));
+                        x += 1;
                     }
                 },
                 _ => { 
@@ -292,10 +327,19 @@ impl<'table> NP_Value<'table> for NP_Table<'table> {
                 schema_data.extend(col.1);
             }
 
-            return Ok(Some(NP_Schema { is_sortable: false, bytes: schema_data}))
+
+            return Ok(Some((schema_data, NP_Parsed_Schema::Table {
+                i: NP_TypeKeys::Table,
+                sortable: false,
+                columns: column_schemas
+            })))
         }
 
         Ok(None)
+    }
+
+    fn schema_default(_schema: &NP_Parsed_Schema) -> Option<Box<Self>> {
+        None
     }
 }
 
@@ -309,7 +353,7 @@ impl<'table> Default for NP_Table<'table> {
 impl<'table> NP_Table<'table> {
 
     #[doc(hidden)]
-    pub fn new(address: u32, head: u32, memory: &'table NP_Memory, schema: NP_Schema_Ptr<'table>) -> Self {
+    pub fn new(address: u32, head: u32, memory: &'table NP_Memory, schema: &'table Box<NP_Parsed_Schema>) -> Self {
         NP_Table {
             address,
             head,
@@ -324,70 +368,42 @@ impl<'table> NP_Table<'table> {
         NP_Table_Iterator::new(self.address, self.head, self.memory.unwrap(), self.schema.unwrap())
     }
 
-    /// Convert schema bytes into Struct
-    /// 
-    #[doc(hidden)]
-    pub fn get_schema_state(schema_ptr: NP_Schema_Ptr<'table>) -> NP_Table_Schema_State<'table> {
-
-        let column_len = schema_ptr.schema.bytes[schema_ptr.address + 1];
-
-        let mut columns: Vec<(u8, String, NP_Schema_Ptr)> = Vec::new();
-
-        let mut offset = schema_ptr.address + 2;
-
-        for x in 0..column_len as usize {
-            let col_name_len = schema_ptr.schema.bytes[offset] as usize;
-            let col_name_bytes = &schema_ptr.schema.bytes[(offset + 1)..(offset + 1 + col_name_len)];
-            let col_name: String = String::from_utf8_lossy(col_name_bytes).into();
-
-            offset += 1 + col_name_len;
-
-            let schema_size = u16::from_be_bytes([
-                schema_ptr.schema.bytes[offset],
-                schema_ptr.schema.bytes[offset + 1]
-            ]) as usize;
-    
-            columns.push((x as u8, col_name, schema_ptr.copy_with_addr(offset + 2)));
-
-            offset += schema_size + 2;
-        }
-
-        NP_Table_Schema_State { columns: columns }
-    }
-
     /// Select a specific column from the table.  If there is no value for the column you selected, you'll get an empty pointer back.
     /// 
     /// If the column does not exist this operation will fail.
     /// 
     pub fn select<X: NP_Value<'table> + Default>(&mut self, column: &str) -> Result<NP_Ptr<'table, X>, NP_Error> {
 
-        let mut column_schema: Option<(u8, String, NP_Schema_Ptr)> = None;
 
-        let schema = self.schema.as_ref().unwrap().copy();
-        
-
-        for col in NP_Table::get_schema_state(schema.copy()).columns {
-            if col.1 == column {
-                column_schema = Some(col);
-            }
-        }
+        let column_schema = match &**self.schema.unwrap() {
+            NP_Parsed_Schema::Table { i: _, columns, sortable: _} => {
+                let mut col_data: Option<&(u8, String, Box<NP_Parsed_Schema>)> = None;
+                for col in columns {
+                    if col.1 == column {
+                        col_data = Some(&col);
+                    }
+                }
+                col_data
+            },
+            _ => { unsafe { unreachable_unchecked() } }
+        };
 
         match column_schema {
             Some(some_column_schema) => {
 
                 let memory = self.memory.unwrap();
   
-                let type_data = NP_TypeKeys::from(some_column_schema.2.schema.bytes[some_column_schema.2.address]);
+                let type_data = (*some_column_schema.2).into_type_data();
 
                 // make sure the type we're casting to isn't ANY or the cast itself isn't ANY
-                if X::type_idx().0 != NP_TypeKeys::Any as u8 && type_data.clone() as u8 != NP_TypeKeys::Any as u8 {
+                if X::type_idx().0 != NP_TypeKeys::Any as u8 && type_data.0 as u8 != NP_TypeKeys::Any as u8 {
 
                     // not using any casting, check type
-                    if type_data.clone() as u8 != X::type_idx().0 {
+                    if type_data.0 as u8 != X::type_idx().0 {
                         let mut err = "TypeError: Attempted to cast type (".to_owned();
                         err.push_str(X::type_idx().1.as_str());
                         err.push_str(") to schema of type (");
-                        err.push_str(type_data.clone().into_type_idx().1.as_str());
+                        err.push_str(type_data.1.as_str());
                         err.push_str(")");
                         return Err(NP_Error::new(err));
                     }
@@ -416,7 +432,7 @@ impl<'table> NP_Table<'table> {
                     self.set_head(addr);
 
                     // provide
-                    return Ok(NP_Ptr::_new_table_item_ptr(self.head, some_column_schema.2, &memory));
+                    return Ok(NP_Ptr::_new_table_item_ptr(self.head, &some_column_schema.2, &memory));
                 } else { // values exist, loop through them to see if we have an existing pointer for this column
 
                     let mut next_addr = self.head as usize;
@@ -433,7 +449,7 @@ impl<'table> NP_Table<'table> {
                         
                         // found our value!
                         if index == some_column_schema.0 {
-                            return Ok(NP_Ptr::_new_table_item_ptr(next_addr as u32, some_column_schema.2, &memory))
+                            return Ok(NP_Ptr::_new_table_item_ptr(next_addr as u32, &some_column_schema.2, &memory))
                         }
                         
                         // not found yet, get next address
@@ -492,7 +508,7 @@ impl<'table> NP_Table<'table> {
                     }
                     
                     // provide 
-                    return Ok(NP_Ptr::_new_table_item_ptr(addr, some_column_schema.2, memory));
+                    return Ok(NP_Ptr::_new_table_item_ptr(addr, &some_column_schema.2, memory));
 
                 }
             },
@@ -512,15 +528,17 @@ impl<'table> NP_Table<'table> {
 
         let memory = self.memory.unwrap();
 
-        let schema = self.schema.as_ref().unwrap();
-        let schema_state = NP_Table::get_schema_state(schema.copy());
-
-        let column_index = schema_state.columns.iter().fold(0u8, |prev, cur| {
-            if cur.1 == column {
-                return cur.0; 
-            }
-            prev
-        });
+        let column_index = match &**self.schema.unwrap() {
+            NP_Parsed_Schema::Table { i: _, columns, sortable: _ } => {
+                columns.iter().fold(0u8, |prev, cur| {
+                    if cur.1 == column {
+                        return cur.0; 
+                    }
+                    prev
+                })
+            },
+            _ => { unsafe { unreachable_unchecked() } }
+        };
 
         if self.head == 0 { // no values, nothing to delete
             Ok(false)
@@ -686,7 +704,7 @@ impl<'table> NP_Table<'table> {
     /// The first bool is if a pointer exists for this column, the second bool is if there is a value set on that pointer.
     /// 
     pub fn has(&self, column: &str) -> core::result::Result<(bool, bool), NP_Error> {
-        let mut found = false;
+        let found = false;
 
         if self.head == 0 { // no values in this table
            return Ok((false, false));
@@ -694,16 +712,17 @@ impl<'table> NP_Table<'table> {
 
         let memory = self.memory.unwrap();
 
-        let schema = self.schema.as_ref().unwrap();
-        let schema_state = NP_Table::get_schema_state(schema.copy());
-
-        let column_index = schema_state.columns.iter().fold(0, |prev, cur| {
-            if cur.1.as_str() == column { 
-                found = true;
-                return cur.0; 
-            }
-            prev
-        });
+        let column_index = match &**self.schema.unwrap() {
+            NP_Parsed_Schema::Table { i: _, columns, sortable: _ } => {
+                columns.iter().fold(0u8, |prev, cur| {
+                    if cur.1 == column {
+                        return cur.0; 
+                    }
+                    prev
+                })
+            },
+            _ => { unsafe { unreachable_unchecked() } }
+        };
 
         // no column with this name
         if found == false { return Ok((false, false));};
@@ -758,7 +777,7 @@ pub struct NP_Table_Iterator<'it> {
     address: u32, // pointer location
     head: u32,
     memory: &'it NP_Memory,
-    schema: NP_Schema_Ptr<'it>,
+    schema: &'it Box<NP_Parsed_Schema>,
     column_index: u8,
     table: NP_Table<'it>
 }
@@ -766,14 +785,14 @@ pub struct NP_Table_Iterator<'it> {
 impl<'it> NP_Table_Iterator<'it> {
 
     #[doc(hidden)]
-    pub fn new(address: u32, head: u32, memory: &'it NP_Memory, schema: NP_Schema_Ptr<'it>) -> Self {
+    pub fn new(address: u32, head: u32, memory: &'it NP_Memory, schema: &'it Box<NP_Parsed_Schema>) -> Self {
         NP_Table_Iterator {
             address,
             head,
             memory: &memory,
-            schema: schema.copy(),
+            schema: &schema,
             column_index: 0,
-            table: NP_Table::new(address, head, memory, schema.copy())
+            table: NP_Table::new(address, head, memory, schema)
         }
     }
 
@@ -787,25 +806,30 @@ impl<'it> Iterator for NP_Table_Iterator<'it> {
     type Item = NP_Table_Item<'it>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let schema_state = NP_Table::get_schema_state(self.schema.copy());
+        let cols = match &**self.schema {
+            NP_Parsed_Schema::Table { i: _, columns, sortable: _ } => {
+                columns
+            },
+            _ => { unsafe { unreachable_unchecked() } }
+        };
 
-        if (self.column_index as usize) < schema_state.columns.len() {
+        if (self.column_index as usize) < cols.len() {
 
             loop {
-                if (self.column_index as usize) >= schema_state.columns.len() {
+                if (self.column_index as usize) >= cols.len() {
                     return None;
                 }
 
-                let col_data = &schema_state.columns[self.column_index as usize];
+                let col_data = &cols[self.column_index as usize];
 
                 self.column_index += 1;
                 let exists = self.table.has(col_data.1.as_str()).unwrap();
                 return Some(NP_Table_Item {
                     index: col_data.0,
-                    column: col_data.1.clone(),
+                    column: &col_data.1,
                     has_value: exists,
-                    schema: col_data.2.copy(),
-                    table: NP_Table::new(self.address, self.head, &self.memory, self.schema.copy())
+                    schema: &col_data.2,
+                    table: NP_Table::new(self.address, self.head, &self.memory, self.schema)
                 });
                  
             }
@@ -821,11 +845,11 @@ pub struct NP_Table_Item<'item> {
     /// The index of this item in the table
     pub index: u8,
     /// The column string name for this index
-    pub column: String,
+    pub column: &'item String,
     /// (has pointer at this index, his value at this index)
     pub has_value: (bool, bool),
     /// Schema pointer for this item
-    pub schema: NP_Schema_Ptr<'item>,
+    pub schema: &'item Box<NP_Parsed_Schema>,
     table: NP_Table<'item>
 }
 
@@ -842,3 +866,25 @@ impl<'item> NP_Table_Item<'item> {
     }
 }
 
+#[test]
+fn schema_parsing_works() -> Result<(), NP_Error> {
+    let schema = "{\"type\":\"table\",\"columns\":[[\"age\",{\"type\":\"uint8\"}],[\"name\",{\"type\":\"string\",\"size\":10}]]}";
+    let factory = crate::NP_Factory::new(schema)?;
+    assert_eq!(schema, factory.schema.to_json()?.stringify());
+    
+    Ok(())
+}
+
+#[test]
+fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
+    let schema = "{\"type\":\"table\",\"columns\":[[\"age\",{\"type\":\"uint8\"}],[\"name\",{\"type\":\"string\"}]]}";
+    let factory = crate::NP_Factory::new(schema)?;
+    let mut buffer = factory.empty_buffer(None, None);
+    buffer.deep_set("name", String::from("hello"))?;
+    assert_eq!(buffer.deep_get::<String>("name")?, Some(Box::new(String::from("hello"))));
+    buffer.deep_clear("")?;
+    buffer = buffer.compact(None, None)?;
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 6u32);
+
+    Ok(())
+}

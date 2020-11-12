@@ -1,5 +1,5 @@
 
-use crate::{schema::NP_Schema_Ptr, json_flex::{JSMAP}};
+use crate::{json_flex::{JSMAP}, schema::{NP_Parsed_Schema}};
 use alloc::vec::Vec;
 use crate::pointer::NP_Ptr;
 use crate::error::NP_Error;
@@ -23,15 +23,15 @@ impl NP_Any {
     /// 
     pub fn cast<'any, T: NP_Value<'any> + Default>(pointer: NP_Ptr<'any, NP_Any>) -> Result<NP_Ptr<'any, T>, NP_Error> {
 
-        let this_type = pointer.schema.schema.bytes[pointer.schema.address];
+        let this_type = pointer.schema.into_type_data();
 
         // schema is "any" type, all casting permitted
-        if this_type == NP_TypeKeys::Any as u8 {
+        if this_type.0 == NP_TypeKeys::Any as u8 {
             return Ok(NP_Ptr::_new_standard_ptr(pointer.location, pointer.schema, pointer.memory));
         }
 
         // schema matches type
-        if T::type_idx().0 == this_type { 
+        if T::type_idx().0 == this_type.0 { 
             return Ok(NP_Ptr::_new_standard_ptr(pointer.location, pointer.schema, pointer.memory));
         }
 
@@ -39,7 +39,7 @@ impl NP_Any {
         let mut err = "TypeError: Attempted to cast type (".to_owned();
         err.push_str(T::type_idx().1.as_str());
         err.push_str(") to schema of type (");
-        err.push_str(NP_TypeKeys::from(this_type).into_type_idx().1.as_str());
+        err.push_str(this_type.1.as_str());
         err.push_str(")");
         Err(NP_Error::new(err))
     }
@@ -47,10 +47,10 @@ impl NP_Any {
 
 impl<'any> NP_Value<'any> for NP_Any {
 
-    fn type_idx() -> (u8, String) { (NP_TypeKeys::Any as u8, "any".to_owned()) }
-    fn self_type_idx(&self) -> (u8, String) { (NP_TypeKeys::Any as u8, "any".to_owned()) }
+    fn type_idx() -> (u8, String, NP_TypeKeys) { (NP_TypeKeys::Any as u8, "any".to_owned(), NP_TypeKeys::Any) }
+    fn self_type_idx(&self) -> (u8, String, NP_TypeKeys) { (NP_TypeKeys::Any as u8, "any".to_owned(), NP_TypeKeys::Any) }
 
-    fn schema_to_json(_schema_ptr: &NP_Schema_Ptr)-> Result<NP_JSON, NP_Error> {
+    fn schema_to_json(_schema_ptr: &NP_Parsed_Schema)-> Result<NP_JSON, NP_Error> {
         let mut schema_json = JSMAP::new();
         schema_json.insert("type".to_owned(), NP_JSON::String("any".to_owned()));
 
@@ -72,17 +72,31 @@ impl<'any> NP_Value<'any> for NP_Any {
     fn do_compact(_from_ptr: NP_Lite_Ptr, _to_ptr: NP_Lite_Ptr) -> Result<(), NP_Error> where Self: NP_Value<'any> + Default {
         Err(NP_Error::new("Cannot compact an ANY field!"))
     }
-    fn from_json_to_schema(json_schema: &NP_JSON) -> Result<Option<NP_Schema>, NP_Error> {
+    fn from_json_to_schema(json_schema: &NP_JSON)-> Result<Option<(Vec<u8>, NP_Parsed_Schema)>, NP_Error> {
 
         let type_str = NP_Schema::_get_type(json_schema)?;
 
         if "any" == type_str {
             let mut schema_data: Vec<u8> = Vec::new();
             schema_data.push(NP_TypeKeys::Any as u8);
-            return Ok(Some(NP_Schema { is_sortable: false, bytes: schema_data}))
+            return Ok(Some((schema_data, NP_Parsed_Schema::Any {
+                i: NP_TypeKeys::Any,
+                sortable: false
+            })));
         }
 
         Ok(None)
+    }
+
+    fn schema_default(_schema: &NP_Parsed_Schema) -> Option<Box<Self>> {
+        None
+    }
+
+    fn from_bytes_to_schema(_address: usize, _bytes: &Vec<u8>) -> NP_Parsed_Schema {
+        NP_Parsed_Schema::Any {
+            i: NP_TypeKeys::Any,
+            sortable: false
+        }
     }
 }
 
@@ -90,4 +104,14 @@ impl<'any> Default for NP_Any {
     fn default() -> Self { 
         NP_Any {}
     }
+}
+
+
+#[test]
+fn schema_parsing_works() -> Result<(), NP_Error> {
+    let schema = "{\"type\":\"any\"}";
+    let factory = crate::NP_Factory::new(schema)?;
+    assert_eq!(schema, factory.schema.to_json()?.stringify());
+    
+    Ok(())
 }

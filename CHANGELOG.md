@@ -1,7 +1,15 @@
+# 0.3.0 November 11, 2020
+- Added lots of tests
+- Reorganized files a little bit.
+- Byte schemas are now parsed ahead of time instead of incrementally
+- Slight adjustment to the schema byte format.
+- Tuple sorting validation is now more thorough
+- Cleaned up lots of code.
+
 # 0.2.2 November 10, 2020
 - Added lots of tests and documentation.
 - Removed all Rc's from the library.
-- Added compiled schemas & format docs with tests.
+- Added compiled byte schemas & format docs with tests.
 
 # 0.1.2 August 26, 2020
 - Added lots of tests, fixed a few small bugs.

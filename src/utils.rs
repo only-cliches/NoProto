@@ -2,7 +2,7 @@ use core::str;
 use alloc::string::String;
 use alloc::borrow::ToOwned;
 use alloc::vec::Vec;
-use crate::error::NP_Error;
+use crate::{error::NP_Error, schema::NP_TypeKeys};
 
 const KX: u32 = 123456789;
 const KY: u32 = 362436069;
@@ -86,7 +86,7 @@ pub fn overflow_error(kind: &str, path: &Vec<&str>, path_index: usize) -> Result
     Ok(())
 }
 
-pub fn type_error(schema_type: &(u8, String), casting_type: &(u8, String), path: &Vec<&str>, path_index: usize) -> Result<(), NP_Error> {
+pub fn type_error(schema_type: &(u8, String, NP_TypeKeys), casting_type: &(u8, String, NP_TypeKeys), path: &Vec<&str>, path_index: usize) -> Result<(), NP_Error> {
     if schema_type.0 != casting_type.0 {
         let mut err = "TypeError: Attempted to get value for type (".to_owned();
         err.push_str(casting_type.1.as_str());

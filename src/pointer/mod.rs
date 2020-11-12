@@ -4,34 +4,37 @@
 //! Pointers should *never* be created directly, instead the various methods provided by the library to access
 //! the internals of the buffer should be used.
 //! 
-//! Once you have a pointer you can read it's contents if it's a scalar value with `.get()` or convert it to a collection with `.into()`.
+//! Once you have a pointer you can read it's contents if it's a scalar value with `.get()` or convert it to a collection with `.deref()`.
 //! When you attempt to read, update, or convert a pointer the schema is checked for that pointer location.  If the schema conflicts with the operation you're attempting it will fail.
 //! As a result, you should be careful to make sure your reads and updates to the buffer line up with the schema you provided.
 //! 
 //! 
 
-/// Misc types (NP_Dec, NP_Geo, etc)
-pub mod misc;
-pub mod string;
-/// Bytes type
-pub mod bytes;
 /// Any type
 pub mod any;
+pub mod string;
+pub mod bytes;
 pub mod numbers;
 pub mod bool;
+pub mod geo;
+pub mod dec;
+pub mod ulid;
+pub mod uuid;
+pub mod option;
+pub mod date;
 
-use crate::{json_flex::NP_JSON, schema::NP_Schema};
+use crate::pointer::dec::NP_Dec;
+use crate::NP_Parsed_Schema;
+use crate::{json_flex::NP_JSON};
 use crate::memory::{NP_Size, NP_Memory};
 use crate::NP_Error;
-use crate::{schema::{NP_TypeKeys, NP_Schema_Ptr}, collection::{map::NP_Map, table::NP_Table, list::NP_List, tuple::NP_Tuple}, utils::{overflow_error, print_path, type_error}};
+use crate::{schema::{NP_TypeKeys}, collection::{map::NP_Map, table::NP_Table, list::NP_List, tuple::NP_Tuple}, utils::{overflow_error, print_path, type_error}};
 
-use alloc::string::String;
-use alloc::boxed::Box;
-use alloc::borrow::ToOwned;
-use alloc::{vec::Vec};
+use alloc::{boxed::Box, string::String, vec::Vec, borrow::ToOwned};
 use bytes::NP_Bytes;
-pub use misc::{NP_Geo, NP_Dec, NP_UUID, NP_ULID, NP_Date, NP_Option};
 use any::NP_Any;
+
+use self::{date::NP_Date, geo::NP_Geo, option::NP_Option, ulid::NP_ULID, uuid::NP_UUID};
 
 // stores the different kinds of pointers and the details for each pointer
 #[doc(hidden)]
@@ -68,17 +71,15 @@ pub trait NP_Value<'value> {
 
     /// Get the type information for this type (static)
     /// 
-    fn type_idx() -> (u8, String) { (0, "null".to_owned()) }
+    fn type_idx() -> (u8, String, NP_TypeKeys);
 
     /// Get the type information for this type (instance)
     /// 
-    fn self_type_idx(&self) -> (u8, String) { (0, "null".to_owned()) }
+    fn self_type_idx(&self) -> (u8, String, NP_TypeKeys);
 
     /// Convert the schema byte array for this type into JSON
     /// 
-    fn schema_to_json(_schema_ptr: &NP_Schema_Ptr)-> Result<NP_JSON, NP_Error> {
-        Err(NP_Error::new("Attempted to convert schema to JSON for unsupported type!"))
-    }
+    fn schema_to_json(_schema_ptr: &NP_Parsed_Schema)-> Result<NP_JSON, NP_Error>;
 
     /// Set the value of this scalar into the buffer
     /// 
@@ -98,15 +99,11 @@ pub trait NP_Value<'value> {
 
     /// Convert this type into a JSON value (recursive for collections)
     /// 
-    fn to_json(_pointer: NP_Lite_Ptr<'value>) -> NP_JSON {
-         NP_JSON::Null
-    }
+    fn to_json(_pointer: NP_Lite_Ptr<'value>) -> NP_JSON;
 
     /// Calculate the size of this pointer and it's children (recursive for collections)
     /// 
-    fn get_size(_pointer: NP_Lite_Ptr<'value>) -> Result<u32, NP_Error> {
-         Err(NP_Error::new("Size not supported for this type!"))
-    }
+    fn get_size(_pointer: NP_Lite_Ptr<'value>) -> Result<u32, NP_Error>;
     
     /// Handle copying from old pointer/buffer to new pointer/buffer (recursive for collections)
     /// 
@@ -127,15 +124,15 @@ pub trait NP_Value<'value> {
 
     /// Get the default schema value for this type
     /// 
-    fn schema_default(_schema: &NP_Schema_Ptr) -> Option<Box<Self>> {
-        None
-    }
+    fn schema_default(_schema: &NP_Parsed_Schema) -> Option<Box<Self>>;
 
-    /// Parse JSON schema into bytes
-    ///  returns (isSortable, schema_bytes)
-    fn from_json_to_schema(_json_schema: &NP_JSON) -> Result<Option<NP_Schema>, NP_Error> {
-        Err(NP_Error::new("No parsing for this type!"))
-    }
+    /// Parse JSON schema into schema
+    ///
+    fn from_json_to_schema(_json_schema: &NP_JSON) -> Result<Option<(Vec<u8>, NP_Parsed_Schema)>, NP_Error>;
+
+    /// Parse bytes into schema
+    /// 
+    fn from_bytes_to_schema(_address: usize, _bytes: &Vec<u8>) -> NP_Parsed_Schema;
 }
 
 #[derive(Debug, Clone)]
@@ -149,13 +146,13 @@ pub struct NP_Lite_Ptr<'lite> {
     /// the underlying buffer this pointer is a part of
     pub memory: &'lite NP_Memory, 
     /// schema stores the *actual* schema data for this pointer, regardless of type casting
-    pub schema: NP_Schema_Ptr<'lite>
+    pub schema: &'lite Box<NP_Parsed_Schema>
 }
 
 impl<'lite> NP_Lite_Ptr<'lite> {
 
     /// New standard lite pointer  
-    pub fn new_standard(location: u32, schema: NP_Schema_Ptr<'lite>, memory: &'lite NP_Memory) -> Self {
+    pub fn new_standard(location: u32, schema: &'lite Box<NP_Parsed_Schema>, memory: &'lite NP_Memory) -> Self {
 
         let addr = location as usize;
         
@@ -197,7 +194,7 @@ impl<'lite> NP_Lite_Ptr<'lite> {
                 NP_Size::U8 => u8::from_be_bytes([ptr.memory.get_1_byte(addr).unwrap_or(0)]) as u32
             }},
             memory: ptr.memory,
-            schema: ptr.schema.clone()
+            schema: ptr.schema
         }
     }
 
@@ -214,86 +211,36 @@ impl<'lite> NP_Lite_Ptr<'lite> {
 
     /// used to run compaction on this pointer
     /// should not be called directly by the library user
-    /// Use NP_Factory methods of `compact` and `maybe_compact`.
+    #[doc(hidden)]
     pub fn compact(self, copy_to: NP_Lite_Ptr) -> Result<(), NP_Error> {
 
-
-        match self.schema.to_type_key() {
-            NP_TypeKeys::Any => {
-                Ok(())
-            },
-            NP_TypeKeys::JSON => {
-                unreachable!()
-            },
-            NP_TypeKeys::UTF8String => {
-                String::do_compact(self, copy_to)
-            },
-            NP_TypeKeys::Bytes => {
-                NP_Bytes::do_compact(self, copy_to)
-            },
-            NP_TypeKeys::Int8 => {
-                i8::do_compact(self, copy_to)
-            },
-            NP_TypeKeys::Int16 => {
-                i16::do_compact(self, copy_to)
-            },
-            NP_TypeKeys::Int32 => {
-                i32::do_compact(self, copy_to)
-            },
-            NP_TypeKeys::Int64 => {
-                i64::do_compact(self, copy_to)
-            },
-            NP_TypeKeys::Uint8 => {
-                u8::do_compact(self, copy_to)
-            },
-            NP_TypeKeys::Uint16 => {
-                u16::do_compact(self, copy_to)
-            },
-            NP_TypeKeys::Uint32 => {
-                u32::do_compact(self, copy_to)
-            },
-            NP_TypeKeys::Uint64 => {
-                u64::do_compact(self, copy_to)
-            },
-            NP_TypeKeys::Float => {
-                f32::do_compact(self, copy_to)
-            },
-            NP_TypeKeys::Double => {
-                f64::do_compact(self, copy_to)
-            },
-            NP_TypeKeys::Decimal => {
-                NP_Dec::do_compact(self, copy_to)
-            },
-            NP_TypeKeys::Boolean => {
-                bool::do_compact(self, copy_to)
-            },
-            NP_TypeKeys::Geo => {
-                NP_Geo::do_compact(self, copy_to)
-            },
-            NP_TypeKeys::Uuid => {
-                NP_UUID::do_compact(self, copy_to)
-            },
-            NP_TypeKeys::Ulid => {
-                NP_ULID::do_compact(self, copy_to)
-            },
-            NP_TypeKeys::Date => {
-                NP_Date::do_compact(self, copy_to)
-            },
-            NP_TypeKeys::Enum => {
-                NP_Option::do_compact(self, copy_to)
-            },
-            NP_TypeKeys::Table => {
-                NP_Table::do_compact(self, copy_to)
-            },
-            NP_TypeKeys::Map => {
-                NP_Map::<NP_Any>::do_compact(self, copy_to)
-            },
-            NP_TypeKeys::List => {
-                NP_List::<NP_Any>::do_compact(self, copy_to)
-            },
-            NP_TypeKeys::Tuple => {
-                NP_Tuple::do_compact(self, copy_to)
-            }
+        match **self.schema {
+            NP_Parsed_Schema::Any        { sortable: _, i:_ }                        => { Ok(()) }
+            NP_Parsed_Schema::UTF8String { sortable: _, i:_, size:_, default:_ }     => { String::do_compact(self, copy_to) }
+            NP_Parsed_Schema::Bytes      { sortable: _, i:_, size:_, default:_ }     => { NP_Bytes::do_compact(self, copy_to) }
+            NP_Parsed_Schema::Int8       { sortable: _, i:_, default: _ }            => { i8::do_compact(self, copy_to) }
+            NP_Parsed_Schema::Int16      { sortable: _, i:_ , default: _ }           => { i16::do_compact(self, copy_to)}
+            NP_Parsed_Schema::Int32      { sortable: _, i:_ , default: _ }           => { i32::do_compact(self, copy_to) }
+            NP_Parsed_Schema::Int64      { sortable: _, i:_ , default: _ }           => { i64::do_compact(self, copy_to) }
+            NP_Parsed_Schema::Uint8      { sortable: _, i:_ , default: _ }           => { u8::do_compact(self, copy_to) }
+            NP_Parsed_Schema::Uint16     { sortable: _, i:_ , default: _ }           => { u16::do_compact(self, copy_to) }
+            NP_Parsed_Schema::Uint32     { sortable: _, i:_ , default: _ }           => { u32::do_compact(self, copy_to) }
+            NP_Parsed_Schema::Uint64     { sortable: _, i:_ , default: _ }           => { u64::do_compact(self, copy_to) }
+            NP_Parsed_Schema::Float      { sortable: _, i:_ , default: _ }           => { f32::do_compact(self, copy_to) }
+            NP_Parsed_Schema::Double     { sortable: _, i:_ , default: _ }           => { f64::do_compact(self, copy_to) }
+            NP_Parsed_Schema::Decimal    { sortable: _, i:_, exp:_, default:_ }      => { NP_Dec::do_compact(self, copy_to) }
+            NP_Parsed_Schema::Boolean    { sortable: _, i:_, default:_ }             => { bool::do_compact(self, copy_to) }
+            NP_Parsed_Schema::Geo        { sortable: _, i:_, default:_, size:_ }     => { NP_Geo::do_compact(self, copy_to) }
+            NP_Parsed_Schema::Uuid       { sortable: _, i:_ }                        => { NP_UUID::do_compact(self, copy_to) }
+            NP_Parsed_Schema::Ulid       { sortable: _, i:_ }                        => { NP_ULID::do_compact(self, copy_to) }
+            NP_Parsed_Schema::Date       { sortable: _, i:_, default:_ }             => { NP_Date::do_compact(self, copy_to) }
+            NP_Parsed_Schema::Enum       { sortable: _, i:_, default:_, choices: _ } => { NP_Option::do_compact(self, copy_to) }
+            NP_Parsed_Schema::Table      { sortable: _, i:_, columns:_ }             => { NP_Table::do_compact(self, copy_to) }
+            NP_Parsed_Schema::Map        { sortable: _, i:_, value:_ }               => { NP_Map::<NP_Any>::do_compact(self, copy_to) }
+            NP_Parsed_Schema::List       { sortable: _, i:_, of:_ }                  => { NP_List::<NP_Any>::do_compact(self, copy_to) }
+            NP_Parsed_Schema::Tuple      { sortable: _, i:_, values:_ }              => { NP_Tuple::do_compact(self, copy_to) }
+            NP_Parsed_Schema::JSON       { sortable: _, i:_ }                        => { unreachable!() },
+            _ => { panic!() }
         }
     }
 }
@@ -308,7 +255,7 @@ impl<'lite> NP_Lite_Ptr<'lite> {
 /// ```rust
 /// use no_proto::error::NP_Error;
 /// use no_proto::NP_Factory;
-/// use no_proto::pointer::misc::NP_Date;
+/// use no_proto::pointer::date::NP_Date;
 /// use std::time::{SystemTime, UNIX_EPOCH};
 /// 
 /// // Simple schema with just a date
@@ -399,14 +346,10 @@ pub struct NP_Ptr<'ptr, T: NP_Value<'ptr> + Default> {
     /// the underlying buffer this pointer is a part of
     pub memory: &'ptr NP_Memory, 
     /// schema stores the *actual* schema data for this pointer, regardless of type casting
-    pub schema: NP_Schema_Ptr<'ptr>, 
+    pub schema: &'ptr Box<NP_Parsed_Schema>, 
     /// a static invocation of the pointer type
     pub value: T
 }
-/*
-impl<'ptr, T: NP_Value<'ptr> + Default> Copy for NP_Ptr<'ptr, T> {
-
-}*/
 
 impl<'ptr, T: NP_Value<'ptr> + Default> NP_Ptr<'ptr, T> {
 
@@ -454,7 +397,7 @@ impl<'ptr, T: NP_Value<'ptr> + Default> NP_Ptr<'ptr, T> {
     }
 
     #[doc(hidden)]
-    pub fn _new_standard_ptr(location: u32, schema: NP_Schema_Ptr<'ptr>, memory: &'ptr NP_Memory) -> Self {
+    pub fn _new_standard_ptr(location: u32, schema: &'ptr Box<NP_Parsed_Schema>, memory: &'ptr NP_Memory) -> Self {
 
         let addr = location as usize;
         
@@ -472,7 +415,7 @@ impl<'ptr, T: NP_Value<'ptr> + Default> NP_Ptr<'ptr, T> {
     }
 
     #[doc(hidden)]
-    pub fn _new_table_item_ptr(location: u32, schema: NP_Schema_Ptr<'ptr>, memory: &'ptr NP_Memory) -> Self {
+    pub fn _new_table_item_ptr(location: u32, schema: &'ptr Box<NP_Parsed_Schema>, memory: &'ptr NP_Memory) -> Self {
 
         let addr = location as usize;
         let b_bytes = &memory.read_bytes();
@@ -503,7 +446,7 @@ impl<'ptr, T: NP_Value<'ptr> + Default> NP_Ptr<'ptr, T> {
     }
 
     #[doc(hidden)]
-    pub fn _new_map_item_ptr(location: u32, schema: NP_Schema_Ptr<'ptr>, memory: &'ptr NP_Memory) -> Self {
+    pub fn _new_map_item_ptr(location: u32, schema: &'ptr Box<NP_Parsed_Schema>, memory: &'ptr NP_Memory) -> Self {
 
         let addr = location as usize;
 
@@ -533,7 +476,7 @@ impl<'ptr, T: NP_Value<'ptr> + Default> NP_Ptr<'ptr, T> {
     }
 
     #[doc(hidden)]
-    pub fn _new_list_item_ptr(location: u32, schema: NP_Schema_Ptr<'ptr>, memory: &'ptr NP_Memory) -> Self {
+    pub fn _new_list_item_ptr(location: u32, schema: &'ptr Box<NP_Parsed_Schema>, memory: &'ptr NP_Memory) -> Self {
 
         let addr = location as usize;
 
@@ -586,12 +529,13 @@ impl<'ptr, T: NP_Value<'ptr> + Default> NP_Ptr<'ptr, T> {
         })
     }
 
-    /// Destroy this pointer and convert it into the underlying data type.
+    /// Consume this pointer and convert it into the underlying data type.
     /// This is mostly useful for collections but can also be used to copy scalar values out of the buffer.
     /// 
     pub fn deref(self) -> Result<Option<T>, NP_Error> {
 
-        let type_data = self.schema.to_type_data();
+  
+        let type_data = self.schema.into_type_data();
 
         // make sure the type we're casting to isn't ANY or the cast itself isn't ANY
         if T::type_idx().0 != NP_TypeKeys::Any as u8 && type_data.0 != NP_TypeKeys::Any as u8  {
@@ -637,7 +581,7 @@ impl<'ptr, T: NP_Value<'ptr> + Default> NP_Ptr<'ptr, T> {
             NP_TypeKeys::Tuple => { Err(NP_Error::new("Can't deep set tuple type!")) },
             _ => {
                 let vec_path: Vec<&str> = path.split(".").filter(|v| { v.len() > 0 }).collect();
-                let pointer = Self::_new_standard_ptr(self.location, self.schema.copy(), self.memory);
+                let pointer = Self::_new_standard_ptr(self.location, self.schema, self.memory);
                 pointer._deep_set::<X>(vec_path, 0, value)
             }
         }
@@ -650,7 +594,7 @@ impl<'ptr, T: NP_Value<'ptr> + Default> NP_Ptr<'ptr, T> {
     /// 
     pub fn deep_clear(&'ptr mut self, path: &str) -> Result<(), NP_Error> {
         let vec_path: Vec<&str> = path.split(".").filter(|v| { v.len() > 0 }).collect();
-        let pointer = Self::_new_standard_ptr(self.location, self.schema.copy(), &self.memory);
+        let pointer = Self::_new_standard_ptr(self.location, self.schema, &self.memory);
         pointer._deep_clear(vec_path, 0)
     }
   
@@ -663,20 +607,19 @@ impl<'ptr, T: NP_Value<'ptr> + Default> NP_Ptr<'ptr, T> {
     /// The type that you cast the request to will be compared to the schema, if it doesn't match the schema the request will fail.
     pub fn deep_get<X: NP_Value<'ptr> + Default>(&mut self, path: &str) -> Result<Option<Box<X>>, NP_Error> {
         let vec_path: Vec<&str> = path.split(".").filter(|v| { v.len() > 0 }).collect();
-        let pointer = Self::_new_standard_ptr(self.location, self.schema.copy(), &self.memory);
+        let pointer = Self::_new_standard_ptr(self.location, self.schema, &self.memory);
         pointer._deep_get::<X>(vec_path, 0)
     }
 
     #[doc(hidden)]
     pub fn _deep_clear(self, path: Vec<&str>, path_index: usize) -> Result<(), NP_Error> {
 
-        
         if path.len() == path_index {
             self.clear()?;
             return Ok(());
         }
 
-        match self.schema.to_type_key() {
+        match self.schema.into_type_data().2 {
             NP_TypeKeys::Table => {
 
                 let result = NP_Table::into_value(NP_Lite_Ptr::from(self))?;
@@ -773,9 +716,9 @@ impl<'ptr, T: NP_Value<'ptr> + Default> NP_Ptr<'ptr, T> {
             _ => { }
         };
 
-        let type_data = self.schema.to_type_data();
+        let type_data = self.schema.into_type_data();
 
-        match self.schema.to_type_key() {
+        match type_data.2 {
             NP_TypeKeys::Table => {
 
                 overflow_error("deep set", &path, path_index)?;
@@ -908,9 +851,9 @@ impl<'ptr, T: NP_Value<'ptr> + Default> NP_Ptr<'ptr, T> {
             _ => false
         };
 
-        let type_data = self.schema.to_type_data();
+        let type_data = self.schema.into_type_data();
 
-        match self.schema.to_type_key() {
+        match type_data.2 {
             NP_TypeKeys::Table => {
 
                 if is_json_req == false {
@@ -1060,7 +1003,8 @@ impl<'ptr, T: NP_Value<'ptr> + Default> NP_Ptr<'ptr, T> {
     /// This is NOT related to the `default` key in the schema, this is the default for the underlying Rust data type.
     pub fn set_default(&self) -> Result<(), NP_Error> {
 
-        match self.schema.to_type_key() {
+        match self.schema.into_type_data().2 {
+            NP_TypeKeys::None => { },
             NP_TypeKeys::Any => { },
             NP_TypeKeys::JSON => { },
             NP_TypeKeys::UTF8String => {
@@ -1137,7 +1081,7 @@ impl<'ptr, T: NP_Value<'ptr> + Default> NP_Ptr<'ptr, T> {
         Ok(())
     }
 
-    /// Calculate the number of bytes used by this object and it's descendants.
+    /// Calculate the number of bytes used by this pointer and it's descendants.
     /// 
     pub fn calc_size(&self) -> Result<u32, NP_Error> {
 
@@ -1147,7 +1091,10 @@ impl<'ptr, T: NP_Value<'ptr> + Default> NP_Ptr<'ptr, T> {
             return Ok(base_size);
         }
 
-        let type_size = match self.schema.to_type_key() {
+        let type_size = match self.schema.into_type_data().2 {
+            NP_TypeKeys::None => {
+                Ok(0)
+            },
             NP_TypeKeys::Any => {
                 Ok(0)
             },
@@ -1231,14 +1178,18 @@ impl<'ptr, T: NP_Value<'ptr> + Default> NP_Ptr<'ptr, T> {
 
     /// Exports this pointer and all it's descendants into a JSON object.
     /// This will create a copy of the underlying data and return default values where there isn't data.
+    /// 
     pub fn json_encode(&self) -> NP_JSON {
         if self.location == 0 {
             return NP_JSON::Null;
         }
 
-        let type_key = self.schema.to_type_key();
+        let type_key = self.schema.into_type_data().2;
 
         match type_key {
+            NP_TypeKeys::None => { 
+                NP_JSON::Null 
+            }
             NP_TypeKeys::Any => {
                 NP_JSON::Null
             },
@@ -1323,74 +1274,4 @@ impl<'ptr, T: NP_Value<'ptr> + Default> NP_Ptr<'ptr, T> {
 /*
 // unsigned integer size:        0 to (2^i) -1
 //   signed integer size: -2^(i-1) to  2^(i-1) 
-pub enum NP_DataType {
-    none,
-    /*table {
-        head: u32
-    },
-    map {
-        head: u32
-    },
-    list {
-        head: u32,
-        tail: u32,
-        size: u16
-    },
-    tuple {
-        head: u32
-    },*/
-    utf8_string { size: u32, value: String },
-    bytes { size: u32, value: Vec<u8> },
-    int8 { value: i8 },
-    int16 { value: i16 },
-    int32 { value: i32 },
-    int64 { value: i64 }, 
-    uint8 { value: u8 },
-    uint16 { value: u16 },
-    uint32 { value: u32 },
-    uint64 { value: u64 },
-    float { value: f32 }, // -3.4E+38 to +3.4E+38
-    double { value: f64 }, // -1.7E+308 to +1.7E+308
-    option { value: u8 }, // enum
-    dec32 { value: i32, expo: i8},
-    dec64 { value: i64, exp: i8},
-    boolean { value: bool },
-    geo_16 { lat: f64, lon: f64 }, // (3.5nm resolution): two 64 bit float (16 bytes)
-    geo_8 { lat: i32, lon: i32 }, // (16mm resolution): two 32 bit integers (8 bytes) Deg*10000000
-    geo_4 { lat: i16, lon: i16 }, // (1.5km resolution): two 16 bit integers (4 bytes) Deg*100
-    uuid { value: String }, // 16 bytes 21,267,647,932,558,653,966,460,912,964,485,513,216 possibilities (255^15 * 16) or over 2 quadrillion times more possibilites than stars in the universe
-    time_id { id: String, time: u64 }, // 8 + 8 bytes
-    date { value: u64 } // 8 bytes  
-}*/
-
-// Pointer -> String
-/*impl From<&NP_Ptr> for Result<String> {
-    fn from(ptr: &NP_Ptr) -> Result<String> {
-        ptr.to_string()
-    }
-}*/
-
-/*
-// cast i64 => Pointer
-impl From<i64> for NP_Value {
-    fn from(num: i64) -> Self {
-        NP_Value {
-            loaded: false,
-            address: 0,
-            value: NP_Value::int64 { value: num },
-            // model: None
-        }
-    }
-}
-
-// cast Pointer => Result<i64>
-impl From<&NP_Value> for Result<i64> {
-    fn from(ptr: &NP_Value) -> Result<i64> {
-        match ptr.value {
-            NP_Value::int64 { value } => {
-                Some(value)
-            }
-            _ => None
-        }
-    }
-}*/
+*/

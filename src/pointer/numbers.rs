@@ -30,7 +30,7 @@
 //! 
 //! 
 
-use crate::schema::NP_Schema_Ptr;
+use crate::schema::NP_Parsed_Schema;
 use alloc::vec::Vec;
 use crate::utils::to_unsigned;
 use crate::utils::to_signed;
@@ -62,11 +62,11 @@ macro_rules! noproto_number {
 
         impl<'num> NP_Value<'num> for $t {
 
-            fn type_idx() -> (u8, String) { ($tkey as u8, $str1.to_owned()) }
+            fn type_idx() -> (u8, String, NP_TypeKeys) { ($tkey as u8, $str1.to_owned(), $tkey) }
 
-            fn self_type_idx(&self) -> (u8, String) { ($tkey as u8, $str1.to_owned()) }
+            fn self_type_idx(&self) -> (u8, String, NP_TypeKeys) { ($tkey as u8, $str1.to_owned(), $tkey) }
 
-            fn schema_to_json(schema_ptr: &NP_Schema_Ptr)-> Result<NP_JSON, NP_Error> {
+            fn schema_to_json(schema_ptr: &NP_Parsed_Schema)-> Result<NP_JSON, NP_Error> {
                 let mut schema_json = JSMAP::new();
                 schema_json.insert("type".to_owned(), NP_JSON::String(Self::type_idx().1));
             
@@ -89,15 +89,8 @@ macro_rules! noproto_number {
                 Ok(NP_JSON::Dictionary(schema_json))
             }
 
-            fn schema_default(ptr: &NP_Schema_Ptr) -> Option<Box<Self>> {
-
-                let size = core::mem::size_of::<Self>();
-                let has_default = ptr.schema.bytes[(ptr.address + 1)];
-                if has_default == 0 {
-                    return None
-                }
-                let default_bytes = &ptr.schema.bytes[(ptr.address + 2)..(ptr.address + 2 + size)];
-                Some(<$t>::np_from_be_bytes(default_bytes))
+            fn schema_default(ptr: &NP_Parsed_Schema) -> Option<Box<Self>> {
+                <$t>::np_get_default(ptr)
             }
     
             fn set_value(ptr: NP_Lite_Ptr, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
@@ -204,7 +197,7 @@ macro_rules! noproto_number {
                 }
             }
 
-            fn from_json_to_schema(json_schema: &NP_JSON) -> Result<Option<NP_Schema>, NP_Error> {
+            fn from_json_to_schema(json_schema: &NP_JSON) -> Result<Option<(Vec<u8>, NP_Parsed_Schema)>, NP_Error> {
         
                 let type_str = NP_Schema::_get_type(json_schema)?;
         
@@ -225,22 +218,82 @@ macro_rules! noproto_number {
                         _ => {
                             schema_data.push(0);
                         }
-                    }
-
-                    match $numType {
-                        NP_NumType::signed => {
-                            return Ok(Some(NP_Schema { is_sortable: true, bytes: schema_data }));
-                        },
-                        NP_NumType::unsigned => {
-                            return Ok(Some(NP_Schema { is_sortable: true, bytes: schema_data }));
-                        },
-                        NP_NumType::floating => {
-                            return Ok(Some(NP_Schema { is_sortable: false, bytes: schema_data }));
-                        }
                     };
+
+                    let use_schema = match $tkey {
+                        NP_TypeKeys::Int8 => {
+                            NP_Parsed_Schema::Int8 { sortable: true, i: $tkey, default: i8::np_get_default_from_json(&json_schema["default"])}
+                        },
+                        NP_TypeKeys::Int16 => {
+                            NP_Parsed_Schema::Int16 { sortable: true, i: $tkey, default: i16::np_get_default_from_json(&json_schema["default"])}
+                        },
+                        NP_TypeKeys::Int32 => {
+                            NP_Parsed_Schema::Int32 { sortable: true, i: $tkey, default: i32::np_get_default_from_json(&json_schema["default"])}
+                        },
+                        NP_TypeKeys::Int64 => {
+                            NP_Parsed_Schema::Int64 { sortable: true, i: $tkey, default: i64::np_get_default_from_json(&json_schema["default"])}
+                        },
+                        NP_TypeKeys::Uint8 => {
+                            NP_Parsed_Schema::Uint8 { sortable: true, i: $tkey, default: u8::np_get_default_from_json(&json_schema["default"])}
+                        },
+                        NP_TypeKeys::Uint16 => {
+                            NP_Parsed_Schema::Uint16 { sortable: true, i: $tkey, default: u16::np_get_default_from_json(&json_schema["default"])}
+                        },
+                        NP_TypeKeys::Uint32 => {
+                            NP_Parsed_Schema::Uint32 { sortable: true, i: $tkey, default: u32::np_get_default_from_json(&json_schema["default"])}
+                        },
+                        NP_TypeKeys::Uint64 => {
+                            NP_Parsed_Schema::Uint64 { sortable: true, i: $tkey, default: u64::np_get_default_from_json(&json_schema["default"])}
+                        },
+                        NP_TypeKeys::Float => {
+                            NP_Parsed_Schema::Float { sortable: false, i: $tkey, default: f32::np_get_default_from_json(&json_schema["default"])}
+                        },
+                        NP_TypeKeys::Double => {
+                            NP_Parsed_Schema::Double { sortable: false, i: $tkey, default: f64::np_get_default_from_json(&json_schema["default"])}
+                        },
+                        _ => { unreachable!() }
+                    };
+
+                    return Ok(Some((schema_data, use_schema)));
                 }
                 
                 Ok(None)
+            }
+
+            fn from_bytes_to_schema(address: usize, schema: &Vec<u8>) -> NP_Parsed_Schema { 
+                match $tkey {
+                    NP_TypeKeys::Int8 => {
+                        NP_Parsed_Schema::Int8 { sortable: true, i: $tkey, default: i8::np_get_default_from_bytes(address, schema)}
+                    },
+                    NP_TypeKeys::Int16 => {
+                        NP_Parsed_Schema::Int16 { sortable: true, i: $tkey, default: i16::np_get_default_from_bytes(address, schema)}
+                    },
+                    NP_TypeKeys::Int32 => {
+                        NP_Parsed_Schema::Int32 { sortable: true, i: $tkey, default: i32::np_get_default_from_bytes(address, schema)}
+                    },
+                    NP_TypeKeys::Int64 => {
+                        NP_Parsed_Schema::Int64 { sortable: true, i: $tkey, default: i64::np_get_default_from_bytes(address, schema)}
+                    },
+                    NP_TypeKeys::Uint8 => {
+                        NP_Parsed_Schema::Uint8 { sortable: true, i: $tkey, default: u8::np_get_default_from_bytes(address, schema)}
+                    },
+                    NP_TypeKeys::Uint16 => {
+                        NP_Parsed_Schema::Uint16 { sortable: true, i: $tkey, default: u16::np_get_default_from_bytes(address, schema)}
+                    },
+                    NP_TypeKeys::Uint32 => {
+                        NP_Parsed_Schema::Uint32 { sortable: true, i: $tkey, default: u32::np_get_default_from_bytes(address, schema)}
+                    },
+                    NP_TypeKeys::Uint64 => {
+                        NP_Parsed_Schema::Uint64 { sortable: true, i: $tkey, default: u64::np_get_default_from_bytes(address, schema)}
+                    },
+                    NP_TypeKeys::Float => {
+                        NP_Parsed_Schema::Float { sortable: false, i: $tkey, default: f32::np_get_default_from_bytes(address, schema)}
+                    },
+                    NP_TypeKeys::Double => {
+                        NP_Parsed_Schema::Double { sortable: false, i: $tkey, default: f64::np_get_default_from_bytes(address, schema)}
+                    },
+                    _ => { unreachable!() }
+                }
             }
         }
     }
@@ -263,85 +316,715 @@ noproto_number!(f32,  "float", "f32", NP_TypeKeys::Float , NP_NumType::floating)
 noproto_number!(f64, "double", "f64", NP_TypeKeys::Double, NP_NumType::floating);
 
 trait NP_BigEndian {
-    fn np_from_be_bytes(_bytes: &[u8]) -> Box<Self> { panic!() }
+    fn np_get_default_from_json(json: &NP_JSON) -> Option<Box<Self>>;
+    fn np_get_default(ptr: &NP_Parsed_Schema) -> Option<Box<Self>>;
+    fn np_get_default_from_bytes(address: usize, bytes: &Vec<u8>) -> Option<Box<Self>>;
 }
 
+
 impl NP_BigEndian for i8 {
-    fn np_from_be_bytes(bytes: &[u8]) -> Box<Self> {
-        let mut slice: [u8; 1] = Default::default();
-        slice.copy_from_slice(bytes);
-        Box::new(i8::from_be_bytes(slice))
+    fn np_get_default(ptr: &NP_Parsed_Schema) -> Option<Box<Self>> {
+        match ptr {
+            NP_Parsed_Schema::Int8 { sortable: _, i: _, default } => { default.clone() },
+            _ => None
+        }
     }
+    fn np_get_default_from_json(json: &NP_JSON) -> Option<Box<Self>> {
+        match json {
+            NP_JSON::Float(x) => {
+                Some(Box::new(*x as Self))
+            },
+            NP_JSON::Integer(x) => {
+                Some(Box::new(*x as Self))
+            },
+            _ => {
+                None
+            }
+        }
+    }
+    fn np_get_default_from_bytes(address: usize, bytes: &Vec<u8>) -> Option<Box<Self>> {
+        if bytes[address + 1] == 0 {
+            None
+        } else {
+            let mut slice: [u8; 1] = Default::default();
+            slice.copy_from_slice(&bytes[(address + 1)..(address + 2)]);
+            Some(Box::new(i8::from_be_bytes(slice)))
+        }
+    }
+}
+
+#[test]
+fn i8_schema_parsing_works() -> Result<(), NP_Error> {
+    let schema = "{\"type\":\"int8\",\"default\":20}";
+    let factory = crate::NP_Factory::new(schema)?;
+    assert_eq!(schema, factory.schema.to_json()?.stringify());
+
+    let schema = "{\"type\":\"int8\"}";
+    let factory = crate::NP_Factory::new(schema)?;
+    assert_eq!(schema, factory.schema.to_json()?.stringify());
+    
+    Ok(())
+}
+
+#[test]
+fn i8_default_value_works() -> Result<(), NP_Error> {
+    let schema = "{\"type\":\"i8\",\"default\":56}";
+    let factory = crate::NP_Factory::new(schema)?;
+    let buffer = factory.empty_buffer(None, None);
+    assert_eq!(buffer.deep_get("")?.unwrap(), Box::new(56i8));
+
+    Ok(())
+}
+
+#[test]
+fn i8_set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
+    let schema = "{\"type\":\"i8\"}";
+    let factory = crate::NP_Factory::new(schema)?;
+    let mut buffer = factory.empty_buffer(None, None);
+    buffer.deep_set("", 56i8)?;
+    assert_eq!(buffer.deep_get::<i8>("")?.unwrap(), Box::new(56i8));
+    buffer.deep_clear("")?;
+    assert_eq!(buffer.deep_get::<i8>("")?, None);
+
+    buffer = buffer.compact(None, None)?;
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 4u32);
+
+    Ok(())
 }
 
 impl NP_BigEndian for i16 {
-    fn np_from_be_bytes(bytes: &[u8]) -> Box<Self> {
-        let mut slice: [u8; 2] = Default::default();
-        slice.copy_from_slice(bytes);
-        Box::new(i16::from_be_bytes(slice))
+    fn np_get_default(ptr: &NP_Parsed_Schema) -> Option<Box<Self>> {
+        match ptr {
+            NP_Parsed_Schema::Int16 { sortable: _, i: _, default } => { default.clone() },
+            _ => None
+        }
     }
+    fn np_get_default_from_json(json: &NP_JSON) -> Option<Box<Self>> {
+        match json {
+            NP_JSON::Float(x) => {
+                Some(Box::new(*x as Self))
+            },
+            NP_JSON::Integer(x) => {
+                Some(Box::new(*x as Self))
+            },
+            _ => {
+                None
+            }
+        }
+    }
+    fn np_get_default_from_bytes(address: usize, bytes: &Vec<u8>) -> Option<Box<Self>> {
+        if bytes[address + 1] == 0 {
+            None
+        } else {
+            let mut slice: [u8; 2] = Default::default();
+            slice.copy_from_slice(&bytes[(address + 1)..(address + 3)]);
+            Some(Box::new(i16::from_be_bytes(slice)))
+        }
+    }
+}
+
+#[test]
+fn i16_schema_parsing_works() -> Result<(), NP_Error> {
+    let schema = "{\"type\":\"int16\",\"default\":20}";
+    let factory = crate::NP_Factory::new(schema)?;
+    assert_eq!(schema, factory.schema.to_json()?.stringify());
+
+    let schema = "{\"type\":\"int16\"}";
+    let factory = crate::NP_Factory::new(schema)?;
+    assert_eq!(schema, factory.schema.to_json()?.stringify());
+    
+    Ok(())
+}
+
+
+#[test]
+fn i16_default_value_works() -> Result<(), NP_Error> {
+    let schema = "{\"type\":\"i16\",\"default\":293}";
+    let factory = crate::NP_Factory::new(schema)?;
+    let buffer = factory.empty_buffer(None, None);
+    assert_eq!(buffer.deep_get("")?.unwrap(), Box::new(293i16));
+
+    Ok(())
+}
+
+#[test]
+fn i16_set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
+    let schema = "{\"type\":\"i16\"}";
+    let factory = crate::NP_Factory::new(schema)?;
+    let mut buffer = factory.empty_buffer(None, None);
+    buffer.deep_set("", 293i16)?;
+    assert_eq!(buffer.deep_get::<i16>("")?.unwrap(), Box::new(293i16));
+    buffer.deep_clear("")?;
+    assert_eq!(buffer.deep_get::<i16>("")?, None);
+
+    buffer = buffer.compact(None, None)?;
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 4u32);
+
+    Ok(())
 }
 
 impl NP_BigEndian for i32 {
-    fn np_from_be_bytes(bytes: &[u8]) -> Box<Self> {
-        let mut slice: [u8; 4] = Default::default();
-        slice.copy_from_slice(bytes);
-        Box::new(i32::from_be_bytes(slice))
+    fn np_get_default(ptr: &NP_Parsed_Schema) -> Option<Box<Self>> {
+        match ptr {
+            NP_Parsed_Schema::Int32 { sortable: _, i: _, default } => { default.clone() },
+            _ => None
+        }
     }
+    fn np_get_default_from_json(json: &NP_JSON) -> Option<Box<Self>> {
+        match json {
+            NP_JSON::Float(x) => {
+                Some(Box::new(*x as Self))
+            },
+            NP_JSON::Integer(x) => {
+                Some(Box::new(*x as Self))
+            },
+            _ => {
+                None
+            }
+        }
+    }
+    fn np_get_default_from_bytes(address: usize, bytes: &Vec<u8>) -> Option<Box<Self>> {
+        if bytes[address + 1] == 0 {
+            None
+        } else {
+            let mut slice: [u8; 4] = Default::default();
+            slice.copy_from_slice(&bytes[(address + 1)..(address + 5)]);
+            Some(Box::new(i32::from_be_bytes(slice)))
+        }
+    }
+}
+
+#[test]
+fn i32_schema_parsing_works() -> Result<(), NP_Error> {
+    let schema = "{\"type\":\"int32\",\"default\":20}";
+    let factory = crate::NP_Factory::new(schema)?;
+    assert_eq!(schema, factory.schema.to_json()?.stringify());
+
+    let schema = "{\"type\":\"int32\"}";
+    let factory = crate::NP_Factory::new(schema)?;
+    assert_eq!(schema, factory.schema.to_json()?.stringify());
+    
+    Ok(())
+}
+
+
+#[test]
+fn i32_default_value_works() -> Result<(), NP_Error> {
+    let schema = "{\"type\":\"i32\",\"default\":293}";
+    let factory = crate::NP_Factory::new(schema)?;
+    let buffer = factory.empty_buffer(None, None);
+    assert_eq!(buffer.deep_get("")?.unwrap(), Box::new(293i32));
+
+    Ok(())
+}
+
+#[test]
+fn i32_set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
+    let schema = "{\"type\":\"i32\"}";
+    let factory = crate::NP_Factory::new(schema)?;
+    let mut buffer = factory.empty_buffer(None, None);
+    buffer.deep_set("", 293i32)?;
+    assert_eq!(buffer.deep_get::<i32>("")?.unwrap(), Box::new(293i32));
+    buffer.deep_clear("")?;
+    assert_eq!(buffer.deep_get::<i32>("")?, None);
+
+    buffer = buffer.compact(None, None)?;
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 4u32);
+
+    Ok(())
 }
 
 impl NP_BigEndian for i64 {
-    fn np_from_be_bytes(bytes: &[u8]) -> Box<Self> {
-        let mut slice: [u8; 8] = Default::default();
-        slice.copy_from_slice(bytes);
-        Box::new(i64::from_be_bytes(slice))
+    fn np_get_default(ptr: &NP_Parsed_Schema) -> Option<Box<Self>> {
+        match ptr {
+            NP_Parsed_Schema::Int64 { sortable: _, i: _, default } => { default.clone() },
+            _ => None
+        }
     }
+    fn np_get_default_from_json(json: &NP_JSON) -> Option<Box<Self>> {
+        match json {
+            NP_JSON::Float(x) => {
+                Some(Box::new(*x as Self))
+            },
+            NP_JSON::Integer(x) => {
+                Some(Box::new(*x as Self))
+            },
+            _ => {
+                None
+            }
+        }
+    }
+    fn np_get_default_from_bytes(address: usize, bytes: &Vec<u8>) -> Option<Box<Self>> {
+        if bytes[address + 1] == 0 {
+            None
+        } else {
+            let mut slice: [u8; 8] = Default::default();
+            slice.copy_from_slice(&bytes[(address + 1)..(address + 9)]);
+            Some(Box::new(i64::from_be_bytes(slice)))
+        }
+    }
+}
+
+#[test]
+fn i64_schema_parsing_works() -> Result<(), NP_Error> {
+    let schema = "{\"type\":\"int64\",\"default\":20}";
+    let factory = crate::NP_Factory::new(schema)?;
+    assert_eq!(schema, factory.schema.to_json()?.stringify());
+
+    let schema = "{\"type\":\"int64\"}";
+    let factory = crate::NP_Factory::new(schema)?;
+    assert_eq!(schema, factory.schema.to_json()?.stringify());
+    
+    Ok(())
+}
+
+
+#[test]
+fn i64_default_value_works() -> Result<(), NP_Error> {
+    let schema = "{\"type\":\"i64\",\"default\":293}";
+    let factory = crate::NP_Factory::new(schema)?;
+    let buffer = factory.empty_buffer(None, None);
+    assert_eq!(buffer.deep_get("")?.unwrap(), Box::new(293i64));
+
+    Ok(())
+}
+
+#[test]
+fn i64_set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
+    let schema = "{\"type\":\"i64\"}";
+    let factory = crate::NP_Factory::new(schema)?;
+    let mut buffer = factory.empty_buffer(None, None);
+    buffer.deep_set("", 293i64)?;
+    assert_eq!(buffer.deep_get::<i64>("")?.unwrap(), Box::new(293i64));
+    buffer.deep_clear("")?;
+    assert_eq!(buffer.deep_get::<i64>("")?, None);
+
+    buffer = buffer.compact(None, None)?;
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 4u32);
+
+    Ok(())
 }
 
 impl NP_BigEndian for u8 {
-    fn np_from_be_bytes(bytes: &[u8]) -> Box<Self> {
-        let mut slice: [u8; 1] = Default::default();
-        slice.copy_from_slice(bytes);
-        Box::new(u8::from_be_bytes(slice))
+    fn np_get_default(ptr: &NP_Parsed_Schema) -> Option<Box<Self>> {
+        match ptr {
+            NP_Parsed_Schema::Uint8 { sortable: _, i: _, default } => { default.clone() },
+            _ => None
+        }
     }
+    fn np_get_default_from_json(json: &NP_JSON) -> Option<Box<Self>> {
+        match json {
+            NP_JSON::Float(x) => {
+                Some(Box::new(*x as Self))
+            },
+            NP_JSON::Integer(x) => {
+                Some(Box::new(*x as Self))
+            },
+            _ => {
+                None
+            }
+        }
+    }
+    fn np_get_default_from_bytes(address: usize, bytes: &Vec<u8>) -> Option<Box<Self>> {
+        if bytes[address + 1] == 0 {
+            None
+        } else {
+            let mut slice: [u8; 1] = Default::default();
+            slice.copy_from_slice(&bytes[(address + 1)..(address + 2)]);
+            Some(Box::new(u8::from_be_bytes(slice)))
+        }
+    }
+}
+
+
+#[test]
+fn u8_schema_parsing_works() -> Result<(), NP_Error> {
+    let schema = "{\"type\":\"uint8\",\"default\":20}";
+    let factory = crate::NP_Factory::new(schema)?;
+    assert_eq!(schema, factory.schema.to_json()?.stringify());
+
+    let schema = "{\"type\":\"uint8\"}";
+    let factory = crate::NP_Factory::new(schema)?;
+    assert_eq!(schema, factory.schema.to_json()?.stringify());
+    
+    Ok(())
+}
+
+#[test]
+fn u8_default_value_works() -> Result<(), NP_Error> {
+    let schema = "{\"type\":\"u8\",\"default\":198}";
+    let factory = crate::NP_Factory::new(schema)?;
+    let buffer = factory.empty_buffer(None, None);
+    assert_eq!(buffer.deep_get("")?.unwrap(), Box::new(198u8));
+
+    Ok(())
+}
+
+#[test]
+fn u8_set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
+    let schema = "{\"type\":\"u8\"}";
+    let factory = crate::NP_Factory::new(schema)?;
+    let mut buffer = factory.empty_buffer(None, None);
+    buffer.deep_set("", 198u8)?;
+    assert_eq!(buffer.deep_get::<u8>("")?.unwrap(), Box::new(198u8));
+    buffer.deep_clear("")?;
+    assert_eq!(buffer.deep_get::<u8>("")?, None);
+
+    buffer = buffer.compact(None, None)?;
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 4u32);
+
+    Ok(())
 }
 
 impl NP_BigEndian for u16 {
-    fn np_from_be_bytes(bytes: &[u8]) -> Box<Self> {
-        let mut slice: [u8; 2] = Default::default();
-        slice.copy_from_slice(bytes);
-        Box::new(u16::from_be_bytes(slice))
+    fn np_get_default(ptr: &NP_Parsed_Schema) -> Option<Box<Self>> {
+        match ptr {
+            NP_Parsed_Schema::Uint16 { sortable: _, i: _, default } => { default.clone() },
+            _ => None
+        }
     }
+    fn np_get_default_from_json(json: &NP_JSON) -> Option<Box<Self>> {
+        match json {
+            NP_JSON::Float(x) => {
+                Some(Box::new(*x as Self))
+            },
+            NP_JSON::Integer(x) => {
+                Some(Box::new(*x as Self))
+            },
+            _ => {
+                None
+            }
+        }
+    }
+    fn np_get_default_from_bytes(address: usize, bytes: &Vec<u8>) -> Option<Box<Self>> {
+        if bytes[address + 1] == 0 {
+            None
+        } else {
+            let mut slice: [u8; 2] = Default::default();
+            slice.copy_from_slice(&bytes[(address + 1)..(address + 3)]);
+            Some(Box::new(u16::from_be_bytes(slice)))
+        }
+    }
+}
+
+#[test]
+fn u16_schema_parsing_works() -> Result<(), NP_Error> {
+    let schema = "{\"type\":\"uint16\",\"default\":20}";
+    let factory = crate::NP_Factory::new(schema)?;
+    assert_eq!(schema, factory.schema.to_json()?.stringify());
+
+    let schema = "{\"type\":\"uint16\"}";
+    let factory = crate::NP_Factory::new(schema)?;
+    assert_eq!(schema, factory.schema.to_json()?.stringify());
+    
+    Ok(())
+}
+
+
+#[test]
+fn u16_default_value_works() -> Result<(), NP_Error> {
+    let schema = "{\"type\":\"u16\",\"default\":293}";
+    let factory = crate::NP_Factory::new(schema)?;
+    let buffer = factory.empty_buffer(None, None);
+    assert_eq!(buffer.deep_get("")?.unwrap(), Box::new(293u16));
+
+    Ok(())
+}
+
+#[test]
+fn u16_set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
+    let schema = "{\"type\":\"u16\"}";
+    let factory = crate::NP_Factory::new(schema)?;
+    let mut buffer = factory.empty_buffer(None, None);
+    buffer.deep_set("", 293u16)?;
+    assert_eq!(buffer.deep_get::<u16>("")?.unwrap(), Box::new(293u16));
+    buffer.deep_clear("")?;
+    assert_eq!(buffer.deep_get::<u16>("")?, None);
+
+    buffer = buffer.compact(None, None)?;
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 4u32);
+
+    Ok(())
 }
 
 impl NP_BigEndian for u32 {
-    fn np_from_be_bytes(bytes: &[u8]) -> Box<Self> {
-        let mut slice: [u8; 4] = Default::default();
-        slice.copy_from_slice(bytes);
-        Box::new(u32::from_be_bytes(slice))
+    fn np_get_default(ptr: &NP_Parsed_Schema) -> Option<Box<Self>> {
+        match ptr {
+            NP_Parsed_Schema::Uint32 { sortable: _, i: _, default } => { default.clone() },
+            _ => None
+        }
     }
+    fn np_get_default_from_json(json: &NP_JSON) -> Option<Box<Self>> {
+        match json {
+            NP_JSON::Float(x) => {
+                Some(Box::new(*x as Self))
+            },
+            NP_JSON::Integer(x) => {
+                Some(Box::new(*x as Self))
+            },
+            _ => {
+                None
+            }
+        }
+    }
+    fn np_get_default_from_bytes(address: usize, bytes: &Vec<u8>) -> Option<Box<Self>> {
+        if bytes[address + 1] == 0 {
+            None
+        } else {
+            let mut slice: [u8; 4] = Default::default();
+            slice.copy_from_slice(&bytes[(address + 1)..(address + 5)]);
+            Some(Box::new(u32::from_be_bytes(slice)))
+        }
+    }
+}
+
+#[test]
+fn u32_schema_parsing_works() -> Result<(), NP_Error> {
+    let schema = "{\"type\":\"uint32\",\"default\":20}";
+    let factory = crate::NP_Factory::new(schema)?;
+    assert_eq!(schema, factory.schema.to_json()?.stringify());
+
+    let schema = "{\"type\":\"uint32\"}";
+    let factory = crate::NP_Factory::new(schema)?;
+    assert_eq!(schema, factory.schema.to_json()?.stringify());
+    
+    Ok(())
+}
+
+
+#[test]
+fn u32_default_value_works() -> Result<(), NP_Error> {
+    let schema = "{\"type\":\"u32\",\"default\":293}";
+    let factory = crate::NP_Factory::new(schema)?;
+    let buffer = factory.empty_buffer(None, None);
+    assert_eq!(buffer.deep_get("")?.unwrap(), Box::new(293u32));
+
+    Ok(())
+}
+
+#[test]
+fn u32_set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
+    let schema = "{\"type\":\"u32\"}";
+    let factory = crate::NP_Factory::new(schema)?;
+    let mut buffer = factory.empty_buffer(None, None);
+    buffer.deep_set("", 293u32)?;
+    assert_eq!(buffer.deep_get::<u32>("")?.unwrap(), Box::new(293u32));
+    buffer.deep_clear("")?;
+    assert_eq!(buffer.deep_get::<u32>("")?, None);
+
+    buffer = buffer.compact(None, None)?;
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 4u32);
+
+    Ok(())
 }
 
 impl NP_BigEndian for u64 {
-    fn np_from_be_bytes(bytes: &[u8]) -> Box<Self> {
-        let mut slice: [u8; 8] = Default::default();
-        slice.copy_from_slice(bytes);
-        Box::new(u64::from_be_bytes(slice))
+    fn np_get_default(ptr: &NP_Parsed_Schema) -> Option<Box<Self>> {
+        match ptr {
+            NP_Parsed_Schema::Uint64 { sortable: _, i: _, default } => { default.clone() },
+            _ => None
+        }
     }
+    fn np_get_default_from_json(json: &NP_JSON) -> Option<Box<Self>> {
+        match json {
+            NP_JSON::Float(x) => {
+                Some(Box::new(*x as Self))
+            },
+            NP_JSON::Integer(x) => {
+                Some(Box::new(*x as Self))
+            },
+            _ => {
+                None
+            }
+        }
+    }
+    fn np_get_default_from_bytes(address: usize, bytes: &Vec<u8>) -> Option<Box<Self>> {
+        if bytes[address + 1] == 0 {
+            None
+        } else {
+            let mut slice: [u8; 8] = Default::default();
+            slice.copy_from_slice(&bytes[(address + 1)..(address + 9)]);
+            Some(Box::new(u64::from_be_bytes(slice)))
+        }
+    }
+}
+
+#[test]
+fn u64_schema_parsing_works() -> Result<(), NP_Error> {
+    let schema = "{\"type\":\"uint64\",\"default\":20}";
+    let factory = crate::NP_Factory::new(schema)?;
+    assert_eq!(schema, factory.schema.to_json()?.stringify());
+
+    let schema = "{\"type\":\"uint64\"}";
+    let factory = crate::NP_Factory::new(schema)?;
+    assert_eq!(schema, factory.schema.to_json()?.stringify());
+    
+    Ok(())
+}
+
+#[test]
+fn u64_default_value_works() -> Result<(), NP_Error> {
+    let schema = "{\"type\":\"u64\",\"default\":293}";
+    let factory = crate::NP_Factory::new(schema)?;
+    let buffer = factory.empty_buffer(None, None);
+    assert_eq!(buffer.deep_get("")?.unwrap(), Box::new(293u64));
+
+    Ok(())
+}
+
+#[test]
+fn u64_set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
+    let schema = "{\"type\":\"u64\"}";
+    let factory = crate::NP_Factory::new(schema)?;
+    let mut buffer = factory.empty_buffer(None, None);
+    buffer.deep_set("", 293u64)?;
+    assert_eq!(buffer.deep_get::<u64>("")?.unwrap(), Box::new(293u64));
+    buffer.deep_clear("")?;
+    assert_eq!(buffer.deep_get::<u64>("")?, None);
+
+    buffer = buffer.compact(None, None)?;
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 4u32);
+
+    Ok(())
 }
 
 impl NP_BigEndian for f32 {
-    fn np_from_be_bytes(bytes: &[u8]) -> Box<Self> {
-        let mut slice: [u8; 4] = Default::default();
-        slice.copy_from_slice(bytes);
-        Box::new(f32::from_be_bytes(slice))
+    fn np_get_default(ptr: &NP_Parsed_Schema) -> Option<Box<Self>> {
+        match ptr {
+            NP_Parsed_Schema::Float { sortable: _, i: _, default } => { default.clone() },
+            _ => None
+        }
+    }
+    fn np_get_default_from_json(json: &NP_JSON) -> Option<Box<Self>> {
+        match json {
+            NP_JSON::Float(x) => {
+                Some(Box::new(*x as Self))
+            },
+            NP_JSON::Integer(x) => {
+                Some(Box::new(*x as Self))
+            },
+            _ => {
+                None
+            }
+        }
+    }
+    fn np_get_default_from_bytes(address: usize, bytes: &Vec<u8>) -> Option<Box<Self>> {
+        if bytes[address + 1] == 0 {
+            None
+        } else {
+            let mut slice: [u8; 4] = Default::default();
+            slice.copy_from_slice(&bytes[(address + 1)..(address + 5)]);
+            Some(Box::new(f32::from_be_bytes(slice)))
+        }
     }
 }
 
+#[test]
+fn float_schema_parsing_works() -> Result<(), NP_Error> {
+    let schema = "{\"type\":\"float\",\"default\":20.183000564575195}";
+    let factory = crate::NP_Factory::new(schema)?;
+    assert_eq!(schema, factory.schema.to_json()?.stringify());
+
+    let schema = "{\"type\":\"float\"}";
+    let factory = crate::NP_Factory::new(schema)?;
+    assert_eq!(schema, factory.schema.to_json()?.stringify());
+    
+    Ok(())
+}
+
+#[test]
+fn float_default_value_works() -> Result<(), NP_Error> {
+    let schema = "{\"type\":\"float\",\"default\":2983.2938}";
+    let factory = crate::NP_Factory::new(schema)?;
+    let buffer = factory.empty_buffer(None, None);
+    assert_eq!(buffer.deep_get("")?.unwrap(), Box::new(2983.2938f32));
+
+    Ok(())
+}
+
+#[test]
+fn float_set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
+    let schema = "{\"type\":\"float\"}";
+    let factory = crate::NP_Factory::new(schema)?;
+    let mut buffer = factory.empty_buffer(None, None);
+    buffer.deep_set("", 2983.2938f32)?;
+    assert_eq!(buffer.deep_get::<f32>("")?.unwrap(), Box::new(2983.2938f32));
+    buffer.deep_clear("")?;
+    assert_eq!(buffer.deep_get::<f32>("")?, None);
+
+    buffer = buffer.compact(None, None)?;
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 4u32);
+
+    Ok(())
+}
+
+
 impl NP_BigEndian for f64 {
-    fn np_from_be_bytes(bytes: &[u8]) -> Box<Self> {
-        let mut slice: [u8; 8] = Default::default();
-        slice.copy_from_slice(bytes);
-        Box::new(f64::from_be_bytes(slice))
+    fn np_get_default(ptr: &NP_Parsed_Schema) -> Option<Box<Self>> {
+        match ptr {
+            NP_Parsed_Schema::Double { sortable: _, i: _, default } => { default.clone() },
+            _ => None
+        }
     }
+    fn np_get_default_from_json(json: &NP_JSON) -> Option<Box<Self>> {
+        match json {
+            NP_JSON::Float(x) => {
+                Some(Box::new(*x as Self))
+            },
+            NP_JSON::Integer(x) => {
+                Some(Box::new(*x as Self))
+            },
+            _ => {
+                None
+            }
+        }
+    }
+    fn np_get_default_from_bytes(address: usize, bytes: &Vec<u8>) -> Option<Box<Self>> {
+        if bytes[address + 1] == 0 {
+            None
+        } else {
+            let mut slice: [u8; 8] = Default::default();
+            slice.copy_from_slice(&bytes[(address + 1)..(address + 9)]);
+            Some(Box::new(f64::from_be_bytes(slice)))
+        }
+    }
+}
+
+#[test]
+fn double_schema_parsing_works() -> Result<(), NP_Error> {
+    let schema = "{\"type\":\"double\",\"default\":20.183000564575195}";
+    let factory = crate::NP_Factory::new(schema)?;
+    assert_eq!(schema, factory.schema.to_json()?.stringify());
+
+    let schema = "{\"type\":\"double\"}";
+    let factory = crate::NP_Factory::new(schema)?;
+    assert_eq!(schema, factory.schema.to_json()?.stringify());
+    
+    Ok(())
+}
+
+#[test]
+fn double_default_value_works() -> Result<(), NP_Error> {
+    let schema = "{\"type\":\"double\",\"default\":2983.2938}";
+    let factory = crate::NP_Factory::new(schema)?;
+    let buffer = factory.empty_buffer(None, None);
+    assert_eq!(buffer.deep_get("")?.unwrap(), Box::new(2983.2938f64));
+
+    Ok(())
+}
+
+#[test]
+fn double_set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
+    let schema = "{\"type\":\"double\"}";
+    let factory = crate::NP_Factory::new(schema)?;
+    let mut buffer = factory.empty_buffer(None, None);
+    buffer.deep_set("", 2983.2938f64)?;
+    assert_eq!(buffer.deep_get::<f64>("")?.unwrap(), Box::new(2983.2938f64));
+    buffer.deep_clear("")?;
+    assert_eq!(buffer.deep_get::<f64>("")?, None);
+
+    buffer = buffer.compact(None, None)?;
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 4u32);
+
+    Ok(())
 }

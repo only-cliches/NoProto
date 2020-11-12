@@ -3,7 +3,6 @@
 //! ```
 //! use no_proto::error::NP_Error;
 //! use no_proto::NP_Factory;
-//! use no_proto::pointer::bytes::NP_Bytes;
 //! 
 //! let factory: NP_Factory = NP_Factory::new(r#"{
 //!    "type": "string"
@@ -18,10 +17,12 @@
 //! ```
 
 
+use core::hint::unreachable_unchecked;
+
 use alloc::vec::Vec;
-use crate::{json_flex::JSMAP, schema::NP_Schema};
+use crate::{json_flex::JSMAP, memory::NP_Size, schema::{NP_Parsed_Schema, NP_Schema}};
 use crate::error::NP_Error;
-use crate::{schema::{NP_TypeKeys, NP_Schema_Ptr}, pointer::NP_Value, utils::from_utf8_lossy, json_flex::NP_JSON};
+use crate::{schema::{NP_TypeKeys}, pointer::NP_Value, utils::from_utf8_lossy, json_flex::NP_JSON};
 use super::{NP_PtrKinds, NP_Lite_Ptr, bytes::NP_Bytes};
 
 use alloc::string::String;
@@ -39,57 +40,69 @@ pub struct NP_String_Schema_State {
     pub default: Option<String>
 }
 
-/// Get schema state for string type
-#[doc(hidden)]
-pub fn str_get_schema_state(schema_ptr: &NP_Schema_Ptr) -> NP_String_Schema_State {
-
-    // fixed size
-    let fixed_size = u16::from_be_bytes([
-        schema_ptr.schema.bytes[schema_ptr.address + 1],
-        schema_ptr.schema.bytes[schema_ptr.address + 2]
-    ]);
-
-    // default value size
-    let default_size = u16::from_be_bytes([
-        schema_ptr.schema.bytes[schema_ptr.address + 3],
-        schema_ptr.schema.bytes[schema_ptr.address + 4]
-    ]) as usize;
-
-    if default_size == 0 {
-        return NP_String_Schema_State {
-            size: fixed_size,
-            default: None
-        }
-    }
-
-    let default_bytes = {
-        let bytes = &schema_ptr.schema.bytes[(schema_ptr.address + 5)..(schema_ptr.address + 5 + (default_size - 1))];
-        from_utf8_lossy(bytes).to_string()
-    };
-
-    return NP_String_Schema_State { size: fixed_size, default: Some(default_bytes) }
-}
-
 
 impl<'str> NP_Value<'str> for String {
 
-    fn type_idx() -> (u8, String) { (NP_TypeKeys::UTF8String as u8, "string".to_owned()) }
-    fn self_type_idx(&self) -> (u8, String) { (NP_TypeKeys::UTF8String as u8, "string".to_owned()) }
+    fn type_idx() -> (u8, String, NP_TypeKeys) { (NP_TypeKeys::UTF8String as u8, "string".to_owned(), NP_TypeKeys::UTF8String) }
+    fn self_type_idx(&self) -> (u8, String, NP_TypeKeys) { (NP_TypeKeys::UTF8String as u8, "string".to_owned(), NP_TypeKeys::UTF8String) }
 
-    fn schema_to_json(schema_ptr: &NP_Schema_Ptr)-> Result<NP_JSON, NP_Error> {
-        let mut schema_json = JSMAP::new();
-        schema_json.insert("type".to_owned(), NP_JSON::String(Self::type_idx().1));
+    fn schema_to_json(schema: &NP_Parsed_Schema)-> Result<NP_JSON, NP_Error> {
 
-        let schema_state = str_get_schema_state(&schema_ptr);
-        if schema_state.size > 0 {
-            schema_json.insert("size".to_owned(), NP_JSON::Integer(schema_state.size.into()));
+        match schema {
+            NP_Parsed_Schema::UTF8String { i: _, size, default, sortable: _ } => {
+                let mut schema_json = JSMAP::new();
+                schema_json.insert("type".to_owned(), NP_JSON::String(Self::type_idx().1));
+        
+                if *size > 0 {
+                    schema_json.insert("size".to_owned(), NP_JSON::Integer(size.clone().into()));
+                }
+        
+                if let Some(default_value) = default {
+                    schema_json.insert("default".to_owned(), NP_JSON::String(*default_value.clone()));
+                }
+        
+                Ok(NP_JSON::Dictionary(schema_json))
+            },
+            _ => {
+                unsafe { unreachable_unchecked() }
+            }
         }
 
-        if let Some(default) = schema_state.default {
-            schema_json.insert("default".to_owned(), NP_JSON::String(default.clone()));
+    }
+
+    fn from_bytes_to_schema(address: usize, bytes: &Vec<u8>) -> NP_Parsed_Schema {
+        // fixed size
+        let fixed_size = u16::from_be_bytes([
+            bytes[address + 1],
+            bytes[address + 2]
+        ]);
+
+        // default value size
+        let default_size = u16::from_be_bytes([
+            bytes[address + 3],
+            bytes[address + 4]
+        ]) as usize;
+
+        if default_size == 0 {
+            return NP_Parsed_Schema::UTF8String {
+                i: NP_TypeKeys::UTF8String,
+                default: None,
+                sortable: fixed_size > 0,
+                size: fixed_size
+            }
         }
 
-        Ok(NP_JSON::Dictionary(schema_json))
+        let default_bytes = {
+            let bytes = &bytes[(address + 5)..(address + 5 + (default_size - 1))];
+            from_utf8_lossy(bytes).to_string()
+        };
+
+        return NP_Parsed_Schema::UTF8String {
+            i: NP_TypeKeys::UTF8String,
+            default: Some(Box::new(default_bytes)),
+            size: fixed_size,
+            sortable: fixed_size > 0
+        }
     }
 
     fn set_value(pointer: NP_Lite_Ptr, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
@@ -98,22 +111,70 @@ impl<'str> NP_Value<'str> for String {
     }
 
     fn into_value(pointer: NP_Lite_Ptr) -> Result<Option<Box<Self>>, NP_Error> {
-        match NP_Bytes::into_value(pointer)? {
-            Some(x) => {
-                let bytes = &*x.bytes.to_vec();
-                Ok(Some(Box::new(from_utf8_lossy(bytes))))
+        let addr = pointer.kind.get_value_addr() as usize;
+ 
+        // empty value
+        if addr == 0 {
+            return Ok(None);
+        }
+
+        let memory = pointer.memory;
+
+        match &**pointer.schema {
+            NP_Parsed_Schema::UTF8String { i: _, sortable: _, default: _, size} => {
+                if *size > 0 { // fixed size
+            
+                    let size = *size as usize;
+                    
+                    // get bytes
+                    let bytes = &memory.read_bytes()[(addr)..(addr+size)];
+        
+                    return Ok(Some(Box::new(from_utf8_lossy(bytes))))
+        
+                } else { // dynamic size
+                    // get size of bytes
+        
+                    let bytes_size: usize = match memory.size {
+                        NP_Size::U8 => {
+                            let mut size_bytes: [u8; 1] = [0; 1];
+                            size_bytes.copy_from_slice(&memory.read_bytes()[addr..(addr+1)]);
+                            u8::from_be_bytes(size_bytes) as usize
+                        },
+                        NP_Size::U16 => {
+                            let mut size_bytes: [u8; 2] = [0; 2];
+                            size_bytes.copy_from_slice(&memory.read_bytes()[addr..(addr+2)]);
+                            u16::from_be_bytes(size_bytes) as usize
+                        },
+                        NP_Size::U32 => { 
+                            let mut size_bytes: [u8; 4] = [0; 4];
+                            size_bytes.copy_from_slice(&memory.read_bytes()[addr..(addr+4)]);
+                            u32::from_be_bytes(size_bytes) as usize
+                        }
+                    };
+        
+                    // get bytes
+                    let bytes = match memory.size {
+                        NP_Size::U8 => { &memory.read_bytes()[(addr+1)..(addr+1+bytes_size)] },
+                        NP_Size::U16 => { &memory.read_bytes()[(addr+2)..(addr+2+bytes_size)] },
+                        NP_Size::U32 => { &memory.read_bytes()[(addr+4)..(addr+4+bytes_size)] }
+                    };
+        
+                    return Ok(Some(Box::new(from_utf8_lossy(bytes))))
+                }
             },
-            None => Ok(None)
+            _ => { unsafe { unreachable_unchecked() } }
         }
     }
 
-    fn schema_default(schema: &NP_Schema_Ptr) -> Option<Box<Self>> {
-        let state = str_get_schema_state(schema);
-        match state.default {
-            Some(x) => {
-                Some(Box::new(String::from(x)))
+    fn schema_default(schema: &NP_Parsed_Schema) -> Option<Box<Self>> {
+        match schema {
+            NP_Parsed_Schema::UTF8String { i: _, size: _, default, sortable: _ } => {
+                match default {
+                    Some(x) => Some(Box::new(*x.clone())),
+                    None => None
+                }
             },
-            None => None
+            _ => { panic!() }
         }
     }
 
@@ -127,12 +188,14 @@ impl<'str> NP_Value<'str> for String {
                         NP_JSON::String(*y)
                     },
                     None => {
-                        let schema_state = str_get_schema_state(&pointer.schema);
-                        match schema_state.default {
-                            Some(x) => {
-                                NP_JSON::String(String::from(x))
+                        match &**pointer.schema {
+                            NP_Parsed_Schema::UTF8String { i: _, size: _, default, sortable: _ } => {
+                                match default {
+                                    Some(x) => NP_JSON::String(*x.clone()),
+                                    None => NP_JSON::Null
+                                }
                             },
-                            None => NP_JSON::Null
+                            _ => { unsafe { unreachable_unchecked() } }
                         }
                     }
                 }
@@ -144,10 +207,51 @@ impl<'str> NP_Value<'str> for String {
     }
 
     fn get_size(pointer: NP_Lite_Ptr) -> Result<u32, NP_Error> {
-        NP_Bytes::get_size(pointer)
+        let value = pointer.kind.get_value_addr();
+
+        // empty value
+        if value == 0 {
+            return Ok(0)
+        }
+        
+        // get size of bytes
+        let addr = value as usize;        
+        let memory = pointer.memory;
+
+        match &**pointer.schema {
+            NP_Parsed_Schema::UTF8String { i: _, size, default: _, sortable: _ } => {
+                // fixed size
+                if *size > 0 { 
+                    return Ok(*size as u32)
+                }
+
+                // dynamic size
+                let bytes_size: u32 = match &memory.size {
+                    NP_Size::U8 => {
+                        let mut size: [u8; 1] = [0; 1];
+                        size.copy_from_slice(&memory.read_bytes()[addr..(addr+1)]);
+                        (u8::from_be_bytes(size) as u32) + 1
+                    },
+                    NP_Size::U16 => {
+                        let mut size: [u8; 2] = [0; 2];
+                        size.copy_from_slice(&memory.read_bytes()[addr..(addr+2)]);
+                        (u16::from_be_bytes(size) as u32) + 2
+                    },
+                    NP_Size::U32 => {
+                        let mut size: [u8; 4] = [0; 4];
+                        size.copy_from_slice(&memory.read_bytes()[addr..(addr+4)]);
+                        (u32::from_be_bytes(size) as u32) + 4
+                    }
+                };
+                
+                // return total size of this string
+                return Ok(bytes_size);
+            },
+            _ => { unsafe { unreachable_unchecked() } }
+        }
     }
 
-    fn from_json_to_schema(json_schema: &NP_JSON) -> Result<Option<NP_Schema>, NP_Error> {
+    fn from_json_to_schema(json_schema: &NP_JSON) -> Result<Option<(Vec<u8>, NP_Parsed_Schema)>, NP_Error> {
 
         let type_str = NP_Schema::_get_type(json_schema)?;
 
@@ -158,7 +262,7 @@ impl<'str> NP_Value<'str> for String {
 
             let mut has_fixed_size = false;
 
-            match json_schema["size"] {
+            let size = match json_schema["size"] {
                 NP_JSON::Integer(x) => {
                     has_fixed_size = true;
                     if x < 1 {
@@ -168,6 +272,7 @@ impl<'str> NP_Value<'str> for String {
                         return Err(NP_Error::new("Fixed size for string cannot be larger than 2^16!"));
                     }
                     schema_data.extend((x as u16).to_be_bytes().to_vec());
+                    x as u16
                 },
                 NP_JSON::Float(x) => {
                     has_fixed_size = true;
@@ -179,13 +284,15 @@ impl<'str> NP_Value<'str> for String {
                     }
 
                     schema_data.extend((x as u16).to_be_bytes().to_vec());
+                    x as u16
                 },
                 _ => {
                     schema_data.extend(0u16.to_be_bytes().to_vec());
+                    0u16
                 }
-            }
+            };
 
-            match &json_schema["default"] {
+            let default = match &json_schema["default"] {
                 NP_JSON::String(bytes) => {
                     let str_bytes = bytes.clone().into_bytes();
                     if str_bytes.len() > u16::max as usize - 1 {
@@ -193,15 +300,76 @@ impl<'str> NP_Value<'str> for String {
                     }
                     schema_data.extend(((str_bytes.len() + 1) as u16).to_be_bytes().to_vec());
                     schema_data.extend(str_bytes);
+                    Some(Box::new(bytes.clone()))
                 },
                 _ => {
                     schema_data.extend(0u16.to_be_bytes().to_vec());
+                    None
                 }
-            }
+            };
 
-            return Ok(Some(NP_Schema { is_sortable: has_fixed_size, bytes: schema_data}));
+            return Ok(Some((schema_data, NP_Parsed_Schema::UTF8String {
+                i: NP_TypeKeys::UTF8String,
+                size: size,
+                default: default,
+                sortable: has_fixed_size
+            })));
         }
         
         Ok(None)
     }
+}
+
+#[test]
+fn schema_parsing_works() -> Result<(), NP_Error> {
+    let schema = "{\"type\":\"string\",\"default\":\"hello\"}";
+    let factory = crate::NP_Factory::new(schema)?;
+    assert_eq!(schema, factory.schema.to_json()?.stringify());
+
+    let schema = "{\"type\":\"string\",\"size\":10}";
+    let factory = crate::NP_Factory::new(schema)?;
+    assert_eq!(schema, factory.schema.to_json()?.stringify());
+
+    let schema = "{\"type\":\"string\"}";
+    let factory = crate::NP_Factory::new(schema)?;
+    assert_eq!(schema, factory.schema.to_json()?.stringify());
+    
+    Ok(())
+}
+
+#[test]
+fn default_value_works() -> Result<(), NP_Error> {
+    let schema = "{\"type\":\"string\",\"default\":\"hello\"}";
+    let factory = crate::NP_Factory::new(schema)?;
+    let buffer = factory.empty_buffer(None, None);
+    assert_eq!(buffer.deep_get("")?.unwrap(), Box::new(String::from("hello")));
+
+    Ok(())
+}
+
+#[test]
+fn fixed_size_works() -> Result<(), NP_Error> {
+    let schema = "{\"type\":\"string\",\"size\": 20}";
+    let factory = crate::NP_Factory::new(schema)?;
+    let buffer = factory.empty_buffer(None, None);
+    buffer.deep_set("", String::from("hello there this sentence is long"))?;
+    assert_eq!(buffer.deep_get("")?.unwrap(), Box::new(String::from("hello there this sen")));
+
+    Ok(())
+}
+
+#[test]
+fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
+    let schema = "{\"type\":\"string\"}";
+    let factory = crate::NP_Factory::new(schema)?;
+    let mut buffer = factory.empty_buffer(None, None);
+    buffer.deep_set("", String::from("hello there this sentence is long"))?;
+    assert_eq!(buffer.deep_get::<String>("")?.unwrap(), Box::new(String::from("hello there this sentence is long")));
+    buffer.deep_clear("")?;
+    assert_eq!(buffer.deep_get::<String>("")?, None);
+
+    buffer = buffer.compact(None, None)?;
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 4u32);
+
+    Ok(())
 }

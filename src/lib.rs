@@ -1,6 +1,6 @@
 #![warn(missing_docs, missing_debug_implementations)]
 #![allow(non_camel_case_types)]
-#![no_std]
+// #![no_std]
 
 //! ## High Performance Serialization Library
 //! Faster than JSON with Schemas and Native Types.  Like Mutable Protocol Buffers with Compile Free Schemas.
@@ -198,6 +198,7 @@ mod utils;
 
 extern crate alloc;
 
+use alloc::prelude::v1::Box;
 use crate::json_flex::NP_JSON;
 use crate::schema::NP_Schema;
 use crate::json_flex::json_decode;
@@ -206,6 +207,7 @@ use crate::memory::NP_Memory;
 use buffer::{NP_Buffer};
 use alloc::vec::Vec;
 use alloc::{borrow::ToOwned};
+use schema::NP_Parsed_Schema;
 use crate::memory::NP_Size;
 
 const PROTOCOL_VERSION: u8 = 1;
@@ -213,7 +215,7 @@ const PROTOCOL_VERSION: u8 = 1;
 
 /// Factories are created from schemas.  Once you have a factory you can use it to create new buffers or open existing ones.
 /// 
-/// The correct way to create a factory is to pass a JSON string schema into the static `new` method.  [Learn about schemas here.](./schema/index.html)
+/// To create a factory pass a JSON string schema into the static `new` method.  [Learn about schemas here.](./schema/index.html)
 /// 
 /// You can also create a factory with a compiled byte schema using the static `new_compiled` method.
 /// 
@@ -295,19 +297,11 @@ impl NP_Factory {
             Ok(good_parsed) => {
                 let schema = NP_Schema::from_json(good_parsed)?;
 
-                // add leading byte for sortable/non sortable
-                let mut new_bytes: Vec<u8> = Vec::with_capacity(schema.bytes.len() + 1);
-                if schema.is_sortable {
-                    new_bytes.push(1);
-                } else {
-                    new_bytes.push(0);
-                }
-                new_bytes.extend(schema.bytes);
-
                 Ok(NP_Factory {
                     schema:  NP_Schema {
-                        is_sortable: schema.is_sortable,
-                        bytes: new_bytes
+                        is_sortable: schema.1.is_sortable(),
+                        bytes: schema.0,
+                        parsed: Box::new(schema.1)
                     }
                 })
             },
@@ -318,12 +312,18 @@ impl NP_Factory {
     }
 
     /// Create a new factory from a compiled schema byte array.
-    /// No validation or checking is performed on the schema, you must make sure you're using a byte array that was generated with `compile_schema`.
+    /// The byte schemas are at least an order of magnitude faster to parse than JSON schemas.
     /// 
-    pub fn new_compiled(schema: Vec<u8>) -> NP_Factory {
-        let is_sortable = schema[0] == 1;
+    pub fn new_compiled(schema_bytes: Vec<u8>) -> NP_Factory {
+        
+        let schema = NP_Schema::from_bytes(0, &schema_bytes);
+
         NP_Factory {
-            schema:  NP_Schema { bytes: schema, is_sortable: is_sortable }
+            schema:  NP_Schema { 
+                is_sortable: schema.is_sortable(), 
+                bytes: schema_bytes, 
+                parsed: Box::new(schema)
+            }
         }
     }
 
@@ -370,6 +370,15 @@ mod tests {
     // use collection::{table::NP_Table, list::NP_List};
     // use json_flex::NP_JSON;
     // use pointer::misc::NP_Date;
+
+    #[test]
+    fn scham_parsing_works() -> core::result::Result<(), NP_Error> {
+        let schema = "{\"type\":\"string\",\"default\":\"hello\"}";
+        let factory: NP_Factory = NP_Factory::new(schema)?;
+        assert_eq!(schema, factory.schema.to_json()?.stringify());
+
+        Ok(())
+    }
 
     #[test]
     fn it_works() -> core::result::Result<(), NP_Error> {
