@@ -10,7 +10,7 @@ authors = ["Scott Lott <me@scottlott.com>"]
 readme = "README.md"
 edition = "2018"
 categories = ["data-structures", "embedded", "encoding", "no-std"]
-keywords = ["schemas", "protocol-buffers", "flatbuffers", "deserialization", "zero-copy", "serialization", "rpc", "json", "bson", "messagepack"]
+keywords = ["protocol-buffers", "flatbuffers", "zero-copy", "serialization", "json"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
