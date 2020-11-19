@@ -9,9 +9,9 @@
 //! }"#)?;
 //!
 //! let mut new_buffer = factory.empty_buffer(None, None);
-//! new_buffer.deep_set("", String::from("I want to play a game"))?;
+//! new_buffer.set("", String::from("I want to play a game"))?;
 //! 
-//! assert_eq!(Box::new(String::from("I want to play a game")), new_buffer.deep_get::<String>("")?.unwrap());
+//! assert_eq!(Box::new(String::from("I want to play a game")), new_buffer.get::<String>("")?.unwrap());
 //!
 //! # Ok::<(), NP_Error>(()) 
 //! ```
@@ -23,7 +23,7 @@ use alloc::vec::Vec;
 use crate::{json_flex::JSMAP, memory::NP_Size, schema::{NP_Parsed_Schema, NP_Schema}};
 use crate::error::NP_Error;
 use crate::{schema::{NP_TypeKeys}, pointer::NP_Value, utils::from_utf8_lossy, json_flex::NP_JSON};
-use super::{NP_PtrKinds, NP_Lite_Ptr, bytes::NP_Bytes};
+use super::{NP_Ptr, bytes::NP_Bytes};
 
 use alloc::string::String;
 use alloc::boxed::Box;
@@ -105,12 +105,12 @@ impl<'str> NP_Value<'str> for String {
         }
     }
 
-    fn set_value(pointer: NP_Lite_Ptr, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
+    fn set_value(pointer: &mut NP_Ptr<'str>, value: Box<&Self>) -> Result<(), NP_Error> {
         let bytes = value.as_bytes().to_vec();
         NP_Bytes::set_value(pointer, Box::new(&NP_Bytes::new(bytes)))
     }
 
-    fn into_value(pointer: NP_Lite_Ptr) -> Result<Option<Box<Self>>, NP_Error> {
+    fn into_value(pointer: NP_Ptr<'str>) -> Result<Option<Box<Self>>, NP_Error> {
         let addr = pointer.kind.get_value_addr() as usize;
  
         // empty value
@@ -134,23 +134,7 @@ impl<'str> NP_Value<'str> for String {
                 } else { // dynamic size
                     // get size of bytes
         
-                    let bytes_size: usize = match memory.size {
-                        NP_Size::U8 => {
-                            let mut size_bytes: [u8; 1] = [0; 1];
-                            size_bytes.copy_from_slice(&memory.read_bytes()[addr..(addr+1)]);
-                            u8::from_be_bytes(size_bytes) as usize
-                        },
-                        NP_Size::U16 => {
-                            let mut size_bytes: [u8; 2] = [0; 2];
-                            size_bytes.copy_from_slice(&memory.read_bytes()[addr..(addr+2)]);
-                            u16::from_be_bytes(size_bytes) as usize
-                        },
-                        NP_Size::U32 => { 
-                            let mut size_bytes: [u8; 4] = [0; 4];
-                            size_bytes.copy_from_slice(&memory.read_bytes()[addr..(addr+4)]);
-                            u32::from_be_bytes(size_bytes) as usize
-                        }
-                    };
+                    let bytes_size: usize = memory.read_address(addr);
         
                     // get bytes
                     let bytes = match memory.size {
@@ -178,7 +162,7 @@ impl<'str> NP_Value<'str> for String {
         }
     }
 
-    fn to_json(pointer: NP_Lite_Ptr) -> NP_JSON {
+    fn to_json(pointer: &'str NP_Ptr<'str>) -> NP_JSON {
         let this_string = Self::into_value(pointer.clone());
 
         match this_string {
@@ -206,7 +190,7 @@ impl<'str> NP_Value<'str> for String {
         }
     }
 
-    fn get_size(pointer: NP_Lite_Ptr) -> Result<u32, NP_Error> {
+    fn get_size(pointer: &'str NP_Ptr<'str>) -> Result<usize, NP_Error> {
         let value = pointer.kind.get_value_addr();
 
         // empty value
@@ -222,27 +206,11 @@ impl<'str> NP_Value<'str> for String {
             NP_Parsed_Schema::UTF8String { i: _, size, default: _, sortable: _ } => {
                 // fixed size
                 if *size > 0 { 
-                    return Ok(*size as u32)
+                    return Ok(*size as usize)
                 }
 
                 // dynamic size
-                let bytes_size: u32 = match &memory.size {
-                    NP_Size::U8 => {
-                        let mut size: [u8; 1] = [0; 1];
-                        size.copy_from_slice(&memory.read_bytes()[addr..(addr+1)]);
-                        (u8::from_be_bytes(size) as u32) + 1
-                    },
-                    NP_Size::U16 => {
-                        let mut size: [u8; 2] = [0; 2];
-                        size.copy_from_slice(&memory.read_bytes()[addr..(addr+2)]);
-                        (u16::from_be_bytes(size) as u32) + 2
-                    },
-                    NP_Size::U32 => {
-                        let mut size: [u8; 4] = [0; 4];
-                        size.copy_from_slice(&memory.read_bytes()[addr..(addr+4)]);
-                        (u32::from_be_bytes(size) as u32) + 4
-                    }
-                };
+                let bytes_size = memory.read_address(addr) + memory.addr_size_bytes();
                 
                 // return total size of this string
                 return Ok(bytes_size);
@@ -342,7 +310,7 @@ fn default_value_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"string\",\"default\":\"hello\"}";
     let factory = crate::NP_Factory::new(schema)?;
     let buffer = factory.empty_buffer(None, None);
-    assert_eq!(buffer.deep_get("")?.unwrap(), Box::new(String::from("hello")));
+    assert_eq!(buffer.get("")?.unwrap(), Box::new(String::from("hello")));
 
     Ok(())
 }
@@ -351,9 +319,9 @@ fn default_value_works() -> Result<(), NP_Error> {
 fn fixed_size_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"string\",\"size\": 20}";
     let factory = crate::NP_Factory::new(schema)?;
-    let buffer = factory.empty_buffer(None, None);
-    buffer.deep_set("", String::from("hello there this sentence is long"))?;
-    assert_eq!(buffer.deep_get("")?.unwrap(), Box::new(String::from("hello there this sen")));
+    let mut buffer = factory.empty_buffer(None, None);
+    buffer.set("", String::from("hello there this sentence is long"))?;
+    assert_eq!(buffer.get("")?.unwrap(), Box::new(String::from("hello there this sen")));
 
     Ok(())
 }
@@ -363,13 +331,13 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"string\"}";
     let factory = crate::NP_Factory::new(schema)?;
     let mut buffer = factory.empty_buffer(None, None);
-    buffer.deep_set("", String::from("hello there this sentence is long"))?;
-    assert_eq!(buffer.deep_get::<String>("")?.unwrap(), Box::new(String::from("hello there this sentence is long")));
-    buffer.deep_clear("")?;
-    assert_eq!(buffer.deep_get::<String>("")?, None);
+    buffer.set("", String::from("hello there this sentence is long"))?;
+    assert_eq!(buffer.get::<String>("")?.unwrap(), Box::new(String::from("hello there this sentence is long")));
+    buffer.del("")?;
+    assert_eq!(buffer.get::<String>("")?, None);
 
-    buffer = buffer.compact(None, None)?;
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 4u32);
+    buffer.compact(None, None)?;
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);
 
     Ok(())
 }

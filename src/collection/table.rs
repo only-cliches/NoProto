@@ -1,20 +1,23 @@
-use crate::schema::{NP_Parsed_Schema};
+use crate::{pointer::{NP_Iterator_Helper, NP_Ptr_Collection}, schema::{NP_Parsed_Schema}};
 use crate::pointer::NP_PtrKinds;
-use crate::{memory::{NP_Size, NP_Memory}, pointer::{NP_Value, NP_Ptr, any::NP_Any, NP_Lite_Ptr}, error::NP_Error, schema::{NP_Schema, NP_TypeKeys}, json_flex::{JSMAP, NP_JSON}};
+use crate::{memory::{NP_Size, NP_Memory}, pointer::{NP_Value, NP_Ptr}, error::NP_Error, schema::{NP_Schema, NP_TypeKeys}, json_flex::{JSMAP, NP_JSON}};
 
 use alloc::vec::Vec;
 use alloc::string::String;
 use alloc::boxed::Box;
 use alloc::{borrow::ToOwned};
 use core::{result::Result, hint::unreachable_unchecked};
+use core::ops::Add;
+
+use super::NP_Collection;
 
 /// The data type for tables in NoProto buffers. [Using collections with pointers](../pointer/struct.NP_Ptr.html#using-collection-types-with-pointers).
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct NP_Table<'table> {
-    address: u32, // pointer location
-    head: u32,
-    memory: Option<&'table NP_Memory>,
-    schema: Option<&'table Box<NP_Parsed_Schema>>
+    address: usize, // pointer location
+    head: usize,
+    memory: &'table NP_Memory,
+    schema: &'table Box<NP_Parsed_Schema>
 }
 
 impl<'table> NP_Value<'table> for NP_Table<'table> {
@@ -73,11 +76,11 @@ impl<'table> NP_Value<'table> for NP_Table<'table> {
         Ok(NP_JSON::Dictionary(schema_json))
     }
 
-    fn set_value(_pointer: NP_Lite_Ptr, _value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
+    fn set_value(_pointer: &mut NP_Ptr<'table>, _value: Box<&Self>) -> Result<(), NP_Error> {
         Err(NP_Error::new("Type (table) doesn't support .set()! Use .into() instead."))
     }
 
-    fn into_value(ptr: NP_Lite_Ptr<'table>) -> Result<Option<Box<Self>>, NP_Error> {
+    fn into_value(ptr: NP_Ptr<'table>) -> Result<Option<Box<Self>>, NP_Error> {
 
         match &ptr.memory.size {
             NP_Size::U8 => {
@@ -88,7 +91,7 @@ impl<'table> NP_Value<'table> for NP_Table<'table> {
                 if addr == 0 {
                     // no table here, make one
                     addr = ptr.memory.malloc([0 as u8; 1].to_vec())?; // stores HEAD
-                    ptr.memory.set_value_address(ptr.location, addr, &ptr.kind); // set pointer to new table
+                    ptr.memory.set_value_address(ptr.address, addr, &ptr.kind); // set pointer to new table
                 } else {
                     // existing head, read value
                     let a = addr as usize;
@@ -97,9 +100,9 @@ impl<'table> NP_Value<'table> for NP_Table<'table> {
 
                 Ok(Some(Box::new(NP_Table {
                     address: addr,
-                    head: u8::from_be_bytes(head) as u32,
-                    memory: Some(ptr.memory),
-                    schema: Some(ptr.schema)
+                    head: u8::from_be_bytes(head) as usize,
+                    memory: ptr.memory,
+                    schema: ptr.schema
                 })))
             },
             NP_Size::U16 => {
@@ -110,7 +113,7 @@ impl<'table> NP_Value<'table> for NP_Table<'table> {
                 if addr == 0 {
                     // no table here, make one
                     addr = ptr.memory.malloc([0 as u8; 2].to_vec())?; // stores HEAD
-                    ptr.memory.set_value_address(ptr.location, addr, &ptr.kind); // set pointer to new table
+                    ptr.memory.set_value_address(ptr.address, addr, &ptr.kind); // set pointer to new table
                 } else {
                     // existing head, read value
                     let a = addr as usize;
@@ -119,9 +122,9 @@ impl<'table> NP_Value<'table> for NP_Table<'table> {
 
                 Ok(Some(Box::new(NP_Table {
                     address: addr,
-                    head: u16::from_be_bytes(head) as u32,
-                    memory: Some(ptr.memory),
-                    schema: Some(ptr.schema)
+                    head: u16::from_be_bytes(head) as usize,
+                    memory: ptr.memory,
+                    schema: ptr.schema
                 })))
             },
             NP_Size::U32 => {
@@ -132,7 +135,7 @@ impl<'table> NP_Value<'table> for NP_Table<'table> {
                 if addr == 0 {
                     // no table here, make one
                     addr = ptr.memory.malloc([0 as u8; 4].to_vec())?; // stores HEAD
-                    ptr.memory.set_value_address(ptr.location, addr, &ptr.kind); // set pointer to new table
+                    ptr.memory.set_value_address(ptr.address, addr, &ptr.kind); // set pointer to new table
                 } else {
                     // existing head, read value
                     let a = addr as usize;
@@ -141,15 +144,15 @@ impl<'table> NP_Value<'table> for NP_Table<'table> {
 
                 Ok(Some(Box::new(NP_Table {
                     address: addr,
-                    head: u32::from_be_bytes(head) as u32,
-                    memory: Some(ptr.memory),
-                    schema: Some(ptr.schema)
+                    head: u32::from_be_bytes(head) as usize,
+                    memory: ptr.memory,
+                    schema: ptr.schema
                 })))
             }
         }
     }
  
-    fn get_size(ptr: NP_Lite_Ptr) -> Result<u32, NP_Error> {
+    fn get_size(ptr: &'table NP_Ptr<'table>) -> Result<usize, NP_Error> {
 
         let addr = ptr.kind.get_value_addr();
 
@@ -158,30 +161,20 @@ impl<'table> NP_Value<'table> for NP_Table<'table> {
         }
 
         let base_size = match &ptr.memory.size {
-            NP_Size::U8  => 1u32,
-            NP_Size::U16 => 2u32,
-            NP_Size::U32 => 4u32
+            NP_Size::U8  => 1usize,
+            NP_Size::U16 => 2usize,
+            NP_Size::U32 => 4usize
         };
 
-        let mut acc_size = 0u32;
+        let mut acc_size = 0usize;
 
         match NP_Table::into_value(ptr.clone())? {
-            Some(mut real_table) => {
-
-                match &**ptr.schema {
-                    NP_Parsed_Schema::Table { i: _, columns, sortable: _ } => {
-                        for c in columns {
-                            let has_value = real_table.has(&c.1)?;
-
-                            if has_value.1 {
-                                let col_ptr = real_table.select::<NP_Any>(&c.1)?;
-                                let size = col_ptr.calc_size()?;
-                                acc_size += size;
-                            }
-                        }                        
-                    },
-                    _ => { unsafe { unreachable_unchecked() } }
-                };
+            Some(real_table) => {
+                for item in real_table.it().into_iter() {
+                    if item.has_value() {
+                        acc_size += item.calc_size()?;
+                    }
+                }
             },
             None => {
                 
@@ -191,7 +184,7 @@ impl<'table> NP_Value<'table> for NP_Table<'table> {
         Ok(base_size + acc_size)
     }
 
-    fn to_json(ptr: NP_Lite_Ptr) -> NP_JSON {
+    fn to_json(ptr: &'table NP_Ptr<'table>) -> NP_JSON {
         let addr = ptr.kind.get_value_addr();
 
         if addr == 0 {
@@ -200,71 +193,39 @@ impl<'table> NP_Value<'table> for NP_Table<'table> {
 
         let mut object = JSMAP::new();
 
-        let table = NP_Table::into_value(ptr.clone());
+        let real_table = NP_Table::into_value(ptr.clone()).unwrap().unwrap();
 
-        match table {
-            Ok(good_table) => {
-                match good_table {
-                    Some(mut real_table) => {
-
-                        match &**ptr.schema {
-                            NP_Parsed_Schema::Table { i: _, columns, sortable: _ } => {
-                                for c in columns {
-                                    let col_ptr = real_table.select::<NP_Any>(c.1.as_str());
-                                    match col_ptr {
-                                        Ok(ptr) => {
-                                            object.insert(c.1.to_owned(), ptr.json_encode());
-                                        },
-                                        Err(_e) => {
-                                            object.insert(c.1.to_owned(), NP_JSON::Null);
-                                        }
-                                    }
-                                }
-                            },
-                            _ => { unsafe { unreachable_unchecked() } }
-                        }
-                    },
-                    None => {
-                        return NP_JSON::Null;
-                    }
-                }
-            },
-            Err(_e) => {
-                return NP_JSON::Null;
-            }
+        for item in real_table.it().into_iter() {
+            let column = match item.helper {
+                NP_Iterator_Helper::Table {  index: _, column, prev_addr: _, skip_step: _ } => { column },
+                _ => panic!()
+            };
+            object.insert(String::from(column), item.json_encode());
         }
 
         NP_JSON::Dictionary(object)
     }
 
-    fn do_compact(from_ptr: NP_Lite_Ptr<'table>, to_ptr: NP_Lite_Ptr<'table>) -> Result<(), NP_Error> where Self: NP_Value<'table> + Default {
+    fn do_compact(from_ptr: NP_Ptr<'table>, to_ptr: &'table mut NP_Ptr<'table>) -> Result<(), NP_Error> where Self: NP_Value<'table> {
 
-        if from_ptr.location == 0 {
+        if from_ptr.address == 0 {
             return Ok(());
         }
 
-        let to_ptr_list = to_ptr.into::<Self>();
+        let old_table = NP_Table::into_value(from_ptr)?.expect("Attempted to cast table from non table pointer!");
+        let new_table = NP_Table::into_value(to_ptr.clone())?.expect("Attempted to cast table from non table pointer!");
 
-        match Self::into_value(from_ptr)? {
-            Some(old_list) => {
 
-                match to_ptr_list.deref()? {
-                    Some(mut new_list) => {
-
-                        for mut item in old_list.it().into_iter() {
-
-                            if item.has_value.0 && item.has_value.1 {
-                                let new_ptr = NP_Lite_Ptr::from(new_list.select::<NP_Any>(&item.column)?);
-                                let old_ptr = NP_Lite_Ptr::from(item.select::<NP_Any>()?);
-                                old_ptr.compact(new_ptr)?;
-                            }
-
-                        }
-                    },
-                    None => {}
-                }
-            },
-            None => { }
+        for old_item in old_table.it().into_iter() {
+            if old_item.has_value() {
+                let (idx, column) = match old_item.helper {
+                    NP_Iterator_Helper::Table {  index, column, prev_addr: _, skip_step: _ } => { (index, column) },
+                    _ => panic!()
+                };
+                let mut new_ptr = new_table.select(column, Some(idx as usize));
+                new_ptr = NP_Table::commit_pointer(new_ptr)?;
+                old_item.clone().compact(&mut new_ptr)?;
+            }
         }
 
         Ok(())
@@ -309,6 +270,10 @@ impl<'table> NP_Value<'table> for NP_Table<'table> {
                 return Err(NP_Error::new("Tables cannot have more than 255 columns!"))
             }
 
+            if column_data.len() == 0 {
+                return Err(NP_Error::new("Tables must have at least one column!"))
+            }
+
             // number of columns
             schema_data.push(column_data.len() as u8);
 
@@ -343,526 +308,369 @@ impl<'table> NP_Value<'table> for NP_Table<'table> {
     }
 }
 
-impl<'table> Default for NP_Table<'table> {
-
-    fn default() -> Self {
-        NP_Table { address: 0, head: 0, memory: None, schema: None}
-    }
-}
-
 impl<'table> NP_Table<'table> {
 
     #[doc(hidden)]
-    pub fn new(address: u32, head: u32, memory: &'table NP_Memory, schema: &'table Box<NP_Parsed_Schema>) -> Self {
+    pub fn new(address: usize, head: usize, memory: &'table NP_Memory, schema: &'table Box<NP_Parsed_Schema>) -> Self {
         NP_Table {
             address,
             head,
-            memory: Some(memory),
-            schema: Some(schema)
+            memory: memory,
+            schema: schema
         }
+    }
+
+    /// read schema of table
+    pub fn get_schema(&self) -> &'table Box<NP_Parsed_Schema> {
+        self.schema
     }
 
     /// Convert the table into an iterator.  Allows you to loop through all the values present in the table.
     /// 
     pub fn it(self) -> NP_Table_Iterator<'table> {
-        NP_Table_Iterator::new(self.address, self.head, self.memory.unwrap(), self.schema.unwrap())
+        NP_Table_Iterator::new(self)
     }
 
-    /// Select a specific column from the table.  If there is no value for the column you selected, you'll get an empty pointer back.
-    /// 
-    /// If the column does not exist this operation will fail.
-    /// 
-    pub fn select<X: NP_Value<'table> + Default>(&mut self, column: &str) -> Result<NP_Ptr<'table, X>, NP_Error> {
+    /// Select a specific value at the given key
+    pub fn select(&'table self, column: &str, quick_select: Option<usize>) -> NP_Ptr<'table> {
+        NP_Table::select_mv(self.clone(), column, quick_select)
+    }
 
-
-        let column_schema = match &**self.schema.unwrap() {
-            NP_Parsed_Schema::Table { i: _, columns, sortable: _} => {
-                let mut col_data: Option<&(u8, String, Box<NP_Parsed_Schema>)> = None;
-                for col in columns {
-                    if col.1 == column {
-                        col_data = Some(&col);
-                    }
-                }
-                col_data
+    /// Select a specific value at the given key
+    pub fn select_mv(self, column: &str, quick_select: Option<usize>) -> NP_Ptr<'table> {
+        let columns = match &**self.schema {
+            NP_Parsed_Schema::Table { i: _, sortable: _, columns } => {
+                columns
             },
             _ => { unsafe { unreachable_unchecked() } }
         };
 
-        match column_schema {
-            Some(some_column_schema) => {
+        let column_schema = columns.iter().fold(None, |prev, item| {
+            if item.1 == column {
+                Some(item)
+            } else {
+                prev
+            }
+        }).unwrap();
 
-                let memory = self.memory.unwrap();
-  
-                let type_data = (*some_column_schema.2).into_type_data();
+        // table is empty, return virtual pointer
+        if self.head == 0 {
+            return NP_Ptr::_new_collection_item_ptr(0, &column_schema.2, &self.memory, NP_Ptr_Collection::Table {
+                address: self.address,
+                head: self.head,
+                schema: self.schema
+            }, NP_Iterator_Helper::Table {
+                index: column_schema.0,
+                column: &column_schema.1,
+                prev_addr: 0,
+                skip_step: false
+            })
+        }
 
-                // make sure the type we're casting to isn't ANY or the cast itself isn't ANY
-                if X::type_idx().0 != NP_TypeKeys::Any as u8 && type_data.0 as u8 != NP_TypeKeys::Any as u8 {
+        // this ONLY works if we KNOW FOR SURE that the key we're inserting is not a duplicate column
+        if let Some(x) = quick_select {
+            return NP_Ptr::_new_collection_item_ptr(0, &columns[x].2, &self.memory, NP_Ptr_Collection::Table {
+                address: self.address,
+                head: self.head,
+                schema: self.schema
+            }, NP_Iterator_Helper::Table {
+                index: columns[x].0,
+                column: &columns[x].1,
+                prev_addr: self.head,
+                skip_step: false
+            });
+        }
 
-                    // not using any casting, check type
-                    if type_data.0 as u8 != X::type_idx().0 {
-                        let mut err = "TypeError: Attempted to cast type (".to_owned();
-                        err.push_str(X::type_idx().1.as_str());
-                        err.push_str(") to schema of type (");
-                        err.push_str(type_data.1.as_str());
-                        err.push_str(")");
-                        return Err(NP_Error::new(err));
-                    }
-                }
+        let mut running_ptr: usize = 0;
 
-                if self.head == 0 { // no values, create one
+        // key might be somewhere in existing records
+        for item in self.clone().it().into_iter() {
 
-                    let mut ptr_bytes: Vec<u8> = memory.blank_ptr_bytes(&NP_PtrKinds::TableItem { addr: 0, i: 0, next: 0 }); // Table item pointer
-    
-                    // set column index in pointer
-                    match &memory.size {
-                        NP_Size::U8 => { 
-                            ptr_bytes[2] = some_column_schema.0;
-                        },
-                        NP_Size::U16 => { 
-                            ptr_bytes[4] = some_column_schema.0;
-                        },
-                        NP_Size::U32 => {
-                            ptr_bytes[8] = some_column_schema.0;
-                        }
-                    }
-        
-                    let addr = memory.malloc(ptr_bytes.to_vec())?;
-                    
-                    // update head to point to newly created TableItem pointer
-                    self.set_head(addr);
-
-                    // provide
-                    return Ok(NP_Ptr::_new_table_item_ptr(self.head, &some_column_schema.2, &memory));
-                } else { // values exist, loop through them to see if we have an existing pointer for this column
-
-                    let mut next_addr = self.head as usize;
-
-                    let mut has_next = true;
-
-                    while has_next {
-
-                        let index = match &memory.size {
-                            NP_Size::U8 => { memory.read_bytes()[(next_addr + 2)] },
-                            NP_Size::U16 => { memory.read_bytes()[(next_addr + 4)] },
-                            NP_Size::U32 => { memory.read_bytes()[(next_addr + 8)] }
-                        };
-                        
-                        // found our value!
-                        if index == some_column_schema.0 {
-                            return Ok(NP_Ptr::_new_table_item_ptr(next_addr as u32, &some_column_schema.2, &memory))
-                        }
-                        
-                        // not found yet, get next address
-                        let next_ptr = match memory.size {
-                            NP_Size::U8 => u8::from_be_bytes([memory.get_1_byte(next_addr + 1).unwrap_or(0)]) as usize,
-                            NP_Size::U16 => u16::from_be_bytes(*memory.get_2_bytes(next_addr + 2).unwrap_or(&[0; 2])) as usize,
-                            NP_Size::U32 => u32::from_be_bytes(*memory.get_4_bytes(next_addr + 4).unwrap_or(&[0; 4])) as usize
-                        };
-                        if next_ptr == 0 {
-                            has_next = false;
-                        } else {
-                            next_addr = next_ptr;
-                        }
-                    }
-
-                    // ran out of pointers to check, make one!
-
-                    
-                    let mut ptr_bytes: Vec<u8> = memory.blank_ptr_bytes(&NP_PtrKinds::TableItem { addr: 0, i: 0, next: 0 }); // Map item pointer
-    
-                    // set column index in pointer
-                    match &memory.size {
-                        NP_Size::U8 => { 
-                            ptr_bytes[2] = some_column_schema.0;
-                        },
-                        NP_Size::U16 => { 
-                            ptr_bytes[4] = some_column_schema.0;
-                        },
-                        NP_Size::U32 => {
-                            ptr_bytes[8] = some_column_schema.0;
-                        }
-                    }
+            let this_column = match item.helper {
+                NP_Iterator_Helper::Table { index: _, column, prev_addr: _, skip_step: _} => column,
+                _ => panic!()
+            };
             
-                    let addr = memory.malloc(ptr_bytes.to_vec())?;
-
-                    let write_bytes = memory.write_bytes();
-
-                    // set previouse pointer's "next" value to this new pointer
-                    match &memory.size {
-                        NP_Size::U8 => { 
-                            let addr_bytes = (addr as u8).to_be_bytes();
-                            write_bytes[(next_addr + 1)] = addr_bytes[0];
-                        },
-                        NP_Size::U16 => { 
-                            let addr_bytes = (addr as u16).to_be_bytes();
-                            for x in 0..addr_bytes.len() {
-                                write_bytes[(next_addr + 2 + x)] = addr_bytes[x];
-                            }
-                        },
-                        NP_Size::U32 => {
-                            let addr_bytes = addr.to_be_bytes();
-                            for x in 0..addr_bytes.len() {
-                                write_bytes[(next_addr + 4 + x)] = addr_bytes[x];
-                            }
-                        }
-                    }
-                    
-                    // provide 
-                    return Ok(NP_Ptr::_new_table_item_ptr(addr, &some_column_schema.2, memory));
-
-                }
-            },
-            None => {
-                let mut err_msg = "Column (".to_owned();
-                err_msg.push_str(column);
-                err_msg.push_str(") not found, unable to select!");
-                return Err(NP_Error::new(err_msg.as_str()));
-            }
-        }
-    }
-
-
-    /// Delets a specific column value from this table.  If the column value doesn't exist or the table is empty this does nothing.
-    /// 
-    pub fn delete(&mut self, column: &str) -> Result<bool, NP_Error> {
-
-        let memory = self.memory.unwrap();
-
-        let column_index = match &**self.schema.unwrap() {
-            NP_Parsed_Schema::Table { i: _, columns, sortable: _ } => {
-                columns.iter().fold(0u8, |prev, cur| {
-                    if cur.1 == column {
-                        return cur.0; 
-                    }
-                    prev
-                })
-            },
-            _ => { unsafe { unreachable_unchecked() } }
-        };
-
-        if self.head == 0 { // no values, nothing to delete
-            Ok(false)
-        } else { // values exist, loop through them to see if we have an existing pointer for this column
-
-            let mut curr_addr = self.head as usize;
-            let mut prev_addr = 0u32;
-
-            let mut has_next = true;
-
-            while has_next {
-
-                let index = match &memory.size {
-                    NP_Size::U8  => { memory.read_bytes()[(curr_addr + 2)] },
-                    NP_Size::U16 => { memory.read_bytes()[(curr_addr + 4)] },
-                    NP_Size::U32 => { memory.read_bytes()[(curr_addr + 8)] }
-                };
-                
-                // found our value!
-                if index == column_index {
-
-                    let next_pointer: u32 = match &memory.size {
-                        NP_Size::U8 => { 
-                            let next_pointer_bytes: [u8; 1];
-
-                            match memory.get_1_byte(curr_addr + 1) {
-                                Some(x) => {
-                                    next_pointer_bytes = [x];
-                                },
-                                None => {
-                                    return Err(NP_Error::new("Out of range request"));
-                                }
-                            }
-                            u8::from_be_bytes(next_pointer_bytes) as u32
-                        },
-                        NP_Size::U16 => { 
-                            let next_pointer_bytes: [u8; 2];
-
-                            match memory.get_2_bytes(curr_addr + 2) {
-                                Some(x) => {
-                                    next_pointer_bytes = *x;
-                                },
-                                None => {
-                                    return Err(NP_Error::new("Out of range request"));
-                                }
-                            }
-                            u16::from_be_bytes(next_pointer_bytes) as u32
-                        },
-                        NP_Size::U32 => { 
-                            let next_pointer_bytes: [u8; 4];
-
-                            match memory.get_4_bytes(curr_addr + 4) {
-                                Some(x) => {
-                                    next_pointer_bytes = *x;
-                                },
-                                None => {
-                                    return Err(NP_Error::new("Out of range request"));
-                                }
-                            }
-                            u32::from_be_bytes(next_pointer_bytes)
-                        }
-                    };
-
-                    if curr_addr == self.head as usize { // item is HEAD, just set head to following pointer
-                        self.set_head(next_pointer);
-                    } else { // item is NOT head, set previous pointer's NEXT value to the pointer following this one
-                
-                        let memory_bytes = memory.write_bytes();
-
-                        match &memory.size {
-                            NP_Size::U8 => {
-                                let next_pointer_bytes = (next_pointer as u8).to_be_bytes();
-                                memory_bytes[(prev_addr + 1) as usize] = next_pointer_bytes[0];
-                            },
-                            NP_Size::U16 => {
-                                let next_pointer_bytes = (next_pointer as u16).to_be_bytes();
-                                for x in 0..next_pointer_bytes.len() {
-                                    memory_bytes[(prev_addr + x as u32 + 2) as usize] = next_pointer_bytes[x as usize];
-                                };
-                            },
-                            NP_Size::U32 => {
-                                let next_pointer_bytes = next_pointer.to_be_bytes();
-                                for x in 0..next_pointer_bytes.len() {
-                                    memory_bytes[(prev_addr + x as u32 + 4) as usize] = next_pointer_bytes[x as usize];
-                                };
-                            }
-                        }
-                    }
-
-                    return Ok(true);
-                }
-                
-                // not found yet, get next address
-                let next_ptr = match memory.size {
-                    NP_Size::U8 => u8::from_be_bytes([memory.get_1_byte(curr_addr + 1).unwrap_or(0)]) as usize,
-                    NP_Size::U16 => u16::from_be_bytes(*memory.get_2_bytes(curr_addr + 2).unwrap_or(&[0; 2])) as usize,
-                    NP_Size::U32 => u32::from_be_bytes(*memory.get_4_bytes(curr_addr + 4).unwrap_or(&[0; 4])) as usize
-                };
-                if next_ptr == 0 {
-                    has_next = false;
-                } else {
-                    // store old value for next loop
-                    prev_addr = curr_addr as u32;
-
-                    // set next pointer for next loop
-                    curr_addr = next_ptr;
-                }
+            // found matched key
+            if this_column == column {
+                return item.clone();
             }
 
-            // out of pointers to check, nothing to delete
-            Ok(false)
-        }
-    }
-
-    /// Clear all column values from this table.
-    /// 
-    pub fn empty(self) -> Self {
-
-        let memory = self.memory.unwrap();
-
-        let memory_bytes = memory.write_bytes();
-       
-        let head_bytes = match memory.size {
-            NP_Size::U8 => { 0u8.to_be_bytes().to_vec() },
-            NP_Size::U16 => { 0u16.to_be_bytes().to_vec() },
-            NP_Size::U32 => { 0u32.to_be_bytes().to_vec() }
-        };
-
-        for x in 0..head_bytes.len() {
-            memory_bytes[(self.address + x as u32) as usize] = head_bytes[x as usize];
+            running_ptr = item.address;
         }
 
-        NP_Table {
+
+        // key not found, make a virutal pointer at the end of the table pointers
+        return NP_Ptr::_new_collection_item_ptr(0, &column_schema.2, &self.memory, NP_Ptr_Collection::Table {
             address: self.address,
-            head: 0,
-            memory: self.memory,
+            head: self.head,
             schema: self.schema
-        }
-    }
-
-    fn set_head(&mut self, addr: u32) {
-
-        self.head = addr;
-
-        let memory = self.memory.unwrap();
-
-        let memory_bytes = memory.write_bytes();
-       
-        let addr_bytes = match memory.size {
-            NP_Size::U8 => { (addr as u8).to_be_bytes().to_vec() },
-            NP_Size::U16 => { (addr as u16).to_be_bytes().to_vec() },
-            NP_Size::U32 => { addr.to_be_bytes().to_vec() }
-        };
-
-        for x in 0..addr_bytes.len() {
-            memory_bytes[(self.address + x as u32) as usize] = addr_bytes[x as usize];
-        }
-      
+        }, NP_Iterator_Helper::Table {
+            index: column_schema.0,
+            column: &column_schema.1,
+            prev_addr: running_ptr,
+            skip_step: false
+        })
     }
 
     /// Check to see if a specific column value has been set in this table.
     /// 
     /// The first bool is if a pointer exists for this column, the second bool is if there is a value set on that pointer.
     /// 
-    pub fn has(&self, column: &str) -> core::result::Result<(bool, bool), NP_Error> {
-        let found = false;
-
-        if self.head == 0 { // no values in this table
-           return Ok((false, false));
+    pub fn has(&self, column: &str) -> bool {
+        if self.head == 0 { // empty list, nothing to delete
+            false
+        } else {
+            self.select(column, None).has_value()
         }
-
-        let memory = self.memory.unwrap();
-
-        let column_index = match &**self.schema.unwrap() {
-            NP_Parsed_Schema::Table { i: _, columns, sortable: _ } => {
-                columns.iter().fold(0u8, |prev, cur| {
-                    if cur.1 == column {
-                        return cur.0; 
-                    }
-                    prev
-                })
-            },
-            _ => { unsafe { unreachable_unchecked() } }
-        };
-
-        // no column with this name
-        if found == false { return Ok((false, false));};
-
-        // values exist, loop through values to see if we have a matching column
-
-        let mut next_addr = self.head as usize;
-
-        let mut has_next = true;
-
-        while has_next {
-
-            let index = match &memory.size {
-                NP_Size::U8 => { memory.read_bytes()[(next_addr + 2)] },
-                NP_Size::U16 => { memory.read_bytes()[(next_addr + 4)] },
-                NP_Size::U32 => { memory.read_bytes()[(next_addr + 8)] }
-            };
-
-            // found our value!
-            if index == column_index {
-                let value_addr = match &memory.size {
-                    NP_Size::U8 => { u8::from_be_bytes([memory.get_1_byte(next_addr).unwrap_or(0)]) as u32 },
-                    NP_Size::U16 => { u16::from_be_bytes(*memory.get_2_bytes(next_addr).unwrap_or(&[0; 2])) as u32 },
-                    NP_Size::U32 => { u32::from_be_bytes(*memory.get_4_bytes(next_addr).unwrap_or(&[0; 4])) }
-                };
-                return Ok((true, value_addr != 0));
-            }
-
-            
-            // not found yet, get next address
-            
-            next_addr = match &memory.size {
-                NP_Size::U8 => { u8::from_be_bytes([memory.get_1_byte(next_addr + 1).unwrap_or(0)]) as usize },
-                NP_Size::U16 => { u16::from_be_bytes(*memory.get_2_bytes(next_addr + 2).unwrap_or(&[0; 2])) as usize },
-                NP_Size::U32 => { u32::from_be_bytes(*memory.get_4_bytes(next_addr + 4).unwrap_or(&[0; 4])) as usize }
-            };
-
-            if next_addr== 0 {
-                has_next = false;
-            }
-        }
-
-        // ran out of pointers, value doesn't exist!
-        return Ok((false, false));
     }
 
 }
 
-/// Iterator over table column values
-#[derive(Debug)]
-pub struct NP_Table_Iterator<'it> {
-    address: u32, // pointer location
-    head: u32,
-    memory: &'it NP_Memory,
-    schema: &'it Box<NP_Parsed_Schema>,
-    column_index: u8,
-    table: NP_Table<'it>
+
+impl<'collection> NP_Collection<'collection> for NP_Table<'collection> {
+
+    /// Get length of collection
+    fn length(&self) -> usize {
+        match &**self.schema {
+            NP_Parsed_Schema::Table { i: _, sortable: _, columns } => {
+                return columns.len()
+            },
+            _ => panic!()
+        }
+    }
+
+    /// Step a pointer to the next item in the collection
+    fn step_pointer(ptr: &mut NP_Ptr<'collection>) -> Option<NP_Ptr<'collection>> {
+        // can't step with virtual pointer
+        if ptr.address == 0 {
+            return None;
+        }
+
+        let skip_step = match ptr.helper {
+            NP_Iterator_Helper::Table { index: _, column: _, skip_step, prev_addr: _} => {
+                skip_step
+            },
+            _ => panic!()
+        };
+
+        if skip_step == true {
+            return None;
+        }
+
+        let addr_size = ptr.memory.addr_size_bytes();
+
+        // save current pointer as previous pointer for next pointer
+        let prev_addr = ptr.address;
+
+        // get address for next pointer
+        let curr_addr = ptr.memory.read_address(ptr.address + addr_size);
+
+        if curr_addr == 0 { // no more pointers
+            return None;
+        }
+
+        let current_index = ptr.memory.read_bytes()[curr_addr + addr_size + addr_size];
+
+        let (column, schema) = match ptr.parent {
+            NP_Ptr_Collection::Table { address: _, head: _, schema} => {
+                match &**schema {
+                    NP_Parsed_Schema::Table { i: _, sortable: _, columns } => {
+                        let idx = current_index as usize;
+                        (&columns[idx].1, &columns[idx].2)
+                    },
+                    _ => panic!()
+                }
+            },
+            _ => panic!()
+        };
+
+
+        // provide next pointer
+        Some(NP_Ptr::_new_collection_item_ptr(curr_addr, schema, ptr.memory, ptr.parent.clone(), NP_Iterator_Helper::Table {
+            prev_addr,
+            index: current_index,
+            column: column,
+            skip_step: false
+        }))
+    }
+
+    /// Commit a virtual pointer into the buffer
+    fn commit_pointer(ptr: NP_Ptr<'collection>) -> Result<NP_Ptr<'collection>, NP_Error> {
+
+        // pointer already committed
+        if ptr.address != 0 {
+            return Ok(ptr);
+        }
+
+        match ptr.helper {
+            NP_Iterator_Helper::Table { index, column, prev_addr, skip_step } => {
+                let (mut head, table_address, schema) = match ptr.parent { NP_Ptr_Collection::Table { head, address, schema } => { (head, address, schema) }, _ => panic!()};
+
+                let mut ptr_bytes: Vec<u8> = ptr.memory.blank_ptr_bytes(&NP_PtrKinds::TableItem { addr: 0, next: 0, i: 0}); 
+
+                let addr_size = ptr.memory.addr_size_bytes();
+
+                // set index in table item pointer
+                ptr_bytes[addr_size + addr_size] = index;
+
+                // write to buffer
+                let new_addr = ptr.memory.malloc(ptr_bytes)?;
+               
+
+                if head == 0 { // empty map
+                    // set head to this new pointer
+                    head = new_addr;
+                    ptr.memory.write_address(table_address, new_addr)?;
+                } else { // table has existing values
+
+                    if prev_addr == head { // inserting in beggining
+                        // update this poitner's "next" to old head
+                        ptr.memory.write_address(new_addr + addr_size, head)?;
+                        // update head to this new pointer
+                        head = new_addr;
+                        ptr.memory.write_address(table_address, new_addr)?;
+                    } else { // inserting at end
+                        // update previous pointer "next" to this new pointer
+                        ptr.memory.write_address(prev_addr + addr_size, new_addr)?;
+                    }
+                }
+
+                Ok(NP_Ptr::_new_collection_item_ptr(new_addr, ptr.schema, ptr.memory, NP_Ptr_Collection::Table {
+                    address: table_address,
+                    head: head,
+                    schema: schema
+                }, NP_Iterator_Helper::Table {
+                    index: index,
+                    column: column,
+                    prev_addr: prev_addr,
+                    skip_step: skip_step
+                }))
+            },
+            _ => panic!()
+        }
+    }
 }
+
+
+
 
 impl<'it> NP_Table_Iterator<'it> {
 
     #[doc(hidden)]
-    pub fn new(address: u32, head: u32, memory: &'it NP_Memory, schema: &'it Box<NP_Parsed_Schema>) -> Self {
-        NP_Table_Iterator {
-            address,
-            head,
-            memory: &memory,
-            schema: &schema,
-            column_index: 0,
-            table: NP_Table::new(address, head, memory, schema)
-        }
-    }
-
-    /// Convert the iterator back into a table.
-    pub fn into_table(self) -> NP_Table<'it> {
-        self.table
-    }
-}
-
-impl<'it> Iterator for NP_Table_Iterator<'it> {
-    type Item = NP_Table_Item<'it>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let cols = match &**self.schema {
-            NP_Parsed_Schema::Table { i: _, columns, sortable: _ } => {
+    pub fn new(table: NP_Table<'it>) -> Self {
+        let column_schemas = match &**table.schema {
+            NP_Parsed_Schema::Table { i: _, sortable: _, columns} => {
                 columns
             },
             _ => { unsafe { unreachable_unchecked() } }
         };
 
-        if (self.column_index as usize) < cols.len() {
+        let memory = table.memory;
 
-            loop {
-                if (self.column_index as usize) >= cols.len() {
-                    return None;
+        let addr_size = memory.addr_size_bytes();
+
+        // Check if there's a pointer in the map, if so use it as the first element in the loop
+        let (addr, prev_addr, head_idx) = if table.head != 0 { // tabl has items
+            let head_idx = memory.read_bytes()[table.head + addr_size + addr_size];
+            (table.head, 0, head_idx)
+        } else { // empty table, everything is virtual
+            (0, 0, 0)
+        };
+
+        let head_schema = &column_schemas[head_idx as usize];
+
+        let remaining_idxs: Vec<&(u8, String, Box<NP_Parsed_Schema>)> = column_schemas.iter().filter_map(|x| {
+            if x.0 == head_schema.0 {
+                None
+            } else {
+                Some(x)
+            }
+        }).collect();
+
+        // make first initial pointer
+        NP_Table_Iterator {
+            parent: NP_Ptr_Collection::Table {
+                address: table.address,
+                head: table.head,
+                schema: table.schema
+            },
+            memory: &memory,
+            remaining_idxs,
+            current: Some(NP_Ptr::_new_collection_item_ptr(addr, &head_schema.2, &memory, NP_Ptr_Collection::Table {
+                address: table.address,
+                head: table.head,
+                schema: table.schema
+            }, NP_Iterator_Helper::Table {
+                prev_addr,
+                index: head_idx,
+                column: &head_schema.1,
+                skip_step: false
+            }))
+        }
+    }
+}
+
+/// The iterator type for maps
+#[derive(Debug)]
+pub struct NP_Table_Iterator<'it> {
+    parent: NP_Ptr_Collection<'it>,
+    memory: &'it NP_Memory,
+    remaining_idxs: Vec<&'it (u8, String, Box<NP_Parsed_Schema>)>,
+    current: Option<NP_Ptr<'it>>
+}
+
+impl<'it> Iterator for NP_Table_Iterator<'it> {
+    type Item = NP_Ptr<'it>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.remaining_idxs.len() == 0 {
+            return None;
+        }
+        match &mut self.current {
+            Some(x) => {
+                let current = x.clone();
+                let idx = match &x.helper {
+                    NP_Iterator_Helper::Table {  index, column: _, prev_addr: _, skip_step: _ } => { index },
+                    _ => panic!()
+                };
+                self.parent = current.parent.clone();
+                self.remaining_idxs.retain(|&x| x.0 != *idx);
+                self.current = NP_Table::step_pointer(x);
+                Some(current)
+            },
+            None => {
+                
+                match self.remaining_idxs.pop() {
+                    Some((idx, col, schema)) => {
+
+                        let head = match self.parent { NP_Ptr_Collection::Table { head, address: _, schema: _ } => { head }, _ => panic!()};
+
+                        let current = NP_Ptr::_new_collection_item_ptr(0, schema, self.memory, self.parent.clone(), NP_Iterator_Helper::Table {
+                            prev_addr: head,
+                            index: *idx,
+                            column: col,
+                            skip_step: true
+                        });
+                        self.current = Some(current.clone());
+                        Some(current)
+                    },
+                    None => None
                 }
-
-                let col_data = &cols[self.column_index as usize];
-
-                self.column_index += 1;
-                let exists = self.table.has(col_data.1.as_str()).unwrap();
-                return Some(NP_Table_Item {
-                    index: col_data.0,
-                    column: &col_data.1,
-                    has_value: exists,
-                    schema: &col_data.2,
-                    table: NP_Table::new(self.address, self.head, &self.memory, self.schema)
-                });
-                 
             }
         }
 
-        None
-    }
-}
 
-///  A single item of the table iterator.
-#[derive(Debug)]
-pub struct NP_Table_Item<'item> { 
-    /// The index of this item in the table
-    pub index: u8,
-    /// The column string name for this index
-    pub column: &'item String,
-    /// (has pointer at this index, his value at this index)
-    pub has_value: (bool, bool),
-    /// Schema pointer for this item
-    pub schema: &'item Box<NP_Parsed_Schema>,
-    table: NP_Table<'item>
-}
-
-impl<'item> NP_Table_Item<'item> {
-    /// Select the pointer at this iterator
-    // TODO: Build a select statement that grabs the current index in place instead of seeking to it.
-    pub fn select<X: NP_Value<'item> + Default>(&mut self) -> Result<NP_Ptr<'item, X>, NP_Error> {
-        self.table.select(&self.column)
     }
-    /// Delete the value and it's pointer at this iterator
-    // TODO: Same as select for delete
-    pub fn delete(&mut self) -> Result<bool, NP_Error> {
-        self.table.delete(&self.column)
+
+    fn count(self) -> usize where Self: Sized {
+        #[inline]
+        fn add1<T>(count: usize, _: T) -> usize {
+            // Might overflow.
+            Add::add(count, 1)
+        }
+
+        self.fold(0, add1)
     }
 }
 
@@ -880,11 +688,11 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"table\",\"columns\":[[\"age\",{\"type\":\"uint8\"}],[\"name\",{\"type\":\"string\"}]]}";
     let factory = crate::NP_Factory::new(schema)?;
     let mut buffer = factory.empty_buffer(None, None);
-    buffer.deep_set("name", String::from("hello"))?;
-    assert_eq!(buffer.deep_get::<String>("name")?, Some(Box::new(String::from("hello"))));
-    buffer.deep_clear("")?;
-    buffer = buffer.compact(None, None)?;
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 6u32);
+    buffer.set("name", String::from("hello"))?;
+    assert_eq!(buffer.get::<String>("name")?, Some(Box::new(String::from("hello"))));
+    buffer.del("")?;
+    buffer.compact(None, None)?;
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);
 
     Ok(())
 }

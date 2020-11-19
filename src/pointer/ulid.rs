@@ -12,9 +12,9 @@
 //! }"#)?;
 //!
 //! let mut new_buffer = factory.empty_buffer(None, None);
-//! new_buffer.deep_set("", NP_ULID::generate(1604965249484, 50))?;
+//! new_buffer.set("", NP_ULID::generate(1604965249484, 50))?;
 //! 
-//! assert_eq!("1EPQP4CEC3KANC3XYNG9YKAQ", new_buffer.deep_get::<NP_ULID>("")?.unwrap().to_string());
+//! assert_eq!("1EPQP4CEC3KANC3XYNG9YKAQ", new_buffer.get::<NP_ULID>("")?.unwrap().to_string());
 //!
 //! # Ok::<(), NP_Error>(()) 
 //! ```
@@ -25,15 +25,14 @@ use alloc::vec::Vec;
 use crate::utils::to_base32;
 use crate::json_flex::{JSMAP, NP_JSON};
 use crate::schema::{NP_Schema, NP_TypeKeys};
-use crate::pointer::NP_PtrKinds;
 use crate::{pointer::NP_Value, error::NP_Error, utils::{Rand}};
 use core::{fmt::{Debug, Formatter}};
 
 use alloc::string::String;
 use alloc::boxed::Box;
 use alloc::borrow::ToOwned;
-use super::NP_Lite_Ptr;
 
+use super::NP_Ptr;
 
 
 /// Holds ULIDs which are good for time series keys.
@@ -124,7 +123,7 @@ impl<'value> NP_Value<'value> for NP_ULID {
         Ok(NP_JSON::Dictionary(schema_json))
     }
 
-    fn set_value(ptr: NP_Lite_Ptr, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
+    fn set_value(ptr: &mut NP_Ptr, value: Box<&Self>) -> Result<(), NP_Error> {
 
         let mut addr = ptr.kind.get_value_addr();
 
@@ -138,13 +137,12 @@ impl<'value> NP_Value<'value> for NP_ULID {
             // overwrite existing values in buffer
             for x in 0..16 {
                 if x < 6 {
-                    write_bytes[(addr + x as u32) as usize] = time_bytes[x as usize + 2];
+                    write_bytes[addr + x] = time_bytes[x + 2];
                 } else {
-                    write_bytes[(addr + x as u32) as usize] = id_bytes[x as usize];
+                    write_bytes[addr + x] = id_bytes[x];
                 }
             }
 
-            return Ok(ptr.kind);
 
         } else { // new value
 
@@ -152,20 +150,22 @@ impl<'value> NP_Value<'value> for NP_ULID {
 
             for x in 0..bytes.len() {
                 if x < 6 {
-                    bytes[(addr + x as u32) as usize] = time_bytes[x as usize + 2];
+                    bytes[addr + x] = time_bytes[x + 2];
                 } else {
-                    bytes[(addr + x as u32) as usize] = id_bytes[x as usize];
+                    bytes[addr + x] = id_bytes[x];
                 }
             }
 
             addr = ptr.memory.malloc(bytes.to_vec())?;
 
-            return Ok(ptr.memory.set_value_address(ptr.location, addr as u32, &ptr.kind));
-        }                    
+            ptr.kind = ptr.memory.set_value_address(ptr.address, addr, &ptr.kind);
+        }              
+        
+        Ok(())
         
     }
 
-    fn into_value(ptr: NP_Lite_Ptr) -> Result<Option<Box<Self>>, NP_Error> {
+    fn into_value(ptr: NP_Ptr<'value>) -> Result<Option<Box<Self>>, NP_Error> {
         let addr = ptr.kind.get_value_addr() as usize;
 
         // empty value
@@ -193,7 +193,7 @@ impl<'value> NP_Value<'value> for NP_ULID {
          
     }
 
-    fn to_json(ptr: NP_Lite_Ptr) -> NP_JSON {
+    fn to_json(ptr: &'value NP_Ptr<'value>) -> NP_JSON {
         let this_string = Self::into_value(ptr.clone());
 
         match this_string {
@@ -213,8 +213,8 @@ impl<'value> NP_Value<'value> for NP_ULID {
         }
     }
 
-    fn get_size(ptr: NP_Lite_Ptr) -> Result<u32, NP_Error> {
-        let addr = ptr.kind.get_value_addr() as usize;
+    fn get_size(ptr: &'value NP_Ptr<'value>) -> Result<usize, NP_Error> {
+        let addr = ptr.kind.get_value_addr();
 
         if addr == 0 {
             return Ok(0) 
@@ -266,13 +266,13 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"ulid\"}";
     let factory = crate::NP_Factory::new(schema)?;
     let mut buffer = factory.empty_buffer(None, None);
-    buffer.deep_set("", NP_ULID::generate(2039203, 212))?;
-    assert_eq!(buffer.deep_get::<NP_ULID>("")?, Some(Box::new(NP_ULID::generate(2039203, 212))));
-    buffer.deep_clear("")?;
-    assert_eq!(buffer.deep_get::<NP_ULID>("")?, None);
+    buffer.set("", NP_ULID::generate(2039203, 212))?;
+    assert_eq!(buffer.get::<NP_ULID>("")?, Some(Box::new(NP_ULID::generate(2039203, 212))));
+    buffer.del("")?;
+    assert_eq!(buffer.get::<NP_ULID>("")?, None);
 
-    buffer = buffer.compact(None, None)?;
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 4u32);
+    buffer.compact(None, None)?;
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);
 
     Ok(())
 }

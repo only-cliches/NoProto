@@ -12,9 +12,9 @@
 //! }"#)?;
 //!
 //! let mut new_buffer = factory.empty_buffer(None, None);
-//! new_buffer.deep_set("", NP_Date::new(1604965249484))?;
+//! new_buffer.set("", NP_Date::new(1604965249484))?;
 //! 
-//! assert_eq!(Box::new(NP_Date::new(1604965249484)), new_buffer.deep_get::<NP_Date>("")?.unwrap());
+//! assert_eq!(Box::new(NP_Date::new(1604965249484)), new_buffer.get::<NP_Date>("")?.unwrap());
 //!
 //! # Ok::<(), NP_Error>(()) 
 //! ```
@@ -24,14 +24,14 @@ use crate::schema::{NP_Parsed_Schema};
 use alloc::vec::Vec;
 use crate::json_flex::{JSMAP, NP_JSON};
 use crate::schema::{NP_Schema, NP_TypeKeys};
-use crate::pointer::NP_PtrKinds;
 use crate::{pointer::NP_Value, error::NP_Error};
 use core::{fmt::{Debug, Formatter}, hint::unreachable_unchecked};
 
 use alloc::string::String;
 use alloc::boxed::Box;
 use alloc::borrow::ToOwned;
-use super::NP_Lite_Ptr;
+
+use super::NP_Ptr;
 
 
 /// Holds Date data.
@@ -97,7 +97,7 @@ impl<'value> NP_Value<'value> for NP_Date {
         }
     }
 
-    fn set_value(ptr: NP_Lite_Ptr, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
+    fn set_value(ptr: &mut NP_Ptr<'value>, value: Box<&Self>) -> Result<(), NP_Error> {
 
         let mut addr = ptr.kind.get_value_addr();
 
@@ -108,21 +108,23 @@ impl<'value> NP_Value<'value> for NP_Date {
 
             // overwrite existing values in buffer
             for x in 0..bytes.len() {
-                write_bytes[(addr + x as u32) as usize] = bytes[x as usize];
+                write_bytes[addr + x] = bytes[x];
             }
 
-            return Ok(ptr.kind);
+            return Ok(());
 
         } else { // new value
 
             let bytes = value.value.to_be_bytes();
             addr = ptr.memory.malloc(bytes.to_vec())?;
-            return Ok(ptr.memory.set_value_address(ptr.location, addr as u32, &ptr.kind));
+            ptr.kind = ptr.memory.set_value_address(ptr.address, addr, &ptr.kind);
+
+            return Ok(());
         }                    
         
     }
 
-    fn into_value(ptr: NP_Lite_Ptr) -> Result<Option<Box<Self>>, NP_Error> {
+    fn into_value(ptr: NP_Ptr<'value>) -> Result<Option<Box<Self>>, NP_Error> {
         let addr = ptr.kind.get_value_addr() as usize;
 
         // empty value
@@ -139,7 +141,7 @@ impl<'value> NP_Value<'value> for NP_Date {
         })
     }
 
-    fn to_json(ptr: NP_Lite_Ptr) -> NP_JSON {
+    fn to_json(ptr: &'value NP_Ptr<'value>) -> NP_JSON {
 
         match Self::into_value(ptr.clone()) {
             Ok(x) => {
@@ -167,13 +169,13 @@ impl<'value> NP_Value<'value> for NP_Date {
         }
     }
 
-    fn get_size(ptr: NP_Lite_Ptr) -> Result<u32, NP_Error> {
+    fn get_size(ptr: &'value NP_Ptr<'value>) -> Result<usize, NP_Error> {
         let addr = ptr.kind.get_value_addr() as usize;
 
         if addr == 0 {
             return Ok(0) 
         } else {
-            Ok(core::mem::size_of::<u64>() as u32)
+            Ok(core::mem::size_of::<u64>())
         }
     }
 
@@ -243,7 +245,7 @@ fn default_value_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"date\",\"default\":1605138980392}";
     let factory = crate::NP_Factory::new(schema)?;
     let buffer = factory.empty_buffer(None, None);
-    assert_eq!(buffer.deep_get("")?.unwrap(), Box::new(NP_Date::new(1605138980392)));
+    assert_eq!(buffer.get("")?.unwrap(), Box::new(NP_Date::new(1605138980392)));
 
     Ok(())
 }
@@ -253,13 +255,13 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"date\"}";
     let factory = crate::NP_Factory::new(schema)?;
     let mut buffer = factory.empty_buffer(None, None);
-    buffer.deep_set("", NP_Date::new(1605138980392))?;
-    assert_eq!(buffer.deep_get::<NP_Date>("")?, Some(Box::new(NP_Date::new(1605138980392))));
-    buffer.deep_clear("")?;
-    assert_eq!(buffer.deep_get::<NP_Date>("")?, None);
+    buffer.set("", NP_Date::new(1605138980392))?;
+    assert_eq!(buffer.get::<NP_Date>("")?, Some(Box::new(NP_Date::new(1605138980392))));
+    buffer.del("")?;
+    assert_eq!(buffer.get::<NP_Date>("")?, None);
 
-    buffer = buffer.compact(None, None)?;
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 4u32);
+    buffer.compact(None, None)?;
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);
 
     Ok(())
 }

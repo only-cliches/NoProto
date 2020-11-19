@@ -1,8 +1,8 @@
 [package]
 name = "no_proto"
 license = "MIT"
-version = "0.3.0"
-description = "Faster than JSON with Schemas and Native Types.  Like Mutable Protocol Buffers with Compile Free Schemas."
+version = "0.4.0"
+description = "Simple & Performant Zero-Copy Serialization.  Performance of Flatbuffers / Cap'N Proto with flexibility of JSON."
 homepage = "https://github.com/ClickSimply/NoProto"
 repository = "https://github.com/ClickSimply/NoProto"
 documentation="https://docs.rs/crate/no_proto/"
@@ -13,3 +13,5 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+
+[features]

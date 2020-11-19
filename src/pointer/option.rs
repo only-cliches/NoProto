@@ -11,9 +11,9 @@
 //! }"#)?;
 //!
 //! let mut new_buffer = factory.empty_buffer(None, None);
-//! new_buffer.deep_set("", NP_Option::new("green"))?;
+//! new_buffer.set("", NP_Option::new("green"))?;
 //! 
-//! assert_eq!(Box::new(NP_Option::new("green")), new_buffer.deep_get::<NP_Option>("")?.unwrap());
+//! assert_eq!(Box::new(NP_Option::new("green")), new_buffer.get::<NP_Option>("")?.unwrap());
 //!
 //! # Ok::<(), NP_Error>(()) 
 //! ```
@@ -23,7 +23,6 @@ use crate::schema::{NP_Parsed_Schema};
 use alloc::vec::Vec;
 use crate::json_flex::{JSMAP, NP_JSON};
 use crate::schema::{NP_Schema, NP_TypeKeys};
-use crate::pointer::NP_PtrKinds;
 use crate::{pointer::NP_Value, error::NP_Error};
 use core::{fmt::{Debug}, hint::unreachable_unchecked};
 
@@ -31,7 +30,7 @@ use alloc::string::String;
 use alloc::boxed::Box;
 use alloc::borrow::ToOwned;
 use alloc::{string::ToString};
-use super::NP_Lite_Ptr;
+use super::NP_Ptr;
 
 
 
@@ -114,7 +113,7 @@ impl<'value> NP_Value<'value> for NP_Option {
         }
     }
 
-    fn set_value(ptr: NP_Lite_Ptr, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
+    fn set_value(ptr: &mut NP_Ptr<'value>, value: Box<&Self>) -> Result<(), NP_Error> {
 
         let mut addr = ptr.kind.get_value_addr();
 
@@ -145,22 +144,24 @@ impl<'value> NP_Value<'value> for NP_Option {
         
                     // overwrite existing values in buffer
                     for x in 0..bytes.len() {
-                        write_bytes[(addr + x as u32) as usize] = bytes[x as usize];
+                        write_bytes[addr + x] = bytes[x];
                     }
-                    return Ok(ptr.kind);
+                    return Ok(());
         
                 } else { // new value
         
                     addr = ptr.memory.malloc(bytes.to_vec())?;
+
+                    ptr.kind = ptr.memory.set_value_address(ptr.address, addr, &ptr.kind);
         
-                    return Ok(ptr.memory.set_value_address(ptr.location, addr as u32, &ptr.kind));
+                    return Ok(());
                 }     
             },
             _ => { unsafe { unreachable_unchecked() } }
         }               
     }
 
-    fn into_value(ptr: NP_Lite_Ptr) -> Result<Option<Box<Self>>, NP_Error> {
+    fn into_value(ptr: NP_Ptr<'value>) -> Result<Option<Box<Self>>, NP_Error> {
         let addr = ptr.kind.get_value_addr() as usize;
 
         // empty value
@@ -189,7 +190,7 @@ impl<'value> NP_Value<'value> for NP_Option {
         }
     }
 
-    fn to_json(ptr: NP_Lite_Ptr) -> NP_JSON {
+    fn to_json(ptr: &'value NP_Ptr<'value>) -> NP_JSON {
         let this_string = Self::into_value(ptr.clone());
 
         match this_string {
@@ -234,13 +235,13 @@ impl<'value> NP_Value<'value> for NP_Option {
         }
     }
 
-    fn get_size(ptr: NP_Lite_Ptr) -> Result<u32, NP_Error> {
+    fn get_size(ptr: &'value NP_Ptr<'value>) -> Result<usize, NP_Error> {
         let addr = ptr.kind.get_value_addr() as usize;
 
         if addr == 0 {
             return Ok(0) 
         } else {
-            Ok(core::mem::size_of::<u8>() as u32)
+            Ok(core::mem::size_of::<u8>())
         }
     }
 
@@ -364,7 +365,7 @@ fn default_value_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"option\",\"default\":\"hello\",\"choices\":[\"hello\",\"world\"]}";
     let factory = crate::NP_Factory::new(schema)?;
     let buffer = factory.empty_buffer(None, None);
-    assert_eq!(buffer.deep_get("")?.unwrap(), Box::new(NP_Option::new("hello")));
+    assert_eq!(buffer.get("")?.unwrap(), Box::new(NP_Option::new("hello")));
 
     Ok(())
 }
@@ -374,13 +375,13 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"option\",\"choices\":[\"hello\",\"world\"]}";
     let factory = crate::NP_Factory::new(schema)?;
     let mut buffer = factory.empty_buffer(None, None);
-    buffer.deep_set("", NP_Option::new("hello"))?;
-    assert_eq!(buffer.deep_get::<NP_Option>("")?, Some(Box::new(NP_Option::new("hello"))));
-    buffer.deep_clear("")?;
-    assert_eq!(buffer.deep_get::<NP_Option>("")?, None);
+    buffer.set("", NP_Option::new("hello"))?;
+    assert_eq!(buffer.get::<NP_Option>("")?, Some(Box::new(NP_Option::new("hello"))));
+    buffer.del("")?;
+    assert_eq!(buffer.get::<NP_Option>("")?, None);
 
-    buffer = buffer.compact(None, None)?;
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 4u32);
+    buffer.compact(None, None)?;
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);
 
     Ok(())
 }

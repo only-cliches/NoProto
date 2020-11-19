@@ -1,21 +1,19 @@
 #![warn(missing_docs, missing_debug_implementations)]
 #![allow(non_camel_case_types)]
-// #![no_std]
+#![no_std]
 
-//! ## High Performance Serialization Library
-//! Faster than JSON with Schemas and Native Types.  Like Mutable Protocol Buffers with Compile Free Schemas.
+//! ## Simple & Performant Zero-Copy Serialization
+//! Performance of Flatbuffers / Cap'N Proto with flexibility of JSON
 //! 
 //! [Github](https://github.com/ClickSimply/NoProto) | [Crates.io](https://crates.io/crates/no_proto) | [Documentation](https://docs.rs/no_proto)
 //! 
 //! ### Features  
 //! - Zero dependencies
 //! - #![no_std] support, WASM ready
-//! - Supports byte-wise sorting of buffers
+//! - Zero copy deserialization
+//! - Native byte-wise sorting
 //! - Extensive Documentation & Testing
-//! - Automatic & instant sterilization
-//! - Nearly instant deserialization
-//! - Schemas are dynamic/flexible at runtime
-//! - Mutate/Insert/Delete values in existing buffers
+//! - Easily mutate, add or delete values in existing buffers
 //! - Supports most common native data types
 //! - Supports collection types (list, map, table & tuple)
 //! - Supports deep nesting of collection types
@@ -36,14 +34,16 @@
 //! - Mutate (add/delete/update) existing/imported buffers
 //! 
 //! *Compared to JSON*
-//! - Far more space efficient
+//! - Usually more space efficient
+//! - Deserializtion is zero copy
 //! - Faster serialization & deserialization
 //! - Has schemas / type safe
 //! - Supports byte-wise sorting
 //! - Supports raw bytes & other native types
 //! 
 //! *Compared to BSON*
-//! - Far more space efficient
+//! - Usually more space efficient
+//! - Deserializtion is zero copy
 //! - Faster serialization & deserialization
 //! - Has schemas / type safe
 //! - Byte-wise sorting is first class operation
@@ -53,20 +53,20 @@
 //! *Compared to Serde*
 //! - Supports byte-wise sorting
 //! - Objects & schemas are dynamic at runtime
-//! - Faster serialization & deserialization
+//! - Deserializtion is zero copy
 //! - Language agnostic
 //! 
-//! | Format           | Incremental De/Serialization | Size Limit | Mutable | Schemas | Language Agnostic | No Compiling    | Byte-wise Sorting |
-//! |------------------|------------------------------|------------|---------|---------|-------------------|-----------------|-------------------|
-//! | **NoProto**      | ✓                            | ~4GB       | ✓       | ✓       | ✓                 | ✓               | ✓                 |
-//! | JSON             | 𐄂                            | Unlimited  | ✓       | 𐄂       | ✓                 | ✓               | 𐄂                 |
-//! | BSON             | 𐄂                            | ~16KB      | ✓       | 𐄂       | ✓                 | ✓               | 𐄂                 |
-//! | MessagePack      | 𐄂                            | Unlimited  | ✓       | 𐄂       | ✓                 | ✓               | 𐄂                 |
-//! | FlatBuffers      | ✓                            | ~2GB       | 𐄂       | ✓       | ✓                 | 𐄂               | 𐄂                 |
-//! | Protocol Buffers | 𐄂                            | ~2GB       | 𐄂       | ✓       | ✓                 | 𐄂               | 𐄂                 |
-//! | Cap'N Proto      | ✓                            | 2^64 Bytes | 𐄂       | ✓       | ✓                 | 𐄂               | 𐄂                 |
-//! | Serde            | 𐄂                            | ?          | 𐄂       | ✓       | 𐄂                 | 𐄂               | 𐄂                 |
-//! | Veriform         | 𐄂                            | ?          | 𐄂       | 𐄂       | 𐄂                 | 𐄂               | 𐄂                 |
+//! | Format           | Zero-Copy | Size Limit | Mutable | Schemas | Language Agnostic | No Compiling    | Byte-wise Sorting |
+//! |------------------|-----------|------------|---------|---------|-------------------|-----------------|-------------------|
+//! | **NoProto**      | ✓         | ~4GB       | ✓       | ✓       | ✓                 | ✓               | ✓                 |
+//! | JSON             | 𐄂         | Unlimited  | ✓       | 𐄂       | ✓                 | ✓               | 𐄂                 |
+//! | BSON             | 𐄂         | ~16KB      | ✓       | 𐄂       | ✓                 | ✓               | 𐄂                 |
+//! | MessagePack      | 𐄂         | Unlimited  | ✓       | 𐄂       | ✓                 | ✓               | 𐄂                 |
+//! | FlatBuffers      | ✓         | ~2GB       | 𐄂       | ✓       | ✓                 | 𐄂               | 𐄂                 |
+//! | Protocol Buffers | 𐄂         | ~2GB       | 𐄂       | ✓       | ✓                 | 𐄂               | 𐄂                 |
+//! | Cap'N Proto      | ✓         | 2^64 Bytes | 𐄂       | ✓       | ✓                 | 𐄂               | 𐄂                 |
+//! | Serde            | 𐄂         | ?          | 𐄂       | ✓       | 𐄂                 | 𐄂               | 𐄂                 |
+//! | Veriform         | 𐄂         | ?          | 𐄂       | 𐄂       | 𐄂                 | 𐄂               | 𐄂                 |
 //! 
 //! #### Limitations
 //! - Buffers cannot be larger than 2^32 bytes (~4GB).
@@ -103,13 +103,13 @@
 //! let mut user_buffer = user_factory.empty_buffer(None, None); // optional capacity, optional address size (u16 by default)
 //! 
 //! // set an internal value of the buffer, set the  "name" column
-//! user_buffer.deep_set("name", String::from("Billy Joel"))?;
+//! user_buffer.set("name", String::from("Billy Joel"))?;
 //! 
 //! // assign nested internal values, sets the first tag element
-//! user_buffer.deep_set("tags.0", String::from("first tag"))?;
+//! user_buffer.set("tags.0", String::from("first tag"))?;
 //! 
 //! // get an internal value of the buffer from the "name" column
-//! let name = user_buffer.deep_get::<String>("name")?;
+//! let name = user_buffer.get::<String>("name")?;
 //! assert_eq!(name, Some(Box::new(String::from("Billy Joel"))));
 //! 
 //! // close buffer and get internal bytes
@@ -119,11 +119,11 @@
 //! let user_buffer = user_factory.open_buffer(user_bytes);
 //! 
 //! // get nested internal value, first tag from the tag list
-//! let tag = user_buffer.deep_get::<String>("tags.0")?;
+//! let tag = user_buffer.get::<String>("tags.0")?;
 //! assert_eq!(tag, Some(Box::new(String::from("first tag"))));
 //! 
 //! // get nested internal value, the age field
-//! let age = user_buffer.deep_get::<u16>("age")?;
+//! let age = user_buffer.get::<u16>("age")?;
 //! // returns default value from schema
 //! assert_eq!(age, Some(Box::new(0u16)));
 //! 
@@ -142,7 +142,7 @@
 //! 
 //! // confirm the new byte schema works with existing buffers
 //! let user_buffer = user_factory2.open_buffer(user_bytes);
-//! let tag = user_buffer.deep_get::<String>("tags.0")?;
+//! let tag = user_buffer.get::<String>("tags.0")?;
 //! assert_eq!(tag, Some(Box::new(String::from("first tag"))));
 //! 
 //! 
@@ -150,16 +150,15 @@
 //! ```
 //! 
 //! ## Non Goals / Known Tradeoffs
-//! There are formats that focus on being as compact as possible.  While NoProto is not intentionally wasteful with space, it will likely never be the most compact way to store data.  If you need the smallest possible format MessagePack is a good choice.
+//! There are formats that focus on being as compact as possible.  While NoProto is not intentionally wasteful, it's primary focus is not on compactness.  If you need the smallest possible format MessagePack is a good choice.  It's all about tradeoffs, NoProto uses up extra bytes over other formats to make incremental de/serialization, traversal and mutation as fast as possible.
 //! 
-//! If every CPU cycle counts, FlatBuffers/CapnProto is probably the way to go.  While NoProto makes good tradeoffs with flexibility and performance, it cannot be as fast as languages that compile the schema into source code.  In the future compiling schema to source code could be a feature, but for now I'm happy leaving that edge to the other libraries.
+//! If every CPU cycle counts and you don't plan to mutate your buffers/objects, FlatBuffers/CapnProto is probably the way to go.  While NoProto makes good tradeoffs with flexibility and performance, it cannot be as fast as languages that compile the schema into source code.  In the future compiling schema to source code could be a feature, but for now I'm happy leaving that edge to the other libraries.
 //! 
 //! ## Guided Learning / Next Steps:
 //! 1. [`Schemas`](https://docs.rs/no_proto/latest/no_proto/schema/index.html) - Learn how to build & work with schemas.
 //! 2. [`Factories`](https://docs.rs/no_proto/latest/no_proto/struct.NP_Factory.html) - Parsing schemas into something you can work with.
-//! 3. [`Buffers`](https://docs.rs/no_proto/latest/no_proto/buffer/struct.NP_Buffer.html) - How to create, update & compact buffers.
-//! 4. [`Pointers`](https://docs.rs/no_proto/latest/no_proto/pointer/struct.NP_Ptr.html) - How to add, remove and edit values in a buffer.
-//! 5. [`Data Format`](https://docs.rs/no_proto/latest/no_proto/format/index.html) - Learn how data is saved into the buffer.
+//! 3. [`Buffers`](https://docs.rs/no_proto/latest/no_proto/buffer/struct.NP_Buffer.html) - How to create, update & compact buffers/data.
+//! 4. [`Data Format`](https://docs.rs/no_proto/latest/no_proto/format/index.html) - Learn how data is saved into the buffer.
 //! 
 //! 
 //! ----------------------
@@ -240,10 +239,10 @@ const PROTOCOL_VERSION: u8 = 1;
 /// let mut user_buffer = user_factory.empty_buffer(None, None); // optional capacity, optional size
 ///    
 /// // set the "name" column of the table
-/// user_buffer.deep_set("name", "Billy Joel".to_owned())?;
+/// user_buffer.set("name", "Billy Joel".to_owned())?;
 /// 
 /// // set the first todo
-/// user_buffer.deep_set("todos.0", "Write a rust library.".to_owned())?;
+/// user_buffer.set("todos.0", "Write a rust library.".to_owned())?;
 /// 
 /// // close buffer 
 /// let user_vec:Vec<u8> = user_buffer.close();
@@ -252,15 +251,16 @@ const PROTOCOL_VERSION: u8 = 1;
 /// let user_buffer_2 = user_factory.open_buffer(user_vec);
 /// 
 /// // read column value
-/// let name_column = user_buffer_2.deep_get::<String>("name")?;
+/// let name_column = user_buffer_2.get::<String>("name")?;
 /// assert_eq!(name_column, Some(Box::new("Billy Joel".to_owned())));
 /// 
+/// 
 /// // read first todo
-/// let todo_value = user_buffer_2.deep_get::<String>("todos.0")?;
+/// let todo_value = user_buffer_2.get::<String>("todos.0")?;
 /// assert_eq!(todo_value, Some(Box::new("Write a rust library.".to_owned())));
 /// 
 /// // read second todo
-/// let todo_value = user_buffer_2.deep_get::<String>("todos.1")?;
+/// let todo_value = user_buffer_2.get::<String>("todos.1")?;
 /// assert_eq!(todo_value, None);
 /// 
 /// 
@@ -403,9 +403,9 @@ mod tests {
             Ok(())
         })?;
 
-        new_buffer.deep_set("10.name", "something".to_owned())?;
-        new_buffer.deep_set("10.name", "someth\"ing22".to_owned())?;
-        new_buffer.deep_set("9.age", -29383i16)?;
+        new_buffer.set("10.name", "something".to_owned())?;
+        new_buffer.set("10.name", "someth\"ing22".to_owned())?;
+        new_buffer.set("9.age", -29383i16)?;
         println!("Size: {:?}", new_buffer.calc_bytes()?);
         // new_buffer.compact(None, None)?;
         println!("Size: {:?}", new_buffer.calc_bytes()?);
@@ -413,7 +413,7 @@ mod tests {
         // println!("JSON: {}", new_buffer.json_encode().stringify());
         // new_buffer.compact(None, None)?;
         
-        let value = new_buffer.deep_get::<NP_JSON>("9")?;
+        let value = new_buffer.get::<NP_JSON>("9")?;
 
         println!("name: {}", value.unwrap().stringify());
 
@@ -421,7 +421,7 @@ mod tests {
 
         // let buffer2 = factory.deep_set::<String>(return_buffer, "15", "hello, world".to_owned())?;
 
-        // println!("value {:?}", factory.deep_get::<String>(return_buffer, "10.name")?);
+        // println!("value {:?}", factory.get::<String>(return_buffer, "10.name")?);
         */
         Ok(())
     }

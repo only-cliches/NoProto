@@ -188,7 +188,6 @@
 //! 
 //! More Details:
 //! - [Using NP_Table data type](../collection/table/struct.NP_Table.html)
-//! - [Using collection values with pointers](../pointer/struct.NP_Ptr.html#using-collection-types-with-pointers)
 //! 
 //! ## list
 //! Lists represent a dynamically sized list of items.  The type for every item in the list is identical and the order of entries is mainted in the buffer.  Lists do not have to contain contiguous entries, gaps can safely and efficiently be stored.
@@ -220,7 +219,6 @@
 //! 
 //! More Details:
 //! - [Using NP_List data type](../collection/list/struct.NP_List.html)
-//! - [Using collection values with pointers](../pointer/struct.NP_Ptr.html#using-collection-types-with-pointers)
 //! 
 //! ## map
 //! A map is a dynamically sized list of items where each key is a Vec<u8>.  Every value of a map has the same type.
@@ -245,7 +243,6 @@
 //! 
 //! More Details:
 //! - [Using NP_Map data type](../collection/map/struct.NP_Map.html)
-//! - [Using collection values with pointers](../pointer/struct.NP_Ptr.html#using-collection-types-with-pointers)
 //! 
 //! ## tuple
 //! A tuple is a fixed size list of items.  Each item has it's own type and index.  Tuples support up to 255 items.
@@ -285,7 +282,6 @@
 //! 
 //! More Details:
 //! - [Using NP_Tuple data type](../collection/tuple/struct.NP_Tuple.html) 
-//! - [Using collection values with pointers](../pointer/struct.NP_Ptr.html#using-collection-types-with-pointers)
 //! 
 //! ## any
 //! Any types are used to declare that a specific type has no fixed schema but is dynamic.  It's generally not a good idea to use Any types.
@@ -304,7 +300,6 @@
 //! 
 //! More Details:
 //! - [Using NP_Any data type](../pointer/any/struct.NP_Any.html)
-//! - [Using scalar values with pointers](../pointer/struct.NP_Ptr.html#using-scalar-types-with-pointers)
 //! 
 //! ## string
 //! A string is a fixed or dynamically sized collection of utf-8 encoded bytes.
@@ -328,7 +323,6 @@
 //! 
 //! More Details:
 //! - [Using String data type](../pointer/string/index.html)
-//! - [Using scalar values with pointers](../pointer/struct.NP_Ptr.html#using-scalar-types-with-pointers)
 //! 
 //! ## bytes
 //! Bytes are fixed or dynimcally sized Vec<u8> collections. 
@@ -350,7 +344,6 @@
 //! 
 //! More Details:
 //! - [Using NP_Bytes data type](../pointer/bytes/struct.NP_Bytes.html)
-//! - [Using scalar values with pointers](../pointer/struct.NP_Ptr.html#using-scalar-types-with-pointers)
 //! 
 //! ## int8, int16, int32, int64
 //! Signed integers allow positive or negative whole numbers to be stored.  The bytes are stored in big endian format and converted to unsigned types to allow bytewise sorting.
@@ -367,7 +360,6 @@
 //! 
 //! More Details:
 //! - [Using number data types](../pointer/numbers/index.html)
-//! - [Using scalar values with pointers](../pointer/struct.NP_Ptr.html#using-scalar-types-with-pointers)
 //! 
 //! ## uint8, uint16, uint32, uint64
 //! Unsgined integers allow only positive whole numbers to be stored.  The bytes are stored in big endian format to allow bytewise sorting.
@@ -384,7 +376,6 @@
 //! 
 //! More Details:
 //! - [Using number data types](../pointer/numbers/index.html)
-//! - [Using scalar values with pointers](../pointer/struct.NP_Ptr.html#using-scalar-types-with-pointers)
 //! 
 //! ## float, double
 //! Allows the storage of floating point numbers of various sizes.  Bytes are stored in big endian format.
@@ -401,7 +392,6 @@
 //! 
 //! More Details:
 //! - [Using number data types](../pointer/numbers/index.html)
-//! - [Using scalar values with pointers](../pointer/struct.NP_Ptr.html#using-scalar-types-with-pointers)
 //! 
 //! ## option
 //! Allows efficeint storage of a selection between a known collection of ordered strings.  The selection is stored as a single u8 byte, limiting the max number of choices to 255.
@@ -421,7 +411,6 @@
 //! 
 //! More Details:
 //! - [Using NP_Option data type](../pointer/misc/struct.NP_Option.html)
-//! - [Using scalar values with pointers](../pointer/struct.NP_Ptr.html#using-scalar-types-with-pointers)
 //! 
 //! ## bool
 //! Allows efficent storage of a true or false value.  The value is stored as a single byte that is set to either 1 or 0.
@@ -437,7 +426,6 @@
 //! ```
 //! 
 //! More Details:
-//! - [Using scalar values with pointers](../pointer/struct.NP_Ptr.html#using-scalar-types-with-pointers)
 //! 
 //! ## decimal
 //! Allows you to store fixed point decimal numbers.  The number of decimal places must be declared in the schema as `exp` property and will be used for every value.
@@ -457,7 +445,6 @@
 //! 
 //! More Details:
 //! - [Using NP_Dec data type](../pointer/misc/struct.NP_Dec.html)
-//! - [Using scalar values with pointers](../pointer/struct.NP_Ptr.html#using-scalar-types-with-pointers)
 //! 
 //! ## geo4, ge8, geo16
 //! Allows you to store geographic coordinates with varying levels of accuracy and space usage.  
@@ -482,7 +469,6 @@
 //! 
 //! More Details:
 //! - [Using NP_Geo data type](../pointer/misc/struct.NP_Geo.html)
-//! - [Using scalar values with pointers](../pointer/struct.NP_Ptr.html#using-scalar-types-with-pointers)
 //! 
 //! ## ulid
 //! Allows you to store a unique ID with a timestamp.  The timestamp is stored in milliseconds since the unix epoch.
@@ -499,7 +485,6 @@
 //! 
 //! More Details:
 //! - [Using NP_ULID data type](../pointer/misc/struct.NP_ULID.html)
-//! - [Using scalar values with pointers](../pointer/struct.NP_Ptr.html#using-scalar-types-with-pointers)
 //! 
 //! ## uuid
 //! Allows you to store a universally unique ID.
@@ -516,7 +501,6 @@
 //! 
 //! More Details:
 //! - [Using NP_UUID data type](../pointer/misc/struct.NP_UUID.html)
-//! - [Using scalar values with pointers](../pointer/struct.NP_Ptr.html#using-scalar-types-with-pointers)
 //! 
 //! ## date
 //! Allows you to store a timestamp as a u64 value.  This is just a thin wrapper around the u64 type.
@@ -533,7 +517,6 @@
 //! 
 //! More Details:
 //! - [Using NP_Date data type](../pointer/misc/struct.NP_Date.html)
-//! - [Using scalar values with pointers](../pointer/struct.NP_Ptr.html#using-scalar-types-with-pointers)
 //!  
 //! 
 //! ## Next Step
@@ -589,8 +572,7 @@ pub enum NP_TypeKeys {
     Table = 21,
     Map = 22, 
     List = 23,
-    Tuple = 24,
-    JSON = 25
+    Tuple = 24
 }
 
 impl From<u8> for NP_TypeKeys {
@@ -626,17 +608,16 @@ impl NP_TypeKeys {
             NP_TypeKeys::Date =>       { return NP_Date::type_idx() }
             NP_TypeKeys::Enum =>       { return NP_Option::type_idx() }
             NP_TypeKeys::Table =>      { return NP_Table::type_idx() }
-            NP_TypeKeys::Map =>        { return NP_Map::<NP_Any>::type_idx() }
-            NP_TypeKeys::List =>       { return NP_List::<NP_Any>::type_idx() }
+            NP_TypeKeys::Map =>        { return NP_Map::type_idx() }
+            NP_TypeKeys::List =>       { return NP_List::type_idx() }
             NP_TypeKeys::Tuple =>      { return NP_Tuple::type_idx() }
-            NP_TypeKeys::JSON =>       { return NP_JSON::type_idx() }
         }
     }
 }
 
 /// Parsed Schema struct
 #[derive(Debug, Clone)]
-#[doc(hidden)]
+#[allow(missing_docs)]
 pub enum NP_Parsed_Schema {
     None,
     Any        { sortable: bool, i:NP_TypeKeys },
@@ -662,12 +643,16 @@ pub enum NP_Parsed_Schema {
     Table      { sortable: bool, i:NP_TypeKeys, columns: Vec<(u8, String, Box<NP_Parsed_Schema>)> },
     Map        { sortable: bool, i:NP_TypeKeys, value: Box<NP_Parsed_Schema>}, 
     List       { sortable: bool, i:NP_TypeKeys, of: Box<NP_Parsed_Schema> },
-    Tuple      { sortable: bool, i:NP_TypeKeys, values: Vec<Box<NP_Parsed_Schema>>},
-    JSON       { sortable: bool, i:NP_TypeKeys }
+    Tuple      { sortable: bool, i:NP_TypeKeys, values: Vec<Box<NP_Parsed_Schema>>}
 }
 
-#[doc(hidden)]
+
 impl NP_Parsed_Schema {
+
+    /// Get the type key for this schema
+    pub fn get_type_key(&self) -> NP_TypeKeys {
+        self.into_type_data().2
+    }
 
     /// Get the type data fo a given schema value
     pub fn into_type_data(&self) -> (u8, String, NP_TypeKeys) {
@@ -697,7 +682,6 @@ impl NP_Parsed_Schema {
             NP_Parsed_Schema::Map        { sortable: _, i, value:_ }               => { i.into_type_idx() }
             NP_Parsed_Schema::List       { sortable: _, i, of:_ }                  => { i.into_type_idx() }
             NP_Parsed_Schema::Tuple      { sortable: _, i, values:_ }              => { i.into_type_idx() }
-            NP_Parsed_Schema::JSON       { sortable: _, i }                        => { i.into_type_idx() }
         }
     }
 
@@ -729,7 +713,6 @@ impl NP_Parsed_Schema {
             NP_Parsed_Schema::Map        { sortable, i: _, value:_ }               => { *sortable }
             NP_Parsed_Schema::List       { sortable, i: _, of:_ }                  => { *sortable }
             NP_Parsed_Schema::Tuple      { sortable, i: _, values:_ }              => { *sortable }
-            NP_Parsed_Schema::JSON       { sortable, i: _ }                        => { *sortable }
         }
     }
 }
@@ -785,10 +768,9 @@ impl NP_Schema {
             NP_Parsed_Schema::Date       { sortable: _, i:_, default:_ }              => { return NP_Date::schema_to_json(parsed_schema) }
             NP_Parsed_Schema::Enum       { sortable: _, i:_, default:_, choices: _ }  => { return NP_Option::schema_to_json(parsed_schema) }
             NP_Parsed_Schema::Table      { sortable: _, i:_, columns:_ }              => { return NP_Table::schema_to_json(parsed_schema) }
-            NP_Parsed_Schema::Map        { sortable: _, i:_, value:_ }                => { return NP_Map::<NP_Any>::schema_to_json(parsed_schema) }
-            NP_Parsed_Schema::List       { sortable: _, i:_, of:_ }                   => { return NP_List::<NP_Any>::schema_to_json(parsed_schema) }
+            NP_Parsed_Schema::Map        { sortable: _, i:_, value:_ }                => { return NP_Map::schema_to_json(parsed_schema) }
+            NP_Parsed_Schema::List       { sortable: _, i:_, of:_ }                   => { return NP_List::schema_to_json(parsed_schema) }
             NP_Parsed_Schema::Tuple      { sortable: _, i:_, values:_ }               => { return NP_Tuple::schema_to_json(parsed_schema) }
-            NP_Parsed_Schema::JSON       { sortable: _, i:_ }                         => { return NP_JSON::schema_to_json(parsed_schema) }
             _ => { panic!() }
         }
     }
@@ -832,10 +814,9 @@ impl NP_Schema {
             NP_TypeKeys::Date =>       { NP_Date::from_bytes_to_schema(address, bytes) }
             NP_TypeKeys::Enum =>       { NP_Option::from_bytes_to_schema(address, bytes) }
             NP_TypeKeys::Table =>      { NP_Table::from_bytes_to_schema(address, bytes) }
-            NP_TypeKeys::Map =>        { NP_Map::<NP_Any>::from_bytes_to_schema(address, bytes) }
-            NP_TypeKeys::List =>       { NP_List::<NP_Any>::from_bytes_to_schema(address, bytes) }
+            NP_TypeKeys::Map =>        { NP_Map::from_bytes_to_schema(address, bytes) }
+            NP_TypeKeys::List =>       { NP_List::from_bytes_to_schema(address, bytes) }
             NP_TypeKeys::Tuple =>      { NP_Tuple::from_bytes_to_schema(address, bytes) }
-            NP_TypeKeys::JSON =>       { NP_JSON::from_bytes_to_schema(address, bytes) }
         }
     }
 
@@ -873,8 +854,8 @@ impl NP_Schema {
         schema_check!(NP_Option,       &json_schema);
 
         schema_check!(NP_Table,        &json_schema);
-        schema_check!(NP_Map<NP_Any>,  &json_schema);
-        schema_check!(NP_List<NP_Any>, &json_schema);
+        schema_check!(NP_Map,          &json_schema);
+        schema_check!(NP_List,         &json_schema);
         schema_check!(NP_Tuple,        &json_schema);
 
         let mut err_msg = String::from("Can't find a type that matches this schema! ");

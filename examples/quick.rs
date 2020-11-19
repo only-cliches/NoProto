@@ -29,14 +29,13 @@ fn main() -> Result<(), NP_Error> {
     // show bytes (empty)
     println!("bytes: {:?}", user_bytes);
     // open the buffer again
-    let user_buffer = user_factory.open_buffer(user_bytes);
-
+    let mut user_buffer = user_factory.open_buffer(user_bytes);
 
     // set an internal value of the buffer, set the  "name" column
-    user_buffer.deep_set("name", String::from("Billy Joel"))?;
+    user_buffer.set("name", String::from("Billy Joel"))?;
 
     // get an internal value of the buffer from the "name" column
-    let name = user_buffer.deep_get::<String>("name")?;
+    let name = user_buffer.get::<String>("name")?;
     assert_eq!(name, Some(Box::new(String::from("Billy Joel"))));
     println!("\nname: {}", name.unwrap());
     
@@ -44,16 +43,16 @@ fn main() -> Result<(), NP_Error> {
     // show bytes
     let user_bytes: Vec<u8> = user_buffer.close();
     println!("bytes: {:?}", user_bytes);
-    let user_buffer = user_factory.open_buffer(user_bytes);
+    let mut user_buffer = user_factory.open_buffer(user_bytes);
 
-    let user_buffer = user_buffer.compact(None, None)?;
+    user_buffer.compact(None, None)?;
 
 
     // assign nested internal values, sets the first tag element
-    user_buffer.deep_set("tags.0", String::from("first tag"))?;
+    user_buffer.set("tags.0", String::from("first tag"))?;
 
     // get nested internal value, first tag from the tag list
-    let tag = user_buffer.deep_get::<String>("tags.0")?;
+    let tag = user_buffer.get::<String>("tags.0")?;
     assert_eq!(tag, Some(Box::new(String::from("first tag"))));
     println!("\ntag: {}", tag.unwrap());
 
@@ -65,7 +64,7 @@ fn main() -> Result<(), NP_Error> {
 
 
     // get nested internal value, the age field
-    let age = user_buffer.deep_get::<u16>("age")?;
+    let age = user_buffer.get::<u16>("age")?;
     // returns default value from schema
     assert_eq!(age, Some(Box::new(0u16)));
     println!("\nage: {}", age.unwrap());

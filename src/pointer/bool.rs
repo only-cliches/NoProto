@@ -10,9 +10,9 @@
 //! }"#)?;
 //!
 //! let mut new_buffer = factory.empty_buffer(None, None);
-//! new_buffer.deep_set("", true)?;
+//! new_buffer.set("", true)?;
 //! 
-//! assert_eq!(Box::new(true), new_buffer.deep_get::<bool>("")?.unwrap());
+//! assert_eq!(Box::new(true), new_buffer.get::<bool>("")?.unwrap());
 //!
 //! # Ok::<(), NP_Error>(()) 
 //! ```
@@ -23,7 +23,7 @@ use crate::{json_flex::JSMAP, schema::{NP_Parsed_Schema}};
 use crate::schema::NP_Schema;
 use crate::error::NP_Error;
 use crate::{schema::{NP_TypeKeys}, pointer::NP_Value, json_flex::NP_JSON};
-use super::{NP_PtrKinds, NP_Lite_Ptr};
+use super::{NP_Ptr};
 
 use alloc::vec::Vec;
 use alloc::string::String;
@@ -65,7 +65,7 @@ impl<'value> NP_Value<'value> for bool {
         }
     }
 
-    fn set_value(ptr: NP_Lite_Ptr, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
+    fn set_value(ptr: &mut NP_Ptr<'value>, value: Box<&Self>) -> Result<(), NP_Error> {
 
         let mut addr = ptr.kind.get_value_addr();
 
@@ -79,7 +79,7 @@ impl<'value> NP_Value<'value> for bool {
             // overwrite existing values in buffer
             ptr.memory.write_bytes()[addr as usize] = bytes[0];
 
-            return Ok(ptr.kind);
+            return Ok(());
 
         } else { // new value
 
@@ -90,12 +90,14 @@ impl<'value> NP_Value<'value> for bool {
             };
 
             addr = ptr.memory.malloc(bytes.to_vec())?;
-            return Ok(ptr.memory.set_value_address(ptr.location, addr as u32, &ptr.kind));
+            ptr.kind = ptr.memory.set_value_address(ptr.address, addr, &ptr.kind);
+
+            return Ok(());
         }
         
     }
 
-    fn into_value(ptr: NP_Lite_Ptr) -> Result<Option<Box<Self>>, NP_Error> {
+    fn into_value(ptr: NP_Ptr<'value>) -> Result<Option<Box<Self>>, NP_Error> {
         let addr = ptr.kind.get_value_addr() as usize;
 
         // empty value
@@ -113,7 +115,7 @@ impl<'value> NP_Value<'value> for bool {
         })
     }
 
-    fn to_json(ptr: NP_Lite_Ptr) -> NP_JSON {
+    fn to_json(ptr: &'value NP_Ptr<'value>) -> NP_JSON {
         let this_string = Self::into_value(ptr.clone());
 
         match this_string {
@@ -150,13 +152,13 @@ impl<'value> NP_Value<'value> for bool {
         }
     }
 
-    fn get_size(ptr: NP_Lite_Ptr) -> Result<u32, NP_Error> {
+    fn get_size(ptr: &'value NP_Ptr<'value>) -> Result<usize, NP_Error> {
         let addr = ptr.kind.get_value_addr() as usize;
 
         if addr == 0 {
             return Ok(0) 
         } else {
-            Ok(core::mem::size_of::<u8>() as u32)
+            Ok(core::mem::size_of::<u8>())
         }
     }
 
@@ -224,7 +226,7 @@ fn default_value_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"bool\",\"default\":false}";
     let factory = crate::NP_Factory::new(schema)?;
     let buffer = factory.empty_buffer(None, None);
-    assert_eq!(buffer.deep_get("")?.unwrap(), Box::new(false));
+    assert_eq!(buffer.get("")?.unwrap(), Box::new(false));
 
     Ok(())
 }
@@ -235,13 +237,13 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"bool\"}";
     let factory = crate::NP_Factory::new(schema)?;
     let mut buffer = factory.empty_buffer(None, None);
-    buffer.deep_set("", false)?;
-    assert_eq!(buffer.deep_get::<bool>("")?.unwrap(), Box::new(false));
-    buffer.deep_clear("")?;
-    assert_eq!(buffer.deep_get::<bool>("")?, None);
+    buffer.set("", false)?;
+    assert_eq!(buffer.get::<bool>("")?.unwrap(), Box::new(false));
+    buffer.del("")?;
+    assert_eq!(buffer.get::<bool>("")?, None);
 
-    buffer = buffer.compact(None, None)?;
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 4u32);
+    buffer.compact(None, None)?;
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);
 
     Ok(())
 }

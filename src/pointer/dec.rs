@@ -55,9 +55,9 @@
 //! }"#)?;
 //!
 //! let mut new_buffer = factory.empty_buffer(None, None);
-//! new_buffer.deep_set("", NP_Dec::new(50283, 2))?;
+//! new_buffer.set("", NP_Dec::new(50283, 2))?;
 //! 
-//! assert_eq!(502.83f64, new_buffer.deep_get::<NP_Dec>("")?.unwrap().to_float());
+//! assert_eq!(502.83f64, new_buffer.get::<NP_Dec>("")?.unwrap().to_float());
 //!
 //! # Ok::<(), NP_Error>(()) 
 //! ```
@@ -69,14 +69,14 @@ use crate::utils::to_signed;
 use crate::utils::to_unsigned;
 use crate::json_flex::{JSMAP, NP_JSON};
 use crate::schema::{NP_Schema, NP_TypeKeys};
-use crate::pointer::NP_PtrKinds;
 use crate::{pointer::NP_Value, error::NP_Error};
 use core::{fmt::{Debug}, hint::unreachable_unchecked};
 
 use alloc::string::String;
 use alloc::boxed::Box;
 use alloc::borrow::ToOwned;
-use super::NP_Lite_Ptr;
+
+use super::NP_Ptr;
 
 
 /// Holds fixed decimal data.
@@ -705,7 +705,7 @@ impl<'value> NP_Value<'value> for NP_Dec {
         }
     }
 
-    fn set_value(ptr: NP_Lite_Ptr, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
+    fn set_value(ptr: &mut NP_Ptr<'value>, value: Box<&Self>) -> Result<(), NP_Error> {
 
         let exp = match &&**ptr.schema {
             NP_Parsed_Schema::Decimal { i: _, sortable: _, default: _, exp} => {
@@ -731,9 +731,10 @@ impl<'value> NP_Value<'value> for NP_Dec {
 
             // overwrite existing values in buffer
             for x in 0..bytes.len() {
-                write_bytes[(addr + x as u32) as usize] = bytes[x as usize];
+                write_bytes[addr + x] = bytes[x];
             }
-            return Ok(ptr.kind);
+
+            return Ok(());
         } else { // new value
 
             let mut be_bytes = i64_value.to_be_bytes();
@@ -742,11 +743,13 @@ impl<'value> NP_Value<'value> for NP_Dec {
             be_bytes[0] = to_unsigned(be_bytes[0]);
 
             addr = ptr.memory.malloc(be_bytes.to_vec())?;
-            return Ok(ptr.memory.set_value_address(ptr.location, addr as u32, &ptr.kind));
+            ptr.kind = ptr.memory.set_value_address(ptr.address, addr, &ptr.kind);
+
+            return Ok(());
         }
     }
 
-    fn into_value(ptr: NP_Lite_Ptr) -> Result<Option<Box<Self>>, NP_Error> {
+    fn into_value(ptr: NP_Ptr<'value>) -> Result<Option<Box<Self>>, NP_Error> {
         let addr = ptr.kind.get_value_addr() as usize;
 
         // empty value
@@ -773,7 +776,7 @@ impl<'value> NP_Value<'value> for NP_Dec {
         })
     }
 
-    fn to_json(ptr: NP_Lite_Ptr) -> NP_JSON {
+    fn to_json(ptr: &'value NP_Ptr<'value>) -> NP_JSON {
         let this_value = Self::into_value(ptr.clone());
 
         let exp = match &**ptr.schema {
@@ -820,13 +823,13 @@ impl<'value> NP_Value<'value> for NP_Dec {
         }
     }
 
-    fn get_size(ptr: NP_Lite_Ptr) -> Result<u32, NP_Error> {
+    fn get_size(ptr: &'value NP_Ptr<'value>) -> Result<usize, NP_Error> {
         let addr = ptr.kind.get_value_addr() as usize;
 
         if addr == 0 {
             return Ok(0) 
         } else {
-            Ok(core::mem::size_of::<i64>() as u32)
+            Ok(core::mem::size_of::<i64>())
         }
     }
 
@@ -925,7 +928,7 @@ fn default_value_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"decimal\",\"exp\":3,\"default\":203.293}";
     let factory = crate::NP_Factory::new(schema)?;
     let buffer = factory.empty_buffer(None, None);
-    assert_eq!(buffer.deep_get("")?.unwrap(), Box::new(NP_Dec::new(203293, 3)));
+    assert_eq!(buffer.get("")?.unwrap(), Box::new(NP_Dec::new(203293, 3)));
 
     Ok(())
 }
@@ -936,13 +939,13 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"decimal\",\"exp\": 3}";
     let factory = crate::NP_Factory::new(schema)?;
     let mut buffer = factory.empty_buffer(None, None);
-    buffer.deep_set("", NP_Dec::new(203293, 3))?;
-    assert_eq!(buffer.deep_get::<NP_Dec>("")?.unwrap(), Box::new(NP_Dec::new(203293, 3)));
-    buffer.deep_clear("")?;
-    assert_eq!(buffer.deep_get::<NP_Dec>("")?, None);
+    buffer.set("", NP_Dec::new(203293, 3))?;
+    assert_eq!(buffer.get::<NP_Dec>("")?.unwrap(), Box::new(NP_Dec::new(203293, 3)));
+    buffer.del("")?;
+    assert_eq!(buffer.get::<NP_Dec>("")?, None);
 
-    buffer = buffer.compact(None, None)?;
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 4u32);
+    buffer.compact(None, None)?;
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);
 
     Ok(())
 }

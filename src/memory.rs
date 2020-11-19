@@ -21,6 +21,7 @@ pub enum NP_Size {
 #[doc(hidden)]
 pub struct NP_Memory {
     bytes: UnsafeCell<Vec<u8>>,
+    iterators: UnsafeCell<Vec<Option<u64>>>,
     pub size: NP_Size
 }
 
@@ -37,6 +38,7 @@ impl<'a> NP_Memory {
         
         NP_Memory {
             bytes: UnsafeCell::new(bytes),
+            iterators: UnsafeCell::new(Vec::new()),
             size: match size {
                 0 => NP_Size::U32,
                 1 => NP_Size::U16,
@@ -46,11 +48,62 @@ impl<'a> NP_Memory {
         }
     }
 
-    pub fn addr_size(&self) -> usize {
+    pub fn max_addr_size(&self) -> usize {
         match &self.size {
             NP_Size::U32 => MAX_SIZE_LARGE,
             NP_Size::U16 => MAX_SIZE_SMALL,
             NP_Size::U8 => MAX_SIZE_XSMALL
+        }
+    }
+
+    pub fn addr_size_bytes(&self) -> usize {
+        match &self.size {
+            NP_Size::U32 => 4,
+            NP_Size::U16 => 2,
+            NP_Size::U8 => 1
+        }
+    }
+
+    pub fn write_address(&self, addr: usize, value: usize) -> Result<(), NP_Error> {
+        
+        let addr_bytes = match self.size {
+            NP_Size::U32 => value.to_be_bytes().to_vec(),
+            NP_Size::U16 => (value as u16).to_be_bytes().to_vec(),
+            NP_Size::U8 => (value as u8).to_be_bytes().to_vec()
+        };
+
+        if addr + addr_bytes.len() > self.max_addr_size() {
+            return Err(NP_Error::new("Attempting to write out of bounds!"));
+        }
+
+        let self_bytes = unsafe { &mut *self.bytes.get() };
+
+        for x in 0..addr_bytes.len() {
+            self_bytes[addr + x] = addr_bytes[x];
+        }
+
+        Ok(())
+    }
+
+    pub fn read_address(&self, addr: usize) -> usize {
+        if addr == 0 {
+            return 0;
+        }
+        match self.size {
+            NP_Size::U8 =>  { u8::from_be_bytes([self.get_1_byte(addr).unwrap_or(0)]) as usize },
+            NP_Size::U16 => { u16::from_be_bytes(*self.get_2_bytes(addr).unwrap_or(&[0; 2])) as usize },
+            NP_Size::U32 => { u32::from_be_bytes(*self.get_4_bytes(addr).unwrap_or(&[0; 4])) as usize }
+        }
+    }
+
+    pub fn read_address_offset(&self, addr: usize, u32_off: usize, u16_off: usize, u8_off: usize) -> usize {
+        if addr == 0 {
+            return 0;
+        }
+        match self.size {
+            NP_Size::U8 =>  { u8::from_be_bytes([self.get_1_byte(addr + u8_off).unwrap_or(0)]) as usize },
+            NP_Size::U16 => { u16::from_be_bytes(*self.get_2_bytes(addr + u16_off).unwrap_or(&[0; 2])) as usize },
+            NP_Size::U32 => { u32::from_be_bytes(*self.get_4_bytes(addr + u32_off).unwrap_or(&[0; 4])) as usize }
         }
     }
 
@@ -82,11 +135,12 @@ impl<'a> NP_Memory {
 
         NP_Memory {
             bytes: UnsafeCell::new(new_bytes),
+            iterators: UnsafeCell::new(Vec::new()),
             size: size
         }
     }
 
-    pub fn malloc(&self, bytes: Vec<u8>) -> core::result::Result<u32, NP_Error> {
+    pub fn malloc(&self, bytes: Vec<u8>) -> core::result::Result<usize, NP_Error> {
 
         let self_bytes = unsafe { &mut *self.bytes.get() };
 
@@ -104,7 +158,7 @@ impl<'a> NP_Memory {
         }
 
         self_bytes.extend(bytes);
-        Ok(location as u32)
+        Ok(location)
     }
 
     pub fn read_bytes(&self) -> &Vec<u8> {
@@ -112,18 +166,51 @@ impl<'a> NP_Memory {
         self_bytes
     }
 
+    pub fn new_it(&self, value: u64) -> usize {
+        let self_it = unsafe { &mut *self.iterators.get() };
+        let mut x: usize = 0;
+        for it in self_it.iter_mut() {
+            if let None = it {
+                *it = Some(value);
+                return x;
+            }
+            x += 1;
+        }
+        let len = self_it.len();
+        self_it.push(Some(value));
+        len
+    }
+
+    pub fn del_it(&self, index: usize) {
+        let self_it = unsafe { &mut *self.iterators.get() };
+        if self_it.len() <= index {
+            self_it[index] = None;
+        }
+    }
+
+    pub fn it_write(&self, index: usize, value: u64) {
+        let self_it = unsafe { &mut *self.iterators.get() };
+        self_it[index] = Some(value);
+    }
+
+    pub fn it_read(&self, index: usize) -> Option<u64> {
+        let self_it = unsafe { &*self.iterators.get() };
+        self_it[index]
+    }
+
     pub fn write_bytes(&self) -> &mut Vec<u8> {
         let self_bytes = unsafe { &mut *self.bytes.get() };
         self_bytes
     }
 
-    pub fn ptr_size(&self, ptr: &NP_PtrKinds) -> u32 {
+    pub fn ptr_size(&self, ptr: &NP_PtrKinds) -> usize {
         // Get the size of this pointer based it's kind
         match self.size {
             NP_Size::U32 => {
                 match ptr {
-                    NP_PtrKinds::None                                     =>   {  0 },
+                    NP_PtrKinds::None                                    =>    {  0 },
                     NP_PtrKinds::Standard  { addr: _ }                   =>    {  4 },
+                    NP_PtrKinds::TupleItem { addr: _, i:_  }             =>    {  4 },
                     NP_PtrKinds::MapItem   { addr: _, key: _,  next: _ } =>    { 12 },
                     NP_PtrKinds::TableItem { addr: _, i:_ ,    next: _ } =>    {  9 },
                     NP_PtrKinds::ListItem  { addr: _, i:_ ,    next: _ } =>    { 10 }
@@ -131,8 +218,9 @@ impl<'a> NP_Memory {
             },
             NP_Size::U16 => {
                 match ptr {
-                    NP_PtrKinds::None                                     =>   { 0 },
+                    NP_PtrKinds::None                                    =>    { 0 },
                     NP_PtrKinds::Standard  { addr: _ }                   =>    { 2 },
+                    NP_PtrKinds::TupleItem { addr: _, i:_  }             =>    { 4 },
                     NP_PtrKinds::MapItem   { addr: _, key: _,  next: _ } =>    { 6 },
                     NP_PtrKinds::TableItem { addr: _, i:_ ,    next: _ } =>    { 5 },
                     NP_PtrKinds::ListItem  { addr: _, i:_ ,    next: _ } =>    { 6 }
@@ -140,8 +228,9 @@ impl<'a> NP_Memory {
             },
             NP_Size::U8 => {
                 match ptr {
-                    NP_PtrKinds::None                                     =>   { 0 },
+                    NP_PtrKinds::None                                    =>    { 0 },
                     NP_PtrKinds::Standard  { addr: _ }                   =>    { 1 },
+                    NP_PtrKinds::TupleItem { addr: _, i:_  }             =>    { 1 },
                     NP_PtrKinds::MapItem   { addr: _, key: _,  next: _ } =>    { 3 },
                     NP_PtrKinds::TableItem { addr: _, i:_ ,    next: _ } =>    { 3 },
                     NP_PtrKinds::ListItem  { addr: _, i:_ ,    next: _ } =>    { 3 }
@@ -159,7 +248,7 @@ impl<'a> NP_Memory {
         empty_bytes
     }
 
-    pub fn set_value_address(&self, address: u32, val: u32, kind: &NP_PtrKinds) -> NP_PtrKinds {
+    pub fn set_value_address(&self, address: usize, val: usize, kind: &NP_PtrKinds) -> NP_PtrKinds {
 
         let addr_bytes = match self.size {
             NP_Size::U32 => val.to_be_bytes().to_vec(),
@@ -170,7 +259,7 @@ impl<'a> NP_Memory {
         let self_bytes = unsafe { &mut *self.bytes.get() };
     
         for x in 0..addr_bytes.len() {
-            self_bytes[(address + x as u32) as usize] = addr_bytes[x as usize];
+            self_bytes[address + x] = addr_bytes[x as usize];
         }
 
         match kind {
@@ -179,6 +268,9 @@ impl<'a> NP_Memory {
             }
             NP_PtrKinds::Standard { addr: _ } => {
                 NP_PtrKinds::Standard { addr: val }
+            },
+            NP_PtrKinds::TupleItem { addr: _, i} => {
+                NP_PtrKinds::TupleItem { addr: val, i: *i }
             },
             NP_PtrKinds::MapItem { addr: _, key,  next  } => {
                 NP_PtrKinds::MapItem { addr: val, key: *key, next: *next }

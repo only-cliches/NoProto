@@ -12,9 +12,9 @@
 //! }"#)?;
 //!
 //! let mut new_buffer = factory.empty_buffer(None, None);
-//! new_buffer.deep_set("", NP_Geo::new(4, 45.509616, -122.714625))?;
+//! new_buffer.set("", NP_Geo::new(4, 45.509616, -122.714625))?;
 //! 
-//! assert_eq!("{\"lat\":45.5,\"lng\":-122.71}", new_buffer.deep_get::<NP_Geo>("")?.unwrap().into_json().stringify());
+//! assert_eq!("{\"lat\":45.5,\"lng\":-122.71}", new_buffer.get::<NP_Geo>("")?.unwrap().into_json().stringify());
 //!
 //! # Ok::<(), NP_Error>(()) 
 //! ```
@@ -26,7 +26,6 @@ use crate::utils::to_signed;
 use crate::utils::to_unsigned;
 use crate::json_flex::{JSMAP, NP_JSON};
 use crate::schema::{NP_Schema, NP_TypeKeys};
-use crate::pointer::NP_PtrKinds;
 use crate::{pointer::NP_Value, error::NP_Error};
 use core::{fmt::{Debug}, hint::unreachable_unchecked};
 use core::convert::TryInto;
@@ -35,7 +34,8 @@ use alloc::string::String;
 use alloc::boxed::Box;
 use alloc::borrow::ToOwned;
 use alloc::{string::ToString};
-use super::NP_Lite_Ptr;
+
+use super::NP_Ptr;
 
 
 /// Allows you to efficiently retrieve just the bytes of the geographic coordinate
@@ -121,16 +121,16 @@ impl<'value> NP_Value<'value> for NP_Geo_Bytes {
 
     fn schema_to_json(schema_ptr: &NP_Parsed_Schema)-> Result<NP_JSON, NP_Error> { NP_Geo::schema_to_json(&schema_ptr)}
 
-    fn set_value(_ptr: NP_Lite_Ptr, _value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
+    fn set_value(_ptr: &mut NP_Ptr<'value>, _value: Box<&Self>) -> Result<(), NP_Error> {
         Err(NP_Error::new("Can't set value with NP_Geo_Bytes, use NP_Geo instead!"))
     }
-    fn to_json(ptr: NP_Lite_Ptr) -> NP_JSON {
+    fn to_json(ptr: &'value NP_Ptr<'value>) -> NP_JSON {
         NP_Geo::to_json(ptr)
     }
-    fn get_size(ptr: NP_Lite_Ptr) -> Result<u32, NP_Error> {
+    fn get_size(ptr:  &'value NP_Ptr<'value>) -> Result<usize, NP_Error> {
         NP_Geo::get_size(ptr)
     }
-    fn into_value(ptr: NP_Lite_Ptr) -> Result<Option<Box<Self>>, NP_Error> {
+    fn into_value(ptr: NP_Ptr<'value>) -> Result<Option<Box<Self>>, NP_Error> {
 
         let addr = ptr.kind.get_value_addr() as usize;
 
@@ -367,7 +367,7 @@ impl<'value> NP_Value<'value> for NP_Geo {
 
     }
 
-    fn set_value(ptr: NP_Lite_Ptr, value: Box<&Self>) -> Result<NP_PtrKinds, NP_Error> {
+    fn set_value(ptr: &mut NP_Ptr<'value>, value: Box<&Self>) -> Result<(), NP_Error> {
 
         let mut addr = ptr.kind.get_value_addr();
 
@@ -460,11 +460,11 @@ impl<'value> NP_Value<'value> for NP_Geo {
             // overwrite existing values in buffer
             for x in 0..value_bytes.len() {
                 if x < value_bytes_size {
-                    write_bytes[(addr + x as u32) as usize] = value_bytes[x as usize];
+                    write_bytes[addr + x] = value_bytes[x];
                 }
             }
 
-            return Ok(ptr.kind);
+            return Ok(());
 
         } else { // new value
 
@@ -478,16 +478,18 @@ impl<'value> NP_Value<'value> for NP_Geo {
             // set values in buffer
             for x in 0..value_bytes.len() {
                 if x < value_bytes_size {
-                    write_bytes[(addr + x as u32) as usize] = value_bytes[x as usize];
+                    write_bytes[addr + x] = value_bytes[x];
                 }
             }
 
-            return Ok(ptr.memory.set_value_address(ptr.location, addr as u32, &ptr.kind));
+            ptr.kind = ptr.memory.set_value_address(ptr.address, addr, &ptr.kind);
+
+            return Ok(());
         }
         
     }
 
-    fn into_value(ptr: NP_Lite_Ptr) -> Result<Option<Box<Self>>, NP_Error> {
+    fn into_value(ptr: NP_Ptr<'value>) -> Result<Option<Box<Self>>, NP_Error> {
 
         let addr = ptr.kind.get_value_addr() as usize;
 
@@ -556,7 +558,7 @@ impl<'value> NP_Value<'value> for NP_Geo {
         })))
     }
 
-    fn to_json(ptr: NP_Lite_Ptr) -> NP_JSON {
+    fn to_json(ptr: &'value NP_Ptr<'value>) -> NP_JSON {
         let this_value = Self::into_value(ptr.clone());
 
         match this_value {
@@ -595,7 +597,7 @@ impl<'value> NP_Value<'value> for NP_Geo {
         }
     }
 
-    fn get_size(ptr: NP_Lite_Ptr) -> Result<u32, NP_Error> {
+    fn get_size(ptr: &'value NP_Ptr<'value>) -> Result<usize, NP_Error> {
         let addr = ptr.kind.get_value_addr() as usize;
 
         if addr == 0 {
@@ -607,7 +609,7 @@ impl<'value> NP_Value<'value> for NP_Geo {
                 },
                 _ => { unsafe { unreachable_unchecked() } }
             };
-            Ok(*size as u32)
+            Ok(*size as usize)
         }
     }
 
@@ -782,17 +784,17 @@ fn default_value_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"geo4\",\"default\":{\"lat\":20.23,\"lng\":-12.21}}";
     let factory = crate::NP_Factory::new(schema)?;
     let buffer = factory.empty_buffer(None, None);
-    assert_eq!((*buffer.deep_get::<NP_Geo>("")?.unwrap()).get_bytes().unwrap(), NP_Geo::new(4, 20.23, -12.21).get_bytes().unwrap());
+    assert_eq!((*buffer.get::<NP_Geo>("")?.unwrap()).get_bytes().unwrap(), NP_Geo::new(4, 20.23, -12.21).get_bytes().unwrap());
 
     let schema = "{\"type\":\"geo8\",\"default\":{\"lat\":20.2334234,\"lng\":-12.2146363}}";
     let factory = crate::NP_Factory::new(schema)?;
     let buffer = factory.empty_buffer(None, None);
-    assert_eq!((*buffer.deep_get::<NP_Geo>("")?.unwrap()).get_bytes().unwrap(), NP_Geo::new(8, 20.2334234, -12.2146363).get_bytes().unwrap());
+    assert_eq!((*buffer.get::<NP_Geo>("")?.unwrap()).get_bytes().unwrap(), NP_Geo::new(8, 20.2334234, -12.2146363).get_bytes().unwrap());
 
     let schema = "{\"type\":\"geo16\",\"default\":{\"lat\":20.233423434,\"lng\":-12.214636323}}";
     let factory = crate::NP_Factory::new(schema)?;
     let buffer = factory.empty_buffer(None, None);
-    assert_eq!((*buffer.deep_get::<NP_Geo>("")?.unwrap()).get_bytes().unwrap(), NP_Geo::new(16, 20.233423434, -12.214636323).get_bytes().unwrap());
+    assert_eq!((*buffer.get::<NP_Geo>("")?.unwrap()).get_bytes().unwrap(), NP_Geo::new(16, 20.233423434, -12.214636323).get_bytes().unwrap());
 
     Ok(())
 }
@@ -802,18 +804,18 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"geo4\"}";
     let factory = crate::NP_Factory::new(schema)?;
     let mut buffer = factory.empty_buffer(None, None);
-    buffer.deep_set("", NP_Geo::new(4, 20.23, -12.21))?;
-    assert_eq!((*buffer.deep_get::<NP_Geo>("")?.unwrap()).get_bytes().unwrap(), NP_Geo::new(4, 20.23, -12.21).get_bytes().unwrap());
-    buffer.deep_clear("")?;
+    buffer.set("", NP_Geo::new(4, 20.23, -12.21))?;
+    assert_eq!((*buffer.get::<NP_Geo>("")?.unwrap()).get_bytes().unwrap(), NP_Geo::new(4, 20.23, -12.21).get_bytes().unwrap());
+    buffer.del("")?;
     assert!({
-        match buffer.deep_get::<NP_Geo>("")? {
+        match buffer.get::<NP_Geo>("")? {
             Some(_x) => false,
             None => true
         }
     });
 
-    buffer = buffer.compact(None, None)?;
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 4u32);
+    buffer.compact(None, None)?;
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);
 
     Ok(())
 }

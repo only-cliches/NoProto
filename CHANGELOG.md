@@ -1,3 +1,10 @@
+# 0.4.0 November 19, 2020
+- Completely reworked loop code for all collections, it's now far faster and more efficient.
+- Iterating/Traversing over a buffer no longer mutates it.
+- Added new `to_iter` and `list_push` methods to buffer.
+- Removed `open` and `extract` methods from buffer, you can no longer access internal pointers directly.
+- Several other minor optimizations.
+
 # 0.3.0 November 11, 2020
 - Added lots of tests
 - Reorganized files a little bit.
