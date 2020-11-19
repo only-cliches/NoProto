@@ -491,11 +491,11 @@
 //! 
 //! NoProto JSON schemas are compiled into a byte array as part of the parsing process.
 //! 
-//! The compiled byte array is a significantly more compact and efficient way to store the schema.  It also takes *zero* time to parse a byte schema, where parsing a JSON schema can be a comparitively expensive operation.
+//! The compiled byte array is a significantly more compact and efficient way to store the schema.  It also takes almost no time to parse a byte schema, where parsing a JSON schema can be a comparitively expensive operation.
 //! 
 //! You can use the runtime to parse JSON schemas into byte array schemas at any time, and the JSON/byte array schemas can be used interchangebly.
 //! 
-//! The byte array schema stores default values and all other supported properties.
+//! The byte array schema store default values and all other supported schema properties.
 //! 
 //! Schema data is stored in a recursive format, each nested schema contains at least one byte that describes the data type.  The single data type byte is usually but not always followed by schema data specific to that data type.  The document below describes all of the data types and their specifics.
 //! 

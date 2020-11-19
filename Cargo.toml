@@ -1,7 +1,7 @@
 [package]
 name = "no_proto"
 license = "MIT"
-version = "0.4.0"
+version = "0.4.1"
 description = "Simple & Performant Zero-Copy Serialization.  Performance of Flatbuffers / Cap'N Proto with flexibility of JSON."
 homepage = "https://github.com/ClickSimply/NoProto"
 repository = "https://github.com/ClickSimply/NoProto"
@@ -9,6 +9,8 @@ documentation="https://docs.rs/crate/no_proto/"
 authors = ["Scott Lott <me@scottlott.com>"]
 readme = "README.md"
 edition = "2018"
+categories = ["data-structures", "embedded", "encoding", "no-std"]
+keywords = ["schemas", "protocol-buffers", "flatbuffers", "deserialization", "zero-copy", "serialization", "rpc", "json", "bson", "messagepack"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

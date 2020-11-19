@@ -1,3 +1,6 @@
+# 0.4.1 November 19, 2020
+- Docs & Meta update
+
 # 0.4.0 November 19, 2020
 - Completely reworked loop code for all collections, it's now far faster and more efficient.
 - Iterating/Traversing over a buffer no longer mutates it.

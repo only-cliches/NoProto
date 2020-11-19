@@ -9,7 +9,7 @@
 //! 
 //! ### Features  
 //! - Zero dependencies
-//! - #![no_std] support, WASM ready
+//! - no_std support, WASM ready
 //! - Zero copy deserialization
 //! - Native byte-wise sorting
 //! - Extensive Documentation & Testing
