@@ -76,8 +76,8 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// ```
     /// 
     pub fn json_encode(&self, path: &str) -> Result<NP_JSON, NP_Error> {
-        let vec_path: Vec<String> = path.split(".").filter_map(|v| { 
-            if v.len() > 0 { Some(String::from(v)) } else { None }
+        let vec_path: Vec<&str> = path.split(".").filter_map(|v| { 
+            if v.len() > 0 { Some(v) } else { None }
         }).collect();
         let root: NP_Ptr = NP_Ptr::_new_standard_ptr(ROOT_PTR_ADDR, &self.schema.parsed, &self.memory);
         let json_ptr = root._deep_get(vec_path, 0)?;
@@ -312,8 +312,8 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// ```
     /// 
     pub fn get_iter(&self, path: &str) -> Result<Option<NP_Generic_Iterator>, NP_Error> {
-        let vec_path: Vec<String> = path.split(".").filter_map(|v| { 
-            if v.len() > 0 { Some(String::from(v)) } else { None }
+        let vec_path: Vec<&str> = path.split(".").filter_map(|v| { 
+            if v.len() > 0 { Some(v) } else { None }
         }).collect();
 
         let root: NP_Ptr = NP_Ptr::_new_standard_ptr(ROOT_PTR_ADDR, &self.schema.parsed, &self.memory);
@@ -471,8 +471,8 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// ```
     /// 
     pub fn get_schema(&self, path: &str) -> Result<Option<&NP_Parsed_Schema>, NP_Error> {
-        let vec_path: Vec<String> = path.split(".").filter_map(|v| { 
-            if v.len() > 0 { Some(String::from(v)) } else { None }
+        let vec_path: Vec<&str> = path.split(".").filter_map(|v| { 
+            if v.len() > 0 { Some(v) } else { None }
         }).collect();
         let root: NP_Ptr = NP_Ptr::_new_standard_ptr(ROOT_PTR_ADDR, &self.schema.parsed, &self.memory);
         let collection_ptr = root._deep_get(vec_path, 0)?;
@@ -505,8 +505,8 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// ```
     /// 
     pub fn length(&self, path: &str) -> Result<Option<usize>, NP_Error> {
-        let vec_path: Vec<String> = path.split(".").filter_map(|v| { 
-            if v.len() > 0 { Some(String::from(v)) } else { None }
+        let vec_path: Vec<&str> = path.split(".").filter_map(|v| { 
+            if v.len() > 0 { Some(v) } else { None }
         }).collect();
         let root: NP_Ptr = NP_Ptr::_new_standard_ptr(ROOT_PTR_ADDR, &self.schema.parsed, &self.memory);
         let collection_ptr = root._deep_get(vec_path, 0)?;
@@ -582,8 +582,8 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// ```
     /// 
     pub fn del(&mut self, path: &str) -> Result<bool, NP_Error> {
-        let vec_path: Vec<String> = path.split(".").filter_map(|v| { 
-            if v.len() > 0 { Some(String::from(v)) } else { None }
+        let vec_path: Vec<&str> = path.split(".").filter_map(|v| { 
+            if v.len() > 0 { Some(v) } else { None }
         }).collect();
         let root: NP_Ptr = NP_Ptr::_new_standard_ptr(ROOT_PTR_ADDR, &self.schema.parsed, &self.memory);
         root._deep_delete(vec_path, 0)
@@ -621,8 +621,8 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// 
     pub fn get<'get, X:'get>(&'get self, path: &'buffer str) -> Result<Option<Box<X>>, NP_Error> where X: NP_Value<'get> + Default {
 
-        let vec_path: Vec<String> = path.split(".").filter_map(|v| { 
-            if v.len() > 0 { Some(String::from(v)) } else { None }
+        let vec_path: Vec<&str> = path.split(".").filter_map(|v| { 
+            if v.len() > 0 { Some(v) } else { None }
         }).collect();
         let root: NP_Ptr = NP_Ptr::_new_standard_ptr(ROOT_PTR_ADDR, &self.schema.parsed, &self.memory);
         root._deep_get_type::<X>(vec_path, 0)

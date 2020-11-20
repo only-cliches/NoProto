@@ -328,7 +328,7 @@ impl<'ptr> NP_Ptr<'ptr> {
     }
 
     /// Deep delete a value
-    pub fn _deep_delete(self, path: Vec<String>, path_index: usize) -> Result<bool, NP_Error> {
+    pub fn _deep_delete(self, path: Vec<&str>, path_index: usize) -> Result<bool, NP_Error> {
 
         if let Some(x) = self._deep_get(path, path_index)? {
             Ok(x.clear_here())
@@ -485,7 +485,7 @@ impl<'ptr> NP_Ptr<'ptr> {
     }
 
     /// deep get with type
-    pub fn _deep_get_type<X: NP_Value<'ptr> + Default>(self, path: Vec<String>, path_index: usize) -> Result<Option<Box<X>>, NP_Error> {
+    pub fn _deep_get_type<X: NP_Value<'ptr> + Default>(self, path: Vec<&str>, path_index: usize) -> Result<Option<Box<X>>, NP_Error> {
         let ptr = self._deep_get(path, path_index)?;
 
         if let Some(x) = ptr {
@@ -508,7 +508,7 @@ impl<'ptr> NP_Ptr<'ptr> {
     }
 
     /// Deep get a value
-    pub fn _deep_get(self, path: Vec<String>, path_index: usize) -> Result<Option<NP_Ptr<'ptr>>, NP_Error> {
+    pub fn _deep_get(self, path: Vec<&str>, path_index: usize) -> Result<Option<NP_Ptr<'ptr>>, NP_Error> {
 
         if path.len() == path_index {
             return Ok(Some(self));
@@ -551,7 +551,7 @@ impl<'ptr> NP_Ptr<'ptr> {
 
                 match result {
                     Some(map) => {
-                        let map_key = String::from(&path[path_index]);
+                        let map_key = String::from(path[path_index]);
                         let col = map.clone().select_mv(map_key, false);
                         if col.has_value() == false {
                             match &**map.get_schema() {
