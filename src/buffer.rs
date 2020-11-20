@@ -315,6 +315,7 @@ impl<'buffer> NP_Buffer<'buffer> {
         let vec_path: Vec<String> = path.split(".").filter_map(|v| { 
             if v.len() > 0 { Some(String::from(v)) } else { None }
         }).collect();
+
         let root: NP_Ptr = NP_Ptr::_new_standard_ptr(ROOT_PTR_ADDR, &self.schema.parsed, &self.memory);
         let collection_ptr = root._deep_get(vec_path, 0)?;
 

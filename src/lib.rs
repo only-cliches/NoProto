@@ -372,15 +372,6 @@ mod tests {
     // use pointer::misc::NP_Date;
 
     #[test]
-    fn scham_parsing_works() -> core::result::Result<(), NP_Error> {
-        let schema = "{\"type\":\"string\",\"default\":\"hello\"}";
-        let factory: NP_Factory = NP_Factory::new(schema)?;
-        assert_eq!(schema, factory.schema.to_json()?.stringify());
-
-        Ok(())
-    }
-
-    #[test]
     fn it_works() -> core::result::Result<(), NP_Error> {
 
 

@@ -5,7 +5,7 @@ Performance of Flatbuffers / Cap'N Proto with flexibility of JSON
 
 ### Features  
 - Zero dependencies
-- #![no_std] support, WASM ready
+- no_std support, WASM ready
 - Zero copy deserialization
 - Native byte-wise sorting
 - Extensive Documentation & Testing
