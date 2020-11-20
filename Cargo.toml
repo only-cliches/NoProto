@@ -1,7 +1,7 @@
 [package]
 name = "no_proto"
 license = "MIT"
-version = "0.4.1"
+version = "0.4.2"
 description = "Simple & Performant Zero-Copy Serialization.  Performance of Flatbuffers / Cap'N Proto with flexibility of JSON."
 homepage = "https://github.com/ClickSimply/NoProto"
 repository = "https://github.com/ClickSimply/NoProto"
