@@ -11,7 +11,9 @@ use core::ops::Add;
 
 use super::NP_Collection;
 
-/// The map type [Using collections with pointers](../pointer/struct.NP_Ptr.html#using-collection-types-with-pointers).
+/// The map type.
+/// 
+#[doc(hidden)]
 #[derive(Debug, Clone)]
 pub struct NP_Map<'map> {
     address: usize, // pointer location
@@ -432,11 +434,6 @@ impl<'map> NP_Map<'map> {
 
 impl<'collection> NP_Collection<'collection> for NP_Map<'collection> {
 
-    /// Get length of collection
-    fn length(&self) -> usize {
-        self.len.into()
-    }
-
     /// Step a pointer to the next item in the collection
     fn step_pointer(ptr: &mut NP_Ptr<'collection>) -> Option<NP_Ptr<'collection>> {
         // can't step with virtual pointer
@@ -593,6 +590,7 @@ impl<'it> NP_Map_Iterator<'it> {
 }
 
 /// The iterator type for maps
+#[doc(hidden)]
 #[derive(Debug)]
 pub struct NP_Map_Iterator<'it> {
     map_schema: &'it Box<NP_Parsed_Schema>,
@@ -614,13 +612,23 @@ impl<'it> Iterator for NP_Map_Iterator<'it> {
     }
 
     fn count(self) -> usize where Self: Sized {
-        #[inline]
-        fn add1<T>(count: usize, _: T) -> usize {
-            // Might overflow.
-            Add::add(count, 1)
+
+        if let Some(x) = self.current {
+            match x.parent {
+                NP_Ptr_Collection::Map { address: _, head: _, length } => length as usize,
+                _ => { unsafe { unreachable_unchecked() } }
+            }
+        } else {
+            #[inline]
+            fn add1<T>(count: usize, _: T) -> usize {
+                // Might overflow.
+                Add::add(count, 1)
+            }
+
+            self.fold(0, add1)            
         }
 
-        self.fold(0, add1)
+
     }
 }
 
@@ -641,6 +649,7 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let mut buffer = factory.empty_buffer(None, None);
     buffer.set("name", String::from("hello, world"))?;
     assert_eq!(buffer.get::<String>("name")?, Some(Box::new(String::from("hello, world"))));
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 34usize);
     buffer.del("")?;
     buffer.compact(None, None)?;
     assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);

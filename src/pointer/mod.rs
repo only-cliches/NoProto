@@ -23,13 +23,12 @@ pub mod uuid;
 pub mod option;
 pub mod date;
 
-use core::hint::unreachable_unchecked;
 use crate::{collection::NP_Collection, pointer::dec::NP_Dec};
 use crate::NP_Parsed_Schema;
 use crate::{json_flex::NP_JSON};
 use crate::memory::{NP_Size, NP_Memory};
 use crate::NP_Error;
-use crate::{schema::{NP_TypeKeys}, collection::{map::NP_Map, table::NP_Table, list::NP_List, tuple::NP_Tuple}, utils::{overflow_error, print_path}};
+use crate::{schema::{NP_TypeKeys}, collection::{map::NP_Map, table::NP_Table, list::NP_List, tuple::NP_Tuple}, utils::{print_path}};
 
 use alloc::{boxed::Box, string::String, vec::Vec, borrow::ToOwned};
 use bytes::NP_Bytes;
@@ -80,6 +79,7 @@ impl NP_PtrKinds {
 
 /// This trait is used to implement types as NoProto buffer types.
 /// This includes all the type data, encoding and decoding methods.
+#[doc(hidden)]
 pub trait NP_Value<'value> {
 
     /// Get the type information for this type (static)
@@ -340,7 +340,7 @@ impl<'ptr> NP_Ptr<'ptr> {
     /// Create a path to a pointer and provide the pointer
     /// 
     #[allow(unused_mut)]
-    pub fn _deep_set(mut self, path: Vec<String>, path_index: usize) -> Result<NP_Ptr<'ptr>, NP_Error> {
+    pub fn _deep_set(mut self, path: Vec<&str>, path_index: usize) -> Result<NP_Ptr<'ptr>, NP_Error> {
 
         if path.len() == path_index {
             return Ok(self);
@@ -351,94 +351,47 @@ impl<'ptr> NP_Ptr<'ptr> {
         match type_data.2 {
             NP_TypeKeys::Table => {
 
-                overflow_error("deep set", &path, path_index)?;
-
-                let result = NP_Table::into_value(self)?;
-                
-                match result {
-                    Some(table) => {
-                        let table_key = &path[path_index];
-                        let mut col = table.select_mv(table_key, None);
-                        if col.has_value() == false {
-                            col = NP_Table::commit_pointer(col)?;
-                        }
-                        return col._deep_set(path, path_index + 1);
-                    },
-                    None => {
-                        unreachable!();
-                    }
-                }
+                let table = NP_Table::into_value(self)?.unwrap();
+                let col = NP_Table::commit_pointer(table.select_mv(&path[path_index], None))?;
+                return col._deep_set(path, path_index + 1);
             },
             NP_TypeKeys::Map => {
 
-                overflow_error("deep set", &path, path_index)?;
-
-                match NP_Map::into_value(self)? {
-                    Some(map) => {
-                        let map_key = String::from(&path[path_index]);
-                        let mut col = map.select_mv(map_key, false);
-                        if col.has_value() == false {
-                            col = NP_Map::commit_pointer(col)?;
-                        }
-                        return col._deep_set(path, path_index + 1);
-                    },
-                    None => {
-                        unreachable!();
-                    }
-                }
+                let map =  NP_Map::into_value(self)?.unwrap();
+                let col = NP_Map::commit_pointer(map.select_mv(String::from(path[path_index]), false))?;
+                return col._deep_set(path, path_index + 1);
             },
             NP_TypeKeys::List => {
 
-                overflow_error("deep set", &path, path_index)?;
-
-                let temp_list = NP_List::into_value(self)?;
-
-                match temp_list {
-                    Some(list)=> {
-                        let list_key = &path[path_index];
-                        let list_key_int = list_key.parse::<u16>();
-                        match list_key_int {
-                            Ok(x) => {
-                                let mut col = list.select_mv(x);
-                                if col.has_value() == false {
-                                    col = NP_List::commit_pointer(col)?;
-                                }
-                                return col._deep_set(path, path_index + 1);
-                            },
-                            Err(_e) => {
-                                return Err(NP_Error::new("Can't query list with string, need number!".to_owned()))
-                            }
-                        }
-                    
+                let list = NP_List::into_value(self)?.unwrap();
+                let list_key_int = (&path[path_index]).parse::<u16>();
+                match list_key_int {
+                    Ok(x) => {
+                        let col = NP_List::commit_pointer(list.select_mv(x))?;
+                        return col._deep_set(path, path_index + 1);
                     },
-                    None => {
-                        unreachable!();
+                    Err(_e) => {
+                        let mut err = String::from("Can't query list with string, need number! Path: \n");
+                        err.push_str(print_path(&path, path_index).as_str());
+                        Err(NP_Error::new(err))
                     }
                 }
             },
             NP_TypeKeys::Tuple => {
 
-                overflow_error("deep set", &path, path_index)?;
+                let tuple = NP_Tuple::into_value(self)?.unwrap();
 
-                let temp_tuple = NP_Tuple::into_value(self)?;
-
-                match temp_tuple {
-                    Some(tuple) => {
-                        let list_key = &path[path_index];
-                        let list_key_int = list_key.parse::<u8>();
-                        match list_key_int {
-                            Ok(x) => {
-                                let col = tuple.select_mv(x)?;
-                                return col._deep_set(path, path_index + 1);
-                            },
-                            Err(_e) => {
-                                return Err(NP_Error::new("Can't query tuple with string, need number!".to_owned()))
-                            }
-                        }
-
+                let list_key = &path[path_index];
+                let list_key_int = list_key.parse::<u8>();
+                match list_key_int {
+                    Ok(x) => {
+                        let col = tuple.select_mv(x)?;
+                        return col._deep_set(path, path_index + 1);
                     },
-                    None => {
-                        unreachable!();
+                    Err(_e) => {
+                        let mut err = String::from("Can't query tuple with string, need number! Path: \n");
+                        err.push_str(print_path(&path, path_index).as_str());
+                        Err(NP_Error::new(err))
                     }
                 }
 
@@ -449,7 +402,7 @@ impl<'ptr> NP_Ptr<'ptr> {
                 if path.len() != path_index { // reached scalar value but not at end of path
                     let mut err = "TypeError: Attempted to deep set into collection but found scalar type (".to_owned();
                     err.push_str(type_data.1.as_str());
-                    err.push_str(")\n Path: ");
+                    err.push_str("), Path:\n");
                     err.push_str(print_path(&path, path_index).as_str());
                     return Err(NP_Error::new(err));
                 }
@@ -461,7 +414,7 @@ impl<'ptr> NP_Ptr<'ptr> {
 
     /// Deep set a value
     #[allow(unused_mut)]
-    pub fn _deep_set_value<X>(mut self, path: Vec<String>, path_index: usize, value: X) -> Result<(), NP_Error> where X: NP_Value<'ptr> + Default {
+    pub fn _deep_set_value<X>(mut self, path: Vec<&str>, path_index: usize, value: X) -> Result<(), NP_Error> where X: NP_Value<'ptr> + Default {
 
         let mut pointer_value = self._deep_set(path, path_index)?;
 
@@ -474,7 +427,7 @@ impl<'ptr> NP_Ptr<'ptr> {
             err.push_str(X::type_idx().1.as_str());
             err.push_str(") into schema of type (");
             err.push_str(type_data.1.as_str());
-            err.push_str(")\n");
+            err.push_str("}\n");
             return Err(NP_Error::new(err));
         }
 
@@ -519,31 +472,10 @@ impl<'ptr> NP_Ptr<'ptr> {
         match type_data.2 {
             NP_TypeKeys::Table => {
 
-                let result = NP_Table::into_value(self)?;
-                
-                match result {
-                    Some(table) => {
-                        let table_key = &path[path_index];
-                        let col = table.clone().select_mv(table_key, None);
-                        if col.has_value() == false { 
-                            match &**table.get_schema() {
-                                NP_Parsed_Schema::Table { sortable: _, i: _, columns} => {
-                                    for schem in columns {
-                                        if schem.1 == *table_key {
-                                            let ptr = NP_Ptr::_new_standard_ptr(0, &schem.2, col.memory);
-                                            return ptr._deep_get(path, path_index + 1);
-                                        }
-                                    }
-                                },
-                                _ => { unsafe { unreachable_unchecked() } }
-                            }
-                        }
-                        col._deep_get(path, path_index + 1)
-                    },
-                    None => {
-                        unreachable!();
-                    }
-                }
+                let table = NP_Table::into_value(self)?.unwrap();
+                let table_key = path[path_index];
+                let col = table.select_mv(table_key, None);
+                col._deep_get(path, path_index + 1)
             },
             NP_TypeKeys::Map => {
 
@@ -552,16 +484,7 @@ impl<'ptr> NP_Ptr<'ptr> {
                 match result {
                     Some(map) => {
                         let map_key = String::from(path[path_index]);
-                        let col = map.clone().select_mv(map_key, false);
-                        if col.has_value() == false {
-                            match &**map.get_schema() {
-                                NP_Parsed_Schema::Map { sortable: _, i: _, value} => {
-                                    let ptr = NP_Ptr::_new_standard_ptr(0, value, col.memory);
-                                    return ptr._deep_get(path, path_index + 1);
-                                },
-                                _ => { unsafe { unreachable_unchecked() } }
-                            }
-                        }
+                        let col = map.select_mv(map_key, false);
                         col._deep_get(path, path_index + 1)
                     },
                     None => {
@@ -582,19 +505,12 @@ impl<'ptr> NP_Ptr<'ptr> {
                         match list_key_int {
                             Ok(x) => {
                                 let col = list.clone().select_mv(x);
-                                if col.has_value() == false {
-                                    match &**list.get_schema() {
-                                        NP_Parsed_Schema::List { sortable: _, i: _, of} => {
-                                            let ptr = NP_Ptr::_new_standard_ptr(0, of, col.memory);
-                                            return ptr._deep_get(path, path_index + 1);
-                                        },
-                                        _ => { unsafe { unreachable_unchecked() } }
-                                    }
-                                }
                                 col._deep_get(path, path_index + 1)
                             },
                             Err(_e) => {
-                                Err(NP_Error::new("Can't query list with string, need number!".to_owned()))
+                                let mut err = String::from("Can't query list with string, need number! Path: \n");
+                                err.push_str(print_path(&path, path_index).as_str());
+                                Err(NP_Error::new(err))
                             }
                         }
                     },
@@ -614,19 +530,12 @@ impl<'ptr> NP_Ptr<'ptr> {
                         match list_key_int {
                             Ok(x) => {
                                 let col = tuple.select(x)?;
-                                if col.has_value() == false { 
-                                    match &**tuple.get_schema() {
-                                        NP_Parsed_Schema::Tuple { sortable: _, i: _, values} => {
-                                            let ptr = NP_Ptr::_new_standard_ptr(0, &values[x as usize], col.memory);
-                                            return ptr._deep_get(path, path_index + 1);
-                                        },
-                                        _ => { unsafe { unreachable_unchecked() } }
-                                    }
-                                }
                                 col._deep_get(path, path_index + 1)
                             },
                             Err(_e) => {
-                                Err(NP_Error::new("Can't query tuple with string, need number!".to_owned()))
+                                let mut err = String::from("Can't query tuple with string, need number! Path: \n");
+                                err.push_str(print_path(&path, path_index).as_str());
+                                Err(NP_Error::new(err))
                             }
                         }
                     },
@@ -636,7 +545,11 @@ impl<'ptr> NP_Ptr<'ptr> {
                 }
 
             },
-            _ => { return Ok(None); }
+            _ => { 
+                // we're not at the end of the select path but we've reached a scalar value
+                // so the select has failed to find anything
+                return Ok(None); 
+            }
         }
 
         // Ok(None)
@@ -727,92 +640,46 @@ impl<'ptr> NP_Ptr<'ptr> {
     /// 
     pub fn calc_size(&self) -> Result<usize, NP_Error> {
 
+        // no pointer, no size
         if self.address == 0 {
             return Ok(0);
         }
 
+        // size of pointer
         let base_size = self.memory.ptr_size(&self.kind);
 
+        // pointer is in buffer but has no value set
         if self.kind.get_value_addr() == 0 { // no value, just base size
             return Ok(base_size);
         }
 
+        // get the size of the value based on schema
         let type_size = match self.schema.into_type_data().2 {
-            NP_TypeKeys::None => {
-                Ok(0)
-            },
-            NP_TypeKeys::Any => {
-                Ok(0)
-            },
-            NP_TypeKeys::UTF8String => {
-                String::get_size(self)
-            },
-            NP_TypeKeys::Bytes => {
-                NP_Bytes::get_size(self)
-            },
-            NP_TypeKeys::Int8 => {
-                i8::get_size(self)
-            },
-            NP_TypeKeys::Int16 => {
-                i16::get_size(self)
-            },
-            NP_TypeKeys::Int32 => {
-                i32::get_size(self)
-            },
-            NP_TypeKeys::Int64 => {
-                i64::get_size(self)
-            },
-            NP_TypeKeys::Uint8 => {
-                u8::get_size(self)
-            },
-            NP_TypeKeys::Uint16 => {
-                u16::get_size(self)
-            },
-            NP_TypeKeys::Uint32 => {
-                u32::get_size(self)
-            },
-            NP_TypeKeys::Uint64 => {
-                u64::get_size(self)
-            },
-            NP_TypeKeys::Float => {
-                f32::get_size(self)
-            },
-            NP_TypeKeys::Double => {
-                f64::get_size(self)
-            },
-            NP_TypeKeys::Decimal => {
-                NP_Dec::get_size(self)
-            },
-            NP_TypeKeys::Boolean => {
-                bool::get_size(self)
-            },
-            NP_TypeKeys::Geo => {
-                NP_Geo::get_size(self)
-            },
-            NP_TypeKeys::Uuid => {
-                NP_UUID::get_size(self)
-            },
-            NP_TypeKeys::Ulid => {
-                NP_ULID::get_size(self)
-            },
-            NP_TypeKeys::Date => {
-                NP_Date::get_size(self)
-            },
-            NP_TypeKeys::Enum => {
-                NP_Option::get_size(self)
-            },
-            NP_TypeKeys::Table => {
-                NP_Table::get_size(self)
-            },
-            NP_TypeKeys::Map => {
-                NP_Map::get_size(self)
-            },
-            NP_TypeKeys::List => {
-                NP_List::get_size(self)
-            },
-            NP_TypeKeys::Tuple => {
-                NP_Tuple::get_size(self)
-            }
+            NP_TypeKeys::None         => { Ok(0) },
+            NP_TypeKeys::Any          => { Ok(0) },
+            NP_TypeKeys::UTF8String   => {    String::get_size(self) },
+            NP_TypeKeys::Bytes        => {  NP_Bytes::get_size(self) },
+            NP_TypeKeys::Int8         => {        i8::get_size(self) },
+            NP_TypeKeys::Int16        => {       i16::get_size(self) },
+            NP_TypeKeys::Int32        => {       i32::get_size(self) },
+            NP_TypeKeys::Int64        => {       i64::get_size(self) },
+            NP_TypeKeys::Uint8        => {        u8::get_size(self) },
+            NP_TypeKeys::Uint16       => {       u16::get_size(self) },
+            NP_TypeKeys::Uint32       => {       u32::get_size(self) },
+            NP_TypeKeys::Uint64       => {       u64::get_size(self) },
+            NP_TypeKeys::Float        => {       f32::get_size(self) },
+            NP_TypeKeys::Double       => {       f64::get_size(self) },
+            NP_TypeKeys::Decimal      => {    NP_Dec::get_size(self) },
+            NP_TypeKeys::Boolean      => {      bool::get_size(self) },
+            NP_TypeKeys::Geo          => {    NP_Geo::get_size(self) },
+            NP_TypeKeys::Uuid         => {   NP_UUID::get_size(self) },
+            NP_TypeKeys::Ulid         => {   NP_ULID::get_size(self) },
+            NP_TypeKeys::Date         => {   NP_Date::get_size(self) },
+            NP_TypeKeys::Enum         => { NP_Option::get_size(self) },
+            NP_TypeKeys::Table        => {  NP_Table::get_size(self) },
+            NP_TypeKeys::Map          => {    NP_Map::get_size(self) },
+            NP_TypeKeys::List         => {   NP_List::get_size(self) },
+            NP_TypeKeys::Tuple        => {  NP_Tuple::get_size(self) }
         }?;
 
         Ok(type_size + base_size)
@@ -831,81 +698,31 @@ impl<'ptr> NP_Ptr<'ptr> {
         let type_key = self.schema.into_type_data().2;
 
         match type_key {
-            NP_TypeKeys::None => { 
-                NP_JSON::Null 
-            }
-            NP_TypeKeys::Any => {
-                NP_JSON::Null
-            },
-            NP_TypeKeys::UTF8String => {
-                String::to_json(self)
-            },
-            NP_TypeKeys::Bytes => {
-                NP_Bytes::to_json(self)
-            },
-            NP_TypeKeys::Int8 => {
-                i8::to_json(self)
-            },
-            NP_TypeKeys::Int16 => {
-                i16::to_json(self)
-            },
-            NP_TypeKeys::Int32 => {
-                i32::to_json(self)
-            },
-            NP_TypeKeys::Int64 => {
-                i64::to_json(self)
-            },
-            NP_TypeKeys::Uint8 => {
-                u8::to_json(self)
-            },
-            NP_TypeKeys::Uint16 => {
-                u16::to_json(self)
-            },
-            NP_TypeKeys::Uint32 => {
-                u32::to_json(self)
-            },
-            NP_TypeKeys::Uint64 => {
-                u64::to_json(self)
-            },
-            NP_TypeKeys::Float => {
-                f32::to_json(self)
-            },
-            NP_TypeKeys::Double => {
-                f64::to_json(self)
-            },
-            NP_TypeKeys::Decimal => {
-                NP_Dec::to_json(self)
-            },
-            NP_TypeKeys::Boolean => {
-                bool::to_json(self)
-            },
-            NP_TypeKeys::Geo => {
-                NP_Geo::to_json(self)
-            },
-            NP_TypeKeys::Uuid => {
-                NP_UUID::to_json(self)
-            },
-            NP_TypeKeys::Ulid => {
-                NP_ULID::to_json(self)
-            },
-            NP_TypeKeys::Date => {
-                NP_Date::to_json(self)
-            },
-            NP_TypeKeys::Enum => {
-                NP_Option::to_json(self)
-            },
-            NP_TypeKeys::Table => {
-                NP_Table::to_json(self)
-            },
-            NP_TypeKeys::Map => {
-                NP_Map::to_json(self)
-            },
-            NP_TypeKeys::List => {
-                NP_List::to_json(self)
-            },
-            NP_TypeKeys::Tuple => {
-                NP_Tuple::to_json(self)
-            }
+            NP_TypeKeys::None           => { NP_JSON::Null },
+            NP_TypeKeys::Any            => { NP_JSON::Null },
+            NP_TypeKeys::UTF8String     => {    String::to_json(self) },
+            NP_TypeKeys::Bytes          => {  NP_Bytes::to_json(self) },
+            NP_TypeKeys::Int8           => {        i8::to_json(self) },
+            NP_TypeKeys::Int16          => {       i16::to_json(self) },
+            NP_TypeKeys::Int32          => {       i32::to_json(self) },
+            NP_TypeKeys::Int64          => {       i64::to_json(self) },
+            NP_TypeKeys::Uint8          => {        u8::to_json(self) },
+            NP_TypeKeys::Uint16         => {       u16::to_json(self) },
+            NP_TypeKeys::Uint32         => {       u32::to_json(self) },
+            NP_TypeKeys::Uint64         => {       u64::to_json(self) },
+            NP_TypeKeys::Float          => {       f32::to_json(self) },
+            NP_TypeKeys::Double         => {       f64::to_json(self) },
+            NP_TypeKeys::Decimal        => {    NP_Dec::to_json(self) },
+            NP_TypeKeys::Boolean        => {      bool::to_json(self) },
+            NP_TypeKeys::Geo            => {    NP_Geo::to_json(self) },
+            NP_TypeKeys::Uuid           => {   NP_UUID::to_json(self) },
+            NP_TypeKeys::Ulid           => {   NP_ULID::to_json(self) },
+            NP_TypeKeys::Date           => {   NP_Date::to_json(self) },
+            NP_TypeKeys::Enum           => { NP_Option::to_json(self) },
+            NP_TypeKeys::Table          => {  NP_Table::to_json(self) },
+            NP_TypeKeys::Map            => {    NP_Map::to_json(self) },
+            NP_TypeKeys::List           => {   NP_List::to_json(self) },
+            NP_TypeKeys::Tuple          => {  NP_Tuple::to_json(self) }
         }
     }
 
@@ -918,29 +735,29 @@ impl<'ptr> NP_Ptr<'ptr> {
 
         match **self.schema {
             NP_Parsed_Schema::Any        { sortable: _, i:_ }                        => { Ok(()) }
-            NP_Parsed_Schema::UTF8String { sortable: _, i:_, size:_, default:_ }     => { String::do_compact(self, copy_to) }
-            NP_Parsed_Schema::Bytes      { sortable: _, i:_, size:_, default:_ }     => { NP_Bytes::do_compact(self, copy_to) }
-            NP_Parsed_Schema::Int8       { sortable: _, i:_, default: _ }            => { i8::do_compact(self, copy_to) }
-            NP_Parsed_Schema::Int16      { sortable: _, i:_ , default: _ }           => { i16::do_compact(self, copy_to)}
-            NP_Parsed_Schema::Int32      { sortable: _, i:_ , default: _ }           => { i32::do_compact(self, copy_to) }
-            NP_Parsed_Schema::Int64      { sortable: _, i:_ , default: _ }           => { i64::do_compact(self, copy_to) }
-            NP_Parsed_Schema::Uint8      { sortable: _, i:_ , default: _ }           => { u8::do_compact(self, copy_to) }
-            NP_Parsed_Schema::Uint16     { sortable: _, i:_ , default: _ }           => { u16::do_compact(self, copy_to) }
-            NP_Parsed_Schema::Uint32     { sortable: _, i:_ , default: _ }           => { u32::do_compact(self, copy_to) }
-            NP_Parsed_Schema::Uint64     { sortable: _, i:_ , default: _ }           => { u64::do_compact(self, copy_to) }
-            NP_Parsed_Schema::Float      { sortable: _, i:_ , default: _ }           => { f32::do_compact(self, copy_to) }
-            NP_Parsed_Schema::Double     { sortable: _, i:_ , default: _ }           => { f64::do_compact(self, copy_to) }
-            NP_Parsed_Schema::Decimal    { sortable: _, i:_, exp:_, default:_ }      => { NP_Dec::do_compact(self, copy_to) }
-            NP_Parsed_Schema::Boolean    { sortable: _, i:_, default:_ }             => { bool::do_compact(self, copy_to) }
-            NP_Parsed_Schema::Geo        { sortable: _, i:_, default:_, size:_ }     => { NP_Geo::do_compact(self, copy_to) }
-            NP_Parsed_Schema::Uuid       { sortable: _, i:_ }                        => { NP_UUID::do_compact(self, copy_to) }
-            NP_Parsed_Schema::Ulid       { sortable: _, i:_ }                        => { NP_ULID::do_compact(self, copy_to) }
-            NP_Parsed_Schema::Date       { sortable: _, i:_, default:_ }             => { NP_Date::do_compact(self, copy_to) }
+            NP_Parsed_Schema::UTF8String { sortable: _, i:_, size:_, default:_ }     => {    String::do_compact(self, copy_to) }
+            NP_Parsed_Schema::Bytes      { sortable: _, i:_, size:_, default:_ }     => {  NP_Bytes::do_compact(self, copy_to) }
+            NP_Parsed_Schema::Int8       { sortable: _, i:_, default: _ }            => {        i8::do_compact(self, copy_to) }
+            NP_Parsed_Schema::Int16      { sortable: _, i:_ , default: _ }           => {       i16::do_compact(self, copy_to) }
+            NP_Parsed_Schema::Int32      { sortable: _, i:_ , default: _ }           => {       i32::do_compact(self, copy_to) }
+            NP_Parsed_Schema::Int64      { sortable: _, i:_ , default: _ }           => {       i64::do_compact(self, copy_to) }
+            NP_Parsed_Schema::Uint8      { sortable: _, i:_ , default: _ }           => {        u8::do_compact(self, copy_to) }
+            NP_Parsed_Schema::Uint16     { sortable: _, i:_ , default: _ }           => {       u16::do_compact(self, copy_to) }
+            NP_Parsed_Schema::Uint32     { sortable: _, i:_ , default: _ }           => {       u32::do_compact(self, copy_to) }
+            NP_Parsed_Schema::Uint64     { sortable: _, i:_ , default: _ }           => {       u64::do_compact(self, copy_to) }
+            NP_Parsed_Schema::Float      { sortable: _, i:_ , default: _ }           => {       f32::do_compact(self, copy_to) }
+            NP_Parsed_Schema::Double     { sortable: _, i:_ , default: _ }           => {       f64::do_compact(self, copy_to) }
+            NP_Parsed_Schema::Decimal    { sortable: _, i:_, exp:_, default:_ }      => {    NP_Dec::do_compact(self, copy_to) }
+            NP_Parsed_Schema::Boolean    { sortable: _, i:_, default:_ }             => {      bool::do_compact(self, copy_to) }
+            NP_Parsed_Schema::Geo        { sortable: _, i:_, default:_, size:_ }     => {    NP_Geo::do_compact(self, copy_to) }
+            NP_Parsed_Schema::Uuid       { sortable: _, i:_ }                        => {   NP_UUID::do_compact(self, copy_to) }
+            NP_Parsed_Schema::Ulid       { sortable: _, i:_ }                        => {   NP_ULID::do_compact(self, copy_to) }
+            NP_Parsed_Schema::Date       { sortable: _, i:_, default:_ }             => {   NP_Date::do_compact(self, copy_to) }
             NP_Parsed_Schema::Enum       { sortable: _, i:_, default:_, choices: _ } => { NP_Option::do_compact(self, copy_to) }
-            NP_Parsed_Schema::Table      { sortable: _, i:_, columns:_ }             => { NP_Table::do_compact(self, copy_to) }
-            NP_Parsed_Schema::Map        { sortable: _, i:_, value:_ }               => { NP_Map::do_compact(self, copy_to) }
-            NP_Parsed_Schema::List       { sortable: _, i:_, of:_ }                  => { NP_List::do_compact(self, copy_to) }
-            NP_Parsed_Schema::Tuple      { sortable: _, i:_, values:_ }              => { NP_Tuple::do_compact(self, copy_to) }
+            NP_Parsed_Schema::Table      { sortable: _, i:_, columns:_ }             => {  NP_Table::do_compact(self, copy_to) }
+            NP_Parsed_Schema::Map        { sortable: _, i:_, value:_ }               => {    NP_Map::do_compact(self, copy_to) }
+            NP_Parsed_Schema::List       { sortable: _, i:_, of:_ }                  => {   NP_List::do_compact(self, copy_to) }
+            NP_Parsed_Schema::Tuple      { sortable: _, i:_, values:_ }              => {  NP_Tuple::do_compact(self, copy_to) }
             _ => { panic!() }
         }
     }

@@ -1,3 +1,7 @@
+# 0.4.2 November 20, 2020
+- Optimizations and cleaning code.
+- More documentation, less noise.
+
 # 0.4.1 November 19, 2020
 - Docs & Meta update
 

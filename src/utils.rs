@@ -2,7 +2,6 @@ use core::str;
 use alloc::string::String;
 use alloc::borrow::ToOwned;
 use alloc::vec::Vec;
-use crate::{error::NP_Error};
 
 const KX: u32 = 123456789;
 const KY: u32 = 362436069;
@@ -73,20 +72,7 @@ pub fn from_utf8_lossy(input: &[u8]) -> String {
     empty
 }
 
-pub fn overflow_error(kind: &str, path: &Vec<String>, path_index: usize) -> Result<(), NP_Error> {
-
-    if path.len() > 0 && (path.len() - 1) < path_index {
-        let mut err = "Error in ".to_owned();
-        err.push_str(kind);
-        err.push_str(", this method does not work for collection types. Path: ");
-        err.push_str(print_path(&path, path_index).as_str());
-        return Err(NP_Error::new(err));
-    }
-
-    Ok(())
-}
-
-pub fn print_path(path: &Vec<String>, path_index: usize) -> String {
+pub fn print_path(path: &Vec<&str>, path_index: usize) -> String {
     let mut path_str: String = "".to_owned();
     let mut ct: usize = 0;
     path.iter().for_each(|v| {

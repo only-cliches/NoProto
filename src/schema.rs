@@ -65,7 +65,7 @@
 //! 
 //! There are multiple collection types, and they can be nested.
 //! 
-//! For example, this is a list of tables.  Each table has two columns: id and title.  Both columns are a string type.
+//! For example, this is a list of tables.  Every item in the list is a table with two columns: id and title.  Both columns are a string type.
 //! ```json
 //! {
 //!     "type": "list",
@@ -78,6 +78,7 @@
 //!     }
 //! }
 //! ```
+//! You can nest collections as much and however you'd like. Nesting is only limited by the address space of the buffer, so go crazy.
 //! 
 //! A list of strings is just as easy...
 //! 
@@ -111,15 +112,15 @@
 //! | [`uint64`](#uint8-uint16-uint32-uint64)| [`u64`](../pointer/numbers/index.html)                                   |✓                 | 8 bytes        | 0 - 18,446,744,073,709,551,616                                           |
 //! | [`float`](#float-double)               | [`f32`](../pointer/numbers/index.html)                                   |𐄂                 | 4 bytes        | -3.4e38 to 3.4e38                                                        |
 //! | [`double`](#float-double)              | [`f64`](../pointer/numbers/index.html)                                   |𐄂                 | 8 bytes        | -1.7e308 to 1.7e308                                                      |
-//! | [`option`](#option)                    | [`NP_Option`](../pointer/misc/struct.NP_Option.html)                     |✓                 | 1 byte         | Up to 255 string based options in schema.                                |
+//! | [`option`](#option)                    | [`NP_Option`](../pointer/option/struct.NP_Option.html)                   |✓                 | 1 byte         | Up to 255 string based options in schema.                                |
 //! | [`bool`](#bool)                        | [`bool`](../pointer/bool/index.html)                                     |✓                 | 1 byte         |                                                                          |
-//! | [`decimal`](#decimal)                  | [`NP_Dec`](../pointer/misc/struct.NP_Dec.html)                           |✓                 | 8 bytes        | Fixed point decimal number based on i64.                                 |
-//! | [`geo4`](#geo4-geo8-geo16)             | [`NP_Geo`](../pointer/misc/struct.NP_Geo.html)                           |✓                 | 4 bytes        | 1.1km resolution (city) geographic coordinate                            |
-//! | [`geo8`](#geo4-geo8-geo16)             | [`NP_Geo`](../pointer/misc/struct.NP_Geo.html)                           |✓                 | 8 bytes        | 11mm resolution (marble) geographic coordinate                           |
-//! | [`geo16`](#geo4-geo8-geo16)            | [`NP_Geo`](../pointer/misc/struct.NP_Geo.html)                           |✓                 | 16 bytes       | 110 microns resolution (grain of sand) geographic coordinate             |
-//! | [`ulid`](#ulid)                        | [`NP_ULID`](../pointer/misc/struct.NP_ULID.html)                         |✓                 | 16 bytes       | 6 bytes for the timestamp, 10 bytes of randomness.                       |
-//! | [`uuid`](#uuid)                        | [`NP_UUID`](../pointer/misc/struct.NP_UUID.html)                         |✓                 | 16 bytes       | v4 UUID, 2e37 possible UUIDs                                             |
-//! | [`date`](#date)                        | [`NP_Date`](../pointer/misc/struct.NP_Date.html)                         |✓                 | 8 bytes        | Good to store unix epoch (in milliseconds) until the year 584,866,263    |
+//! | [`decimal`](#decimal)                  | [`NP_Dec`](../pointer/dec/struct.NP_Dec.html)                            |✓                 | 8 bytes        | Fixed point decimal number based on i64.                                 |
+//! | [`geo4`](#geo4-geo8-geo16)             | [`NP_Geo`](../pointer/geo/struct.NP_Geo.html)                            |✓                 | 4 bytes        | 1.1km resolution (city) geographic coordinate                            |
+//! | [`geo8`](#geo4-geo8-geo16)             | [`NP_Geo`](../pointer/geo/struct.NP_Geo.html)                            |✓                 | 8 bytes        | 11mm resolution (marble) geographic coordinate                           |
+//! | [`geo16`](#geo4-geo8-geo16)            | [`NP_Geo`](../pointer/geo/struct.NP_Geo.html)                            |✓                 | 16 bytes       | 110 microns resolution (grain of sand) geographic coordinate             |
+//! | [`ulid`](#ulid)                        | [`NP_ULID`](../pointer/ulid/struct.NP_ULID.html)                         |✓                 | 16 bytes       | 6 bytes for the timestamp, 10 bytes of randomness.                       |
+//! | [`uuid`](#uuid)                        | [`NP_UUID`](../pointer/uuid/struct.NP_UUID.html)                         |✓                 | 16 bytes       | v4 UUID, 2e37 possible UUIDs                                             |
+//! | [`date`](#date)                        | [`NP_Date`](../pointer/date/struct.NP_Date.html)                         |✓                 | 8 bytes        | Good to store unix epoch (in milliseconds) until the year 584,866,263    |
 //!  
 //! - \* `sorting` must be set to `true` in the schema for this object to enable sorting.
 //! - \*\* String & Bytes can be bytewise sorted only if they have a `size` property in the schema
@@ -159,14 +160,14 @@
 //! Tables represnt a fixed number of named columns, with each column having it's own data type.
 //! 
 //! - **Bytewise Sorting**: Unsupported
-//! - **Compaction**: Columns without values will be removed from the buffer.  If a column never had a value set it is not using *any* space.
+//! - **Compaction**: Columns without values will be removed from the buffer durring compaction.  If a column never had a value set it's using *zero* space in the buffer.
 //! - **Schema Mutations**: The ordering of items in the `columns` property must always remain the same.  It's safe to add new columns to the bottom of the column list or rename columns, but never to remove columns.  Column types cannot be changed safely.  If you need to depreciate a column, set it's name to an empty string. 
 //! 
-//! Table schemas have a single required property called `columns`.  The `columns` property is an array of arrays that represent all possible columns in the table and their data types.  Any type can be used in columns, including tables.
+//! Table schemas have a single required property called `columns`.  The `columns` property is an array of arrays that represent all possible columns in the table and their data types.  Any type can be used in columns, including other tables.
 //! 
 //! Tables do not store the column names in the buffer, only the column index, so this is a very efficient way to store associated data.
 //! 
-//! If you need dynamic column names a map may be a better use case.
+//! If you need flexible column names use a `map` type instead.
 //! 
 //! ```json
 //! {
@@ -193,12 +194,12 @@
 //! Lists represent a dynamically sized list of items.  The type for every item in the list is identical and the order of entries is mainted in the buffer.  Lists do not have to contain contiguous entries, gaps can safely and efficiently be stored.
 //! 
 //! - **Bytewise Sorting**: Unsupported
-//! - **Compaction**: Indexes without valuse are removed from the buffer.  If a specific index never had a value, it occupies *zero* space.
+//! - **Compaction**: Indexes that have had their value cleared will be removed from the buffer.  If a specific index never had a value, it occupies *zero* space.
 //! - **Schema Mutations**: None
 //! 
-//! Lists have a single required property in the schema, `of`.  The `of` property contains another schema for the type of data contained in the list.  Any type is supported, including another list.
+//! Lists have a single required property in the schema, `of`.  The `of` property contains another schema for the type of data contained in the list.  Any type is supported, including another list.  Tables cannot have more than 255 columns, and the colum names cannot be longer than 255 UTF8 bytes.
 //! 
-//! The more items you have in a list, the slower it will be to seek to values at the end of the list. 
+//! The more items you have in a list, the slower it will be to seek to values towards the end of the list or loop through the list.
 //! 
 //! ```json
 //! // a list of list of strings
@@ -227,12 +228,14 @@
 //! - **Compaction**: Keys without values are removed from the buffer
 //! - **Schema Mutations**: None
 //! 
-//! Maps have a single required property in the schema, `value`. The property is used to describe the schema of the values for the map.  Keys are always `Vec<u8>`.  Values can be any schema type, including another map.
+//! Maps have a single required property in the schema, `value`. The property is used to describe the schema of the values for the map.  Keys are always `String`.  Values can be any schema type, including another map.
 //! 
-//! If you expect to have fixed, predictable keys then use a `table` instead.  This is less efficient than tables because keys are stored in the buffer.  
+//! If you expect to have fixed, predictable keys then use a `table` type instead.  Maps are less efficient than tables because keys are stored in the buffer.  
+//! 
+//! The more items you have in a map, the slower it will be to seek to values or loop through the map.  
 //! 
 //! ```json
-//! // a map where every values are strings
+//! // a map where every value is a string
 //! {
 //!     "type": "map",
 //!     "value": {
@@ -283,23 +286,6 @@
 //! More Details:
 //! - [Using NP_Tuple data type](../collection/tuple/struct.NP_Tuple.html) 
 //! 
-//! ## any
-//! Any types are used to declare that a specific type has no fixed schema but is dynamic.  It's generally not a good idea to use Any types.
-//! 
-//! When you set `any` in the schema that value can safely be type casted to *anything*, so you can use these to store any type of data.  **However, there is no way to conserve the data through compaction.**
-//! 
-//! - **Bytewise Sorting**: Unsupported
-//! - **Compaction**: Any types are always compacted out of the buffer, data stored behind an `any` schema will be lost after compaction.
-//! - **Schema Mutations**: None
-//! 
-//! ```json
-//! {
-//!     "type": "any"
-//! }
-//! ```
-//! 
-//! More Details:
-//! - [Using NP_Any data type](../pointer/any/struct.NP_Any.html)
 //! 
 //! ## string
 //! A string is a fixed or dynamically sized collection of utf-8 encoded bytes.
@@ -318,6 +304,11 @@
 //! {
 //!     "type": "string",
 //!     "size": 20
+//! }
+//! // with default value
+//! {
+//!     "type": "string",
+//!     "default": "Default string value"
 //! }
 //! ```
 //! 
@@ -340,6 +331,11 @@
 //!     "type": "bytes",
 //!     "size": 20
 //! }
+//! // with default value
+//! {
+//!     "type": "bytes",
+//!     "default": [1, 2, 3, 4]
+//! }
 //! ```
 //! 
 //! More Details:
@@ -351,6 +347,11 @@
 //! ```json
 //! {
 //!     "type": "int8"
+//! }
+//! // with default value
+//! {
+//!     "type": "int8",
+//!     "default": 20
 //! }
 //! ```
 //! 
@@ -372,6 +373,11 @@
 //! {
 //!     "type": "uint8"
 //! }
+//! // with default value
+//! {
+//!     "type": "uint8",
+//!     "default": 20
+//! }
 //! ```
 //! 
 //! More Details:
@@ -388,13 +394,18 @@
 //! {
 //!     "type": "float"
 //! }
+//! // with default value
+//! {
+//!     "type": "float",
+//!     "default": 20.283
+//! }
 //! ```
 //! 
 //! More Details:
 //! - [Using number data types](../pointer/numbers/index.html)
 //! 
 //! ## option
-//! Allows efficeint storage of a selection between a known collection of ordered strings.  The selection is stored as a single u8 byte, limiting the max number of choices to 255.
+//! Allows efficeint storage of a selection between a known collection of ordered strings.  The selection is stored as a single u8 byte, limiting the max number of choices to 255.  Also the choices themselves cannot be longer than 255 UTF8 bytes each.
 //! 
 //! - **Bytewise Sorting**: Supported
 //! - **Compaction**: Updates are done in place, never use additional space.
@@ -407,10 +418,16 @@
 //!     "type": "option",
 //!     "choices": ["choice 1", "choice 2", "etc"]
 //! }
+//! // with default value
+//! {
+//!     "type": "option",
+//!     "choices": ["choice 1", "choice 2", "etc"],
+//!     "default": "etc"
+//! }
 //! ```
 //! 
 //! More Details:
-//! - [Using NP_Option data type](../pointer/misc/struct.NP_Option.html)
+//! - [Using NP_Option data type](../pointer/option/struct.NP_Option.html)
 //! 
 //! ## bool
 //! Allows efficent storage of a true or false value.  The value is stored as a single byte that is set to either 1 or 0.
@@ -422,6 +439,11 @@
 //! ```json
 //! {
 //!     "type": "bool"
+//! }
+//! // with default value
+//! {
+//!     "type": "bool",
+//!     "default": false
 //! }
 //! ```
 //! 
@@ -441,10 +463,16 @@
 //!     "type": "decimal",
 //!     "exp": 3
 //! }
+//! // with default value
+//! {
+//!     "type": "decimal",
+//!     "exp": 3,
+//!     "default": 20.293
+//! }
 //! ```
 //! 
 //! More Details:
-//! - [Using NP_Dec data type](../pointer/misc/struct.NP_Dec.html)
+//! - [Using NP_Dec data type](../pointer/dec/struct.NP_Dec.html)
 //! 
 //! ## geo4, ge8, geo16
 //! Allows you to store geographic coordinates with varying levels of accuracy and space usage.  
@@ -465,10 +493,15 @@
 //! {
 //!     "type": "geo4"
 //! }
+//! // with default
+//! {
+//!     "type": "geo4",
+//!     "default": {"lat": -20.283, "lng": 19.929}
+//! }
 //! ```
 //! 
 //! More Details:
-//! - [Using NP_Geo data type](../pointer/misc/struct.NP_Geo.html)
+//! - [Using NP_Geo data type](../pointer/geo/struct.NP_Geo.html)
 //! 
 //! ## ulid
 //! Allows you to store a unique ID with a timestamp.  The timestamp is stored in milliseconds since the unix epoch.
@@ -481,10 +514,11 @@
 //! {
 //!     "type": "ulid"
 //! }
+//! // no default supported
 //! ```
 //! 
 //! More Details:
-//! - [Using NP_ULID data type](../pointer/misc/struct.NP_ULID.html)
+//! - [Using NP_ULID data type](../pointer/ulid/struct.NP_ULID.html)
 //! 
 //! ## uuid
 //! Allows you to store a universally unique ID.
@@ -497,10 +531,11 @@
 //! {
 //!     "type": "uuid"
 //! }
+//! // no default supported
 //! ```
 //! 
 //! More Details:
-//! - [Using NP_UUID data type](../pointer/misc/struct.NP_UUID.html)
+//! - [Using NP_UUID data type](../pointer/uuid/struct.NP_UUID.html)
 //! 
 //! ## date
 //! Allows you to store a timestamp as a u64 value.  This is just a thin wrapper around the u64 type.
@@ -513,10 +548,15 @@
 //! {
 //!     "type": "date"
 //! }
+//! // with default value (default should be in ms)
+//! {
+//!     "type": "date",
+//!     "default": 1605909163951
+//! }
 //! ```
 //! 
 //! More Details:
-//! - [Using NP_Date data type](../pointer/misc/struct.NP_Date.html)
+//! - [Using NP_Date data type](../pointer/date/struct.NP_Date.html)
 //!  
 //! 
 //! ## Next Step
@@ -542,11 +582,10 @@ use alloc::vec::Vec;
 use alloc::string::String;
 use alloc::boxed::Box;
 
+/// Simple enum to store the schema types
 #[derive(Debug, Clone)]
-#[doc(hidden)]
 #[repr(u8)]
-// These are just used for runtime type comparison, the type information is never stored in the buffer.
-// When you cast a pointer to some type, this enum is used as comparing numbers is very efficient.
+#[allow(missing_docs)]
 pub enum NP_TypeKeys {
     None = 0,
     Any = 1,
@@ -586,36 +625,37 @@ impl NP_TypeKeys {
     /// Convert this NP_TypeKey into a specific type index
     pub fn into_type_idx(&self) -> (u8, String, NP_TypeKeys) {
         match self {
-            NP_TypeKeys::None =>       {panic!()}
-            NP_TypeKeys::Any =>        { return NP_Any::type_idx() }
-            NP_TypeKeys::UTF8String => { return String::type_idx() }
-            NP_TypeKeys::Bytes =>      { return NP_Bytes::type_idx() }
-            NP_TypeKeys::Int8 =>       { return i8::type_idx() }
-            NP_TypeKeys::Int16 =>      { return i16::type_idx()}
-            NP_TypeKeys::Int32 =>      { return i32::type_idx() }
-            NP_TypeKeys::Int64 =>      { return i64::type_idx() }
-            NP_TypeKeys::Uint8 =>      { return u8::type_idx() }
-            NP_TypeKeys::Uint16 =>     { return u16::type_idx() }
-            NP_TypeKeys::Uint32 =>     { return u32::type_idx() }
-            NP_TypeKeys::Uint64 =>     { return u64::type_idx() }
-            NP_TypeKeys::Float =>      { return f32::type_idx() }
-            NP_TypeKeys::Double =>     { return f64::type_idx() }
-            NP_TypeKeys::Decimal =>    { return NP_Dec::type_idx() }
-            NP_TypeKeys::Boolean =>    { return bool::type_idx() }
-            NP_TypeKeys::Geo =>        { return NP_Geo::type_idx() }
-            NP_TypeKeys::Uuid =>       { return NP_UUID::type_idx() }
-            NP_TypeKeys::Ulid =>       { return NP_ULID::type_idx() }
-            NP_TypeKeys::Date =>       { return NP_Date::type_idx() }
-            NP_TypeKeys::Enum =>       { return NP_Option::type_idx() }
-            NP_TypeKeys::Table =>      { return NP_Table::type_idx() }
-            NP_TypeKeys::Map =>        { return NP_Map::type_idx() }
-            NP_TypeKeys::List =>       { return NP_List::type_idx() }
-            NP_TypeKeys::Tuple =>      { return NP_Tuple::type_idx() }
+            NP_TypeKeys::None =>       { panic!() }
+            NP_TypeKeys::Any =>        {    NP_Any::type_idx() }
+            NP_TypeKeys::UTF8String => {    String::type_idx() }
+            NP_TypeKeys::Bytes =>      {  NP_Bytes::type_idx() }
+            NP_TypeKeys::Int8 =>       {        i8::type_idx() }
+            NP_TypeKeys::Int16 =>      {       i16::type_idx() }
+            NP_TypeKeys::Int32 =>      {       i32::type_idx() }
+            NP_TypeKeys::Int64 =>      {       i64::type_idx() }
+            NP_TypeKeys::Uint8 =>      {        u8::type_idx() }
+            NP_TypeKeys::Uint16 =>     {       u16::type_idx() }
+            NP_TypeKeys::Uint32 =>     {       u32::type_idx() }
+            NP_TypeKeys::Uint64 =>     {       u64::type_idx() }
+            NP_TypeKeys::Float =>      {       f32::type_idx() }
+            NP_TypeKeys::Double =>     {       f64::type_idx() }
+            NP_TypeKeys::Decimal =>    {    NP_Dec::type_idx() }
+            NP_TypeKeys::Boolean =>    {      bool::type_idx() }
+            NP_TypeKeys::Geo =>        {    NP_Geo::type_idx() }
+            NP_TypeKeys::Uuid =>       {   NP_UUID::type_idx() }
+            NP_TypeKeys::Ulid =>       {   NP_ULID::type_idx() }
+            NP_TypeKeys::Date =>       {   NP_Date::type_idx() }
+            NP_TypeKeys::Enum =>       { NP_Option::type_idx() }
+            NP_TypeKeys::Table =>      {  NP_Table::type_idx() }
+            NP_TypeKeys::Map =>        {    NP_Map::type_idx() }
+            NP_TypeKeys::List =>       {   NP_List::type_idx() }
+            NP_TypeKeys::Tuple =>      {  NP_Tuple::type_idx() }
         }
     }
 }
 
-/// Parsed Schema struct
+/// When a schema is parsed from JSON or Bytes, it is stored in this recursive type
+/// 
 #[derive(Debug, Clone)]
 #[allow(missing_docs)]
 pub enum NP_Parsed_Schema {
@@ -717,14 +757,15 @@ impl NP_Parsed_Schema {
     }
 }
 
-/// New NP Schema Parsed
+/// New NP Schema
+#[doc(hidden)]
 #[derive(Debug, Clone)]
 pub struct NP_Schema {
     /// is this schema sortable?
     pub is_sortable: bool,
     /// schema bytes
     pub bytes: Vec<u8>,
-    /// parsed schema
+    /// recursive parsed schema
     pub parsed: Box<NP_Parsed_Schema>
 }
 
@@ -747,30 +788,30 @@ impl NP_Schema {
     #[doc(hidden)]
     pub fn _type_to_json(parsed_schema: &Box<NP_Parsed_Schema>) -> Result<NP_JSON, NP_Error> {
         match **parsed_schema {
-            NP_Parsed_Schema::Any        { sortable: _, i:_ }                         => { return NP_Any::schema_to_json(parsed_schema) }
-            NP_Parsed_Schema::UTF8String { sortable: _, i:_, size:_, default:_ }      => { return String::schema_to_json(parsed_schema) }
-            NP_Parsed_Schema::Bytes      { sortable: _, i:_, size:_, default:_ }      => { return NP_Bytes::schema_to_json(parsed_schema) }
-            NP_Parsed_Schema::Int8       { sortable: _, i:_, default: _ }             => { return i8::schema_to_json(parsed_schema) }
-            NP_Parsed_Schema::Int16      { sortable: _, i:_ , default: _ }            => { return i16::schema_to_json(parsed_schema)}
-            NP_Parsed_Schema::Int32      { sortable: _, i:_ , default: _ }            => { return i32::schema_to_json(parsed_schema) }
-            NP_Parsed_Schema::Int64      { sortable: _, i:_ , default: _ }            => { return i64::schema_to_json(parsed_schema) }
-            NP_Parsed_Schema::Uint8      { sortable: _, i:_ , default: _ }            => { return u8::schema_to_json(parsed_schema) }
-            NP_Parsed_Schema::Uint16     { sortable: _, i:_ , default: _ }            => { return u16::schema_to_json(parsed_schema) }
-            NP_Parsed_Schema::Uint32     { sortable: _, i:_ , default: _ }            => { return u32::schema_to_json(parsed_schema) }
-            NP_Parsed_Schema::Uint64     { sortable: _, i:_ , default: _ }            => { return u64::schema_to_json(parsed_schema) }
-            NP_Parsed_Schema::Float      { sortable: _, i:_ , default: _ }            => { return f32::schema_to_json(parsed_schema) }
-            NP_Parsed_Schema::Double     { sortable: _, i:_ , default: _ }            => { return f64::schema_to_json(parsed_schema) }
-            NP_Parsed_Schema::Decimal    { sortable: _, i:_, exp:_, default:_ }       => { return NP_Dec::schema_to_json(parsed_schema) }
-            NP_Parsed_Schema::Boolean    { sortable: _, i:_, default:_ }              => { return bool::schema_to_json(parsed_schema) }
-            NP_Parsed_Schema::Geo        { sortable: _, i:_, default:_, size:_ }      => { return NP_Geo::schema_to_json(parsed_schema) }
-            NP_Parsed_Schema::Uuid       { sortable: _, i:_ }                         => { return NP_UUID::schema_to_json(parsed_schema) }
-            NP_Parsed_Schema::Ulid       { sortable: _, i:_ }                         => { return NP_ULID::schema_to_json(parsed_schema) }
-            NP_Parsed_Schema::Date       { sortable: _, i:_, default:_ }              => { return NP_Date::schema_to_json(parsed_schema) }
-            NP_Parsed_Schema::Enum       { sortable: _, i:_, default:_, choices: _ }  => { return NP_Option::schema_to_json(parsed_schema) }
-            NP_Parsed_Schema::Table      { sortable: _, i:_, columns:_ }              => { return NP_Table::schema_to_json(parsed_schema) }
-            NP_Parsed_Schema::Map        { sortable: _, i:_, value:_ }                => { return NP_Map::schema_to_json(parsed_schema) }
-            NP_Parsed_Schema::List       { sortable: _, i:_, of:_ }                   => { return NP_List::schema_to_json(parsed_schema) }
-            NP_Parsed_Schema::Tuple      { sortable: _, i:_, values:_ }               => { return NP_Tuple::schema_to_json(parsed_schema) }
+            NP_Parsed_Schema::Any        { sortable: _, i:_ }                         => {    NP_Any::schema_to_json(parsed_schema) }
+            NP_Parsed_Schema::UTF8String { sortable: _, i:_, size:_, default:_ }      => {    String::schema_to_json(parsed_schema) }
+            NP_Parsed_Schema::Bytes      { sortable: _, i:_, size:_, default:_ }      => {  NP_Bytes::schema_to_json(parsed_schema) }
+            NP_Parsed_Schema::Int8       { sortable: _, i:_, default: _ }             => {        i8::schema_to_json(parsed_schema) }
+            NP_Parsed_Schema::Int16      { sortable: _, i:_ , default: _ }            => {       i16::schema_to_json(parsed_schema) }
+            NP_Parsed_Schema::Int32      { sortable: _, i:_ , default: _ }            => {       i32::schema_to_json(parsed_schema) }
+            NP_Parsed_Schema::Int64      { sortable: _, i:_ , default: _ }            => {       i64::schema_to_json(parsed_schema) }
+            NP_Parsed_Schema::Uint8      { sortable: _, i:_ , default: _ }            => {        u8::schema_to_json(parsed_schema) }
+            NP_Parsed_Schema::Uint16     { sortable: _, i:_ , default: _ }            => {       u16::schema_to_json(parsed_schema) }
+            NP_Parsed_Schema::Uint32     { sortable: _, i:_ , default: _ }            => {       u32::schema_to_json(parsed_schema) }
+            NP_Parsed_Schema::Uint64     { sortable: _, i:_ , default: _ }            => {       u64::schema_to_json(parsed_schema) }
+            NP_Parsed_Schema::Float      { sortable: _, i:_ , default: _ }            => {       f32::schema_to_json(parsed_schema) }
+            NP_Parsed_Schema::Double     { sortable: _, i:_ , default: _ }            => {       f64::schema_to_json(parsed_schema) }
+            NP_Parsed_Schema::Decimal    { sortable: _, i:_, exp:_, default:_ }       => {    NP_Dec::schema_to_json(parsed_schema) }
+            NP_Parsed_Schema::Boolean    { sortable: _, i:_, default:_ }              => {      bool::schema_to_json(parsed_schema) }
+            NP_Parsed_Schema::Geo        { sortable: _, i:_, default:_, size:_ }      => {    NP_Geo::schema_to_json(parsed_schema) }
+            NP_Parsed_Schema::Uuid       { sortable: _, i:_ }                         => {   NP_UUID::schema_to_json(parsed_schema) }
+            NP_Parsed_Schema::Ulid       { sortable: _, i:_ }                         => {   NP_ULID::schema_to_json(parsed_schema) }
+            NP_Parsed_Schema::Date       { sortable: _, i:_, default:_ }              => {   NP_Date::schema_to_json(parsed_schema) }
+            NP_Parsed_Schema::Enum       { sortable: _, i:_, default:_, choices: _ }  => { NP_Option::schema_to_json(parsed_schema) }
+            NP_Parsed_Schema::Table      { sortable: _, i:_, columns:_ }              => {  NP_Table::schema_to_json(parsed_schema) }
+            NP_Parsed_Schema::Map        { sortable: _, i:_, value:_ }                => {    NP_Map::schema_to_json(parsed_schema) }
+            NP_Parsed_Schema::List       { sortable: _, i:_, of:_ }                   => {   NP_List::schema_to_json(parsed_schema) }
+            NP_Parsed_Schema::Tuple      { sortable: _, i:_, values:_ }               => {  NP_Tuple::schema_to_json(parsed_schema) }
             _ => { panic!() }
         }
     }
@@ -792,31 +833,31 @@ impl NP_Schema {
     pub fn from_bytes(address: usize, bytes: &Vec<u8>) -> NP_Parsed_Schema {
         let this_type = NP_TypeKeys::from(bytes[address]);
         match this_type {
-            NP_TypeKeys::None =>       {panic!()}
-            NP_TypeKeys::Any =>        { NP_Any::from_bytes_to_schema(address, bytes) }
-            NP_TypeKeys::UTF8String => { String::from_bytes_to_schema(address, bytes) }
-            NP_TypeKeys::Bytes =>      { NP_Bytes::from_bytes_to_schema(address, bytes) }
-            NP_TypeKeys::Int8 =>       { i8::from_bytes_to_schema(address, bytes) }
-            NP_TypeKeys::Int16 =>      { i16::from_bytes_to_schema(address, bytes)}
-            NP_TypeKeys::Int32 =>      { i32::from_bytes_to_schema(address, bytes) }
-            NP_TypeKeys::Int64 =>      { i64::from_bytes_to_schema(address, bytes) }
-            NP_TypeKeys::Uint8 =>      { u8::from_bytes_to_schema(address, bytes) }
-            NP_TypeKeys::Uint16 =>     { u16::from_bytes_to_schema(address, bytes) }
-            NP_TypeKeys::Uint32 =>     { u32::from_bytes_to_schema(address, bytes) }
-            NP_TypeKeys::Uint64 =>     { u64::from_bytes_to_schema(address, bytes) }
-            NP_TypeKeys::Float =>      { f32::from_bytes_to_schema(address, bytes) }
-            NP_TypeKeys::Double =>     { f64::from_bytes_to_schema(address, bytes) }
-            NP_TypeKeys::Decimal =>    { NP_Dec::from_bytes_to_schema(address, bytes) }
-            NP_TypeKeys::Boolean =>    { bool::from_bytes_to_schema(address, bytes) }
-            NP_TypeKeys::Geo =>        { NP_Geo::from_bytes_to_schema(address, bytes) }
-            NP_TypeKeys::Uuid =>       { NP_UUID::from_bytes_to_schema(address, bytes) }
-            NP_TypeKeys::Ulid =>       { NP_ULID::from_bytes_to_schema(address, bytes) }
-            NP_TypeKeys::Date =>       { NP_Date::from_bytes_to_schema(address, bytes) }
+            NP_TypeKeys::None =>       { panic!() }
+            NP_TypeKeys::Any =>        {    NP_Any::from_bytes_to_schema(address, bytes) }
+            NP_TypeKeys::UTF8String => {    String::from_bytes_to_schema(address, bytes) }
+            NP_TypeKeys::Bytes =>      {  NP_Bytes::from_bytes_to_schema(address, bytes) }
+            NP_TypeKeys::Int8 =>       {        i8::from_bytes_to_schema(address, bytes) }
+            NP_TypeKeys::Int16 =>      {       i16::from_bytes_to_schema(address, bytes) }
+            NP_TypeKeys::Int32 =>      {       i32::from_bytes_to_schema(address, bytes) }
+            NP_TypeKeys::Int64 =>      {       i64::from_bytes_to_schema(address, bytes) }
+            NP_TypeKeys::Uint8 =>      {        u8::from_bytes_to_schema(address, bytes) }
+            NP_TypeKeys::Uint16 =>     {       u16::from_bytes_to_schema(address, bytes) }
+            NP_TypeKeys::Uint32 =>     {       u32::from_bytes_to_schema(address, bytes) }
+            NP_TypeKeys::Uint64 =>     {       u64::from_bytes_to_schema(address, bytes) }
+            NP_TypeKeys::Float =>      {       f32::from_bytes_to_schema(address, bytes) }
+            NP_TypeKeys::Double =>     {       f64::from_bytes_to_schema(address, bytes) }
+            NP_TypeKeys::Decimal =>    {    NP_Dec::from_bytes_to_schema(address, bytes) }
+            NP_TypeKeys::Boolean =>    {      bool::from_bytes_to_schema(address, bytes) }
+            NP_TypeKeys::Geo =>        {    NP_Geo::from_bytes_to_schema(address, bytes) }
+            NP_TypeKeys::Uuid =>       {   NP_UUID::from_bytes_to_schema(address, bytes) }
+            NP_TypeKeys::Ulid =>       {   NP_ULID::from_bytes_to_schema(address, bytes) }
+            NP_TypeKeys::Date =>       {   NP_Date::from_bytes_to_schema(address, bytes) }
             NP_TypeKeys::Enum =>       { NP_Option::from_bytes_to_schema(address, bytes) }
-            NP_TypeKeys::Table =>      { NP_Table::from_bytes_to_schema(address, bytes) }
-            NP_TypeKeys::Map =>        { NP_Map::from_bytes_to_schema(address, bytes) }
-            NP_TypeKeys::List =>       { NP_List::from_bytes_to_schema(address, bytes) }
-            NP_TypeKeys::Tuple =>      { NP_Tuple::from_bytes_to_schema(address, bytes) }
+            NP_TypeKeys::Table =>      {  NP_Table::from_bytes_to_schema(address, bytes) }
+            NP_TypeKeys::Map =>        {    NP_Map::from_bytes_to_schema(address, bytes) }
+            NP_TypeKeys::List =>       {   NP_List::from_bytes_to_schema(address, bytes) }
+            NP_TypeKeys::Tuple =>      {  NP_Tuple::from_bytes_to_schema(address, bytes) }
         }
     }
 

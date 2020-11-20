@@ -7,11 +7,11 @@ use alloc::string::String;
 use alloc::boxed::Box;
 use alloc::{borrow::ToOwned};
 use core::{result::Result, hint::unreachable_unchecked};
-use core::ops::Add;
-
 use super::NP_Collection;
 
-/// The data type for tables in NoProto buffers. [Using collections with pointers](../pointer/struct.NP_Ptr.html#using-collection-types-with-pointers).
+/// The data type for tables in NoProto buffers.
+/// 
+#[doc(hidden)]
 #[derive(Debug, Clone)]
 pub struct NP_Table<'table> {
     address: usize, // pointer location
@@ -430,16 +430,6 @@ impl<'table> NP_Table<'table> {
 
 impl<'collection> NP_Collection<'collection> for NP_Table<'collection> {
 
-    /// Get length of collection
-    fn length(&self) -> usize {
-        match &**self.schema {
-            NP_Parsed_Schema::Table { i: _, sortable: _, columns } => {
-                return columns.len()
-            },
-            _ => panic!()
-        }
-    }
-
     /// Step a pointer to the next item in the collection
     fn step_pointer(ptr: &mut NP_Ptr<'collection>) -> Option<NP_Ptr<'collection>> {
         // can't step with virtual pointer
@@ -612,6 +602,7 @@ impl<'it> NP_Table_Iterator<'it> {
 }
 
 /// The iterator type for maps
+#[doc(hidden)]
 #[derive(Debug)]
 pub struct NP_Table_Iterator<'it> {
     parent: NP_Ptr_Collection<'it>,
@@ -664,13 +655,17 @@ impl<'it> Iterator for NP_Table_Iterator<'it> {
     }
 
     fn count(self) -> usize where Self: Sized {
-        #[inline]
-        fn add1<T>(count: usize, _: T) -> usize {
-            // Might overflow.
-            Add::add(count, 1)
+        match self.parent {
+            NP_Ptr_Collection::Table { address: _, head: _, schema } => {
+                match &**schema {
+                    NP_Parsed_Schema::Table { sortable: _, i: _, columns } => {
+                        columns.len()
+                    },
+                    _ => { unsafe { unreachable_unchecked() } }
+                }
+            },
+            _ => { unsafe { unreachable_unchecked() } }
         }
-
-        self.fold(0, add1)
     }
 }
 
@@ -690,6 +685,7 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let mut buffer = factory.empty_buffer(None, None);
     buffer.set("name", String::from("hello"))?;
     assert_eq!(buffer.get::<String>("name")?, Some(Box::new(String::from("hello"))));
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 18usize);
     buffer.del("")?;
     buffer.compact(None, None)?;
     assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);

@@ -10,7 +10,9 @@ use alloc::string::String;
 use alloc::borrow::ToOwned;
 use alloc::{boxed::Box};
 
-/// Tuple data type [Using collections with pointers](../pointer/struct.NP_Ptr.html#using-collection-types-with-pointers).
+/// Tuple data type.
+/// 
+#[doc(hidden)]
 #[derive(Debug, Clone)]
 pub struct NP_Tuple<'tuple> {
     address: usize, // pointer location
@@ -386,6 +388,7 @@ impl<'tuple> NP_Value<'tuple> for NP_Tuple<'tuple> {
 
 
 /// Tuple iterator data type
+#[doc(hidden)]
 #[derive(Debug)]
 pub struct NP_Tuple_Iterator<'it> {
     tuple: NP_Tuple<'it>,
@@ -437,9 +440,20 @@ impl<'it> Iterator for NP_Tuple_Iterator<'it> {
             schema: value_schema
         })
     }
+
+    fn count(self) -> usize where Self: Sized {
+
+        match &**self.tuple.schema {
+            NP_Parsed_Schema::Tuple { sortable: _, i: _, values } => {
+                values.len()
+            },
+            _ => { unsafe { unreachable_unchecked() } }
+        }
+    }
 }
 
 /// A single iterator item
+#[doc(hidden)]
 #[derive(Debug)]
 pub struct NP_Tuple_Item<'item> { 
     /// The index of this item in the list
@@ -481,6 +495,7 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let mut buffer = factory.empty_buffer(None, None);
     buffer.set("0", String::from("hello"))?;
     assert_eq!(buffer.get::<String>("0")?, Some(Box::new(String::from("hello"))));
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 17usize);
     buffer.del("")?;
     buffer.compact(None, None)?;
     assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);

@@ -8,7 +8,9 @@ use alloc::{vec::*};
 use core::{hint::unreachable_unchecked};
 
 use super::NP_Collection;
-/// List data type [Using collections with pointers](../pointer/struct.NP_Ptr.html#using-collection-types-with-pointers).
+/// List data type.
+/// 
+#[doc(hidden)]
 #[derive(Debug, Clone)]
 pub struct NP_List<'list> {
     address: usize,
@@ -243,20 +245,6 @@ impl<'list> NP_List<'list> {
 }
 
 impl<'collection> NP_Collection<'collection> for NP_List<'collection> {
-
-    fn length(&self) -> usize {
-        if self.tail == 0 { return 0usize; }
-
-        let memory = self.memory;
-
-        let tail_index = match &memory.size {
-            NP_Size::U8 => [0, memory.get_1_byte((self.tail + 2) as usize).unwrap_or(0)],
-            NP_Size::U16 => *memory.get_2_bytes((self.tail + 4) as usize).unwrap_or(&[0; 2]),
-            NP_Size::U32 => *memory.get_2_bytes((self.tail + 8) as usize).unwrap_or(&[0; 2])
-        };
-
-        u16::from_be_bytes(tail_index) as usize
-    }
 
     fn step_pointer(ptr: &mut NP_Ptr<'collection>) -> Option<NP_Ptr<'collection>> {
 
@@ -626,6 +614,7 @@ impl<'list> NP_Value<'list> for NP_List<'list> {
 
 
 /// The iterator type for lists
+#[doc(hidden)]
 #[derive(Debug)]
 pub struct NP_List_Iterator<'it> {
     list_schema: &'it Box<NP_Parsed_Schema>,
@@ -708,13 +697,31 @@ impl<'it> Iterator for NP_List_Iterator<'it> {
     }
 
     fn count(self) -> usize where Self: Sized {
-        #[inline]
-        fn add1<T>(count: usize, _: T) -> usize {
-            // Might overflow.
-            Add::add(count, 1)
+
+        if let Some(x) = self.current {
+            // we can just read the tail pointer and get it's index for a length
+            // MUCH faster than iterating through the whole list
+            match x.parent {
+                NP_Ptr_Collection::List { head: _, tail, address: _} => {
+                    if tail == 0 { 0usize } else { (match &x.memory.size {
+                        NP_Size::U32 => u16::from_be_bytes(*x.memory.get_2_bytes(tail + 8).unwrap_or(&[0; 2])) as usize,
+                        NP_Size::U16 => u16::from_be_bytes(*x.memory.get_2_bytes(tail + 4).unwrap_or(&[0; 2])) as usize,
+                        NP_Size::U8 => u8::from_be_bytes([x.memory.get_1_byte(tail + 2).unwrap_or(0)]) as usize
+                    }) + 1usize}
+                },
+                _ => { unsafe { unreachable_unchecked() } }
+            }
+        } else {
+            #[inline]
+            fn add1<T>(count: usize, _: T) -> usize {
+                // Might overflow.
+                Add::add(count, 1)
+            }
+
+            self.fold(0, add1)            
         }
 
-        self.fold(0, add1)
+
     }
 }
 
@@ -736,6 +743,7 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let mut buffer = factory.empty_buffer(None, None);
     buffer.set("10", String::from("hello, world"))?;
     assert_eq!(buffer.get::<String>("10")?, Some(Box::new(String::from("hello, world"))));
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 28usize);
     buffer.del("")?;
     buffer.compact(None, None)?;
     assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);

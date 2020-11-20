@@ -16,6 +16,7 @@ use crate::alloc::string::ToString;
 use crate::alloc::borrow::ToOwned;
 
 /// The address location of the root pointer.
+#[doc(hidden)]
 pub const ROOT_PTR_ADDR: usize = 2;
 
 /// Buffers contain the bytes of each object and allow you to perform reads, updates, deletes and compaction.
@@ -151,8 +152,8 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// ```
     /// 
     pub fn set<'set, X: 'set>(&'set mut self, path: &str, value: X) -> Result<(), NP_Error> where X: NP_Value<'set> + Default {
-        let vec_path: Vec<String> = path.split(".").filter_map(|v| { 
-            if v.len() > 0 { Some(String::from(v)) } else { None }
+        let vec_path: Vec<&str> = path.split(".").filter_map(|v| { 
+            if v.len() > 0 { Some(v) } else { None }
         }).collect();
         let root = NP_Ptr::_new_standard_ptr(ROOT_PTR_ADDR, &self.schema.parsed, &self.memory);
         root._deep_set_value(vec_path, 0, value)
@@ -262,7 +263,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// // set value of sport key
     /// new_buffer.set("sport", String::from("soccor"))?;
     /// 
-    /// // get iterator of root (table)
+    /// // get iterator of root (map)
     /// new_buffer.get_iter("")?.unwrap().into_iter().for_each(|item| {
     ///     let column = item.get_key();
     ///     if column == String::from("color") {
@@ -361,6 +362,8 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// Push a value onto the end of a list.
     /// The path provided must resolve to a list type, and the type being pushed must match the schema
     /// 
+    /// This is the most efficient way to add values to a list type.
+    /// 
     /// ```
     /// use no_proto::error::NP_Error;
     /// use no_proto::NP_Factory;
@@ -408,8 +411,8 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// ```
     /// 
     pub fn list_push<'push, X: 'push>(&'push mut self, path: &str, value: X) -> Result<Option<u16>, NP_Error> where X: NP_Value<'push> + Default {
-        let vec_path: Vec<String> = path.split(".").filter_map(|v| { 
-            if v.len() > 0 { Some(String::from(v)) } else { None }
+        let vec_path: Vec<&str> = path.split(".").filter_map(|v| { 
+            if v.len() > 0 { Some(v) } else { None }
         }).collect();
         let root: NP_Ptr = NP_Ptr::_new_standard_ptr(ROOT_PTR_ADDR, &self.schema.parsed, &self.memory);
         let list_ptr = root._deep_set(vec_path, 0)?;
@@ -484,8 +487,13 @@ impl<'buffer> NP_Buffer<'buffer> {
         }
     }
 
-    /// Get length of String, Bytes or Collection Type
+    /// Get length of String, Bytes, Table, Tuple, List or Map Type
     /// 
+    /// If the type found at the path provided does not support length operations, you'll get `None`.
+    /// 
+    /// If the length of the item is zero, you can expect `Some(0)`.
+    /// 
+    /// ## String Example
     /// ```
     /// use no_proto::error::NP_Error;
     /// use no_proto::NP_Factory;
@@ -498,8 +506,91 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// let mut new_buffer = factory.empty_buffer(None, None);
     /// // set initial value
     /// new_buffer.set("", String::from("hello"))?;
-    /// // get length of value at root
+    /// // get length of value at root (String)
     /// assert_eq!(new_buffer.length("")?, Some(5));
+    /// 
+    /// # Ok::<(), NP_Error>(()) 
+    /// ```
+    /// 
+    /// ## Collection (List) Example
+    /// ```
+    /// use no_proto::error::NP_Error;
+    /// use no_proto::NP_Factory;
+    /// use no_proto::buffer::NP_Size_Data;
+    /// 
+    /// let factory: NP_Factory = NP_Factory::new(r#"{
+    ///    "type": "list",
+    ///     "of": {"type": "string"}
+    /// }"#)?;
+    /// 
+    /// let mut new_buffer = factory.empty_buffer(None, None);
+    /// // set value at 9th index
+    /// new_buffer.set("9", String::from("hello"))?;
+    /// // get length of value at root (List)
+    /// assert_eq!(new_buffer.length("")?, Some(10));
+    /// 
+    /// # Ok::<(), NP_Error>(()) 
+    /// ```
+    /// 
+    /// ## Collection (Table) Example
+    /// ```
+    /// use no_proto::error::NP_Error;
+    /// use no_proto::NP_Factory;
+    /// use no_proto::buffer::NP_Size_Data;
+    /// 
+    /// let factory: NP_Factory = NP_Factory::new(r#"{
+    ///    "type": "table",
+    ///    "columns": [
+    ///         ["age", {"type": "u8"}],
+    ///         ["name", {"type": "string"}]
+    ///     ]
+    /// }"#)?;
+    /// 
+    /// let mut new_buffer = factory.empty_buffer(None, None);
+    /// // get length of value at root (Table)
+    /// assert_eq!(new_buffer.length("")?, Some(2));
+    /// 
+    /// # Ok::<(), NP_Error>(()) 
+    /// ```
+    /// 
+    /// ## Collection (Map) Example
+    /// ```
+    /// use no_proto::error::NP_Error;
+    /// use no_proto::NP_Factory;
+    /// use no_proto::buffer::NP_Size_Data;
+    /// 
+    /// let factory: NP_Factory = NP_Factory::new(r#"{
+    ///    "type": "map",
+    ///    "value": {"type": "string"}
+    /// }"#)?;
+    /// 
+    /// let mut new_buffer = factory.empty_buffer(None, None);
+    /// // set values
+    /// new_buffer.set("foo", String::from("bar"))?;
+    /// new_buffer.set("foo2", String::from("bar2"))?;
+    /// // get length of value at root (Map)
+    /// assert_eq!(new_buffer.length("")?, Some(2));
+    /// 
+    /// # Ok::<(), NP_Error>(()) 
+    /// ```
+    /// 
+    /// ## Collection (Tuple) Example
+    /// ```
+    /// use no_proto::error::NP_Error;
+    /// use no_proto::NP_Factory;
+    /// use no_proto::buffer::NP_Size_Data;
+    /// 
+    /// let factory: NP_Factory = NP_Factory::new(r#"{
+    ///    "type": "tuple",
+    ///    "values": [
+    ///         {"type": "string"}, 
+    ///         {"type": "string"}
+    ///     ]
+    /// }"#)?;
+    /// 
+    /// let mut new_buffer = factory.empty_buffer(None, None);
+    /// // get length of value at root (Tuple)
+    /// assert_eq!(new_buffer.length("")?, Some(2));
     /// 
     /// # Ok::<(), NP_Error>(()) 
     /// ```
@@ -512,10 +603,6 @@ impl<'buffer> NP_Buffer<'buffer> {
         let collection_ptr = root._deep_get(vec_path, 0)?;
 
         if let Some(ptr) = collection_ptr {
-
-            if ptr.address == 0 {
-                return Ok(None);
-            }
 
             match &**ptr.schema {
                 NP_Parsed_Schema::List { i: _, sortable: _, of: _} => {
@@ -865,6 +952,7 @@ impl<'item> NP_Item<'item> {
 
 /// Iterator Enum
 #[derive(Debug)]
+#[doc(hidden)]
 pub enum NP_Iterator_Collection<'col> {
     /// Map
     Map(NP_Map_Iterator<'col>),
@@ -879,6 +967,7 @@ pub enum NP_Iterator_Collection<'col> {
 
 /// Generic iterator
 #[derive(Debug)]
+#[doc(hidden)]
 pub struct NP_Generic_Iterator<'coll> { 
     /// The colleciton iterator
     pub iterator: NP_Iterator_Collection<'coll>,

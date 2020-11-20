@@ -9,11 +9,12 @@
 //! 
 //! ### Features  
 //! - Zero dependencies
-//! - no_std support, WASM ready
 //! - Zero copy deserialization
+//! - no_std support, WASM ready
 //! - Native byte-wise sorting
 //! - Extensive Documentation & Testing
 //! - Easily mutate, add or delete values in existing buffers
+//! - Schemas allow default values and non destructive updates
 //! - Supports most common native data types
 //! - Supports collection types (list, map, table & tuple)
 //! - Supports deep nesting of collection types
@@ -67,14 +68,6 @@
 //! | Cap'N Proto      | ✓         | 2^64 Bytes | 𐄂       | ✓       | ✓                 | 𐄂               | 𐄂                 |
 //! | Serde            | 𐄂         | ?          | 𐄂       | ✓       | 𐄂                 | 𐄂               | 𐄂                 |
 //! | Veriform         | 𐄂         | ?          | 𐄂       | 𐄂       | 𐄂                 | 𐄂               | 𐄂                 |
-//! 
-//! #### Limitations
-//! - Buffers cannot be larger than 2^32 bytes (~4GB).
-//! - Lists cannot have more than 65,535 items.
-//! - Enum/Option types are limited to 255 choices and choices cannot be larger than 255 bytes.
-//! - Tables are limited to 255 columns and column names cannot be larger than 255 bytes.
-//! - Tuple types are limited to 255 items.
-//! - Buffers are not validated or checked before deserializing.
 //! 
 //! 
 //! # Quick Example
@@ -149,10 +142,6 @@
 //! # Ok::<(), NP_Error>(()) 
 //! ```
 //! 
-//! ## Non Goals / Known Tradeoffs
-//! There are formats that focus on being as compact as possible.  While NoProto is not intentionally wasteful, it's primary focus is not on compactness.  If you need the smallest possible format MessagePack is a good choice.  It's all about tradeoffs, NoProto uses up extra bytes over other formats to make incremental de/serialization, traversal and mutation as fast as possible.
-//! 
-//! If every CPU cycle counts and you don't plan to mutate your buffers/objects, FlatBuffers/CapnProto is probably the way to go.  While NoProto makes good tradeoffs with flexibility and performance, it cannot be as fast as languages that compile the schema into source code.  In the future compiling schema to source code could be a feature, but for now I'm happy leaving that edge to the other libraries.
 //! 
 //! ## Guided Learning / Next Steps:
 //! 1. [`Schemas`](https://docs.rs/no_proto/latest/no_proto/schema/index.html) - Learn how to build & work with schemas.
@@ -160,6 +149,19 @@
 //! 3. [`Buffers`](https://docs.rs/no_proto/latest/no_proto/buffer/struct.NP_Buffer.html) - How to create, update & compact buffers/data.
 //! 4. [`Data Format`](https://docs.rs/no_proto/latest/no_proto/format/index.html) - Learn how data is saved into the buffer.
 //! 
+//! 
+//! #### Limitations
+//! - Buffers cannot be larger than 2^32 bytes (~4GB).
+//! - Lists cannot have more than 65,535 items.
+//! - Enum/Option types are limited to 255 choices and choices cannot be larger than 255 bytes.
+//! - Tables are limited to 255 columns and column names cannot be larger than 255 bytes.
+//! - Tuple types are limited to 255 items.
+//! - Buffers are not validated or checked before deserializing.
+//! 
+//! #### Non Goals / Known Tradeoffs
+//! There are formats that focus on being as compact as possible.  While NoProto is not intentionally wasteful, it's primary focus is not on compactness.  If you need the smallest possible format MessagePack is a good choice.  It's all about tradeoffs, NoProto uses up extra bytes over other formats to make zero copy de/serialization, traversal and mutation as fast as possible.
+//! 
+//! If every CPU cycle counts, you don't mind compiling fixed schemas and you don't plan to mutate your buffers/objects, FlatBuffers/CapnProto is probably the way to go.  While NoProto makes good tradeoffs with flexibility and performance, it cannot be as fast as languages that compile the schema into source code.
 //! 
 //! ----------------------
 //! 
@@ -214,7 +216,7 @@ const PROTOCOL_VERSION: u8 = 1;
 
 /// Factories are created from schemas.  Once you have a factory you can use it to create new buffers or open existing ones.
 /// 
-/// To create a factory pass a JSON string schema into the static `new` method.  [Learn about schemas here.](./schema/index.html)
+/// The easiest way to create a factory is to pass a JSON string schema into the static `new` method.  [Learn about schemas here.](./schema/index.html)
 /// 
 /// You can also create a factory with a compiled byte schema using the static `new_compiled` method.
 /// 
@@ -236,7 +238,7 @@ const PROTOCOL_VERSION: u8 = 1;
 /// // user_factory can now be used to make or open buffers that contain the data in the schema.
 /// 
 /// // create new buffer
-/// let mut user_buffer = user_factory.empty_buffer(None, None); // optional capacity, optional size
+/// let mut user_buffer = user_factory.empty_buffer(None, None); // optional capacity, optional address size
 ///    
 /// // set the "name" column of the table
 /// user_buffer.set("name", "Billy Joel".to_owned())?;
@@ -361,60 +363,4 @@ impl NP_Factory {
         };
         NP_Buffer::_new(&self.schema, NP_Memory::new(capacity, use_size))
     }
-}
-
-#[cfg(test)]
-mod tests {
-
-    use super::*;
-    // use collection::{table::NP_Table, list::NP_List};
-    // use json_flex::NP_JSON;
-    // use pointer::misc::NP_Date;
-
-    #[test]
-    fn it_works() -> core::result::Result<(), NP_Error> {
-
-
-        /*
-        let factory: NP_Factory = NP_Factory::new(r#"{
-            "type": "list",
-            "of": {
-                "type": "table",
-                "columns": [
-                    ["name", {"type": "string", "default": "no name"}],
-                    ["age",  {"type": "i16", "default": 10}]
-                ]
-            }
-        }"#)?;
-
-        let mut new_buffer = factory.empty_buffer(None, None);
-
-        new_buffer.open::<NP_List<NP_Table>>(&mut |_list| {
-
-            Ok(())
-        })?;
-
-        new_buffer.set("10.name", "something".to_owned())?;
-        new_buffer.set("10.name", "someth\"ing22".to_owned())?;
-        new_buffer.set("9.age", -29383i16)?;
-        println!("Size: {:?}", new_buffer.calc_bytes()?);
-        // new_buffer.compact(None, None)?;
-        println!("Size: {:?}", new_buffer.calc_bytes()?);
-
-        // println!("JSON: {}", new_buffer.json_encode().stringify());
-        // new_buffer.compact(None, None)?;
-        
-        let value = new_buffer.get::<NP_JSON>("9")?;
-
-        println!("name: {}", value.unwrap().stringify());
-
-        println!("BYTES: {:?}", new_buffer.close());
-
-        // let buffer2 = factory.deep_set::<String>(return_buffer, "15", "hello, world".to_owned())?;
-
-        // println!("value {:?}", factory.get::<String>(return_buffer, "10.name")?);
-        */
-        Ok(())
-    }
-    
 }
