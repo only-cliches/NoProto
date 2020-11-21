@@ -5,11 +5,12 @@ Performance of Flatbuffers / Cap'N Proto with flexibility of JSON
 
 ### Features  
 - Zero dependencies
-- no_std support, WASM ready
 - Zero copy deserialization
+- `no_std` support, WASM ready
 - Native byte-wise sorting
 - Extensive Documentation & Testing
 - Easily mutate, add or delete values in existing buffers
+- Schemas allow default values and non destructive updates
 - Supports most common native data types
 - Supports collection types (list, map, table & tuple)
 - Supports deep nesting of collection types
@@ -63,14 +64,6 @@ NoProto moves the cost of deserialization to the access methods instead of deser
 | Cap'N Proto      | ✓         | 2^64 Bytes | 𐄂       | ✓       | ✓                 | 𐄂               | 𐄂                 |
 | Serde            | 𐄂         | ?          | 𐄂       | ✓       | 𐄂                 | 𐄂               | 𐄂                 |
 | Veriform         | 𐄂         | ?          | 𐄂       | 𐄂       | 𐄂                 | 𐄂               | 𐄂                 |
-
-#### Limitations
-- Buffers cannot be larger than 2^32 bytes (~4GB).
-- Lists cannot have more than 65,535 items.
-- Enum/Option types are limited to 255 choices and choices cannot be larger than 255 bytes.
-- Tables are limited to 255 columns and column names cannot be larger than 255 bytes.
-- Tuple types are limited to 255 items.
-- Buffers are not validated or checked before deserializing.
 
 
 # Quick Example
@@ -145,10 +138,6 @@ assert_eq!(tag, Some(Box::new(String::from("first tag"))));
 # Ok::<(), NP_Error>(()) 
 ```
 
-## Non Goals / Known Tradeoffs
-There are formats that focus on being as compact as possible.  While NoProto is not intentionally wasteful, it's primary focus is not on compactness.  If you need the smallest possible format MessagePack is a good choice.  It's all about tradeoffs, NoProto uses up extra bytes over other formats to make incremental de/serialization, traversal and mutation as fast as possible.
-
-If every CPU cycle counts and you don't plan to mutate your buffers/objects, FlatBuffers/CapnProto is probably the way to go.  While NoProto makes good tradeoffs with flexibility and performance, it cannot be as fast as languages that compile the schema into source code.  In the future compiling schema to source code could be a feature, but for now I'm happy leaving that edge to the other libraries.
 
 ## Guided Learning / Next Steps:
 1. [`Schemas`](https://docs.rs/no_proto/latest/no_proto/schema/index.html) - Learn how to build & work with schemas.
@@ -156,6 +145,19 @@ If every CPU cycle counts and you don't plan to mutate your buffers/objects, Fla
 3. [`Buffers`](https://docs.rs/no_proto/latest/no_proto/buffer/struct.NP_Buffer.html) - How to create, update & compact buffers/data.
 4. [`Data Format`](https://docs.rs/no_proto/latest/no_proto/format/index.html) - Learn how data is saved into the buffer.
 
+
+#### Limitations
+- Buffers cannot be larger than 2^32 bytes (~4GB).
+- Lists cannot have more than 65,535 items.
+- Enum/Option types are limited to 255 choices and choices cannot be larger than 255 bytes.
+- Tables are limited to 255 columns and column names cannot be larger than 255 bytes.
+- Tuple types are limited to 255 items.
+- Buffers are not validated or checked before deserializing.
+
+#### Non Goals / Known Tradeoffs
+There are formats that focus on being as compact as possible.  While NoProto is not intentionally wasteful, it's primary focus is not on compactness.  If you need the smallest possible format MessagePack is a good choice.  It's all about tradeoffs, NoProto uses up extra bytes over other formats to make zero copy de/serialization, traversal and mutation as fast as possible.
+
+If every CPU cycle counts, you don't mind compiling fixed schemas and you don't plan to mutate your buffers/objects, FlatBuffers/CapnProto is probably the way to go.  While NoProto makes good tradeoffs with flexibility and performance, it cannot be as fast as languages that compile the schema into source code.
 
 ----------------------
 

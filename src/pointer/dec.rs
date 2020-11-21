@@ -48,6 +48,7 @@
 //! use no_proto::error::NP_Error;
 //! use no_proto::NP_Factory;
 //! use no_proto::pointer::dec::NP_Dec;
+//! use no_proto::here;
 //! 
 //! let factory: NP_Factory = NP_Factory::new(r#"{
 //!    "type": "dec",
@@ -55,9 +56,9 @@
 //! }"#)?;
 //!
 //! let mut new_buffer = factory.empty_buffer(None, None);
-//! new_buffer.set("", NP_Dec::new(50283, 2))?;
+//! new_buffer.set(here(), NP_Dec::new(50283, 2))?;
 //! 
-//! assert_eq!(502.83f64, new_buffer.get::<NP_Dec>("")?.unwrap().to_float());
+//! assert_eq!(502.83f64, new_buffer.get::<NP_Dec>(here())?.unwrap().to_float());
 //!
 //! # Ok::<(), NP_Error>(()) 
 //! ```
@@ -749,7 +750,7 @@ impl<'value> NP_Value<'value> for NP_Dec {
         }
     }
 
-    fn into_value(ptr: NP_Ptr<'value>) -> Result<Option<Box<Self>>, NP_Error> {
+    fn into_value<'into>(ptr: &'into NP_Ptr<'into>) -> Result<Option<Box<Self>>, NP_Error> {
         let addr = ptr.kind.get_value_addr() as usize;
 
         // empty value
@@ -764,7 +765,7 @@ impl<'value> NP_Value<'value> for NP_Dec {
             _ => { unsafe { unreachable_unchecked() } }
         };
 
-        let memory = ptr.memory;
+        let memory = &ptr.memory;
 
         Ok(match memory.get_8_bytes(addr) {
             Some(x) => {
@@ -777,7 +778,7 @@ impl<'value> NP_Value<'value> for NP_Dec {
     }
 
     fn to_json(ptr: &'value NP_Ptr<'value>) -> NP_JSON {
-        let this_value = Self::into_value(ptr.clone());
+        let this_value = Self::into_value(ptr);
 
         let exp = match &**ptr.schema {
             NP_Parsed_Schema::Decimal { i: _, sortable: _, default: _, exp} => {
@@ -927,8 +928,8 @@ fn schema_parsing_works() -> Result<(), NP_Error> {
 fn default_value_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"decimal\",\"exp\":3,\"default\":203.293}";
     let factory = crate::NP_Factory::new(schema)?;
-    let buffer = factory.empty_buffer(None, None);
-    assert_eq!(buffer.get("")?.unwrap(), Box::new(NP_Dec::new(203293, 3)));
+    let mut buffer = factory.empty_buffer(None, None);
+    assert_eq!(buffer.get(crate::here())?.unwrap(), Box::new(NP_Dec::new(203293, 3)));
 
     Ok(())
 }
@@ -939,10 +940,10 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"decimal\",\"exp\": 3}";
     let factory = crate::NP_Factory::new(schema)?;
     let mut buffer = factory.empty_buffer(None, None);
-    buffer.set("", NP_Dec::new(203293, 3))?;
-    assert_eq!(buffer.get::<NP_Dec>("")?.unwrap(), Box::new(NP_Dec::new(203293, 3)));
-    buffer.del("")?;
-    assert_eq!(buffer.get::<NP_Dec>("")?, None);
+    buffer.set(crate::here(), NP_Dec::new(203293, 3))?;
+    assert_eq!(buffer.get::<NP_Dec>(crate::here())?.unwrap(), Box::new(NP_Dec::new(203293, 3)));
+    buffer.del(crate::here())?;
+    assert_eq!(buffer.get::<NP_Dec>(crate::here())?, None);
 
     buffer.compact(None, None)?;
     assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);

@@ -140,7 +140,27 @@ impl<'a> NP_Memory {
         }
     }
 
-    pub fn malloc(&self, bytes: Vec<u8>) -> core::result::Result<usize, NP_Error> {
+    pub fn malloc_borrow(&self, bytes: &[u8])  -> Result<usize, NP_Error> {
+        let self_bytes = unsafe { &mut *self.bytes.get() };
+
+        let location = self_bytes.len();
+
+        let max_sze = match self.size {
+            NP_Size::U8 =>   MAX_SIZE_XSMALL,
+            NP_Size::U16 =>   MAX_SIZE_SMALL,
+            NP_Size::U32 =>   MAX_SIZE_LARGE
+        };
+
+        // not enough space left?
+        if location + bytes.len() >= max_sze {
+            return Err(NP_Error::new("Not enough space available in buffer!"))
+        }
+
+        self_bytes.extend(bytes);
+        Ok(location)
+    }
+
+    pub fn malloc(&self, bytes: Vec<u8>) -> Result<usize, NP_Error> {
 
         let self_bytes = unsafe { &mut *self.bytes.get() };
 

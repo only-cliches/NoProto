@@ -1,6 +1,6 @@
 #![warn(missing_docs, missing_debug_implementations)]
 #![allow(non_camel_case_types)]
-#![no_std]
+// #![no_std]
 
 //! ## Simple & Performant Zero-Copy Serialization
 //! Performance of Flatbuffers / Cap'N Proto with flexibility of JSON
@@ -10,7 +10,7 @@
 //! ### Features  
 //! - Zero dependencies
 //! - Zero copy deserialization
-//! - no_std support, WASM ready
+//! - `no_std` support, WASM ready
 //! - Native byte-wise sorting
 //! - Extensive Documentation & Testing
 //! - Easily mutate, add or delete values in existing buffers
@@ -76,6 +76,7 @@
 //! use no_proto::NP_Factory;
 //! use no_proto::collection::table::NP_Table;
 //! use no_proto::pointer::NP_Ptr;
+//! use no_proto::path;
 //! 
 //! // JSON is used to describe schema for the factory
 //! // Each factory represents a single schema
@@ -96,13 +97,13 @@
 //! let mut user_buffer = user_factory.empty_buffer(None, None); // optional capacity, optional address size (u16 by default)
 //! 
 //! // set an internal value of the buffer, set the  "name" column
-//! user_buffer.set("name", String::from("Billy Joel"))?;
+//! user_buffer.set(path("name"), String::from("Billy Joel"))?;
 //! 
 //! // assign nested internal values, sets the first tag element
-//! user_buffer.set("tags.0", String::from("first tag"))?;
+//! user_buffer.set(path("tags.0"), String::from("first tag"))?;
 //! 
 //! // get an internal value of the buffer from the "name" column
-//! let name = user_buffer.get::<String>("name")?;
+//! let name = user_buffer.get::<String>(path("name"))?;
 //! assert_eq!(name, Some(Box::new(String::from("Billy Joel"))));
 //! 
 //! // close buffer and get internal bytes
@@ -112,11 +113,11 @@
 //! let user_buffer = user_factory.open_buffer(user_bytes);
 //! 
 //! // get nested internal value, first tag from the tag list
-//! let tag = user_buffer.get::<String>("tags.0")?;
+//! let tag = user_buffer.get::<String>(path("tags.0"))?;
 //! assert_eq!(tag, Some(Box::new(String::from("first tag"))));
 //! 
 //! // get nested internal value, the age field
-//! let age = user_buffer.get::<u16>("age")?;
+//! let age = user_buffer.get::<u16>(path("age"))?;
 //! // returns default value from schema
 //! assert_eq!(age, Some(Box::new(0u16)));
 //! 
@@ -135,7 +136,7 @@
 //! 
 //! // confirm the new byte schema works with existing buffers
 //! let user_buffer = user_factory2.open_buffer(user_bytes);
-//! let tag = user_buffer.get::<String>("tags.0")?;
+//! let tag = user_buffer.get::<String>(path("tags.0"))?;
 //! assert_eq!(tag, Some(Box::new(String::from("first tag"))));
 //! 
 //! 
@@ -213,6 +214,18 @@ use crate::memory::NP_Size;
 
 const PROTOCOL_VERSION: u8 = 1;
 
+/// Convert a string path into a vector path
+/// 
+pub fn path(path: &str) -> Vec<&str> {
+    path.split(".").filter_map(|v| { 
+        if v.len() > 0 { Some(v) } else { None }
+    }).collect()
+}
+
+/// root selector
+pub fn here<'r>() -> &'r [&'r str] {
+    &[]
+}
 
 /// Factories are created from schemas.  Once you have a factory you can use it to create new buffers or open existing ones.
 /// 
@@ -224,6 +237,7 @@ const PROTOCOL_VERSION: u8 = 1;
 /// ```
 /// use no_proto::error::NP_Error;
 /// use no_proto::NP_Factory;
+/// use no_proto::path;
 /// 
 /// let user_factory = NP_Factory::new(r#"{
 ///     "type": "table",
@@ -241,10 +255,10 @@ const PROTOCOL_VERSION: u8 = 1;
 /// let mut user_buffer = user_factory.empty_buffer(None, None); // optional capacity, optional address size
 ///    
 /// // set the "name" column of the table
-/// user_buffer.set("name", "Billy Joel".to_owned())?;
+/// user_buffer.set(path("name"), "Billy Joel".to_owned())?;
 /// 
 /// // set the first todo
-/// user_buffer.set("todos.0", "Write a rust library.".to_owned())?;
+/// user_buffer.set(path("todos.0"), "Write a rust library.".to_owned())?;
 /// 
 /// // close buffer 
 /// let user_vec:Vec<u8> = user_buffer.close();
@@ -253,16 +267,16 @@ const PROTOCOL_VERSION: u8 = 1;
 /// let user_buffer_2 = user_factory.open_buffer(user_vec);
 /// 
 /// // read column value
-/// let name_column = user_buffer_2.get::<String>("name")?;
+/// let name_column = user_buffer_2.get::<String>(path("name"))?;
 /// assert_eq!(name_column, Some(Box::new("Billy Joel".to_owned())));
 /// 
 /// 
 /// // read first todo
-/// let todo_value = user_buffer_2.get::<String>("todos.0")?;
+/// let todo_value = user_buffer_2.get::<String>(path("todos.0"))?;
 /// assert_eq!(todo_value, Some(Box::new("Write a rust library.".to_owned())));
 /// 
 /// // read second todo
-/// let todo_value = user_buffer_2.get::<String>("todos.1")?;
+/// let todo_value = user_buffer_2.get::<String>(path("todos.1"))?;
 /// assert_eq!(todo_value, None);
 /// 
 /// 

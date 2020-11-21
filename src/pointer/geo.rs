@@ -6,15 +6,16 @@
 //! use no_proto::error::NP_Error;
 //! use no_proto::NP_Factory;
 //! use no_proto::pointer::geo::NP_Geo;
+//! use no_proto::here;
 //! 
 //! let factory: NP_Factory = NP_Factory::new(r#"{
 //!    "type": "geo4"
 //! }"#)?;
 //!
 //! let mut new_buffer = factory.empty_buffer(None, None);
-//! new_buffer.set("", NP_Geo::new(4, 45.509616, -122.714625))?;
+//! new_buffer.set(here(), NP_Geo::new(4, 45.509616, -122.714625))?;
 //! 
-//! assert_eq!("{\"lat\":45.5,\"lng\":-122.71}", new_buffer.get::<NP_Geo>("")?.unwrap().into_json().stringify());
+//! assert_eq!("{\"lat\":45.5,\"lng\":-122.71}", new_buffer.get::<NP_Geo>(here())?.unwrap().into_json().stringify());
 //!
 //! # Ok::<(), NP_Error>(()) 
 //! ```
@@ -130,7 +131,7 @@ impl<'value> NP_Value<'value> for NP_Geo_Bytes {
     fn get_size(ptr:  &'value NP_Ptr<'value>) -> Result<usize, NP_Error> {
         NP_Geo::get_size(ptr)
     }
-    fn into_value(ptr: NP_Ptr<'value>) -> Result<Option<Box<Self>>, NP_Error> {
+    fn into_value<'into>(ptr: &'into NP_Ptr<'into>) -> Result<Option<Box<Self>>, NP_Error> {
 
         let addr = ptr.kind.get_value_addr() as usize;
 
@@ -489,7 +490,7 @@ impl<'value> NP_Value<'value> for NP_Geo {
         
     }
 
-    fn into_value(ptr: NP_Ptr<'value>) -> Result<Option<Box<Self>>, NP_Error> {
+    fn into_value<'into>(ptr: &'into NP_Ptr<'into>) -> Result<Option<Box<Self>>, NP_Error> {
 
         let addr = ptr.kind.get_value_addr() as usize;
 
@@ -559,7 +560,7 @@ impl<'value> NP_Value<'value> for NP_Geo {
     }
 
     fn to_json(ptr: &'value NP_Ptr<'value>) -> NP_JSON {
-        let this_value = Self::into_value(ptr.clone());
+        let this_value = Self::into_value(ptr);
 
         match this_value {
             Ok(x) => {
@@ -783,18 +784,18 @@ fn schema_parsing_works() -> Result<(), NP_Error> {
 fn default_value_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"geo4\",\"default\":{\"lat\":20.23,\"lng\":-12.21}}";
     let factory = crate::NP_Factory::new(schema)?;
-    let buffer = factory.empty_buffer(None, None);
-    assert_eq!((*buffer.get::<NP_Geo>("")?.unwrap()).get_bytes().unwrap(), NP_Geo::new(4, 20.23, -12.21).get_bytes().unwrap());
+    let mut buffer = factory.empty_buffer(None, None);
+    assert_eq!((*buffer.get::<NP_Geo>(crate::here())?.unwrap()).get_bytes().unwrap(), NP_Geo::new(4, 20.23, -12.21).get_bytes().unwrap());
 
     let schema = "{\"type\":\"geo8\",\"default\":{\"lat\":20.2334234,\"lng\":-12.2146363}}";
     let factory = crate::NP_Factory::new(schema)?;
-    let buffer = factory.empty_buffer(None, None);
-    assert_eq!((*buffer.get::<NP_Geo>("")?.unwrap()).get_bytes().unwrap(), NP_Geo::new(8, 20.2334234, -12.2146363).get_bytes().unwrap());
+    let mut buffer = factory.empty_buffer(None, None);
+    assert_eq!((*buffer.get::<NP_Geo>(crate::here())?.unwrap()).get_bytes().unwrap(), NP_Geo::new(8, 20.2334234, -12.2146363).get_bytes().unwrap());
 
     let schema = "{\"type\":\"geo16\",\"default\":{\"lat\":20.233423434,\"lng\":-12.214636323}}";
     let factory = crate::NP_Factory::new(schema)?;
-    let buffer = factory.empty_buffer(None, None);
-    assert_eq!((*buffer.get::<NP_Geo>("")?.unwrap()).get_bytes().unwrap(), NP_Geo::new(16, 20.233423434, -12.214636323).get_bytes().unwrap());
+    let mut buffer = factory.empty_buffer(None, None);
+    assert_eq!((*buffer.get::<NP_Geo>(crate::here())?.unwrap()).get_bytes().unwrap(), NP_Geo::new(16, 20.233423434, -12.214636323).get_bytes().unwrap());
 
     Ok(())
 }
@@ -804,11 +805,11 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"geo4\"}";
     let factory = crate::NP_Factory::new(schema)?;
     let mut buffer = factory.empty_buffer(None, None);
-    buffer.set("", NP_Geo::new(4, 20.23, -12.21))?;
-    assert_eq!((*buffer.get::<NP_Geo>("")?.unwrap()).get_bytes().unwrap(), NP_Geo::new(4, 20.23, -12.21).get_bytes().unwrap());
-    buffer.del("")?;
+    buffer.set(crate::here(), NP_Geo::new(4, 20.23, -12.21))?;
+    assert_eq!((*buffer.get::<NP_Geo>(crate::here())?.unwrap()).get_bytes().unwrap(), NP_Geo::new(4, 20.23, -12.21).get_bytes().unwrap());
+    buffer.del(crate::here())?;
     assert!({
-        match buffer.get::<NP_Geo>("")? {
+        match buffer.get::<NP_Geo>(crate::here())? {
             Some(_x) => false,
             None => true
         }

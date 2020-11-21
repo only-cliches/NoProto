@@ -4,15 +4,16 @@
 //! use no_proto::error::NP_Error;
 //! use no_proto::NP_Factory;
 //! use no_proto::pointer::bytes::NP_Bytes;
+//! use no_proto::here;
 //! 
 //! let factory: NP_Factory = NP_Factory::new(r#"{
 //!    "type": "bytes"
 //! }"#)?;
 //!
 //! let mut new_buffer = factory.empty_buffer(None, None);
-//! new_buffer.set("", NP_Bytes::new([0, 1, 2, 3, 4].to_vec()))?;
+//! new_buffer.set(here(), NP_Bytes::new([0, 1, 2, 3, 4].to_vec()))?;
 //! 
-//! assert_eq!(Box::new(NP_Bytes::new([0, 1, 2, 3, 4].to_vec())), new_buffer.get::<NP_Bytes>("")?.unwrap());
+//! assert_eq!(Box::new(NP_Bytes::new([0, 1, 2, 3, 4].to_vec())), new_buffer.get::<NP_Bytes>(here())?.unwrap());
 //!
 //! # Ok::<(), NP_Error>(()) 
 //! ```
@@ -121,7 +122,6 @@ impl<'value> NP_Value<  'value> for NP_Bytes {
         };
 
         if *size > 0 { // fixed size bytes
-            let mut set_kind = pointer.kind.clone();
 
             if addr == 0 { // malloc new bytes
 
@@ -133,7 +133,7 @@ impl<'value> NP_Value<  'value> for NP_Bytes {
                 addr = pointer.memory.malloc(empty_bytes)? as usize;
 
                 // set location address
-                set_kind = pointer.memory.set_value_address(pointer.address, addr, &pointer.kind);
+                pointer.kind = pointer.memory.set_value_address(pointer.address, addr, &pointer.kind);
             }
 
             for x in 0..(*size as usize) {
@@ -143,8 +143,6 @@ impl<'value> NP_Value<  'value> for NP_Bytes {
                     write_bytes[(addr + x)] = 0;
                 }
             }
-
-            pointer.kind = set_kind;
 
             return Ok(())
         }
@@ -217,17 +215,17 @@ impl<'value> NP_Value<  'value> for NP_Bytes {
     }
     
 
-    fn into_value(pointer: NP_Ptr<'value>) -> Result<Option<Box<Self>>, NP_Error> {
-        let addr = pointer.kind.get_value_addr() as usize;
+    fn into_value<'into>(ptr: &'into NP_Ptr<'into>) -> Result<Option<Box<Self>>, NP_Error> {
+        let addr = ptr.kind.get_value_addr() as usize;
  
         // empty value
         if addr == 0 {
             return Ok(None);
         }
 
-        let memory = pointer.memory;
+        let memory = &ptr.memory;
 
-        match &**pointer.schema {
+        match &**ptr.schema {
             NP_Parsed_Schema::Bytes { i: _, sortable: _, default: _, size} => {
                 if *size > 0 { // fixed size
             
@@ -274,7 +272,7 @@ impl<'value> NP_Value<  'value> for NP_Bytes {
     }
 
     fn to_json(pointer: &'value NP_Ptr<'value>) -> NP_JSON {
-        let this_bytes = Self::into_value(pointer.clone());
+        let this_bytes = Self::into_value(&pointer);
 
         match this_bytes {
             Ok(x) => {
@@ -320,7 +318,7 @@ impl<'value> NP_Value<  'value> for NP_Bytes {
         
         // get size of bytes
         let addr = value;        
-        let memory = pointer.memory;
+        let memory = &pointer.memory;
 
         match &**pointer.schema {
             NP_Parsed_Schema::Bytes { i: _, size, default: _, sortable: _ } => {
@@ -471,8 +469,8 @@ fn schema_parsing_works() -> Result<(), NP_Error> {
 fn default_value_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"bytes\",\"default\":[1,2,3,4]}";
     let factory = crate::NP_Factory::new(schema)?;
-    let buffer = factory.empty_buffer(None, None);
-    assert_eq!(buffer.get::<NP_Bytes>("")?.unwrap(), Box::new(NP_Bytes::new([1,2,3,4].to_vec())));
+    let mut buffer = factory.empty_buffer(None, None);
+    assert_eq!(buffer.get::<NP_Bytes>(crate::here())?.unwrap(), Box::new(NP_Bytes::new([1,2,3,4].to_vec())));
 
     Ok(())
 }
@@ -482,8 +480,8 @@ fn fixed_size_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"bytes\",\"size\": 20}";
     let factory = crate::NP_Factory::new(schema)?;
     let mut buffer = factory.empty_buffer(None, None);
-    buffer.set("", NP_Bytes::new([1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22].to_vec()))?;
-    assert_eq!(buffer.get::<NP_Bytes>("")?.unwrap(), Box::new(NP_Bytes::new([1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20].to_vec())));
+    buffer.set(crate::here(), NP_Bytes::new([1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22].to_vec()))?;
+    assert_eq!(buffer.get::<NP_Bytes>(crate::here())?.unwrap(), Box::new(NP_Bytes::new([1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20].to_vec())));
 
     Ok(())
 }
@@ -493,10 +491,10 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"bytes\"}";
     let factory = crate::NP_Factory::new(schema)?;
     let mut buffer = factory.empty_buffer(None, None);
-    buffer.set("", NP_Bytes::new([1,2,3,4,5,6,7,8,9,10,11,12,13].to_vec()))?;
-    assert_eq!(buffer.get("")?.unwrap(), Box::new(NP_Bytes::new([1,2,3,4,5,6,7,8,9,10,11,12,13].to_vec())));
-    buffer.del("")?;
-    assert_eq!(buffer.get::<NP_Bytes>("")?, None);
+    buffer.set(crate::here(), NP_Bytes::new([1,2,3,4,5,6,7,8,9,10,11,12,13].to_vec()))?;
+    assert_eq!(buffer.get(crate::here())?.unwrap(), Box::new(NP_Bytes::new([1,2,3,4,5,6,7,8,9,10,11,12,13].to_vec())));
+    buffer.del(crate::here())?;
+    assert_eq!(buffer.get::<NP_Bytes>(crate::here())?, None);
 
     buffer.compact(None, None)?;
     assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);

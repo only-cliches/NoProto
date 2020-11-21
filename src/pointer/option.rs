@@ -4,6 +4,7 @@
 //! use no_proto::error::NP_Error;
 //! use no_proto::NP_Factory;
 //! use no_proto::pointer::option::NP_Option;
+//! use no_proto::here;
 //! 
 //! let factory: NP_Factory = NP_Factory::new(r#"{
 //!    "type": "option",
@@ -11,9 +12,9 @@
 //! }"#)?;
 //!
 //! let mut new_buffer = factory.empty_buffer(None, None);
-//! new_buffer.set("", NP_Option::new("green"))?;
+//! new_buffer.set(here(), NP_Option::new("green"))?;
 //! 
-//! assert_eq!(Box::new(NP_Option::new("green")), new_buffer.get::<NP_Option>("")?.unwrap());
+//! assert_eq!(Box::new(NP_Option::new("green")), new_buffer.get::<NP_Option>(here())?.unwrap());
 //!
 //! # Ok::<(), NP_Error>(()) 
 //! ```
@@ -161,7 +162,7 @@ impl<'value> NP_Value<'value> for NP_Option {
         }               
     }
 
-    fn into_value(ptr: NP_Ptr<'value>) -> Result<Option<Box<Self>>, NP_Error> {
+    fn into_value<'into>(ptr: &'into NP_Ptr<'into>) -> Result<Option<Box<Self>>, NP_Error> {
         let addr = ptr.kind.get_value_addr() as usize;
 
         // empty value
@@ -169,7 +170,7 @@ impl<'value> NP_Value<'value> for NP_Option {
             return Ok(None);
         }
 
-        let memory = ptr.memory;
+        let memory = &ptr.memory;
 
         match &**ptr.schema {
             NP_Parsed_Schema::Enum { i: _, choices, default: _, sortable: _} => {
@@ -191,7 +192,7 @@ impl<'value> NP_Value<'value> for NP_Option {
     }
 
     fn to_json(ptr: &'value NP_Ptr<'value>) -> NP_JSON {
-        let this_string = Self::into_value(ptr.clone());
+        let this_string = Self::into_value(ptr);
 
         match this_string {
             Ok(x) => {
@@ -364,8 +365,8 @@ fn schema_parsing_works() -> Result<(), NP_Error> {
 fn default_value_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"option\",\"default\":\"hello\",\"choices\":[\"hello\",\"world\"]}";
     let factory = crate::NP_Factory::new(schema)?;
-    let buffer = factory.empty_buffer(None, None);
-    assert_eq!(buffer.get("")?.unwrap(), Box::new(NP_Option::new("hello")));
+    let mut buffer = factory.empty_buffer(None, None);
+    assert_eq!(buffer.get(crate::here())?.unwrap(), Box::new(NP_Option::new("hello")));
 
     Ok(())
 }
@@ -375,10 +376,10 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"option\",\"choices\":[\"hello\",\"world\"]}";
     let factory = crate::NP_Factory::new(schema)?;
     let mut buffer = factory.empty_buffer(None, None);
-    buffer.set("", NP_Option::new("hello"))?;
-    assert_eq!(buffer.get::<NP_Option>("")?, Some(Box::new(NP_Option::new("hello"))));
-    buffer.del("")?;
-    assert_eq!(buffer.get::<NP_Option>("")?, None);
+    buffer.set(crate::here(), NP_Option::new("hello"))?;
+    assert_eq!(buffer.get::<NP_Option>(crate::here())?, Some(Box::new(NP_Option::new("hello"))));
+    buffer.del(crate::here())?;
+    assert_eq!(buffer.get::<NP_Option>(crate::here())?, None);
 
     buffer.compact(None, None)?;
     assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);

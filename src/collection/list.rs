@@ -1,4 +1,5 @@
 use core::ops::Add;
+use alloc::rc::Rc;
 use crate::{error::NP_Error, json_flex::{JSMAP, NP_JSON}, memory::{NP_Size, NP_Memory}, pointer::{NP_Value, NP_Ptr, NP_PtrKinds}, pointer::{NP_Iterator_Helper, NP_Ptr_Collection}, schema::NP_Parsed_Schema, schema::{NP_Schema, NP_TypeKeys}};
 
 use alloc::string::String;
@@ -39,10 +40,12 @@ impl<'list> NP_List<'list> {
         self.schema
     }
 
-    /// Select while moving self
-    /// 
-    pub fn select_mv(self, index: u16) -> NP_Ptr<'list> {
-        let list_of = match &**self.schema {
+    /// Select into pointer
+    pub fn select_to_ptr<'sel>(target_ptr: &mut NP_Ptr<'sel>, index: u16) -> Result<(), NP_Error> {
+
+        let (address, head, tail) = NP_List::get_list_details(&target_ptr)?;
+
+        let list_of = match &**target_ptr.schema {
             NP_Parsed_Schema::List { i: _, sortable: _, of} => {
                 of
             },
@@ -51,26 +54,35 @@ impl<'list> NP_List<'list> {
 
         // check if tail and head are zero, if so return virtual pointer with requested index
         // list is empty so providing any index is safe
-        if self.head == 0 {
-            return NP_Ptr::_new_collection_item_ptr(0, list_of, &self.memory, NP_Ptr_Collection::List {
-                address: self.address,
-                head: self.head,
-                tail: self.tail
-            }, NP_Iterator_Helper::List {
+        if head == 0 {
+            target_ptr.address = 0;
+            target_ptr.schema = list_of;
+            target_ptr.parent = NP_Ptr_Collection::List {
+                address: address,
+                head: head,
+                tail: tail
+            };
+            target_ptr.helper = NP_Iterator_Helper::List {
                 index: index,
                 prev_addr: 0,
                 next_addr: 0,
                 next_index: 0
-            });
+            };
+            target_ptr.kind = NP_PtrKinds::ListItem { 
+                addr:  0,
+                next:  0,
+                i: index
+            };
+            return Ok(())
         }
 
-        let memory = self.memory;
+        let memory = &target_ptr.memory;
 
         
         let first_pointer_index  = match &memory.size {
-            NP_Size::U32 => u16::from_be_bytes(*memory.get_2_bytes(self.head + 8).unwrap_or(&[0; 2])),
-            NP_Size::U16 => u16::from_be_bytes(*memory.get_2_bytes(self.head + 4).unwrap_or(&[0; 2])),
-            NP_Size::U8 => u8::from_be_bytes([memory.get_1_byte(self.head + 2).unwrap_or(0)]) as u16
+            NP_Size::U32 => u16::from_be_bytes(*memory.get_2_bytes(head + 8).unwrap_or(&[0; 2])),
+            NP_Size::U16 => u16::from_be_bytes(*memory.get_2_bytes(head + 4).unwrap_or(&[0; 2])),
+            NP_Size::U8 => u8::from_be_bytes([memory.get_1_byte(head + 2).unwrap_or(0)]) as u16
         };
 
         let offset = memory.addr_size_bytes();
@@ -79,7 +91,7 @@ impl<'list> NP_List<'list> {
         if first_pointer_index == index {
 
             // read into the pointer after the head pointer
-            let next_pointer_addr = memory.read_address(self.head + offset);
+            let next_pointer_addr = memory.read_address(head + offset);
 
             // get the index of the next pointer (after this one)
             let next_real_index = if next_pointer_addr == 0 { 0 } else { match &memory.size {
@@ -88,58 +100,92 @@ impl<'list> NP_List<'list> {
                 NP_Size::U8 => u8::from_be_bytes([memory.get_1_byte(next_pointer_addr + 2).unwrap_or(0)]) as u16
             }};
 
-            return NP_Ptr::_new_collection_item_ptr(self.head, list_of, &self.memory, NP_Ptr_Collection::List {
-                address: self.address,
-                head: self.head,
-                tail: self.tail
-            }, NP_Iterator_Helper::List {
+            target_ptr.address = head;
+            target_ptr.schema = list_of;
+            target_ptr.parent = NP_Ptr_Collection::List {
+                address: address,
+                head: head,
+                tail: tail
+            };
+            target_ptr.helper = NP_Iterator_Helper::List {
                 index: index,
                 prev_addr: 0,
                 next_addr: next_pointer_addr,
                 next_index: next_real_index
-            });
+            };
+            target_ptr.kind = NP_PtrKinds::ListItem { 
+                addr:  memory.read_address(head),
+                next:  next_pointer_addr,
+                i: index
+            };
+            return Ok(())
         }
 
         // if requesting index in front of head, return virtual pointer
         if first_pointer_index > index {
-            return NP_Ptr::_new_collection_item_ptr(0, list_of, &self.memory, NP_Ptr_Collection::List {
-                address: self.address,
-                head: self.head,
-                tail: self.tail
-            }, NP_Iterator_Helper::List {
+            target_ptr.address = 0;
+            target_ptr.schema = list_of;
+            target_ptr.parent = NP_Ptr_Collection::List {
+                address: address,
+                head: head,
+                tail: tail
+            };
+            target_ptr.helper = NP_Iterator_Helper::List {
                 index: index,
                 prev_addr: 0,
-                next_addr: self.head,
+                next_addr: head,
                 next_index: first_pointer_index
-            });
+            };
+            target_ptr.kind = NP_PtrKinds::ListItem { 
+                addr:  0,
+                next:  head,
+                i: index
+            };
+            return Ok(())
         }
 
         
         let last_pointer_index  = match &memory.size {
-            NP_Size::U32 => u16::from_be_bytes(*memory.get_2_bytes(self.tail + 8).unwrap_or(&[0; 2])),
-            NP_Size::U16 => u16::from_be_bytes(*memory.get_2_bytes(self.tail + 4).unwrap_or(&[0; 2])),
-            NP_Size::U8 => u8::from_be_bytes([memory.get_1_byte(self.tail + 2).unwrap_or(0)]) as u16
+            NP_Size::U32 => u16::from_be_bytes(*memory.get_2_bytes(tail + 8).unwrap_or(&[0; 2])),
+            NP_Size::U16 => u16::from_be_bytes(*memory.get_2_bytes(tail + 4).unwrap_or(&[0; 2])),
+            NP_Size::U8 => u8::from_be_bytes([memory.get_1_byte(tail + 2).unwrap_or(0)]) as u16
         };
 
         // if requesting index higher than tail index, return virtual pointer
         if last_pointer_index < index {
-            return NP_Ptr::_new_collection_item_ptr(0, list_of, &self.memory, NP_Ptr_Collection::List {
-                address: self.address,
-                head: self.head,
-                tail: self.tail
-            }, NP_Iterator_Helper::List {
+            target_ptr.address = 0;
+            target_ptr.schema = list_of;
+            target_ptr.parent = NP_Ptr_Collection::List {
+                address: address,
+                head: head,
+                tail: tail
+            };
+            target_ptr.helper = NP_Iterator_Helper::List {
                 index: index,
-                prev_addr: self.tail,
+                prev_addr: tail,
                 next_addr: 0,
                 next_index: 0
-            });
+            };
+            target_ptr.kind = NP_PtrKinds::ListItem { 
+                addr:  0,
+                next:  0,
+                i: index
+            };
+            return Ok(())
         }
 
+        let list = NP_List::new(address, head, tail, (&target_ptr.memory), &target_ptr.schema);
+
         // index is somewhere in the existing records, loop time!
-        for item in self.clone().it().into_iter() {
+        for item in list.it().into_iter() {
             let item_index = match item.helper { NP_Iterator_Helper::List { index, prev_addr: _, next_index: _, next_addr: _ } => index, _ => panic!() };
             if item_index == index {
-                return item.clone()
+                target_ptr.address = item.address;
+                target_ptr.helper = item.helper;
+                target_ptr.parent = item.parent;
+                target_ptr.schema = item.schema;
+                target_ptr.kind = item.kind;
+                return Ok(())
             }
         }
 
@@ -147,20 +193,83 @@ impl<'list> NP_List<'list> {
         panic!()
     }
 
-    /// Select a value from the list.  If the value doesn't exist you'll get a virtual pointer back
-    pub fn select(&'list self, index: u16) -> NP_Ptr<'list> {
-        NP_List::select_mv(self.clone(), index)
-    }
-
     /// Convert this list into an iterator object
     pub fn it(self) -> NP_List_Iterator<'list> {
         NP_List_Iterator::new(self)
     }
 
+    /// Get details of list object at this location in buffer
+    pub fn get_list_details(ptr: &NP_Ptr) -> Result<(usize, usize, usize), NP_Error> {
+        let mut addr = ptr.kind.get_value_addr(); // get pointer of list (head/tail)
+
+        match &ptr.memory.size {
+            NP_Size::U8 => {
+                let mut head: [u8; 1] = [0; 1];
+                let mut tail: [u8; 1] = [0; 1];
+
+                if addr == 0 {
+                    // no list here, make one
+                    addr = ptr.memory.malloc([0u8; 2].to_vec())?; // stores HEAD & TAIL for list
+                    ptr.memory.set_value_address(ptr.address, addr, &ptr.kind);
+                } else {
+                    // existing head, read value
+                    let a = addr as usize;
+                    head = [ptr.memory.get_1_byte(a).unwrap_or(0)];
+                    tail = [ptr.memory.get_1_byte(a + 1).unwrap_or(0)];
+                }
+
+                Ok((addr, u8::from_be_bytes(head) as usize, u8::from_be_bytes(tail) as usize))
+            },
+            NP_Size::U16 => {
+                let mut head: [u8; 2] = [0; 2];
+                let mut tail: [u8; 2] = [0; 2];
+
+                if addr == 0 {
+                    // no list here, make one
+                    addr = ptr.memory.malloc([0u8; 4].to_vec())?; // stores HEAD & TAIL for list
+                    ptr.memory.set_value_address(ptr.address, addr, &ptr.kind);
+                } else {
+                    // existing head, read value
+                    let a = addr as usize;
+                    head = *ptr.memory.get_2_bytes(a).unwrap_or(&[0; 2]);
+                    tail = *ptr.memory.get_2_bytes(a + 2).unwrap_or(&[0; 2]);
+                }
+
+
+                Ok((addr, u16::from_be_bytes(head) as usize, u16::from_be_bytes(tail) as usize))
+            },
+            NP_Size::U32 => {
+                let mut head: [u8; 4] = [0; 4];
+                let mut tail: [u8; 4] = [0; 4];
+
+                if addr == 0 {
+                    // no list here, make one
+                    addr = ptr.memory.malloc([0u8; 8].to_vec())?; // stores HEAD & TAIL for list
+                    ptr.memory.set_value_address(ptr.address, addr, &ptr.kind);
+                } else {
+                    // existing head, read value
+                    let a = addr as usize;
+                    head = *ptr.memory.get_4_bytes(a).unwrap_or(&[0; 4]);
+                    tail = *ptr.memory.get_4_bytes(a + 4).unwrap_or(&[0; 4]);
+                }
+
+                Ok((addr, u32::from_be_bytes(head) as usize, u32::from_be_bytes(tail) as usize))
+            }
+        }
+    }
+
+    /// Convert pointer to self
+    pub fn ptr_to_self(ptr: &NP_Ptr<'list>) -> Result<Self, NP_Error> {
+        
+        let (address, head, tail) = NP_List::get_list_details(&ptr)?;
+
+        Ok(Self::new(address, head, tail, (&ptr.memory), ptr.schema))
+    }
+
     /// Push a new value onto the back of the list
     pub fn push(&mut self, index: Option<u16>) -> Result<NP_Ptr<'list>, NP_Error> {
 
-        let memory = self.memory;
+        let memory = &self.memory;
 
         let list_of = match &**self.schema {
             NP_Parsed_Schema::List { i: _, sortable: _, of} => {
@@ -175,7 +284,7 @@ impl<'list> NP_List<'list> {
 
             let use_index = if let Some(x) = index { x } else { 0 };
             
-            return Ok(NP_Ptr::_new_collection_item_ptr(0, list_of, &memory, NP_Ptr_Collection::List {
+            return Ok(NP_Ptr::_new_collection_item_ptr(0, list_of, (&memory), NP_Ptr_Collection::List {
                 address: self.address,
                 head: self.head,
                 tail: self.tail
@@ -212,7 +321,7 @@ impl<'list> NP_List<'list> {
                 }
             }
 
-            return Ok(NP_Ptr::_new_collection_item_ptr(0, list_of, &memory, NP_Ptr_Collection::List {
+            return Ok(NP_Ptr::_new_collection_item_ptr(0, list_of, (&memory), NP_Ptr_Collection::List {
                 address: self.address,
                 head: self.head,
                 tail: self.tail
@@ -222,15 +331,6 @@ impl<'list> NP_List<'list> {
                 next_addr: 0,
                 next_index: 0
             }));
-        }
-    }
-
-    /// Check to see if a value exists in the list.
-    pub fn has(&'list self, index: u16) -> bool {
-        if self.head == 0 { // empty list, nothing to delete
-            false
-        } else {
-            self.select(index).has_value()
         }
     }
 
@@ -264,7 +364,7 @@ impl<'collection> NP_Collection<'collection> for NP_List<'collection> {
                 if head == 0 { return None };
 
 
-                let memory = ptr.memory;
+                let memory = &ptr.memory;
 
                 if ptr.address == 0 { // handle vritual pointer
 
@@ -284,14 +384,14 @@ impl<'collection> NP_Collection<'collection> for NP_List<'collection> {
                             NP_Size::U8 => u8::from_be_bytes([memory.get_1_byte(next_real_addr + 2).unwrap_or(0)]) as u16
                         }};
 
-                        return Some(NP_Ptr::_new_collection_item_ptr(this_ptr_addr, ptr.schema, ptr.memory, ptr.parent.clone(), NP_Iterator_Helper::List {
+                        return Some(NP_Ptr::_new_collection_item_ptr(this_ptr_addr, ptr.schema, (&ptr.memory), ptr.parent.clone(), NP_Iterator_Helper::List {
                             prev_addr: ptr.address,
                             index: index + 1,
                             next_addr: next_real_addr,
                             next_index: next_real_index
                         }));
                     } else { // go to next index with virtual pointer
-                        return Some(NP_Ptr::_new_collection_item_ptr(ptr.address, ptr.schema, ptr.memory, ptr.parent.clone(), NP_Iterator_Helper::List {
+                        return Some(NP_Ptr::_new_collection_item_ptr(ptr.address, ptr.schema, (&ptr.memory), ptr.parent.clone(), NP_Iterator_Helper::List {
                             prev_addr,
                             index: index + 1,
                             next_addr: next_real_addr,
@@ -317,14 +417,14 @@ impl<'collection> NP_Collection<'collection> for NP_List<'collection> {
                             NP_Size::U8 => u8::from_be_bytes([memory.get_1_byte(next_real_addr + 2).unwrap_or(0)]) as u16
                         };
 
-                        return Some(NP_Ptr::_new_collection_item_ptr(this_ptr_addr, ptr.schema, ptr.memory, ptr.parent.clone(), NP_Iterator_Helper::List {
+                        return Some(NP_Ptr::_new_collection_item_ptr(this_ptr_addr, ptr.schema, (&ptr.memory), ptr.parent.clone(), NP_Iterator_Helper::List {
                             prev_addr: ptr.address,
                             index: index + 1,
                             next_addr: next_real_addr,
                             next_index: next_real_index
                         }));
                     } else { // step into virtual pointer
-                        return Some(NP_Ptr::_new_collection_item_ptr(0, ptr.schema, ptr.memory, ptr.parent.clone(), NP_Iterator_Helper::List {
+                        return Some(NP_Ptr::_new_collection_item_ptr(0, ptr.schema, (&ptr.memory), ptr.parent.clone(), NP_Iterator_Helper::List {
                             prev_addr: ptr.address,
                             index: index + 1,
                             next_addr: next_real_addr,
@@ -338,10 +438,10 @@ impl<'collection> NP_Collection<'collection> for NP_List<'collection> {
 
     }
 
-    fn commit_pointer(ptr: NP_Ptr<'collection>) -> Result<NP_Ptr<'collection>, NP_Error> {
+    fn commit_pointer(ptr: &mut NP_Ptr<'collection>) -> Result<(), NP_Error> {
         // already committed
         if ptr.address != 0 {
-            return Ok(ptr)
+            return Ok(())
         }
 
         let (list_addr, head, tail) = match ptr.parent {
@@ -358,11 +458,20 @@ impl<'collection> NP_Collection<'collection> for NP_List<'collection> {
 
                 let addr_size = ptr.memory.addr_size_bytes();
 
-                // write index to new pointer memory
-                let index_offset = addr_size * 2;
-                for (i, x) in index.to_be_bytes().iter().enumerate() {
-                    ptr_bytes[index_offset + i] = *x;
-                }
+                match &ptr.memory.size {
+                    NP_Size::U8 => {
+                        // write index to new pointer memory
+                        let index_offset = addr_size * 2;
+                        ptr_bytes[index_offset] = index as u8;
+                    },
+                    _ => {
+                        // write index to new pointer memory
+                        let index_offset = addr_size * 2;
+                        for (i, x) in index.to_be_bytes().iter().enumerate() {
+                            ptr_bytes[index_offset + i] = *x;
+                        }
+                    }
+                };
 
                 // write new pointer to memory
                 let new_addr = ptr.memory.malloc(ptr_bytes)?;
@@ -375,7 +484,7 @@ impl<'collection> NP_Collection<'collection> for NP_List<'collection> {
                     ptr.memory.write_address(prev_addr + addr_size, new_addr)?;
                 } else { // update head
                     new_head = new_addr;
-                    NP_List::set_head(ptr.memory, list_addr, new_head)?;
+                    NP_List::set_head((&ptr.memory), list_addr, new_head)?;
                 }
 
                 // adjust this pointer to point to next pointer
@@ -383,14 +492,21 @@ impl<'collection> NP_Collection<'collection> for NP_List<'collection> {
                     ptr.memory.write_address(new_addr + addr_size, next_addr)?;
                 } else { // update tail
                     new_tail = new_addr;
-                    NP_List::set_tail(ptr.memory, list_addr, new_tail)?;
+                    NP_List::set_tail((&ptr.memory), list_addr, new_tail)?;
                 }
-
-                Ok(NP_Ptr::_new_collection_item_ptr(new_addr, ptr.schema, ptr.memory, NP_Ptr_Collection::List {
+                ptr.kind = NP_PtrKinds::ListItem {
+                    addr: 0, 
+                    next: next_addr, 
+                    i: index
+                };
+                ptr.address = new_addr;
+                ptr.parent = NP_Ptr_Collection::List {
                     address: list_addr,
                     head: new_head,
                     tail: new_tail
-                }, ptr.helper))
+                };
+
+                Ok(())
             },
             _ => panic!()
         }
@@ -423,67 +539,6 @@ impl<'list> NP_Value<'list> for NP_List<'list> {
         Err(NP_Error::new("Type (list) doesn't support .set()! Use .into() instead."))
     }
 
-    fn into_value(ptr: NP_Ptr<'list>) -> Result<Option<Box<Self>>, NP_Error> {
-       
-        let mut addr = ptr.kind.get_value_addr(); // get pointer of list (head/tail)
-
-        match &ptr.memory.size {
-            NP_Size::U8 => {
-                let mut head: [u8; 1] = [0; 1];
-                let mut tail: [u8; 1] = [0; 1];
-
-                if addr == 0 {
-                    // no list here, make one
-                    addr = ptr.memory.malloc([0u8; 2].to_vec())?; // stores HEAD & TAIL for list
-                    ptr.memory.set_value_address(ptr.address, addr, &ptr.kind);
-                } else {
-                    // existing head, read value
-                    let a = addr as usize;
-                    head = [ptr.memory.get_1_byte(a).unwrap_or(0)];
-                    tail = [ptr.memory.get_1_byte(a + 1).unwrap_or(0)];
-                }
-
-                Ok(Some(Box::new(Self::new(addr, u8::from_be_bytes(head) as usize, u8::from_be_bytes(tail) as usize, ptr.memory, ptr.schema))))
-            },
-            NP_Size::U16 => {
-                let mut head: [u8; 2] = [0; 2];
-                let mut tail: [u8; 2] = [0; 2];
-
-                if addr == 0 {
-                    // no list here, make one
-                    addr = ptr.memory.malloc([0u8; 4].to_vec())?; // stores HEAD & TAIL for list
-                    ptr.memory.set_value_address(ptr.address, addr, &ptr.kind);
-                } else {
-                    // existing head, read value
-                    let a = addr as usize;
-                    head = *ptr.memory.get_2_bytes(a).unwrap_or(&[0; 2]);
-                    tail = *ptr.memory.get_2_bytes(a + 2).unwrap_or(&[0; 2]);
-                }
-
-
-                Ok(Some(Box::new(Self::new(addr, u16::from_be_bytes(head) as usize, u16::from_be_bytes(tail) as usize, ptr.memory, ptr.schema))))
-            },
-            NP_Size::U32 => {
-                let mut head: [u8; 4] = [0; 4];
-                let mut tail: [u8; 4] = [0; 4];
-
-                if addr == 0 {
-                    // no list here, make one
-                    addr = ptr.memory.malloc([0u8; 8].to_vec())?; // stores HEAD & TAIL for list
-                    ptr.memory.set_value_address(ptr.address, addr, &ptr.kind);
-                } else {
-                    // existing head, read value
-                    let a = addr as usize;
-                    head = *ptr.memory.get_4_bytes(a).unwrap_or(&[0; 4]);
-                    tail = *ptr.memory.get_4_bytes(a + 4).unwrap_or(&[0; 4]);
-                }
-
-                Ok(Some(Box::new(Self::new(addr, u32::from_be_bytes(head) as usize, u32::from_be_bytes(tail) as usize, ptr.memory, ptr.schema))))
-            }
-        }
-        
-    }
-
     fn get_size(ptr: &'list NP_Ptr<'list>) -> Result<usize, NP_Error> {
         // head + tail;,
         let base_size = match ptr.memory.size {
@@ -511,7 +566,7 @@ impl<'list> NP_Value<'list> for NP_List<'list> {
             NP_Size::U32 => u32::from_be_bytes(*ptr.memory.get_4_bytes(a + 4).unwrap_or(&[0; 4]))
         } as usize;
     
-        let list = Self::new(addr, head, tail, ptr.memory, ptr.schema);
+        let list = Self::new(addr, head, tail, (&ptr.memory), ptr.schema);
 
         let mut acc_size = 0usize;
 
@@ -542,7 +597,7 @@ impl<'list> NP_Value<'list> for NP_List<'list> {
             NP_Size::U32 => u32::from_be_bytes(*ptr.memory.get_4_bytes(a + 4).unwrap_or(&[0; 4]))
         } as usize;
 
-        let list = Self::new(addr, head, tail, ptr.memory, ptr.schema);
+        let list = Self::new(addr, head, tail, (&ptr.memory), ptr.schema);
 
         let mut json_list = Vec::new();
 
@@ -553,19 +608,18 @@ impl<'list> NP_Value<'list> for NP_List<'list> {
         NP_JSON::Array(json_list)
     }
 
-    fn do_compact(from_ptr: NP_Ptr<'list>, to_ptr: &'list mut NP_Ptr<'list>) -> Result<(), NP_Error> where Self: NP_Value<'list> {
+    fn do_compact(from_ptr: NP_Ptr<'list>, to_ptr: &mut NP_Ptr<'list>) -> Result<(), NP_Error> where Self: NP_Value<'list> {
 
-        let old_list = Self::into_value(from_ptr.clone())?.unwrap();
-        let mut new_list = Self::into_value(to_ptr.clone())?.unwrap();
+        let old_list = Self::ptr_to_self(&from_ptr)?;
+        let mut new_list = Self::ptr_to_self(to_ptr)?;
 
         for old_item in old_list.it().into_iter() {
             if old_item.has_value() {
                 let this_index = match old_item.helper { NP_Iterator_Helper::List { index, prev_addr: _, next_addr: _, next_index: _} => index, _ => panic!() };
 
                 let mut new_item = new_list.push(Some(this_index))?;
-                new_item = NP_List::commit_pointer(new_item)?;
-
-                old_item.clone().compact(&mut new_item)?;
+                NP_List::commit_pointer(&mut new_item)?;
+                old_item.compact(&mut new_item)?;
             }
         }
 
@@ -667,7 +721,7 @@ impl<'it> NP_List_Iterator<'it> {
         // make first initial pointer
         NP_List_Iterator {
             list_schema: list.schema,
-            current: Some(NP_Ptr::_new_collection_item_ptr(addr, list_of, &memory, NP_Ptr_Collection::List {
+            current: Some(NP_Ptr::_new_collection_item_ptr(addr, list_of, (&memory), NP_Ptr_Collection::List {
                 address: list.address,
                 head: list.head,
                 tail: list.tail
@@ -741,10 +795,10 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"list\",\"of\":{\"type\":\"string\"}}";
     let factory = crate::NP_Factory::new(schema)?;
     let mut buffer = factory.empty_buffer(None, None);
-    buffer.set("10", String::from("hello, world"))?;
-    assert_eq!(buffer.get::<String>("10")?, Some(Box::new(String::from("hello, world"))));
+    buffer.set(&["10"], String::from("hello, world"))?;
+    assert_eq!(buffer.get::<String>(&["10"])?, Some(Box::new(String::from("hello, world"))));
     assert_eq!(buffer.calc_bytes()?.current_buffer, 28usize);
-    buffer.del("")?;
+    buffer.del(&[])?;
     buffer.compact(None, None)?;
     assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);
 

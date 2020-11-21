@@ -9,6 +9,7 @@ documentation="https://docs.rs/crate/no_proto/"
 authors = ["Scott Lott <me@scottlott.com>"]
 readme = "README.md"
 edition = "2018"
+exclude = ["bench/**/*"]
 categories = ["data-structures", "embedded", "encoding", "no-std"]
 keywords = ["protocol-buffers", "flatbuffers", "zero-copy", "serialization", "json"]
 

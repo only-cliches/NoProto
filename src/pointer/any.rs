@@ -30,7 +30,7 @@ impl<'value> NP_Value<'value> for NP_Any {
     fn set_value(_ptr: &mut NP_Ptr<'value>, _value: Box<&Self>) -> Result<(), NP_Error> {
         Err(NP_Error::new("Can't use .set() with (Any), must cast first with NP_Any::cast<T>(pointer)."))
     }
-    fn into_value(_ptr: NP_Ptr<'value>) -> Result<Option<Box<Self>>, NP_Error> {
+    fn into_value<'into>(_ptr: &'into NP_Ptr<'into>) -> Result<Option<Box<Self>>, NP_Error> {
         Err(NP_Error::new("Type (Any) doesn't support .into()!"))
     }
     fn to_json(_ptr: &'value NP_Ptr<'value>) -> NP_JSON {
@@ -39,7 +39,7 @@ impl<'value> NP_Value<'value> for NP_Any {
     fn get_size(_ptr: &'value NP_Ptr<'value>) -> Result<usize, NP_Error> {
         Ok(0)
     }
-    fn do_compact(_from_ptr: NP_Ptr<'value>, _to_ptr: &'value mut NP_Ptr<'value>) -> Result<(), NP_Error> where Self: NP_Value<'value> + Default {
+    fn do_compact(_from_ptr: NP_Ptr<'value>, _to_ptr: &mut NP_Ptr<'value>) -> Result<(), NP_Error> where Self: NP_Value<'value> + Default {
         Err(NP_Error::new("Cannot compact an ANY field!"))
     }
     fn from_json_to_schema(json_schema: &NP_JSON)-> Result<Option<(Vec<u8>, NP_Parsed_Schema)>, NP_Error> {

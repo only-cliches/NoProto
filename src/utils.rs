@@ -72,7 +72,7 @@ pub fn from_utf8_lossy(input: &[u8]) -> String {
     empty
 }
 
-pub fn print_path(path: &Vec<&str>, path_index: usize) -> String {
+pub fn print_path(path: &[&str], path_index: usize) -> String {
     let mut path_str: String = "".to_owned();
     let mut ct: usize = 0;
     path.iter().for_each(|v| {

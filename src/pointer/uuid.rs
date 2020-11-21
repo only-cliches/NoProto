@@ -6,15 +6,16 @@
 //! use no_proto::error::NP_Error;
 //! use no_proto::NP_Factory;
 //! use no_proto::pointer::uuid::NP_UUID;
+//! use no_proto::here;
 //! 
 //! let factory: NP_Factory = NP_Factory::new(r#"{
 //!    "type": "uuid"
 //! }"#)?;
 //!
 //! let mut new_buffer = factory.empty_buffer(None, None);
-//! new_buffer.set("", NP_UUID::generate(50))?;
+//! new_buffer.set(here(), NP_UUID::generate(50))?;
 //! 
-//! assert_eq!("48E6AAB0-7DF5-409F-4D57-4D969FA065EE", new_buffer.get::<NP_UUID>("")?.unwrap().to_string());
+//! assert_eq!("48E6AAB0-7DF5-409F-4D57-4D969FA065EE", new_buffer.get::<NP_UUID>(here())?.unwrap().to_string());
 //!
 //! # Ok::<(), NP_Error>(()) 
 //! ```
@@ -154,7 +155,7 @@ impl<'value> NP_Value<'value> for NP_UUID {
         Ok(())
     }
 
-    fn into_value(ptr: NP_Ptr<'value>) -> Result<Option<Box<Self>>, NP_Error> {
+    fn into_value<'into>(ptr: &'into NP_Ptr<'into>) -> Result<Option<Box<Self>>, NP_Error> {
         let addr = ptr.kind.get_value_addr() as usize;
 
         // empty value
@@ -162,7 +163,7 @@ impl<'value> NP_Value<'value> for NP_UUID {
             return Ok(None);
         }
 
-        let memory = ptr.memory;
+        let memory = &ptr.memory;
         Ok(match memory.get_16_bytes(addr) {
             Some(x) => {
                 // copy since we're handing owned value outside the library
@@ -175,7 +176,7 @@ impl<'value> NP_Value<'value> for NP_UUID {
     }
 
     fn to_json(ptr: &'value NP_Ptr<'value>) -> NP_JSON {
-        let this_string = Self::into_value(ptr.clone());
+        let this_string = Self::into_value(ptr);
 
         match this_string {
             Ok(x) => {
@@ -249,12 +250,12 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let factory = crate::NP_Factory::new(schema)?;
     let mut buffer = factory.empty_buffer(None, None);
     {
-        buffer.set("", NP_UUID::generate(212))?;
+        buffer.set(crate::here(), NP_UUID::generate(212))?;
     }
     
-    assert_eq!(buffer.get::<NP_UUID>("")?, Some(Box::new(NP_UUID::generate(212))));
-    buffer.del("")?;
-    assert_eq!(buffer.get::<NP_UUID>("")?, None);
+    assert_eq!(buffer.get::<NP_UUID>(crate::here())?, Some(Box::new(NP_UUID::generate(212))));
+    buffer.del(crate::here())?;
+    assert_eq!(buffer.get::<NP_UUID>(crate::here())?, None);
 
     buffer.compact(None, None)?;
     assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);

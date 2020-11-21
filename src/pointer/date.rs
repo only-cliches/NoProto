@@ -6,15 +6,16 @@
 //! use no_proto::error::NP_Error;
 //! use no_proto::NP_Factory;
 //! use no_proto::pointer::date::NP_Date;
+//! use no_proto::here;
 //! 
 //! let factory: NP_Factory = NP_Factory::new(r#"{
 //!    "type": "date"
 //! }"#)?;
 //!
 //! let mut new_buffer = factory.empty_buffer(None, None);
-//! new_buffer.set("", NP_Date::new(1604965249484))?;
+//! new_buffer.set(here(), NP_Date::new(1604965249484))?;
 //! 
-//! assert_eq!(Box::new(NP_Date::new(1604965249484)), new_buffer.get::<NP_Date>("")?.unwrap());
+//! assert_eq!(Box::new(NP_Date::new(1604965249484)), new_buffer.get::<NP_Date>(here())?.unwrap());
 //!
 //! # Ok::<(), NP_Error>(()) 
 //! ```
@@ -124,7 +125,7 @@ impl<'value> NP_Value<'value> for NP_Date {
         
     }
 
-    fn into_value(ptr: NP_Ptr<'value>) -> Result<Option<Box<Self>>, NP_Error> {
+    fn into_value<'into>(ptr: &'into NP_Ptr<'into>) -> Result<Option<Box<Self>>, NP_Error> {
         let addr = ptr.kind.get_value_addr() as usize;
 
         // empty value
@@ -132,7 +133,7 @@ impl<'value> NP_Value<'value> for NP_Date {
             return Ok(None);
         }
 
-        let memory = ptr.memory;
+        let memory = &ptr.memory;
         Ok(match memory.get_8_bytes(addr) {
             Some(x) => {
                 Some(Box::new(NP_Date { value: u64::from_be_bytes(*x) }))
@@ -143,7 +144,7 @@ impl<'value> NP_Value<'value> for NP_Date {
 
     fn to_json(ptr: &'value NP_Ptr<'value>) -> NP_JSON {
 
-        match Self::into_value(ptr.clone()) {
+        match Self::into_value(ptr) {
             Ok(x) => {
                 match x {
                     Some(y) => {
@@ -244,8 +245,8 @@ fn schema_parsing_works() -> Result<(), NP_Error> {
 fn default_value_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"date\",\"default\":1605138980392}";
     let factory = crate::NP_Factory::new(schema)?;
-    let buffer = factory.empty_buffer(None, None);
-    assert_eq!(buffer.get("")?.unwrap(), Box::new(NP_Date::new(1605138980392)));
+    let mut buffer = factory.empty_buffer(None, None);
+    assert_eq!(buffer.get(crate::here())?.unwrap(), Box::new(NP_Date::new(1605138980392)));
 
     Ok(())
 }
@@ -255,10 +256,10 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"date\"}";
     let factory = crate::NP_Factory::new(schema)?;
     let mut buffer = factory.empty_buffer(None, None);
-    buffer.set("", NP_Date::new(1605138980392))?;
-    assert_eq!(buffer.get::<NP_Date>("")?, Some(Box::new(NP_Date::new(1605138980392))));
-    buffer.del("")?;
-    assert_eq!(buffer.get::<NP_Date>("")?, None);
+    buffer.set(crate::here(), NP_Date::new(1605138980392))?;
+    assert_eq!(buffer.get::<NP_Date>(crate::here())?, Some(Box::new(NP_Date::new(1605138980392))));
+    buffer.del(crate::here())?;
+    assert_eq!(buffer.get::<NP_Date>(crate::here())?, None);
 
     buffer.compact(None, None)?;
     assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);

@@ -4,15 +4,16 @@
 //! use no_proto::error::NP_Error;
 //! use no_proto::NP_Factory;
 //! use no_proto::pointer::bytes::NP_Bytes;
+//! use no_proto::here;
 //! 
 //! let factory: NP_Factory = NP_Factory::new(r#"{
 //!    "type": "bool"
 //! }"#)?;
 //!
 //! let mut new_buffer = factory.empty_buffer(None, None);
-//! new_buffer.set("", true)?;
+//! new_buffer.set(here(), true)?;
 //! 
-//! assert_eq!(Box::new(true), new_buffer.get::<bool>("")?.unwrap());
+//! assert_eq!(Box::new(true), new_buffer.get::<bool>(here())?.unwrap());
 //!
 //! # Ok::<(), NP_Error>(()) 
 //! ```
@@ -97,7 +98,7 @@ impl<'value> NP_Value<'value> for bool {
         
     }
 
-    fn into_value(ptr: NP_Ptr<'value>) -> Result<Option<Box<Self>>, NP_Error> {
+    fn into_value<'into>(ptr: &'into NP_Ptr<'into>) -> Result<Option<Box<Self>>, NP_Error> {
         let addr = ptr.kind.get_value_addr() as usize;
 
         // empty value
@@ -105,7 +106,7 @@ impl<'value> NP_Value<'value> for bool {
             return Ok(None);
         }
 
-        let memory = ptr.memory;
+        let memory = &ptr.memory;
 
         Ok(match memory.get_1_byte(addr) {
             Some(x) => {
@@ -116,7 +117,7 @@ impl<'value> NP_Value<'value> for bool {
     }
 
     fn to_json(ptr: &'value NP_Ptr<'value>) -> NP_JSON {
-        let this_string = Self::into_value(ptr.clone());
+        let this_string = Self::into_value(&ptr);
 
         match this_string {
             Ok(x) => {
@@ -225,8 +226,8 @@ fn schema_parsing_works() -> Result<(), NP_Error> {
 fn default_value_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"bool\",\"default\":false}";
     let factory = crate::NP_Factory::new(schema)?;
-    let buffer = factory.empty_buffer(None, None);
-    assert_eq!(buffer.get("")?.unwrap(), Box::new(false));
+    let mut buffer = factory.empty_buffer(None, None);
+    assert_eq!(buffer.get(crate::here())?.unwrap(), Box::new(false));
 
     Ok(())
 }
@@ -237,10 +238,10 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"bool\"}";
     let factory = crate::NP_Factory::new(schema)?;
     let mut buffer = factory.empty_buffer(None, None);
-    buffer.set("", false)?;
-    assert_eq!(buffer.get::<bool>("")?.unwrap(), Box::new(false));
-    buffer.del("")?;
-    assert_eq!(buffer.get::<bool>("")?, None);
+    buffer.set(crate::here(), false)?;
+    assert_eq!(buffer.get::<bool>(crate::here())?.unwrap(), Box::new(false));
+    buffer.del(crate::here())?;
+    assert_eq!(buffer.get::<bool>(crate::here())?, None);
 
     buffer.compact(None, None)?;
     assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);
