@@ -214,19 +214,6 @@ use crate::memory::NP_Size;
 
 const PROTOCOL_VERSION: u8 = 1;
 
-/// Convert a string path into a vector path
-/// 
-pub fn path(path: &str) -> Vec<&str> {
-    path.split(".").filter_map(|v| { 
-        if v.len() > 0 { Some(v) } else { None }
-    }).collect()
-}
-
-/// root selector
-pub fn here<'r>() -> &'r [&'r str] {
-    &[]
-}
-
 /// Factories are created from schemas.  Once you have a factory you can use it to create new buffers or open existing ones.
 /// 
 /// The easiest way to create a factory is to pass a JSON string schema into the static `new` method.  [Learn about schemas here.](./schema/index.html)
@@ -294,12 +281,12 @@ pub fn here<'r>() -> &'r [&'r str] {
 /// [Go to NP_Buffer docs](./buffer/struct.NP_Buffer.html)
 /// 
 #[derive(Debug)]
-pub struct NP_Factory {
+pub struct NP_Factory<'factory> {
     /// schema data used by this factory
-    pub schema: NP_Schema
+    pub schema: NP_Schema<'factory>
 }
 
-impl NP_Factory {
+impl<'factory> NP_Factory<'factory> {
     
     /// Generate a new factory from the given schema.
     /// 
@@ -330,7 +317,7 @@ impl NP_Factory {
     /// Create a new factory from a compiled schema byte array.
     /// The byte schemas are at least an order of magnitude faster to parse than JSON schemas.
     /// 
-    pub fn new_compiled(schema_bytes: Vec<u8>) -> NP_Factory {
+    pub fn new_compiled(schema_bytes: Vec<u8>) -> Self {
         
         let schema = NP_Schema::from_bytes(0, &schema_bytes);
 

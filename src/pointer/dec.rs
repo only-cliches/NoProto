@@ -76,8 +76,8 @@ use core::{fmt::{Debug}, hint::unreachable_unchecked};
 use alloc::string::String;
 use alloc::boxed::Box;
 use alloc::borrow::ToOwned;
-
-use super::NP_Ptr;
+use super::{NP_Cursor_Addr};
+use crate::NP_Memory;
 
 
 /// Holds fixed decimal data.
@@ -705,37 +705,38 @@ impl<'value> NP_Value<'value> for NP_Dec {
             _ => { unsafe { unreachable_unchecked() } }
         }
     }
+    fn set_value(cursor_addr: NP_Cursor_Addr, memory: &NP_Memory, value: Box<&Self>) -> Result<NP_Cursor_Addr, NP_Error> {
 
-    fn set_value(ptr: &mut NP_Ptr<'value>, value: Box<&Self>) -> Result<(), NP_Error> {
+        let cursor = memory.get_cursor_data(&cursor_addr).unwrap();
 
-        let exp = match &&**ptr.schema {
+        if cursor_addr.is_virtual { panic!() }
+
+        let exp = match &&**cursor.schema {
             NP_Parsed_Schema::Decimal { i: _, sortable: _, default: _, exp} => {
                 exp
             },
             _ => { unsafe { unreachable_unchecked() } }
         };
 
-        let mut addr = ptr.kind.get_value_addr();
 
         let mut cloned_value = (*value).clone();
         cloned_value.shift_exp(*exp);
 
         let i64_value = cloned_value.num;
 
-        if addr != 0 { // existing value, replace
+        if cursor.address_value != 0 { // existing value, replace
             let mut bytes = i64_value.to_be_bytes();
 
             // convert to unsigned
             bytes[0] = to_unsigned(bytes[0]);
 
-            let write_bytes = ptr.memory.write_bytes();
+            let write_bytes = memory.write_bytes();
 
             // overwrite existing values in buffer
             for x in 0..bytes.len() {
-                write_bytes[addr + x] = bytes[x];
+                write_bytes[cursor.address_value + x] = bytes[x];
             }
 
-            return Ok(());
         } else { // new value
 
             let mut be_bytes = i64_value.to_be_bytes();
@@ -743,31 +744,32 @@ impl<'value> NP_Value<'value> for NP_Dec {
             // convert to unsigned
             be_bytes[0] = to_unsigned(be_bytes[0]);
 
-            addr = ptr.memory.malloc(be_bytes.to_vec())?;
-            ptr.kind = ptr.memory.set_value_address(ptr.address, addr, &ptr.kind);
+            cursor.address_value = memory.malloc_borrow(&be_bytes)?;
+            memory.set_value_address(cursor.address, cursor.address_value);
 
-            return Ok(());
         }
+
+        Ok(cursor_addr)
     }
 
-    fn into_value<'into>(ptr: &'into NP_Ptr<'into>) -> Result<Option<Box<Self>>, NP_Error> {
-        let addr = ptr.kind.get_value_addr() as usize;
+    fn into_value<'into>(cursor_addr: NP_Cursor_Addr, memory: &NP_Memory) -> Result<Option<Box<Self>>, NP_Error> {
+
+        let cursor = memory.get_cursor_data(&cursor_addr).unwrap();
 
         // empty value
-        if addr == 0 {
+        if cursor.address_value == 0 {
             return Ok(None);
         }
 
-        let exp = match &**ptr.schema {
+        let exp = match &**cursor.schema {
             NP_Parsed_Schema::Decimal { i: _, sortable: _, default: _, exp} => {
                 exp
             },
             _ => { unsafe { unreachable_unchecked() } }
         };
 
-        let memory = &ptr.memory;
 
-        Ok(match memory.get_8_bytes(addr) {
+        Ok(match memory.get_8_bytes(cursor.address_value) {
             Some(x) => {
                 let mut be_bytes = x.clone();
                 be_bytes[0] = to_signed(be_bytes[0]);
@@ -777,10 +779,11 @@ impl<'value> NP_Value<'value> for NP_Dec {
         })
     }
 
-    fn to_json(ptr: &'value NP_Ptr<'value>) -> NP_JSON {
-        let this_value = Self::into_value(ptr);
+    fn to_json(cursor_addr: NP_Cursor_Addr, memory: &NP_Memory) -> NP_JSON {
 
-        let exp = match &**ptr.schema {
+        let cursor = memory.get_cursor_data(&cursor_addr).unwrap();
+
+        let exp = match &**cursor.schema {
             NP_Parsed_Schema::Decimal { i: _, sortable: _, default: _, exp} => {
                 exp
             },
@@ -788,7 +791,7 @@ impl<'value> NP_Value<'value> for NP_Dec {
         };
 
 
-        match this_value {
+        match Self::into_value(cursor_addr, memory) {
             Ok(x) => {
                 match x {
                     Some(y) => {
@@ -800,7 +803,7 @@ impl<'value> NP_Value<'value> for NP_Dec {
                         NP_JSON::Dictionary(object)
                     },
                     None => {
-                        match &**ptr.schema {
+                        match &**cursor.schema {
                             NP_Parsed_Schema::Decimal { i: _, sortable: _, default, exp} => {
                                 if let Some(d) = default {
                                     let mut object = JSMAP::new();
@@ -824,10 +827,10 @@ impl<'value> NP_Value<'value> for NP_Dec {
         }
     }
 
-    fn get_size(ptr: &'value NP_Ptr<'value>) -> Result<usize, NP_Error> {
-        let addr = ptr.kind.get_value_addr() as usize;
+    fn get_size(cursor_addr: NP_Cursor_Addr, memory: &NP_Memory) -> Result<usize, NP_Error> {
+        let cursor = memory.get_cursor_data(&cursor_addr).unwrap();
 
-        if addr == 0 {
+        if cursor.address_value == 0 {
             return Ok(0) 
         } else {
             Ok(core::mem::size_of::<i64>())
@@ -929,7 +932,7 @@ fn default_value_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"decimal\",\"exp\":3,\"default\":203.293}";
     let factory = crate::NP_Factory::new(schema)?;
     let mut buffer = factory.empty_buffer(None, None);
-    assert_eq!(buffer.get(crate::here())?.unwrap(), Box::new(NP_Dec::new(203293, 3)));
+    assert_eq!(buffer.get(&[])?.unwrap(), Box::new(NP_Dec::new(203293, 3)));
 
     Ok(())
 }
@@ -940,10 +943,10 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"decimal\",\"exp\": 3}";
     let factory = crate::NP_Factory::new(schema)?;
     let mut buffer = factory.empty_buffer(None, None);
-    buffer.set(crate::here(), NP_Dec::new(203293, 3))?;
-    assert_eq!(buffer.get::<NP_Dec>(crate::here())?.unwrap(), Box::new(NP_Dec::new(203293, 3)));
-    buffer.del(crate::here())?;
-    assert_eq!(buffer.get::<NP_Dec>(crate::here())?, None);
+    buffer.set(&[], NP_Dec::new(203293, 3))?;
+    assert_eq!(buffer.get::<NP_Dec>(&[])?.unwrap(), Box::new(NP_Dec::new(203293, 3)));
+    buffer.del(&[])?;
+    assert_eq!(buffer.get::<NP_Dec>(&[])?, None);
 
     buffer.compact(None, None)?;
     assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);

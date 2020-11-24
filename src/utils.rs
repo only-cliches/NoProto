@@ -44,6 +44,7 @@ impl Rand {
     }
 }
 
+/*
 pub fn from_utf8_lossy(input: &[u8]) -> String {
     let mut empty = String::from("");
 
@@ -70,7 +71,7 @@ pub fn from_utf8_lossy(input: &[u8]) -> String {
     }
 
     empty
-}
+}*/
 
 pub fn print_path(path: &[&str], path_index: usize) -> String {
     let mut path_str: String = "".to_owned();

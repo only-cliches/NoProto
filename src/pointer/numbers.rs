@@ -31,6 +31,7 @@
 //! 
 //! 
 
+
 use crate::schema::NP_Parsed_Schema;
 use alloc::vec::Vec;
 use crate::utils::to_unsigned;
@@ -38,11 +39,12 @@ use crate::utils::to_signed;
 use crate::schema::NP_Schema;
 use crate::error::NP_Error;
 use crate::{schema::NP_TypeKeys, pointer::NP_Value, json_flex::NP_JSON, json_flex::JSMAP};
-use super::{NP_Ptr};
 
 use alloc::string::String;
 use alloc::boxed::Box;
 use alloc::{borrow::ToOwned};
+use super::{NP_Cursor_Addr};
+use crate::NP_Memory;
 
 /// The type of number being used
 #[derive(Debug)]
@@ -71,7 +73,7 @@ macro_rules! noproto_number {
                 let mut schema_json = JSMAP::new();
                 schema_json.insert("type".to_owned(), NP_JSON::String(Self::type_idx().1));
             
-                if let Some(default) = Self::schema_default(&schema_ptr) {
+                if let Some(default) = <$t>::np_get_default(&schema_ptr) {
                     let default_val = *default;
                     match $numType {
                         NP_NumType::signed => {
@@ -90,15 +92,17 @@ macro_rules! noproto_number {
                 Ok(NP_JSON::Dictionary(schema_json))
             }
 
-            fn schema_default(ptr: &NP_Parsed_Schema) -> Option<Box<Self>> {
-                <$t>::np_get_default(ptr)
+            fn schema_default(schema: &NP_Parsed_Schema) -> Option<Box<Self>> {
+                <$t>::np_get_default(&schema)
             }
     
-            fn set_value(ptr: &mut NP_Ptr<'value>, value: Box<&Self>) -> Result<(), NP_Error> {
+            fn set_value(cursor_addr: NP_Cursor_Addr, memory: &NP_Memory, value: Box<&Self>) -> Result<NP_Cursor_Addr, NP_Error> {
 
-                let mut addr = ptr.kind.get_value_addr();
+                let cursor = memory.get_cursor_data(&cursor_addr).unwrap();
         
-                if addr != 0 { // existing value, replace
+                if cursor_addr.is_virtual { panic!() }
+        
+                if cursor.address_value != 0 { // existing value, replace
                     let mut bytes = value.to_be_bytes();
 
                     match $numType {
@@ -108,13 +112,13 @@ macro_rules! noproto_number {
                         _ => {}
                     };
         
-                    let write_bytes = ptr.memory.write_bytes();
+                    let write_bytes = memory.write_bytes();
         
                     // overwrite existing values in buffer
                     for x in 0..bytes.len() {
-                        write_bytes[addr + x] = bytes[x];
+                        write_bytes[cursor.address_value + x] = bytes[x];
                     }
-                    return Ok(());
+                    return Ok(cursor_addr);
                 } else { // new value
         
                     let mut bytes = value.to_be_bytes();
@@ -126,26 +130,27 @@ macro_rules! noproto_number {
                         _ => {}
                     };
         
-                    addr = ptr.memory.malloc(bytes.to_vec())?;
-                    ptr.kind = ptr.memory.set_value_address(ptr.address, addr, &ptr.kind);
+                    cursor.address_value = memory.malloc_borrow(&bytes)?;
+                    memory.set_value_address(cursor.address, cursor.address_value);
 
-                    return Ok(());
+                    return Ok(cursor_addr);
                 }
                 
             }
         
-            fn into_value<'into>(ptr: &'into NP_Ptr<'into>) -> Result<Option<Box<Self>>, NP_Error> {
-                let addr = ptr.kind.get_value_addr() as usize;
-        
+            fn into_value<'into>(cursor_addr: NP_Cursor_Addr, memory: &NP_Memory) -> Result<Option<Box<Self>>, NP_Error> {
+                
+                let cursor = memory.get_cursor_data(&cursor_addr).unwrap();
+
                 // empty value
-                if addr == 0 {
+                if cursor.address_value == 0 {
                     return Ok(None);
                 }
         
-                let read_memory = ptr.memory.read_bytes();
+                let read_memory = memory.read_bytes();
                 let mut be_bytes = <$t>::default().to_be_bytes();
                 for x in 0..be_bytes.len() {
-                    be_bytes[x] = read_memory[addr + x];
+                    be_bytes[x] = read_memory[cursor.address_value + x];
                 }
 
                 match $numType {
@@ -158,10 +163,9 @@ macro_rules! noproto_number {
                 Ok(Some(Box::new(<$t>::from_be_bytes(be_bytes))))
             }
 
-            fn to_json(ptr: &'value NP_Ptr<'value>) -> NP_JSON {
-                let this_value = Self::into_value(ptr);
+            fn to_json(cursor_addr: NP_Cursor_Addr, memory: &NP_Memory) -> NP_JSON {
         
-                match this_value {
+                match Self::into_value(cursor_addr, memory) {
                     Ok(x) => {
                         match x {
                             Some(y) => {
@@ -171,9 +175,8 @@ macro_rules! noproto_number {
                                 }
                             },
                             None => {
-                                let value = <$t>::schema_default(&ptr.schema);
-
-                                match value {
+                                let cursor = memory.get_cursor_data(&cursor_addr).unwrap();
+                                match <$t>::schema_default(&cursor.schema) {
                                     Some(v) => {
                                         match $numType {
                                             NP_NumType::floating => { NP_JSON::Float(*v as f64) },
@@ -191,9 +194,10 @@ macro_rules! noproto_number {
                 }
             }
 
-            fn get_size(ptr: &'value NP_Ptr<'value>) -> Result<usize, NP_Error> {
-         
-                if ptr.kind.get_value_addr() == 0 {
+            fn get_size(cursor_addr: NP_Cursor_Addr, memory: &NP_Memory) -> Result<usize, NP_Error> {
+                let cursor = memory.get_cursor_data(&cursor_addr).unwrap();
+        
+                if cursor.address_value == 0 {
                     Ok(0) 
                 } else {
                     Ok(core::mem::size_of::<Self>())
@@ -322,10 +326,17 @@ trait NP_BigEndian {
     fn np_get_default_from_json(json: &NP_JSON) -> Option<Box<Self>>;
     fn np_get_default(ptr: &NP_Parsed_Schema) -> Option<Box<Self>>;
     fn np_get_default_from_bytes(address: usize, bytes: &Vec<u8>) -> Option<Box<Self>>;
+    fn np_get_default_from_cursor(cursor_addr: NP_Cursor_Addr, memory: &NP_Memory) -> Option<Box<Self>>;
 }
 
 
 impl NP_BigEndian for i8 {
+    
+    fn np_get_default_from_cursor(cursor_addr: NP_Cursor_Addr, memory: &NP_Memory) -> Option<Box<Self>> {
+        let cursor = memory.get_cursor_data(&cursor_addr).unwrap();
+        Self::np_get_default(cursor.schema)
+    }
+
     fn np_get_default(ptr: &NP_Parsed_Schema) -> Option<Box<Self>> {
         match ptr {
             NP_Parsed_Schema::Int8 { sortable: _, i: _, default } => { default.clone() },
@@ -374,7 +385,7 @@ fn i8_default_value_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"i8\",\"default\":56}";
     let factory = crate::NP_Factory::new(schema)?;
     let mut buffer = factory.empty_buffer(None, None);
-    assert_eq!(buffer.get(crate::here())?.unwrap(), Box::new(56i8));
+    assert_eq!(buffer.get(&[])?.unwrap(), Box::new(56i8));
 
     Ok(())
 }
@@ -384,10 +395,10 @@ fn i8_set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"i8\"}";
     let factory = crate::NP_Factory::new(schema)?;
     let mut buffer = factory.empty_buffer(None, None);
-    buffer.set(crate::here(), 56i8)?;
-    assert_eq!(buffer.get::<i8>(crate::here())?.unwrap(), Box::new(56i8));
-    buffer.del(crate::here())?;
-    assert_eq!(buffer.get::<i8>(crate::here())?, None);
+    buffer.set(&[], 56i8)?;
+    assert_eq!(buffer.get::<i8>(&[])?.unwrap(), Box::new(56i8));
+    buffer.del(&[])?;
+    assert_eq!(buffer.get::<i8>(&[])?, None);
 
     buffer.compact(None, None)?;
     assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);
@@ -396,6 +407,11 @@ fn i8_set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
 }
 
 impl NP_BigEndian for i16 {
+    fn np_get_default_from_cursor(cursor_addr: NP_Cursor_Addr, memory: &NP_Memory) -> Option<Box<Self>> {
+        let cursor = memory.get_cursor_data(&cursor_addr).unwrap();
+        Self::np_get_default(cursor.schema)
+    }
+
     fn np_get_default(ptr: &NP_Parsed_Schema) -> Option<Box<Self>> {
         match ptr {
             NP_Parsed_Schema::Int16 { sortable: _, i: _, default } => { default.clone() },
@@ -445,7 +461,7 @@ fn i16_default_value_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"i16\",\"default\":293}";
     let factory = crate::NP_Factory::new(schema)?;
     let mut buffer = factory.empty_buffer(None, None);
-    assert_eq!(buffer.get(crate::here())?.unwrap(), Box::new(293i16));
+    assert_eq!(buffer.get(&[])?.unwrap(), Box::new(293i16));
 
     Ok(())
 }
@@ -455,10 +471,10 @@ fn i16_set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"i16\"}";
     let factory = crate::NP_Factory::new(schema)?;
     let mut buffer = factory.empty_buffer(None, None);
-    buffer.set(crate::here(), 293i16)?;
-    assert_eq!(buffer.get::<i16>(crate::here())?.unwrap(), Box::new(293i16));
-    buffer.del(crate::here())?;
-    assert_eq!(buffer.get::<i16>(crate::here())?, None);
+    buffer.set(&[], 293i16)?;
+    assert_eq!(buffer.get::<i16>(&[])?.unwrap(), Box::new(293i16));
+    buffer.del(&[])?;
+    assert_eq!(buffer.get::<i16>(&[])?, None);
 
     buffer.compact(None, None)?;
     assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);
@@ -467,6 +483,10 @@ fn i16_set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
 }
 
 impl NP_BigEndian for i32 {
+    fn np_get_default_from_cursor(cursor_addr: NP_Cursor_Addr, memory: &NP_Memory) -> Option<Box<Self>> {
+        let cursor = memory.get_cursor_data(&cursor_addr).unwrap();
+        Self::np_get_default(cursor.schema)
+    }
     fn np_get_default(ptr: &NP_Parsed_Schema) -> Option<Box<Self>> {
         match ptr {
             NP_Parsed_Schema::Int32 { sortable: _, i: _, default } => { default.clone() },
@@ -516,7 +536,7 @@ fn i32_default_value_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"i32\",\"default\":293}";
     let factory = crate::NP_Factory::new(schema)?;
     let mut buffer = factory.empty_buffer(None, None);
-    assert_eq!(buffer.get(crate::here())?.unwrap(), Box::new(293i32));
+    assert_eq!(buffer.get(&[])?.unwrap(), Box::new(293i32));
 
     Ok(())
 }
@@ -526,10 +546,10 @@ fn i32_set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"i32\"}";
     let factory = crate::NP_Factory::new(schema)?;
     let mut buffer = factory.empty_buffer(None, None);
-    buffer.set(crate::here(), 293i32)?;
-    assert_eq!(buffer.get::<i32>(crate::here())?.unwrap(), Box::new(293i32));
-    buffer.del(crate::here())?;
-    assert_eq!(buffer.get::<i32>(crate::here())?, None);
+    buffer.set(&[], 293i32)?;
+    assert_eq!(buffer.get::<i32>(&[])?.unwrap(), Box::new(293i32));
+    buffer.del(&[])?;
+    assert_eq!(buffer.get::<i32>(&[])?, None);
 
     buffer.compact(None, None)?;
     assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);
@@ -538,6 +558,12 @@ fn i32_set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
 }
 
 impl NP_BigEndian for i64 {
+
+    fn np_get_default_from_cursor(cursor_addr: NP_Cursor_Addr, memory: &NP_Memory) -> Option<Box<Self>> {
+        let cursor = memory.get_cursor_data(&cursor_addr).unwrap();
+        Self::np_get_default(cursor.schema)
+    }
+
     fn np_get_default(ptr: &NP_Parsed_Schema) -> Option<Box<Self>> {
         match ptr {
             NP_Parsed_Schema::Int64 { sortable: _, i: _, default } => { default.clone() },
@@ -587,7 +613,7 @@ fn i64_default_value_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"i64\",\"default\":293}";
     let factory = crate::NP_Factory::new(schema)?;
     let mut buffer = factory.empty_buffer(None, None);
-    assert_eq!(buffer.get(crate::here())?.unwrap(), Box::new(293i64));
+    assert_eq!(buffer.get(&[])?.unwrap(), Box::new(293i64));
 
     Ok(())
 }
@@ -597,10 +623,10 @@ fn i64_set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"i64\"}";
     let factory = crate::NP_Factory::new(schema)?;
     let mut buffer = factory.empty_buffer(None, None);
-    buffer.set(crate::here(), 293i64)?;
-    assert_eq!(buffer.get::<i64>(crate::here())?.unwrap(), Box::new(293i64));
-    buffer.del(crate::here())?;
-    assert_eq!(buffer.get::<i64>(crate::here())?, None);
+    buffer.set(&[], 293i64)?;
+    assert_eq!(buffer.get::<i64>(&[])?.unwrap(), Box::new(293i64));
+    buffer.del(&[])?;
+    assert_eq!(buffer.get::<i64>(&[])?, None);
 
     buffer.compact(None, None)?;
     assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);
@@ -609,6 +635,12 @@ fn i64_set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
 }
 
 impl NP_BigEndian for u8 {
+
+    fn np_get_default_from_cursor(cursor_addr: NP_Cursor_Addr, memory: &NP_Memory) -> Option<Box<Self>> {
+        let cursor = memory.get_cursor_data(&cursor_addr).unwrap();
+        Self::np_get_default(cursor.schema)
+    }
+
     fn np_get_default(ptr: &NP_Parsed_Schema) -> Option<Box<Self>> {
         match ptr {
             NP_Parsed_Schema::Uint8 { sortable: _, i: _, default } => { default.clone() },
@@ -658,7 +690,7 @@ fn u8_default_value_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"u8\",\"default\":198}";
     let factory = crate::NP_Factory::new(schema)?;
     let mut buffer = factory.empty_buffer(None, None);
-    assert_eq!(buffer.get(crate::here())?.unwrap(), Box::new(198u8));
+    assert_eq!(buffer.get(&[])?.unwrap(), Box::new(198u8));
 
     Ok(())
 }
@@ -668,10 +700,10 @@ fn u8_set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"u8\"}";
     let factory = crate::NP_Factory::new(schema)?;
     let mut buffer = factory.empty_buffer(None, None);
-    buffer.set(crate::here(), 198u8)?;
-    assert_eq!(buffer.get::<u8>(crate::here())?.unwrap(), Box::new(198u8));
-    buffer.del(crate::here())?;
-    assert_eq!(buffer.get::<u8>(crate::here())?, None);
+    buffer.set(&[], 198u8)?;
+    assert_eq!(buffer.get::<u8>(&[])?.unwrap(), Box::new(198u8));
+    buffer.del(&[])?;
+    assert_eq!(buffer.get::<u8>(&[])?, None);
 
     buffer.compact(None, None)?;
     assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);
@@ -680,6 +712,12 @@ fn u8_set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
 }
 
 impl NP_BigEndian for u16 {
+
+    fn np_get_default_from_cursor(cursor_addr: NP_Cursor_Addr, memory: &NP_Memory) -> Option<Box<Self>> {
+        let cursor = memory.get_cursor_data(&cursor_addr).unwrap();
+        Self::np_get_default(cursor.schema)
+    }
+
     fn np_get_default(ptr: &NP_Parsed_Schema) -> Option<Box<Self>> {
         match ptr {
             NP_Parsed_Schema::Uint16 { sortable: _, i: _, default } => { default.clone() },
@@ -729,7 +767,7 @@ fn u16_default_value_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"u16\",\"default\":293}";
     let factory = crate::NP_Factory::new(schema)?;
     let mut buffer = factory.empty_buffer(None, None);
-    assert_eq!(buffer.get(crate::here())?.unwrap(), Box::new(293u16));
+    assert_eq!(buffer.get(&[])?.unwrap(), Box::new(293u16));
 
     Ok(())
 }
@@ -739,10 +777,10 @@ fn u16_set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"u16\"}";
     let factory = crate::NP_Factory::new(schema)?;
     let mut buffer = factory.empty_buffer(None, None);
-    buffer.set(crate::here(), 293u16)?;
-    assert_eq!(buffer.get::<u16>(crate::here())?.unwrap(), Box::new(293u16));
-    buffer.del(crate::here())?;
-    assert_eq!(buffer.get::<u16>(crate::here())?, None);
+    buffer.set(&[], 293u16)?;
+    assert_eq!(buffer.get::<u16>(&[])?.unwrap(), Box::new(293u16));
+    buffer.del(&[])?;
+    assert_eq!(buffer.get::<u16>(&[])?, None);
 
     buffer.compact(None, None)?;
     assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);
@@ -751,6 +789,12 @@ fn u16_set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
 }
 
 impl NP_BigEndian for u32 {
+
+    fn np_get_default_from_cursor(cursor_addr: NP_Cursor_Addr, memory: &NP_Memory) -> Option<Box<Self>> {
+        let cursor = memory.get_cursor_data(&cursor_addr).unwrap();
+        Self::np_get_default(cursor.schema)
+    }
+
     fn np_get_default(ptr: &NP_Parsed_Schema) -> Option<Box<Self>> {
         match ptr {
             NP_Parsed_Schema::Uint32 { sortable: _, i: _, default } => { default.clone() },
@@ -800,7 +844,7 @@ fn u32_default_value_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"u32\",\"default\":293}";
     let factory = crate::NP_Factory::new(schema)?;
     let mut buffer = factory.empty_buffer(None, None);
-    assert_eq!(buffer.get(crate::here())?.unwrap(), Box::new(293u32));
+    assert_eq!(buffer.get(&[])?.unwrap(), Box::new(293u32));
 
     Ok(())
 }
@@ -810,10 +854,10 @@ fn u32_set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"u32\"}";
     let factory = crate::NP_Factory::new(schema)?;
     let mut buffer = factory.empty_buffer(None, None);
-    buffer.set(crate::here(), 293u32)?;
-    assert_eq!(buffer.get::<u32>(crate::here())?.unwrap(), Box::new(293u32));
-    buffer.del(crate::here())?;
-    assert_eq!(buffer.get::<u32>(crate::here())?, None);
+    buffer.set(&[], 293u32)?;
+    assert_eq!(buffer.get::<u32>(&[])?.unwrap(), Box::new(293u32));
+    buffer.del(&[])?;
+    assert_eq!(buffer.get::<u32>(&[])?, None);
 
     buffer.compact(None, None)?;
     assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);
@@ -822,6 +866,12 @@ fn u32_set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
 }
 
 impl NP_BigEndian for u64 {
+
+    fn np_get_default_from_cursor(cursor_addr: NP_Cursor_Addr, memory: &NP_Memory) -> Option<Box<Self>> {
+        let cursor = memory.get_cursor_data(&cursor_addr).unwrap();
+        Self::np_get_default(cursor.schema)
+    }
+
     fn np_get_default(ptr: &NP_Parsed_Schema) -> Option<Box<Self>> {
         match ptr {
             NP_Parsed_Schema::Uint64 { sortable: _, i: _, default } => { default.clone() },
@@ -870,7 +920,7 @@ fn u64_default_value_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"u64\",\"default\":293}";
     let factory = crate::NP_Factory::new(schema)?;
     let mut buffer = factory.empty_buffer(None, None);
-    assert_eq!(buffer.get(crate::here())?.unwrap(), Box::new(293u64));
+    assert_eq!(buffer.get(&[])?.unwrap(), Box::new(293u64));
 
     Ok(())
 }
@@ -880,10 +930,10 @@ fn u64_set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"u64\"}";
     let factory = crate::NP_Factory::new(schema)?;
     let mut buffer = factory.empty_buffer(None, None);
-    buffer.set(crate::here(), 293u64)?;
-    assert_eq!(buffer.get::<u64>(crate::here())?.unwrap(), Box::new(293u64));
-    buffer.del(crate::here())?;
-    assert_eq!(buffer.get::<u64>(crate::here())?, None);
+    buffer.set(&[], 293u64)?;
+    assert_eq!(buffer.get::<u64>(&[])?.unwrap(), Box::new(293u64));
+    buffer.del(&[])?;
+    assert_eq!(buffer.get::<u64>(&[])?, None);
 
     buffer.compact(None, None)?;
     assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);
@@ -892,6 +942,12 @@ fn u64_set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
 }
 
 impl NP_BigEndian for f32 {
+
+    fn np_get_default_from_cursor(cursor_addr: NP_Cursor_Addr, memory: &NP_Memory) -> Option<Box<Self>> {
+        let cursor = memory.get_cursor_data(&cursor_addr).unwrap();
+        Self::np_get_default(cursor.schema)
+    }
+
     fn np_get_default(ptr: &NP_Parsed_Schema) -> Option<Box<Self>> {
         match ptr {
             NP_Parsed_Schema::Float { sortable: _, i: _, default } => { default.clone() },
@@ -940,7 +996,7 @@ fn float_default_value_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"float\",\"default\":2983.2938}";
     let factory = crate::NP_Factory::new(schema)?;
     let mut buffer = factory.empty_buffer(None, None);
-    assert_eq!(buffer.get(crate::here())?.unwrap(), Box::new(2983.2938f32));
+    assert_eq!(buffer.get(&[])?.unwrap(), Box::new(2983.2938f32));
 
     Ok(())
 }
@@ -950,10 +1006,10 @@ fn float_set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"float\"}";
     let factory = crate::NP_Factory::new(schema)?;
     let mut buffer = factory.empty_buffer(None, None);
-    buffer.set(crate::here(), 2983.2938f32)?;
-    assert_eq!(buffer.get::<f32>(crate::here())?.unwrap(), Box::new(2983.2938f32));
-    buffer.del(crate::here())?;
-    assert_eq!(buffer.get::<f32>(crate::here())?, None);
+    buffer.set(&[], 2983.2938f32)?;
+    assert_eq!(buffer.get::<f32>(&[])?.unwrap(), Box::new(2983.2938f32));
+    buffer.del(&[])?;
+    assert_eq!(buffer.get::<f32>(&[])?, None);
 
     buffer.compact(None, None)?;
     assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);
@@ -963,6 +1019,12 @@ fn float_set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
 
 
 impl NP_BigEndian for f64 {
+
+    fn np_get_default_from_cursor(cursor_addr: NP_Cursor_Addr, memory: &NP_Memory) -> Option<Box<Self>> {
+        let cursor = memory.get_cursor_data(&cursor_addr).unwrap();
+        Self::np_get_default(cursor.schema)
+    }
+
     fn np_get_default(ptr: &NP_Parsed_Schema) -> Option<Box<Self>> {
         match ptr {
             NP_Parsed_Schema::Double { sortable: _, i: _, default } => { default.clone() },
@@ -1011,7 +1073,7 @@ fn double_default_value_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"double\",\"default\":2983.2938}";
     let factory = crate::NP_Factory::new(schema)?;
     let mut buffer = factory.empty_buffer(None, None);
-    assert_eq!(buffer.get(crate::here())?.unwrap(), Box::new(2983.2938f64));
+    assert_eq!(buffer.get(&[])?.unwrap(), Box::new(2983.2938f64));
 
     Ok(())
 }
@@ -1021,10 +1083,10 @@ fn double_set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"double\"}";
     let factory = crate::NP_Factory::new(schema)?;
     let mut buffer = factory.empty_buffer(None, None);
-    buffer.set(crate::here(), 2983.2938f64)?;
-    assert_eq!(buffer.get::<f64>(crate::here())?.unwrap(), Box::new(2983.2938f64));
-    buffer.del(crate::here())?;
-    assert_eq!(buffer.get::<f64>(crate::here())?, None);
+    buffer.set(&[], 2983.2938f64)?;
+    assert_eq!(buffer.get::<f64>(&[])?.unwrap(), Box::new(2983.2938f64));
+    buffer.del(&[])?;
+    assert_eq!(buffer.get::<f64>(&[])?, None);
 
     buffer.compact(None, None)?;
     assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);

@@ -1,5 +1,5 @@
 use alloc::rc::Rc;
-use crate::{pointer::{NP_Iterator_Helper, NP_Ptr_Collection}, schema::{NP_Parsed_Schema}};
+use crate::{pointer::{NP_Cursor_Addr, NP_Iterator_Helper, NP_Ptr_Collection}, schema::{NP_Parsed_Schema}};
 use crate::pointer::NP_PtrKinds;
 use crate::{memory::{NP_Size, NP_Memory}, pointer::{NP_Value, NP_Ptr}, error::NP_Error, schema::{NP_Schema, NP_TypeKeys}, json_flex::{JSMAP, NP_JSON}};
 
@@ -15,10 +15,9 @@ use super::NP_Collection;
 #[doc(hidden)]
 #[derive(Debug, Clone)]
 pub struct NP_Table<'table> {
-    address: usize, // pointer location
-    head: usize,
-    memory: &'table NP_Memory,
-    schema: &'table Box<NP_Parsed_Schema>
+    table_cursor: NP_Cursor_Addr,
+    current: Option<NP_Cursor_Addr>,
+    pub memory: &'tabke NP_Memory<'tabke>
 }
 
 impl<'table> NP_Value<'table> for NP_Table<'table> {
@@ -324,7 +323,7 @@ impl<'table> NP_Table<'table> {
     }
 
     /// Select into pointer
-    pub fn select_to_ptr<'sel: 'table>(target_ptr: &mut NP_Ptr<'sel>, column: &str, quick_select: Option<usize>) -> Result<(), NP_Error> {
+    pub fn select_to_ptr<'sel: 'table>(cursor_addr: NP_Cursor_Addr, memory: &NP_Memory, column: &str, quick_select: Option<usize>) -> Result<NP_Cursor_Addr, NP_Error> {
         
         let (address, head) = Self::ptr_to_details(&target_ptr)?;
         
@@ -443,7 +442,7 @@ impl<'table> NP_Table<'table> {
 impl<'collection> NP_Collection<'collection> for NP_Table<'collection> {
 
     /// Step a pointer to the next item in the collection
-    fn step_pointer(ptr: &mut NP_Ptr<'collection>) -> Option<NP_Ptr<'collection>> {
+    fn step_pointer(cursor_addr: NP_Cursor_Addr, memory: &NP_Memory) -> Option<NP_Cursor_Addr> {
         // can't step with virtual pointer
         if ptr.address == 0 {
             return None;
@@ -498,7 +497,7 @@ impl<'collection> NP_Collection<'collection> for NP_Table<'collection> {
     }
 
     /// Commit a virtual pointer into the buffer
-    fn commit_pointer(ptr: &mut NP_Ptr<'collection>) -> Result<(), NP_Error> {
+    fn commit_pointer(cursor_addr: NP_Cursor_Addr, memory: &NP_Memory) -> Result<NP_Cursor_Addr, NP_Error> {
 
         // pointer already committed
         if ptr.address != 0 {

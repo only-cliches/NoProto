@@ -25,40 +25,41 @@ use crate::error::NP_Error;
 use crate::memory::{NP_Size};
 use crate::{schema::{NP_TypeKeys}, pointer::NP_Value, json_flex::NP_JSON};
 use core::hint::unreachable_unchecked;
-use super::{NP_Ptr};
 
 use alloc::vec::Vec;
 use alloc::vec;
 use alloc::string::String;
 use alloc::boxed::Box;
 use alloc::{borrow::ToOwned};
+use super::{NP_Cursor_Addr};
+use crate::NP_Memory;
 
 /// Holds arbitrary byte data.
 /// 
 /// Check out documentation [here](../bytes/index.html).
 /// 
 #[derive(Debug, Eq, PartialEq)]
-pub struct NP_Bytes {
+pub struct NP_Bytes<'bytes> {
     /// The bytes of the vec in this type
-    pub bytes: Vec<u8>
+    pub bytes: &'bytes [u8]
 }
 
-impl NP_Bytes {
+impl<'bytes> NP_Bytes<'bytes> {
     /// Create a new bytes type with the provided Vec
-    pub fn new(bytes: Vec<u8>) -> Self {
+    pub fn new(bytes: &'bytes [u8]) -> Self {
         NP_Bytes { bytes: bytes }
     }
 }
 
 
 
-impl Default for NP_Bytes {
+impl<'bytes> Default for NP_Bytes<'bytes> {
     fn default() -> Self { 
-        NP_Bytes { bytes: vec![] }
+        NP_Bytes { bytes: &[] }
      }
 }
 
-impl<'value> NP_Value<  'value> for NP_Bytes {
+impl<'value> NP_Value<'value> for NP_Bytes<'value> {
 
 
     fn type_idx() -> (u8, String, NP_TypeKeys) { (NP_TypeKeys::Bytes as u8, "bytes".to_owned(), NP_TypeKeys::Bytes) }
@@ -88,7 +89,7 @@ impl<'value> NP_Value<  'value> for NP_Bytes {
         Ok(NP_JSON::Dictionary(schema_json))
     }
 
-    fn schema_default(schema: &NP_Parsed_Schema) -> Option<Box<Self>> {
+    fn schema_default(schema: &'value NP_Parsed_Schema) -> Option<Box<Self>> {
 
         match schema {
             NP_Parsed_Schema::Bytes { i: _, sortable: _, default, size: _} => {
@@ -102,20 +103,20 @@ impl<'value> NP_Value<  'value> for NP_Bytes {
         }
     }
 
-    fn set_value(pointer: &mut NP_Ptr<'value>, value: Box<&Self>) -> Result<(), NP_Error> {
+    fn set_value(cursor_addr: NP_Cursor_Addr, memory: &NP_Memory, value: Box<&Self>) -> Result<NP_Cursor_Addr, NP_Error> {
  
-        let bytes = &value.bytes;
-        let str_size = bytes.len() as u64;
+        let bytes = value.bytes;
 
-        let mut addr = pointer.kind.get_value_addr() as usize;
+        let str_size = bytes.len() as usize;
+    
+        let cursor = memory.get_cursor_data(&cursor_addr).unwrap();
 
-        let write_bytes = pointer.memory.write_bytes();
+        if cursor_addr.is_virtual { panic!() }
+    
+        let write_bytes = memory.write_bytes();
 
-        let size = match &**pointer.schema {
+        let size = match &**cursor.schema {
             NP_Parsed_Schema::Bytes { i: _, sortable: _, default: _, size} => {
-                size
-            },
-            NP_Parsed_Schema::UTF8String { i: _, sortable: _, default: _, size} => {
                 size
             },
             _ => { panic!() }
@@ -123,44 +124,42 @@ impl<'value> NP_Value<  'value> for NP_Bytes {
 
         if *size > 0 { // fixed size bytes
 
-            if addr == 0 { // malloc new bytes
+            if cursor.address_value == 0 { // malloc new bytes
 
                 let mut empty_bytes: Vec<u8> = Vec::with_capacity(*size as usize);
                 for _x in 0..(*size as usize) {
                     empty_bytes.push(0);
                 }
                 
-                addr = pointer.memory.malloc(empty_bytes)? as usize;
-
-                // set location address
-                pointer.kind = pointer.memory.set_value_address(pointer.address, addr, &pointer.kind);
+                cursor.address_value = memory.malloc(empty_bytes)? as usize;
+                memory.set_value_address(cursor.address, cursor.address_value);
             }
 
             for x in 0..(*size as usize) {
                 if x < bytes.len() { // assign values of bytes
-                    write_bytes[(addr + x)] = bytes[x];
+                    write_bytes[(cursor.address_value + x)] = bytes[x];
                 } else { // rest is zeros
-                    write_bytes[(addr + x)] = 0;
+                    write_bytes[(cursor.address_value + x)] = 0;
                 }
             }
-
-            return Ok(())
+    
+            return Ok(cursor_addr)
         }
 
         // flexible size
 
-        let prev_size: usize = if addr != 0 {
-            match pointer.memory.size {
+        let prev_size: usize = if cursor.address_value != 0 {
+            match memory.size {
                 NP_Size::U8 => {
-                    let size_bytes: u8 = pointer.memory.get_1_byte(addr).unwrap_or(0);
+                    let size_bytes: u8 = memory.get_1_byte(cursor.address_value).unwrap_or(0);
                     u8::from_be_bytes([size_bytes]) as usize
                 },
                 NP_Size::U16 => {
-                    let size_bytes: &[u8; 2] = pointer.memory.get_2_bytes(addr).unwrap_or(&[0; 2]);
+                    let size_bytes: &[u8; 2] = memory.get_2_bytes(cursor.address_value).unwrap_or(&[0; 2]);
                     u16::from_be_bytes(*size_bytes) as usize
                 },
                 NP_Size::U32 => { 
-                    let size_bytes: &[u8; 4] = pointer.memory.get_4_bytes(addr).unwrap_or(&[0; 4]);
+                    let size_bytes: &[u8; 4] = memory.get_4_bytes(cursor.address_value).unwrap_or(&[0; 4]);
                     u32::from_be_bytes(*size_bytes) as usize
                 }
             }
@@ -169,72 +168,103 @@ impl<'value> NP_Value<  'value> for NP_Bytes {
         };
 
         if prev_size >= str_size as usize { // previous string is larger than this one, use existing memory
-    
-            let size_bytes = match pointer.memory.size {
-                NP_Size::U8 => { (str_size as u8).to_be_bytes().to_vec() }
-                NP_Size::U16 => { (str_size as u16).to_be_bytes().to_vec() },
-                NP_Size::U32 => { (str_size as u32).to_be_bytes().to_vec() }
+        
+            // update bytes length in buffer
+            match memory.size {
+                NP_Size::U8 => { 
+                    if str_size > core::u8::MAX as usize {
+                        return Err(NP_Error::new("String too large!"))
+                    }
+                    let size_bytes = (str_size as u8).to_be_bytes();
+                    // set string size
+                    write_bytes[cursor.address_value] = size_bytes[0];
+                }
+                NP_Size::U16 => { 
+                    if str_size > core::u16::MAX as usize {
+                        return Err(NP_Error::new("String too large!"))
+                    }
+                    let size_bytes = (str_size as u16).to_be_bytes();
+                    // set string size
+                    for x in 0..size_bytes.len() {
+                        write_bytes[(cursor.address_value + x)] = size_bytes[x];
+                    }
+                },
+                NP_Size::U32 => { 
+                    if str_size > core::u32::MAX as usize {
+                        return Err(NP_Error::new("String too large!"))
+                    }
+                    let size_bytes = (str_size as u32).to_be_bytes();
+                    // set string size
+                    for x in 0..size_bytes.len() {
+                        write_bytes[(cursor.address_value + x)] = size_bytes[x];
+                    }
+                }
             };
 
-            // set string size
-            for x in 0..size_bytes.len() {
-                write_bytes[(addr + x) as usize] = size_bytes[x as usize];
-            }
 
-            let offset = match pointer.memory.size {
-                NP_Size::U8 =>  { 1usize },
-                NP_Size::U16 => { 2usize },
-                NP_Size::U32 => { 4usize }
-            };
+            let offset = memory.addr_size_bytes();
 
             // set bytes
             for x in 0..bytes.len() {
-                write_bytes[(addr + x + offset) as usize] = bytes[x as usize];
+                write_bytes[(cursor.address_value + x + offset) as usize] = bytes[x as usize];
             }
-
-            return Ok(());
+    
+            return Ok(cursor_addr)
         } else { // not enough space or space has not been allocted yet
             
-            // first 2 / 4 bytes are string length
-            let str_bytes = match pointer.memory.size {
-                NP_Size::U8 => { (str_size as u8).to_be_bytes().to_vec() }
-                NP_Size::U16 => { (str_size as u16).to_be_bytes().to_vec() },
-                NP_Size::U32 => { (str_size as u32).to_be_bytes().to_vec() }
+            // first bytes are string length
+            cursor.address_value = match memory.size {
+                NP_Size::U8 => { 
+                    if str_size > core::u8::MAX as usize {
+                        return Err(NP_Error::new("String too large!"))
+                    }
+                    let size_bytes = (str_size as u8).to_be_bytes();
+                    memory.malloc_borrow(&size_bytes)?
+                },
+                NP_Size::U16 => { 
+                    if str_size > core::u16::MAX as usize {
+                        return Err(NP_Error::new("String too large!"))
+                    }
+                    let size_bytes = (str_size as u16).to_be_bytes();
+                    memory.malloc_borrow(&size_bytes)?
+                },
+                NP_Size::U32 => { 
+                    if str_size > core::u32::MAX as usize {
+                        return Err(NP_Error::new("String too large!"))
+                    }
+                    let size_bytes = (str_size as u32).to_be_bytes();
+                    memory.malloc_borrow(&size_bytes)?
+                }
             };
 
-            addr = pointer.memory.malloc(str_bytes)? as usize;
+            memory.set_value_address(cursor.address, cursor.address_value);
 
-            // then string content
-            pointer.memory.malloc(bytes.to_vec())?;
+            memory.malloc_borrow(bytes)?;
 
-            pointer.kind = pointer.memory.set_value_address(pointer.address, addr, &pointer.kind);
-
-            return Ok(());
+            return Ok(cursor_addr);
         }
             
     }
     
 
-    fn into_value<'into>(ptr: &'into NP_Ptr<'into>) -> Result<Option<Box<Self>>, NP_Error> {
-        let addr = ptr.kind.get_value_addr() as usize;
- 
+    fn into_value<'into>(cursor_addr: NP_Cursor_Addr, memory: &'value NP_Memory) -> Result<Option<Box<Self>>, NP_Error> {
+        let cursor = memory.get_cursor_data(&cursor_addr).unwrap();
+
         // empty value
-        if addr == 0 {
+        if cursor.address_value == 0 {
             return Ok(None);
         }
 
-        let memory = &ptr.memory;
-
-        match &**ptr.schema {
+        match &**cursor.schema {
             NP_Parsed_Schema::Bytes { i: _, sortable: _, default: _, size} => {
                 if *size > 0 { // fixed size
             
                     let size = *size as usize;
                     
                     // get bytes
-                    let bytes = &memory.read_bytes()[(addr)..(addr+size)];
+                    let bytes = &memory.read_bytes()[(cursor.address_value)..(cursor.address_value+size)];
         
-                    return Ok(Some(Box::new(NP_Bytes { bytes: bytes.to_vec()})))
+                    return Ok(Some(Box::new(NP_Bytes { bytes: bytes})))
         
                 } else { // dynamic size
                     // get size of bytes
@@ -242,49 +272,50 @@ impl<'value> NP_Value<  'value> for NP_Bytes {
                     let bytes_size: usize = match memory.size {
                         NP_Size::U8 => {
                             let mut size_bytes: [u8; 1] = [0; 1];
-                            size_bytes.copy_from_slice(&memory.read_bytes()[addr..(addr+1)]);
+                            size_bytes.copy_from_slice(&memory.read_bytes()[cursor.address_value..(cursor.address_value+1)]);
                             u8::from_be_bytes(size_bytes) as usize
                         },
                         NP_Size::U16 => {
                             let mut size_bytes: [u8; 2] = [0; 2];
-                            size_bytes.copy_from_slice(&memory.read_bytes()[addr..(addr+2)]);
+                            size_bytes.copy_from_slice(&memory.read_bytes()[cursor.address_value..(cursor.address_value+2)]);
                             u16::from_be_bytes(size_bytes) as usize
                         },
                         NP_Size::U32 => { 
                             let mut size_bytes: [u8; 4] = [0; 4];
-                            size_bytes.copy_from_slice(&memory.read_bytes()[addr..(addr+4)]);
+                            size_bytes.copy_from_slice(&memory.read_bytes()[cursor.address_value..(cursor.address_value+4)]);
                             u32::from_be_bytes(size_bytes) as usize
                         }
                     };
         
                     // get bytes
                     let bytes = match memory.size {
-                        NP_Size::U8 => { &memory.read_bytes()[(addr+1)..(addr+1+bytes_size)] },
-                        NP_Size::U16 => { &memory.read_bytes()[(addr+2)..(addr+2+bytes_size)] },
-                        NP_Size::U32 => { &memory.read_bytes()[(addr+4)..(addr+4+bytes_size)] }
+                        NP_Size::U8 => { &memory.read_bytes()[(cursor.address_value+1)..(cursor.address_value+1+bytes_size)] },
+                        NP_Size::U16 => { &memory.read_bytes()[(cursor.address_value+2)..(cursor.address_value+2+bytes_size)] },
+                        NP_Size::U32 => { &memory.read_bytes()[(cursor.address_value+4)..(cursor.address_value+4+bytes_size)] }
                     };
         
-                    return Ok(Some(Box::new(NP_Bytes { bytes: bytes.to_vec()})))
+                    return Ok(Some(Box::new(NP_Bytes { bytes: bytes})))
                 }
             },
             _ => { unsafe { unreachable_unchecked() } }
         }
     }
 
-    fn to_json(pointer: &'value NP_Ptr<'value>) -> NP_JSON {
-        let this_bytes = Self::into_value(&pointer);
+    fn to_json(cursor_addr: NP_Cursor_Addr, memory: &'value NP_Memory) -> NP_JSON {
 
-        match this_bytes {
+
+        match Self::into_value(cursor_addr, memory) {
             Ok(x) => {
                 match x {
                     Some(y) => {
 
-                        let bytes = y.bytes.into_iter().map(|x| NP_JSON::Integer(x as i64)).collect();
+                        let bytes = y.bytes.into_iter().map(|x| NP_JSON::Integer(*x as i64)).collect();
 
                         NP_JSON::Array(bytes)
                     },
                     None => {
-                        match &**pointer.schema {
+                        let cursor = memory.get_cursor_data(&cursor_addr).unwrap();
+                        match &**cursor.schema {
                             NP_Parsed_Schema::Bytes { i: _, size: _, default, sortable: _ } => {
                                 match default {
                                     Some(x) => {
@@ -308,27 +339,24 @@ impl<'value> NP_Value<  'value> for NP_Bytes {
         }
     }
 
-    fn get_size(pointer: &'value NP_Ptr<'value>) -> Result<usize, NP_Error> {
-        let value = pointer.kind.get_value_addr();
+    fn get_size(cursor_addr: NP_Cursor_Addr, memory: &NP_Memory) -> Result<usize, NP_Error> {
+        let cursor = memory.get_cursor_data(&cursor_addr).unwrap();
 
         // empty value
-        if value == 0 {
+        if cursor.address_value == 0 {
             return Ok(0)
         }
         
-        // get size of bytes
-        let addr = value;        
-        let memory = &pointer.memory;
-
-        match &**pointer.schema {
+    
+        match &**cursor.schema {
             NP_Parsed_Schema::Bytes { i: _, size, default: _, sortable: _ } => {
                 // fixed size
                 if *size > 0 { 
                     return Ok(*size as usize)
                 }
-
+    
                 // dynamic size
-                let bytes_size =  memory.read_address(addr) + memory.addr_size_bytes();
+                let bytes_size = memory.read_address(cursor.address_value) + memory.addr_size_bytes();
                 
                 // return total size of this string
                 return Ok(bytes_size);
@@ -380,15 +408,13 @@ impl<'value> NP_Value<  'value> for NP_Bytes {
 
             let default = match &json_schema["default"] {
                 NP_JSON::Array(bytes) => {
-                    let mut default_bytes: Vec<u8> = Vec::new();
-                    for x in bytes {
-                        match x {
-                            NP_JSON::Integer(x) => {
-                                default_bytes.push(*x as u8);
-                            },
-                            _ => {}
+
+                    let default_bytes: Vec<u8> = bytes.into_iter().map(|v| {
+                        match v {
+                            NP_JSON::Integer(x) => { *x as u8},
+                            _ => { 0u8 }
                         }
-                    }
+                    }).collect();
                     let length = default_bytes.len() as u16 + 1;
                     schema_data.extend(length.to_be_bytes().to_vec());
                     schema_data.extend(default_bytes.clone());
@@ -403,7 +429,11 @@ impl<'value> NP_Value<  'value> for NP_Bytes {
             return Ok(Some((schema_data, NP_Parsed_Schema::Bytes {
                 i: NP_TypeKeys::Bytes,
                 size: size,
-                default: default,
+                default: if let Some(d) = default {
+                    Some(Box::new(&d[..]))
+                } else {
+                    None
+                },
                 sortable: has_fixed_size
             })));
         }
@@ -433,10 +463,7 @@ impl<'value> NP_Value<  'value> for NP_Bytes {
             }
         }
 
-        let default_bytes = {
-            let bytes = &bytes[(address + 5)..(address + 5 + (default_size - 1))];
-            bytes.to_vec()
-        };
+        let default_bytes = &bytes[(address + 5)..(address + 5 + (default_size - 1))];
 
         return NP_Parsed_Schema::Bytes {
             i: NP_TypeKeys::Bytes,
@@ -470,7 +497,7 @@ fn default_value_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"bytes\",\"default\":[1,2,3,4]}";
     let factory = crate::NP_Factory::new(schema)?;
     let mut buffer = factory.empty_buffer(None, None);
-    assert_eq!(buffer.get::<NP_Bytes>(crate::here())?.unwrap(), Box::new(NP_Bytes::new([1,2,3,4].to_vec())));
+    assert_eq!(buffer.get::<NP_Bytes>(&[])?.unwrap(), Box::new(NP_Bytes::new(&[1,2,3,4])));
 
     Ok(())
 }
@@ -480,8 +507,8 @@ fn fixed_size_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"bytes\",\"size\": 20}";
     let factory = crate::NP_Factory::new(schema)?;
     let mut buffer = factory.empty_buffer(None, None);
-    buffer.set(crate::here(), NP_Bytes::new([1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22].to_vec()))?;
-    assert_eq!(buffer.get::<NP_Bytes>(crate::here())?.unwrap(), Box::new(NP_Bytes::new([1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20].to_vec())));
+    buffer.set(&[], NP_Bytes::new(&[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22]))?;
+    assert_eq!(buffer.get::<NP_Bytes>(&[])?.unwrap(), Box::new(NP_Bytes::new(&[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20])));
 
     Ok(())
 }
@@ -491,10 +518,10 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"bytes\"}";
     let factory = crate::NP_Factory::new(schema)?;
     let mut buffer = factory.empty_buffer(None, None);
-    buffer.set(crate::here(), NP_Bytes::new([1,2,3,4,5,6,7,8,9,10,11,12,13].to_vec()))?;
-    assert_eq!(buffer.get(crate::here())?.unwrap(), Box::new(NP_Bytes::new([1,2,3,4,5,6,7,8,9,10,11,12,13].to_vec())));
-    buffer.del(crate::here())?;
-    assert_eq!(buffer.get::<NP_Bytes>(crate::here())?, None);
+    buffer.set(&[], NP_Bytes::new(&[1,2,3,4,5,6,7,8,9,10,11,12,13]))?;
+    assert_eq!(buffer.get(&[])?.unwrap(), Box::new(NP_Bytes::new(&[1,2,3,4,5,6,7,8,9,10,11,12,13])));
+    buffer.del(&[])?;
+    assert_eq!(buffer.get::<NP_Bytes>(&[])?, None);
 
     buffer.compact(None, None)?;
     assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);

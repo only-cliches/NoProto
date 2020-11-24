@@ -658,11 +658,11 @@ impl NP_TypeKeys {
 /// 
 #[derive(Debug, Clone)]
 #[allow(missing_docs)]
-pub enum NP_Parsed_Schema {
+pub enum NP_Parsed_Schema<'schema> {
     None,
     Any        { sortable: bool, i:NP_TypeKeys },
-    UTF8String { sortable: bool, i:NP_TypeKeys, default: Option<Box<String>>, size: u16 },
-    Bytes      { sortable: bool, i:NP_TypeKeys, default: Option<Box<Vec<u8>>>, size: u16 },
+    UTF8String { sortable: bool, i:NP_TypeKeys, default: Option<Box<&'schema str>>, size: u16 },
+    Bytes      { sortable: bool, i:NP_TypeKeys, default: Option<Box<&'schema [u8]>>, size: u16 },
     Int8       { sortable: bool, i:NP_TypeKeys, default: Option<Box<i8>> },
     Int16      { sortable: bool, i:NP_TypeKeys, default: Option<Box<i16>> },
     Int32      { sortable: bool, i:NP_TypeKeys, default: Option<Box<i32>> },
@@ -680,14 +680,14 @@ pub enum NP_Parsed_Schema {
     Enum       { sortable: bool, i:NP_TypeKeys, default: Option<Box<u8>>, choices: Vec<String> },
     Uuid       { sortable: bool, i:NP_TypeKeys },
     Ulid       { sortable: bool, i:NP_TypeKeys },
-    Table      { sortable: bool, i:NP_TypeKeys, columns: Vec<(u8, String, Box<NP_Parsed_Schema>)> },
-    Map        { sortable: bool, i:NP_TypeKeys, value: Box<NP_Parsed_Schema>}, 
-    List       { sortable: bool, i:NP_TypeKeys, of: Box<NP_Parsed_Schema> },
-    Tuple      { sortable: bool, i:NP_TypeKeys, values: Vec<Box<NP_Parsed_Schema>>}
+    Table      { sortable: bool, i:NP_TypeKeys, columns: Vec<(u8, String, Box<NP_Parsed_Schema<'schema>>)> },
+    Map        { sortable: bool, i:NP_TypeKeys, value: Box<NP_Parsed_Schema<'schema>>}, 
+    List       { sortable: bool, i:NP_TypeKeys, of: Box<NP_Parsed_Schema<'schema>> },
+    Tuple      { sortable: bool, i:NP_TypeKeys, values: Vec<Box<NP_Parsed_Schema<'schema>>>}
 }
 
 
-impl NP_Parsed_Schema {
+impl<'schema> NP_Parsed_Schema<'schema> {
 
     /// Get the type key for this schema
     pub fn get_type_key(&self) -> NP_TypeKeys {
@@ -760,13 +760,13 @@ impl NP_Parsed_Schema {
 /// New NP Schema
 #[doc(hidden)]
 #[derive(Debug, Clone)]
-pub struct NP_Schema {
+pub struct NP_Schema<'schema> {
     /// is this schema sortable?
     pub is_sortable: bool,
     /// schema bytes
     pub bytes: Vec<u8>,
     /// recursive parsed schema
-    pub parsed: Box<NP_Parsed_Schema>
+    pub parsed: Box<NP_Parsed_Schema<'schema>>
 }
 
 macro_rules! schema_check {
@@ -777,7 +777,7 @@ macro_rules! schema_check {
     }
 }
 
-impl NP_Schema {
+impl<'schema> NP_Schema<'schema> {
 
     /// Get a JSON represenatation of this schema
     pub fn to_json(&self) -> Result<NP_JSON, NP_Error> {
@@ -867,7 +867,7 @@ impl NP_Schema {
     /// 
     /// If you need a quick way to convert JSON to schema bytes without firing up an NP_Factory, this will do the trick.
     /// 
-    pub fn from_json(json_schema: Box<NP_JSON>) -> Result<(Vec<u8>, NP_Parsed_Schema), NP_Error> {
+    pub fn from_json<'json>(json_schema: Box<NP_JSON>) -> Result<(Vec<u8>, NP_Parsed_Schema<'json>), NP_Error> {
 
         schema_check!(NP_Any,          &json_schema);
         schema_check!(String,          &json_schema);

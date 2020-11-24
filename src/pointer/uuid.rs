@@ -21,7 +21,7 @@
 //! ```
 //! 
 
-use crate::schema::{NP_Parsed_Schema};
+use crate::{memory::NP_Memory, schema::{NP_Parsed_Schema}};
 use alloc::vec::Vec;
 use crate::json_flex::{JSMAP, NP_JSON};
 use crate::schema::{NP_Schema, NP_TypeKeys};
@@ -32,7 +32,7 @@ use alloc::string::String;
 use alloc::boxed::Box;
 use alloc::borrow::ToOwned;
 
-use super::NP_Ptr;
+use super::{NP_Cursor_Addr};
 
 
 /// Holds UUID which is good for random keys.
@@ -131,40 +131,41 @@ impl<'value> NP_Value<'value> for NP_UUID {
         Ok(NP_JSON::Dictionary(schema_json))
     }
 
-    fn set_value(ptr: &mut NP_Ptr, value: Box<&Self>) -> Result<(), NP_Error> {
+    fn set_value(cursor_addr: NP_Cursor_Addr, memory: &NP_Memory, value: Box<&Self>) -> Result<NP_Cursor_Addr, NP_Error> {
 
-        let mut addr = ptr.kind.get_value_addr();
+        let cursor = memory.get_cursor_data(&cursor_addr).unwrap();
 
-        if addr != 0 { // existing value, replace
+        if cursor_addr.is_virtual { panic!() }
+
+        if cursor.address_value != 0 { // existing value, replace
             let bytes = value.value;
-            let write_bytes = ptr.memory.write_bytes();
+            let write_bytes = memory.write_bytes();
 
             // overwrite existing values in buffer
             for x in 0..bytes.len() {
-                write_bytes[addr + x] = bytes[x];
+                write_bytes[cursor.address_value + x] = bytes[x];
             }
 
         } else { // new value
 
             let bytes = value.value;
-            addr = ptr.memory.malloc(bytes.to_vec())?;
-
-            ptr.kind = ptr.memory.set_value_address(ptr.address, addr, &ptr.kind);
+            cursor.address_value = memory.malloc(bytes.to_vec())?;
+            memory.set_value_address(cursor.address, cursor.address_value);
         }                    
         
-        Ok(())
+        Ok(cursor_addr)
     }
 
-    fn into_value<'into>(ptr: &'into NP_Ptr<'into>) -> Result<Option<Box<Self>>, NP_Error> {
-        let addr = ptr.kind.get_value_addr() as usize;
+    fn into_value<'into>(cursor_addr: NP_Cursor_Addr, memory: &NP_Memory) -> Result<Option<Box<Self>>, NP_Error> {
+
+        let cursor = memory.get_cursor_data(&cursor_addr).unwrap();
 
         // empty value
-        if addr == 0 {
+        if cursor.address_value == 0 {
             return Ok(None);
         }
 
-        let memory = &ptr.memory;
-        Ok(match memory.get_16_bytes(addr) {
+        Ok(match memory.get_16_bytes(cursor.address_value) {
             Some(x) => {
                 // copy since we're handing owned value outside the library
                 let mut bytes: [u8; 16] = [0; 16];
@@ -175,10 +176,9 @@ impl<'value> NP_Value<'value> for NP_UUID {
         })
     }
 
-    fn to_json(ptr: &'value NP_Ptr<'value>) -> NP_JSON {
-        let this_string = Self::into_value(ptr);
+    fn to_json(cursor_addr: NP_Cursor_Addr, memory: &NP_Memory) -> NP_JSON {
 
-        match this_string {
+        match Self::into_value(cursor_addr, memory) {
             Ok(x) => {
                 match x {
                     Some(y) => {
@@ -195,11 +195,11 @@ impl<'value> NP_Value<'value> for NP_UUID {
         }
     }
 
-    fn get_size(ptr: &'value NP_Ptr<'value>) -> Result<usize, NP_Error> {
-        let addr = ptr.kind.get_value_addr();
+    fn get_size(cursor_addr: NP_Cursor_Addr, memory: &NP_Memory) -> Result<usize, NP_Error> {
+        let cursor = memory.get_cursor_data(&cursor_addr).unwrap();
 
-        if addr == 0 {
-            return Ok(0) 
+        if cursor.address_value == 0 {
+            Ok(0) 
         } else {
             Ok(16)
         }
@@ -250,12 +250,12 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let factory = crate::NP_Factory::new(schema)?;
     let mut buffer = factory.empty_buffer(None, None);
     {
-        buffer.set(crate::here(), NP_UUID::generate(212))?;
+        buffer.set(&[], NP_UUID::generate(212))?;
     }
     
-    assert_eq!(buffer.get::<NP_UUID>(crate::here())?, Some(Box::new(NP_UUID::generate(212))));
-    buffer.del(crate::here())?;
-    assert_eq!(buffer.get::<NP_UUID>(crate::here())?, None);
+    assert_eq!(buffer.get::<NP_UUID>(&[])?, Some(Box::new(NP_UUID::generate(212))));
+    buffer.del(&[])?;
+    assert_eq!(buffer.get::<NP_UUID>(&[])?, None);
 
     buffer.compact(None, None)?;
     assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);

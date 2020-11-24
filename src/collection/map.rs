@@ -1,6 +1,5 @@
-use alloc::rc::Rc;
-use crate::{json_flex::JSMAP, pointer::{NP_Iterator_Helper, NP_PtrKinds, NP_Ptr_Collection}, utils::from_utf8_lossy};
-use crate::pointer::{NP_Value, NP_Ptr};
+use crate::{json_flex::JSMAP, pointer::{NP_Cursor_Addr, NP_Cursor_Kinds}};
+use crate::pointer::{NP_Value};
 use crate::{memory::{NP_Size, NP_Memory}, schema::{NP_Schema, NP_TypeKeys, NP_Parsed_Schema}, error::NP_Error, json_flex::NP_JSON};
 
 use alloc::vec::Vec;
@@ -17,14 +16,12 @@ use super::NP_Collection;
 #[doc(hidden)]
 #[derive(Debug, Clone)]
 pub struct NP_Map<'map> {
-    address: usize, // pointer location
-    head: usize,
-    len: u16,
-    memory: &'map NP_Memory,
-    schema: &'map Box<NP_Parsed_Schema>,
+    map_cursor: NP_Cursor_Addr,
+    current: Option<NP_Cursor_Addr>,
+    pub memory: &'map NP_Memory<'map>
 }
 
-impl<'map> NP_Value<'map> for NP_Map<'map> {
+impl<'value> NP_Value<'value> for NP_Map<'value> {
 
     fn type_idx() -> (u8, String, NP_TypeKeys) { (NP_TypeKeys::Map as u8, "map".to_owned(), NP_TypeKeys::Map) }
     fn self_type_idx(&self) -> (u8, String, NP_TypeKeys) { (NP_TypeKeys::Map as u8, "map".to_owned(), NP_TypeKeys::Map) }
@@ -45,11 +42,11 @@ impl<'map> NP_Value<'map> for NP_Map<'map> {
         Ok(NP_JSON::Dictionary(schema_json))
     }
     
-    fn set_value(_pointer: &mut NP_Ptr<'map>, _value: Box<&Self>) -> Result<(), NP_Error> {
+    fn set_value(cursor_addr: NP_Cursor_Addr, memory: &NP_Memory, value: Box<&Self>) -> Result<NP_Cursor_Addr, NP_Error> {
         Err(NP_Error::new("Type (map) doesn't support .set()! Use .into() instead."))
     }
 
-    fn get_size(ptr: &'map NP_Ptr<'map>) -> Result<usize, NP_Error> {
+    fn get_size(cursor_addr: NP_Cursor_Addr, memory: &'value NP_Memory<'value>) -> Result<usize, NP_Error> {
 
         let base_size = match &ptr.memory.size {
             NP_Size::U8  => { 2usize }, // u8 head | u8 length
@@ -123,7 +120,7 @@ impl<'map> NP_Value<'map> for NP_Map<'map> {
    
     }
 
-    fn to_json(ptr: &'map NP_Ptr<'map>) -> NP_JSON {
+    fn to_json(cursor_addr: NP_Cursor_Addr, memory: &'value NP_Memory<'value>) -> NP_JSON {
 
         let addr = ptr.kind.get_value_addr();
 
@@ -179,7 +176,7 @@ impl<'map> NP_Value<'map> for NP_Map<'map> {
    
     }
 
-    fn do_compact(from_ptr: NP_Ptr<'map>, to_ptr: &mut NP_Ptr<'map>) -> Result<(), NP_Error> where Self: NP_Value<'map> {
+    fn do_compact(from_cursor: NP_Cursor_Addr, from_memory: &'value NP_Memory<'value>, to_cursor: NP_Cursor_Addr, to_memory: &'value NP_Memory<'value>) -> Result<NP_Cursor_Addr, NP_Error> where Self: NP_Value<'value> {
 
         if from_ptr.address == 0 {
             return Ok(());
@@ -244,162 +241,108 @@ impl<'map> NP_Value<'map> for NP_Map<'map> {
 
 impl<'map> NP_Map<'map> {
 
-    #[doc(hidden)]
-    pub fn new(address: usize, head: usize, length: u16, memory: &'map NP_Memory, schema: &'map Box<NP_Parsed_Schema>) -> Self {
-        NP_Map {
-            address,
-            head,
-            memory: memory,
-            schema: schema,
-            len: length
-        }
-    }
-    
-    /// convert pointer to value
-    pub fn ptr_to_self<'to_self>(ptr: &NP_Ptr<'to_self>) -> Result<NP_Map<'to_self>, NP_Error> {
-        let mut addr = ptr.kind.get_value_addr();
+    /// Get details of map object at this location in buffer
+    pub fn commit_map(cursor_addr: usize, memory: &NP_Memory) -> Result<(), NP_Error> {
+        let cursor = memory.get_cache_mut(cursor_addr);
 
-        let a = addr as usize;
+        match cursor.cache_state {
+            NP_Cursor_State::Complete_Cache => {
+                Ok(())
+            },
+            _ => {
+                let mut addr = cursor.address_value;
 
-        let head = if addr == 0 {
-            0usize
-        } else { 
-            ptr.memory.read_address(addr)
-        };
-    
-        let size = if addr == 0 { 0u16 } else {
-            match &ptr.memory.size {
-                NP_Size::U8 => {
-                    u8::from_be_bytes([ptr.memory.get_1_byte(a + 1).unwrap_or(0)]) as u16
-                },
-                NP_Size::U16 => {
-                    u16::from_be_bytes(*ptr.memory.get_2_bytes(a + 2).unwrap_or(&[0; 2]))
-                },
-                NP_Size::U32 => {
-                    u16::from_be_bytes(*ptr.memory.get_2_bytes(a + 4).unwrap_or(&[0; 2]))
+                let a = addr as usize;
+        
+                let head = if addr == 0 {
+                    0usize
+                } else { 
+                    memory.read_address(addr)
+                };
+
+                cursor.coll_head = Some(head);
+            
+                let size = if addr == 0 { 0usize } else {
+                    match &memory.size {
+                        NP_Size::U8 => {
+                            u8::from_be_bytes([memory.get_1_byte(a + 1).unwrap_or(0)]) as usize
+                        },
+                        NP_Size::U16 => {
+                            u16::from_be_bytes(*memory.get_2_bytes(a + 2).unwrap_or(&[0; 2])) as usize
+                        },
+                        NP_Size::U32 => {
+                            u16::from_be_bytes(*memory.get_2_bytes(a + 4).unwrap_or(&[0; 2])) as usize
+                        }
+                    }
+                };
+
+                cursor.coll_length = Some(size);
+        
+                if addr == 0 {
+                    // no map here, make one
+                    cursor.address_value = match &memory.size {
+                        NP_Size::U8  => { memory.malloc_borrow(&[0u8; 2])? },
+                        NP_Size::U16 => { memory.malloc_borrow(&[0u8; 4])? },
+                        NP_Size::U32 => { memory.malloc_borrow(&[0u8; 6])? },
+                    };
+                    memory.set_value_address(cursor.address, cursor.address_value);
                 }
-            }
-        };
+        
+                cursor.cache_state = NP_Cursor_State::Complete_Cache;
 
-        if addr == 0 {
-            // no map here, make one
-            let bytes = match &ptr.memory.size {
-                NP_Size::U8  => { [0u8; 2].to_vec() },
-                NP_Size::U16 => { [0u8; 4].to_vec() },
-                NP_Size::U32 => { [0u8; 6].to_vec() }
-            };
-            addr = ptr.memory.malloc(bytes)?; // stores HEAD & LENGTH for map
-            ptr.memory.set_value_address(ptr.address, addr, &ptr.kind);
-        }
-
-        Ok(NP_Map::new(addr, head, size, (&ptr.memory), ptr.schema))
-    }
-
-    /// read schema of map
-    pub fn get_schema(&self) -> &'map Box<NP_Parsed_Schema> {
-        self.schema
-    }
-
-    /// Convert this map into an iterator
-    pub fn it(self) -> NP_Map_Iterator<'map> {
-        NP_Map_Iterator::new(self)
-    }
-
-    /// Get key size
-    pub fn get_key_size(key_addr: usize, memory: &'map NP_Memory) -> usize {
-        match memory.size {
-            NP_Size::U8 => {
-                let mut size_bytes: [u8; 1] = [0; 1];
-                size_bytes.copy_from_slice(&memory.read_bytes()[key_addr..(key_addr+1)]);
-                u8::from_be_bytes(size_bytes) as usize
-            },
-            NP_Size::U16 => {
-                let mut size_bytes: [u8; 2] = [0; 2];
-                size_bytes.copy_from_slice(&memory.read_bytes()[key_addr..(key_addr+2)]);
-                u16::from_be_bytes(size_bytes) as usize
-            },
-            NP_Size::U32 => { 
-                let mut size_bytes: [u8; 4] = [0; 4];
-                size_bytes.copy_from_slice(&memory.read_bytes()[key_addr..(key_addr+4)]);
-                u32::from_be_bytes(size_bytes) as usize
+                Ok(())
             }
         }
     }
 
 
+    /// Accepts a cursor that is currently on a list type and moves the cursor to a list item
+    /// The list item may be virtual
+    pub fn select_to_ptr(cursor_addr: usize, memory: &'map NP_Memory<'map>, key: &str, quick_select: bool) -> Result<NP_Cursor_Addr, NP_Error> {
+       
+        NP_Map::commit_map(cursor_addr, memory)?;
 
-    /// Get key string
-    pub fn get_key(key_addr: usize, memory: &'map NP_Memory) -> String {
+        let map_cursor = memory.get_cache_mut(cursor_addr);
 
-        let addr = key_addr;
-
-        let bytes_size = NP_Map::get_key_size(key_addr, (&memory));
-
-        // get bytes
-        let bytes = match memory.size {
-            NP_Size::U8 => { &memory.read_bytes()[(addr+1)..(addr+1+bytes_size)] },
-            NP_Size::U16 => { &memory.read_bytes()[(addr+2)..(addr+2+bytes_size)] },
-            NP_Size::U32 => { &memory.read_bytes()[(addr+4)..(addr+4+bytes_size)] }
-        };
-
-        from_utf8_lossy(bytes)
-    }   
-
-    /// Select into pointer
-    pub fn select_to_ptr<'sel>(target_ptr: &mut NP_Ptr<'sel>, key: &str, quick_select: bool) -> Result<(), NP_Error> {
-        let map = NP_Map::ptr_to_self(target_ptr)?;
-
-        let map_of = match &**target_ptr.schema {
+        let map_of = match &**map_cursor.schema {
             NP_Parsed_Schema::Map { i: _, sortable: _, value} => {
                 value
             },
             _ => { unsafe { unreachable_unchecked() } }
         };
 
-        // map is empty, return virtual pointer
-        if map.head == 0 {
-            target_ptr.address = 0;
-            target_ptr.schema = &map_of;
-            target_ptr.parent = NP_Ptr_Collection::Map {
-                address: map.address,
-                head: map.head,
-                length: 0
-            };
-            target_ptr.helper = NP_Iterator_Helper::Map {
-                key_addr: 0,
-                prev_addr: 0,
-                key: Some(key.to_string())
-            };
-            target_ptr.kind = NP_PtrKinds::MapItem { 
-                addr:  0,
-                next:  0,
-                key: 0
-            };
+        let head = map_cursor.coll_head.unwrap();
 
-            return Ok(())
+        // map is empty, return virtual pointer
+        if head == 0 {
+            let virtual_cursor = memory.get_virt_mut();
+            virtual_cursor.address = 0;
+            virtual_cursor.address_value = 0;
+            virtual_cursor.schema = map_of;
+            virtual_cursor.parent_addr = Some(cursor_addr);
+            virtual_cursor.kind = NP_Cursor_Kinds::MapItem;
+            virtual_cursor.item_index = None;
+            virtual_cursor.item_prev_addr = None;
+            virtual_cursor.item_next_addr = None;
+            virtual_cursor.item_key = Some(key);
+            virtual_cursor.item_key_addr = None;
+            return Ok(NP_Cursor_Addr { address: 0, is_virtual: true})
         }
 
         // this ONLY works if we KNOW FOR SURE that the key we're inserting is not a duplicate key
         if quick_select {
-            target_ptr.address = 0;
-            target_ptr.schema = &map_of;
-            target_ptr.parent = NP_Ptr_Collection::Map {
-                address: map.address,
-                head: map.head,
-                length: map.len
-            };
-            target_ptr.helper = NP_Iterator_Helper::Map {
-                key_addr: 0,
-                prev_addr: map.head,
-                key: Some(key.to_string())
-            };
-            target_ptr.kind = NP_PtrKinds::MapItem { 
-                addr:  0,
-                next:  0,
-                key: 0
-            };
-
-            return Ok(())
+            let virtual_cursor = memory.get_virt_mut();
+            virtual_cursor.address = 0;
+            virtual_cursor.address_value = 0;
+            virtual_cursor.schema = map_of;
+            virtual_cursor.parent_addr = Some(cursor_addr);
+            virtual_cursor.kind = NP_Cursor_Kinds::MapItem;
+            virtual_cursor.item_index = None;
+            virtual_cursor.item_prev_addr = Some(head);
+            virtual_cursor.item_next_addr = None;
+            virtual_cursor.item_key = Some(key);
+            virtual_cursor.item_key_addr = None;
+            return Ok(NP_Cursor_Addr { address: 0, is_virtual: true})
         }
 
         let mut running_ptr: usize = 0;
@@ -457,6 +400,48 @@ impl<'map> NP_Map<'map> {
 
         return Ok(())
     }
+
+    /// Get key size
+    pub fn get_key_size(key_addr: usize, memory: &'map NP_Memory) -> usize {
+        match memory.size {
+            NP_Size::U8 => {
+                let mut size_bytes: [u8; 1] = [0; 1];
+                size_bytes.copy_from_slice(&memory.read_bytes()[key_addr..(key_addr+1)]);
+                u8::from_be_bytes(size_bytes) as usize
+            },
+            NP_Size::U16 => {
+                let mut size_bytes: [u8; 2] = [0; 2];
+                size_bytes.copy_from_slice(&memory.read_bytes()[key_addr..(key_addr+2)]);
+                u16::from_be_bytes(size_bytes) as usize
+            },
+            NP_Size::U32 => { 
+                let mut size_bytes: [u8; 4] = [0; 4];
+                size_bytes.copy_from_slice(&memory.read_bytes()[key_addr..(key_addr+4)]);
+                u32::from_be_bytes(size_bytes) as usize
+            }
+        }
+    }
+
+
+
+    /// Get key string
+    pub fn get_key(key_addr: usize, memory: &'map NP_Memory) -> String {
+
+        let addr = key_addr;
+
+        let bytes_size = NP_Map::get_key_size(key_addr, (&memory));
+
+        // get bytes
+        let bytes = match memory.size {
+            NP_Size::U8 => { &memory.read_bytes()[(addr+1)..(addr+1+bytes_size)] },
+            NP_Size::U16 => { &memory.read_bytes()[(addr+2)..(addr+2+bytes_size)] },
+            NP_Size::U32 => { &memory.read_bytes()[(addr+4)..(addr+4+bytes_size)] }
+        };
+
+        from_utf8_lossy(bytes)
+    }   
+
+
     /*
     /// Select key of map
     pub fn select(&'map self, key: String, quick_select: bool) -> NP_Ptr<'map> {
@@ -548,8 +533,13 @@ impl<'map> NP_Map<'map> {
 
 impl<'collection> NP_Collection<'collection> for NP_Map<'collection> {
 
+
+    fn start_iter(list_cursor_addr: usize, memory: &'collection NP_Memory<'collection>) -> Result<Self, NP_Error> {
+
+    }
+
     /// Step a pointer to the next item in the collection
-    fn step_pointer(ptr: &mut NP_Ptr<'collection>) -> Option<NP_Ptr<'collection>> {
+    fn step_pointer(cursor_addr: NP_Cursor_Addr, memory: &NP_Memory) -> Option<NP_Cursor_Addr> {
         // can't step with virtual pointer
         if ptr.address == 0 {
             return None;
@@ -579,7 +569,7 @@ impl<'collection> NP_Collection<'collection> for NP_Map<'collection> {
     }
 
     /// Commit a virtual pointer into the buffer
-    fn commit_pointer(ptr: &mut NP_Ptr<'collection>) -> Result<(), NP_Error> {
+    fn commit_pointer(cursor_addr: NP_Cursor_Addr, memory: &'collection NP_Memory<'collection>) -> Result<NP_Cursor_Addr, NP_Error> {
 
         // pointer already committed
         if ptr.address != 0 {
@@ -707,22 +697,15 @@ impl<'it> NP_Map_Iterator<'it> {
     }
 }
 
-/// The iterator type for maps
-#[doc(hidden)]
-#[derive(Debug)]
-pub struct NP_Map_Iterator<'it> {
-    map_schema: &'it Box<NP_Parsed_Schema>,
-    current: Option<NP_Ptr<'it>>
-}
 
-impl<'it> Iterator for NP_Map_Iterator<'it> {
-    type Item = NP_Ptr<'it>;
+impl<'it> Iterator for NP_Map<'it> {
+    type Item = NP_Cursor_Addr;
 
     fn next(&mut self) -> Option<Self::Item> {
         match &mut self.current {
             Some(x) => {
                 let current = x.clone();
-                self.current = NP_Map::step_pointer(x);
+                self.current = NP_Map::step_pointer(x, self.memory);
                 Some(current)
             },
             None => None
@@ -731,8 +714,13 @@ impl<'it> Iterator for NP_Map_Iterator<'it> {
 
     fn count(self) -> usize where Self: Sized {
 
+        let map_cursor = self.memory.get_cache_mut(self.map_cursor_addr);
+
+
+
         if let Some(x) = self.current {
-            match x.parent {
+            let cursor = self.memory.get_cache_mut(x);
+            match cursor.parent_addr.unwrap() {
                 NP_Ptr_Collection::Map { address: _, head: _, length } => length as usize,
                 _ => { unsafe { unreachable_unchecked() } }
             }
@@ -768,7 +756,7 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     buffer.set(&["name"], String::from("hello, world"))?;
     assert_eq!(buffer.get::<String>(&["name"])?, Some(Box::new(String::from("hello, world"))));
     assert_eq!(buffer.calc_bytes()?.current_buffer, 34usize);
-    buffer.del(crate::here())?;
+    buffer.del(&[])?;
     buffer.compact(None, None)?;
     assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);
 

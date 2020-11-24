@@ -1,7 +1,7 @@
 use alloc::rc::Rc;
 use core::hint::unreachable_unchecked;
 
-use crate::{json_flex::JSMAP, pointer::{NP_Iterator_Helper, NP_Ptr_Collection}};
+use crate::{json_flex::JSMAP, pointer::{NP_Cursor_Addr, NP_Iterator_Helper, NP_Ptr_Collection}};
 use crate::pointer::NP_Ptr;
 use crate::pointer::{NP_Value};
 use crate::{memory::{NP_Size, NP_Memory}, schema::{NP_Schema, NP_TypeKeys, NP_Parsed_Schema}, error::NP_Error, json_flex::NP_JSON};
@@ -16,10 +16,9 @@ use alloc::{boxed::Box};
 #[doc(hidden)]
 #[derive(Debug, Clone)]
 pub struct NP_Tuple<'tuple> {
-    address: usize, // pointer location
-    memory: &'tuple NP_Memory,
-    schema: &'tuple Box<NP_Parsed_Schema>,
-    value_addrs: Vec<usize>
+    tuple_cursor: NP_Cursor_Addr,
+    current: Option<NP_Cursor_Addr>,
+    pub memory: &'tuple NP_Memory<'tuple>
 }
 
 impl<'tuple> NP_Tuple<'tuple> {
@@ -101,7 +100,7 @@ impl<'tuple> NP_Tuple<'tuple> {
     }
 
     /// Select into pointer
-    pub fn select_to_ptr<'sel>(target_ptr: &mut NP_Ptr<'sel>, index: u8) -> Result<(), NP_Error> {
+    pub fn select_to_ptr<'sel>(cursor_addr: NP_Cursor_Addr, memory: &NP_Memory, index: u8) -> Result<NP_Cursor_Addr, NP_Error> {
 
         let tuple = Self::ptr_to_self(target_ptr)?;
 

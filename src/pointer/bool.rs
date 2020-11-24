@@ -24,13 +24,13 @@ use crate::{json_flex::JSMAP, schema::{NP_Parsed_Schema}};
 use crate::schema::NP_Schema;
 use crate::error::NP_Error;
 use crate::{schema::{NP_TypeKeys}, pointer::NP_Value, json_flex::NP_JSON};
-use super::{NP_Ptr};
 
 use alloc::vec::Vec;
 use alloc::string::String;
 use alloc::boxed::Box;
 use alloc::{borrow::ToOwned};
-
+use super::{NP_Cursor_Addr};
+use crate::NP_Memory;
 
 impl<'value> NP_Value<'value> for bool {
 
@@ -66,21 +66,22 @@ impl<'value> NP_Value<'value> for bool {
         }
     }
 
-    fn set_value(ptr: &mut NP_Ptr<'value>, value: Box<&Self>) -> Result<(), NP_Error> {
+    fn set_value(cursor_addr: NP_Cursor_Addr, memory: &NP_Memory, value: Box<&Self>) -> Result<NP_Cursor_Addr, NP_Error> {
 
-        let mut addr = ptr.kind.get_value_addr();
+        let cursor = memory.get_cursor_data(&cursor_addr).unwrap();
 
-        if addr != 0 { // existing value, replace
-            let bytes = if **value == true {
-                [1] as [u8; 1]
-            } else {
-                [0] as [u8; 1]
-            };
+        if cursor_addr.is_virtual { panic!() }
+
+        if cursor.address_value != 0 {// existing value, replace
 
             // overwrite existing values in buffer
-            ptr.memory.write_bytes()[addr as usize] = bytes[0];
+            memory.write_bytes()[cursor.address_value] = if **value == true {
+                1
+            } else {
+                0
+            };
 
-            return Ok(());
+            return Ok(cursor_addr);
 
         } else { // new value
 
@@ -90,25 +91,24 @@ impl<'value> NP_Value<'value> for bool {
                 [0] as [u8; 1]
             };
 
-            addr = ptr.memory.malloc(bytes.to_vec())?;
-            ptr.kind = ptr.memory.set_value_address(ptr.address, addr, &ptr.kind);
+            cursor.address_value = memory.malloc_borrow(&bytes)?;
+            memory.set_value_address(cursor.address, cursor.address_value);
 
-            return Ok(());
+            return Ok(cursor_addr);
+
         }
         
     }
 
-    fn into_value<'into>(ptr: &'into NP_Ptr<'into>) -> Result<Option<Box<Self>>, NP_Error> {
-        let addr = ptr.kind.get_value_addr() as usize;
+    fn into_value<'into>(cursor_addr: NP_Cursor_Addr, memory: &NP_Memory) -> Result<Option<Box<Self>>, NP_Error> {
+        let cursor = memory.get_cursor_data(&cursor_addr).unwrap();
 
         // empty value
-        if addr == 0 {
+        if cursor.address_value == 0 {
             return Ok(None);
         }
 
-        let memory = &ptr.memory;
-
-        Ok(match memory.get_1_byte(addr) {
+        Ok(match memory.get_1_byte(cursor.address_value) {
             Some(x) => {
                 Some(Box::new(if x == 1 { true } else { false }))
             },
@@ -116,10 +116,9 @@ impl<'value> NP_Value<'value> for bool {
         })
     }
 
-    fn to_json(ptr: &'value NP_Ptr<'value>) -> NP_JSON {
-        let this_string = Self::into_value(&ptr);
+    fn to_json(cursor_addr: NP_Cursor_Addr, memory: &NP_Memory) -> NP_JSON {
 
-        match this_string {
+        match Self::into_value(cursor_addr, memory) {
             Ok(x) => {
                 match x {
                     Some(y) => {
@@ -130,7 +129,8 @@ impl<'value> NP_Value<'value> for bool {
                         }
                     },
                     None => {
-                        match &**ptr.schema {
+                        let cursor = memory.get_cursor_data(&cursor_addr).unwrap();
+                        match &**cursor.schema {
                             NP_Parsed_Schema::Boolean { i: _, sortable: _, default} => {
                                 if let Some(d) = default {
                                     if **d == true {
@@ -153,10 +153,10 @@ impl<'value> NP_Value<'value> for bool {
         }
     }
 
-    fn get_size(ptr: &'value NP_Ptr<'value>) -> Result<usize, NP_Error> {
-        let addr = ptr.kind.get_value_addr() as usize;
+    fn get_size(cursor_addr: NP_Cursor_Addr, memory: &NP_Memory) -> Result<usize, NP_Error> {
+        let cursor = memory.get_cursor_data(&cursor_addr).unwrap();
 
-        if addr == 0 {
+        if cursor.address_value == 0 {
             return Ok(0) 
         } else {
             Ok(core::mem::size_of::<u8>())
@@ -227,7 +227,7 @@ fn default_value_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"bool\",\"default\":false}";
     let factory = crate::NP_Factory::new(schema)?;
     let mut buffer = factory.empty_buffer(None, None);
-    assert_eq!(buffer.get(crate::here())?.unwrap(), Box::new(false));
+    assert_eq!(buffer.get(&[])?.unwrap(), Box::new(false));
 
     Ok(())
 }
@@ -238,10 +238,10 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"bool\"}";
     let factory = crate::NP_Factory::new(schema)?;
     let mut buffer = factory.empty_buffer(None, None);
-    buffer.set(crate::here(), false)?;
-    assert_eq!(buffer.get::<bool>(crate::here())?.unwrap(), Box::new(false));
-    buffer.del(crate::here())?;
-    assert_eq!(buffer.get::<bool>(crate::here())?, None);
+    buffer.set(&[], false)?;
+    assert_eq!(buffer.get::<bool>(&[])?.unwrap(), Box::new(false));
+    buffer.del(&[])?;
+    assert_eq!(buffer.get::<bool>(&[])?, None);
 
     buffer.compact(None, None)?;
     assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);

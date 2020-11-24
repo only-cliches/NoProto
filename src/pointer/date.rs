@@ -31,9 +31,8 @@ use core::{fmt::{Debug, Formatter}, hint::unreachable_unchecked};
 use alloc::string::String;
 use alloc::boxed::Box;
 use alloc::borrow::ToOwned;
-
-use super::NP_Ptr;
-
+use super::{NP_Cursor_Addr};
+use crate::NP_Memory;
 
 /// Holds Date data.
 /// 
@@ -98,43 +97,41 @@ impl<'value> NP_Value<'value> for NP_Date {
         }
     }
 
-    fn set_value(ptr: &mut NP_Ptr<'value>, value: Box<&Self>) -> Result<(), NP_Error> {
+    fn set_value(cursor_addr: NP_Cursor_Addr, memory: &NP_Memory, value: Box<&Self>) -> Result<NP_Cursor_Addr, NP_Error> {
 
-        let mut addr = ptr.kind.get_value_addr();
+        let cursor = memory.get_cursor_data(&cursor_addr).unwrap();
 
-        if addr != 0 { // existing value, replace
+        if cursor_addr.is_virtual { panic!() }
+
+        if cursor.address_value != 0 { // existing value, replace
             let bytes = value.value.to_be_bytes();
 
-            let write_bytes = ptr.memory.write_bytes();
+            let write_bytes = memory.write_bytes();
 
             // overwrite existing values in buffer
             for x in 0..bytes.len() {
-                write_bytes[addr + x] = bytes[x];
+                write_bytes[cursor.address_value + x] = bytes[x];
             }
-
-            return Ok(());
 
         } else { // new value
 
             let bytes = value.value.to_be_bytes();
-            addr = ptr.memory.malloc(bytes.to_vec())?;
-            ptr.kind = ptr.memory.set_value_address(ptr.address, addr, &ptr.kind);
-
-            return Ok(());
+            cursor.address_value = memory.malloc_borrow(&bytes)?;
+            memory.set_value_address(cursor.address, cursor.address_value);
         }                    
-        
+
+        Ok(cursor_addr)
     }
 
-    fn into_value<'into>(ptr: &'into NP_Ptr<'into>) -> Result<Option<Box<Self>>, NP_Error> {
-        let addr = ptr.kind.get_value_addr() as usize;
+    fn into_value<'into>(cursor_addr: NP_Cursor_Addr, memory: &NP_Memory) -> Result<Option<Box<Self>>, NP_Error> {
+        let cursor = memory.get_cursor_data(&cursor_addr).unwrap();
 
         // empty value
-        if addr == 0 {
+        if cursor.address_value == 0 {
             return Ok(None);
         }
 
-        let memory = &ptr.memory;
-        Ok(match memory.get_8_bytes(addr) {
+        Ok(match memory.get_8_bytes(cursor.address_value) {
             Some(x) => {
                 Some(Box::new(NP_Date { value: u64::from_be_bytes(*x) }))
             },
@@ -142,16 +139,17 @@ impl<'value> NP_Value<'value> for NP_Date {
         })
     }
 
-    fn to_json(ptr: &'value NP_Ptr<'value>) -> NP_JSON {
+    fn to_json(cursor_addr: NP_Cursor_Addr, memory: &NP_Memory) -> NP_JSON {
 
-        match Self::into_value(ptr) {
+        match Self::into_value(cursor_addr, memory) {
             Ok(x) => {
                 match x {
                     Some(y) => {
                         NP_JSON::Integer(y.value as i64)
                     },
                     None => {
-                        match &**ptr.schema {
+                        let cursor = memory.get_cursor_data(&cursor_addr).unwrap();
+                        match &**cursor.schema {
                             NP_Parsed_Schema::Date { i: _, default, sortable: _} => {
                                 if let Some(d) = default {
                                     NP_JSON::Integer(d.value.clone() as i64)
@@ -170,10 +168,10 @@ impl<'value> NP_Value<'value> for NP_Date {
         }
     }
 
-    fn get_size(ptr: &'value NP_Ptr<'value>) -> Result<usize, NP_Error> {
-        let addr = ptr.kind.get_value_addr() as usize;
+    fn get_size(cursor_addr: NP_Cursor_Addr, memory: &NP_Memory) -> Result<usize, NP_Error> {
+        let cursor = memory.get_cursor_data(&cursor_addr).unwrap();
 
-        if addr == 0 {
+        if cursor.address_value == 0 {
             return Ok(0) 
         } else {
             Ok(core::mem::size_of::<u64>())
@@ -246,7 +244,7 @@ fn default_value_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"date\",\"default\":1605138980392}";
     let factory = crate::NP_Factory::new(schema)?;
     let mut buffer = factory.empty_buffer(None, None);
-    assert_eq!(buffer.get(crate::here())?.unwrap(), Box::new(NP_Date::new(1605138980392)));
+    assert_eq!(buffer.get(&[])?.unwrap(), Box::new(NP_Date::new(1605138980392)));
 
     Ok(())
 }
@@ -256,10 +254,10 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"date\"}";
     let factory = crate::NP_Factory::new(schema)?;
     let mut buffer = factory.empty_buffer(None, None);
-    buffer.set(crate::here(), NP_Date::new(1605138980392))?;
-    assert_eq!(buffer.get::<NP_Date>(crate::here())?, Some(Box::new(NP_Date::new(1605138980392))));
-    buffer.del(crate::here())?;
-    assert_eq!(buffer.get::<NP_Date>(crate::here())?, None);
+    buffer.set(&[], NP_Date::new(1605138980392))?;
+    assert_eq!(buffer.get::<NP_Date>(&[])?, Some(Box::new(NP_Date::new(1605138980392))));
+    buffer.del(&[])?;
+    assert_eq!(buffer.get::<NP_Date>(&[])?, None);
 
     buffer.compact(None, None)?;
     assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);

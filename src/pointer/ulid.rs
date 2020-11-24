@@ -21,7 +21,7 @@
 //! ```
 //! 
 
-use crate::schema::{NP_Parsed_Schema};
+use crate::{memory::NP_Memory, schema::{NP_Parsed_Schema}};
 use alloc::vec::Vec;
 use crate::utils::to_base32;
 use crate::json_flex::{JSMAP, NP_JSON};
@@ -33,7 +33,7 @@ use alloc::string::String;
 use alloc::boxed::Box;
 use alloc::borrow::ToOwned;
 
-use super::NP_Ptr;
+use super::{NP_Cursor_Addr};
 
 
 /// Holds ULIDs which are good for time series keys.
@@ -124,23 +124,25 @@ impl<'value> NP_Value<'value> for NP_ULID {
         Ok(NP_JSON::Dictionary(schema_json))
     }
 
-    fn set_value(ptr: &mut NP_Ptr, value: Box<&Self>) -> Result<(), NP_Error> {
+    fn set_value(cursor_addr: NP_Cursor_Addr, memory: &NP_Memory, value: Box<&Self>) -> Result<NP_Cursor_Addr, NP_Error> {
 
-        let mut addr = ptr.kind.get_value_addr();
+        let cursor = memory.get_cursor_data(&cursor_addr).unwrap();
+
+        if cursor_addr.is_virtual { panic!() }
 
         let time_bytes: [u8; 8] = value.time.to_be_bytes();
         let id_bytes: [u8; 16] = value.id.to_be_bytes();
 
-        if addr != 0 { // existing value, replace
+        if cursor.address_value != 0 { // existing value, replace
 
-            let write_bytes = ptr.memory.write_bytes();
+            let write_bytes = memory.write_bytes();
 
             // overwrite existing values in buffer
             for x in 0..16 {
                 if x < 6 {
-                    write_bytes[addr + x] = time_bytes[x + 2];
+                    write_bytes[cursor.address_value + x] = time_bytes[x + 2];
                 } else {
-                    write_bytes[addr + x] = id_bytes[x];
+                    write_bytes[cursor.address_value + x] = id_bytes[x];
                 }
             }
 
@@ -151,33 +153,34 @@ impl<'value> NP_Value<'value> for NP_ULID {
 
             for x in 0..bytes.len() {
                 if x < 6 {
-                    bytes[addr + x] = time_bytes[x + 2];
+                    bytes[x] = time_bytes[x + 2];
                 } else {
-                    bytes[addr + x] = id_bytes[x];
+                    bytes[x] = id_bytes[x];
                 }
             }
 
-            addr = ptr.memory.malloc(bytes.to_vec())?;
+            cursor.address_value = memory.malloc_borrow(&bytes)?;
 
-            ptr.kind = ptr.memory.set_value_address(ptr.address, addr, &ptr.kind);
+            memory.set_value_address(cursor.address, cursor.address_value);
         }              
         
-        Ok(())
+        Ok(cursor_addr)
         
     }
 
-    fn into_value<'into>(ptr: &'into NP_Ptr<'into>) -> Result<Option<Box<Self>>, NP_Error> {
-        let addr = ptr.kind.get_value_addr() as usize;
+    fn into_value<'into>(cursor_addr: NP_Cursor_Addr, memory: &NP_Memory) -> Result<Option<Box<Self>>, NP_Error> {
+
+        let cursor = memory.get_cursor_data(&cursor_addr).unwrap();
 
         // empty value
-        if addr == 0 {
+        if cursor.address_value == 0 {
             return Ok(None);
         }
 
         let mut time_bytes: [u8; 8] = [0; 8];
         let mut id_bytes: [u8; 16] = [0; 16];
 
-        let read_bytes: [u8; 16] = *ptr.memory.get_16_bytes(addr).unwrap_or(&[0; 16]);
+        let read_bytes: &[u8; 16] = memory.get_16_bytes(cursor.address_value).unwrap_or(&[0; 16]);
 
         for x in 0..read_bytes.len() {
             if x < 6 {
@@ -194,10 +197,9 @@ impl<'value> NP_Value<'value> for NP_ULID {
          
     }
 
-    fn to_json(ptr: &'value NP_Ptr<'value>) -> NP_JSON {
-        let this_string = Self::into_value(ptr);
+    fn to_json(cursor_addr: NP_Cursor_Addr, memory: &NP_Memory) -> NP_JSON {
 
-        match this_string {
+        match Self::into_value(cursor_addr, memory) {
             Ok(x) => {
                 match x {
                     Some(y) => {
@@ -214,10 +216,10 @@ impl<'value> NP_Value<'value> for NP_ULID {
         }
     }
 
-    fn get_size(ptr: &'value NP_Ptr<'value>) -> Result<usize, NP_Error> {
-        let addr = ptr.kind.get_value_addr();
+    fn get_size(cursor_addr: NP_Cursor_Addr, memory: &NP_Memory) -> Result<usize, NP_Error> {
+        let cursor = memory.get_cursor_data(&cursor_addr).unwrap();
 
-        if addr == 0 {
+        if cursor.address_value == 0 {
             return Ok(0) 
         } else {
             Ok(16)
@@ -267,10 +269,10 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"ulid\"}";
     let factory = crate::NP_Factory::new(schema)?;
     let mut buffer = factory.empty_buffer(None, None);
-    buffer.set(crate::here(), NP_ULID::generate(2039203, 212))?;
-    assert_eq!(buffer.get::<NP_ULID>(crate::here())?, Some(Box::new(NP_ULID::generate(2039203, 212))));
-    buffer.del(crate::here())?;
-    assert_eq!(buffer.get::<NP_ULID>(crate::here())?, None);
+    buffer.set(&[], NP_ULID::generate(2039203, 212))?;
+    assert_eq!(buffer.get::<NP_ULID>(&[])?, Some(Box::new(NP_ULID::generate(2039203, 212))));
+    buffer.del(&[])?;
+    assert_eq!(buffer.get::<NP_ULID>(&[])?, None);
 
     buffer.compact(None, None)?;
     assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);
