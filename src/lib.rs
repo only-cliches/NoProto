@@ -298,13 +298,14 @@ impl<'factory> NP_Factory<'factory> {
 
         match parsed {
             Ok(good_parsed) => {
-                let schema = NP_Schema::from_json(good_parsed)?;
+
+                let schema = NP_Schema::from_json(Vec::new(), good_parsed)?;
 
                 Ok(NP_Factory {
                     schema:  NP_Schema {
-                        is_sortable: schema.1.is_sortable(),
+                        is_sortable: schema.1[0].is_sortable(),
                         bytes: schema.0,
-                        parsed: Box::new(schema.1)
+                        parsed: schema.1
                     }
                 })
             },
@@ -319,13 +320,13 @@ impl<'factory> NP_Factory<'factory> {
     /// 
     pub fn new_compiled(schema_bytes: Vec<u8>) -> Self {
         
-        let schema = NP_Schema::from_bytes(0, &schema_bytes);
+        let schema = NP_Schema::from_bytes(Vec::new(), 0, &schema_bytes);
 
         NP_Factory {
             schema:  NP_Schema { 
-                is_sortable: schema.is_sortable(), 
-                bytes: schema_bytes, 
-                parsed: Box::new(schema)
+                is_sortable: schema[0].is_sortable(),
+                bytes: schema_bytes,
+                parsed: schema
             }
         }
     }
@@ -347,7 +348,7 @@ impl<'factory> NP_Factory<'factory> {
     /// This just moves the Vec<u8> into the buffer object, no deserialization or copying is done here.
     /// 
     pub fn open_buffer<'buffer>(&'buffer self, bytes: Vec<u8>) -> NP_Buffer<'buffer> {
-        NP_Buffer::_new(&self.schema, NP_Memory::existing(bytes))
+        NP_Buffer::_new(NP_Memory::existing(bytes, &self.schema.parsed))
     }
 
     /// Generate a new empty buffer from this factory.
@@ -362,6 +363,6 @@ impl<'factory> NP_Factory<'factory> {
             Some(x) => x,
             None => NP_Size::U16
         };
-        NP_Buffer::_new(&self.schema, NP_Memory::new(capacity, use_size))
+        NP_Buffer::_new(NP_Memory::new(capacity, use_size, &self.schema.parsed))
     }
 }

@@ -31,7 +31,6 @@ use crate::{pointer::NP_Value, error::NP_Error};
 use core::{fmt::{Debug}, hint::unreachable_unchecked};
 use core::convert::TryInto;
 
-use alloc::string::String;
 use alloc::boxed::Box;
 use alloc::borrow::ToOwned;
 use alloc::{string::ToString};
@@ -113,26 +112,38 @@ impl Default for NP_Geo_Bytes {
 }
 
 impl<'value> NP_Value<'value> for NP_Geo_Bytes {
-    fn schema_default(_schema: &NP_Parsed_Schema) -> Option<Box<Self>> {
+    fn schema_default(_schema: &NP_Parsed_Schema) -> Option<&'value Self> {
         None
     }
-    fn type_idx() -> (u8, String, NP_TypeKeys) { NP_Geo::type_idx() }
-    fn self_type_idx(&self) -> (u8, String, NP_TypeKeys) { NP_Geo::type_idx() }
+    fn type_idx() -> (&'value str, NP_TypeKeys) { NP_Geo::type_idx() }
+    fn self_type_idx(&self) -> (&'value str, NP_TypeKeys) { NP_Geo::type_idx() }
 
-    fn schema_to_json(schema_ptr: &NP_Parsed_Schema)-> Result<NP_JSON, NP_Error> { NP_Geo::schema_to_json(&schema_ptr)}
+    fn schema_to_json(schema: &Vec<NP_Parsed_Schema<'value>>, address: usize)-> Result<NP_JSON, NP_Error> { NP_Geo::schema_to_json(schema, address)}
 
-    fn set_value(cursor_addr: NP_Cursor_Addr, memory: &NP_Memory, value: Box<&Self>) -> Result<NP_Cursor_Addr, NP_Error> {
+    fn set_value(cursor_addr: NP_Cursor_Addr, memory: NP_Memory, value: &Self) -> Result<NP_Cursor_Addr, NP_Error> {
         Err(NP_Error::new("Can't set value with NP_Geo_Bytes, use NP_Geo instead!"))
     }
-    fn to_json(cursor_addr: NP_Cursor_Addr, memory: &NP_Memory) -> NP_JSON {
+    fn to_json(cursor_addr: NP_Cursor_Addr, memory: NP_Memory) -> NP_JSON {
         NP_Geo::to_json(cursor_addr, memory)
     }
-    fn get_size(cursor_addr: NP_Cursor_Addr, memory: &NP_Memory) -> Result<usize, NP_Error> {
-        NP_Geo::get_size(cursor_addr, memory)
-    }
-    fn into_value<'into>(cursor_addr: NP_Cursor_Addr, memory: &NP_Memory) -> Result<Option<Box<Self>>, NP_Error> {
+    fn get_size(cursor_addr: NP_Cursor_Addr, memory: NP_Memory) -> Result<usize, NP_Error> {
+        let cursor = cursor_addr.get_data(&memory).unwrap();
 
-        let cursor = memory.get_cursor_data(&cursor_addr).unwrap();
+        if cursor.address_value == 0 {
+            return Ok(0) 
+        } else {
+            let size = match &**cursor.schema {
+                NP_Parsed_Schema::Geo { i: _, sortable: _, default: _, size} => {
+                    size
+                },
+                _ => { unsafe { unreachable_unchecked() } }
+            };
+            Ok(*size as usize)
+        }
+    }
+    fn into_value<'into>(cursor_addr: NP_Cursor_Addr, memory: NP_Memory) -> Result<Option<&'value Self>, NP_Error> {
+
+        let cursor = cursor_addr.get_data(&memory).unwrap();
 
         // empty value
         if cursor.address_value == 0 {
@@ -171,12 +182,12 @@ impl<'value> NP_Value<'value> for NP_Geo_Bytes {
         })))
     }
 
-    fn from_json_to_schema(json_schema: &NP_JSON) -> Result<Option<(Vec<u8>, NP_Parsed_Schema)>, NP_Error> {
-        NP_Geo::from_json_to_schema(json_schema)
+    fn from_json_to_schema(schema: Vec<NP_Parsed_Schema<'value>>, json_schema: &'value NP_JSON) -> Result<Option<(Vec<u8>, Vec<NP_Parsed_Schema<'value>>)>, NP_Error> {
+        NP_Geo::from_json_to_schema(schema, json_schema)
     }
 
-    fn from_bytes_to_schema(address: usize, bytes: &Vec<u8>) -> NP_Parsed_Schema {
-        NP_Geo::from_bytes_to_schema(address, bytes)
+    fn from_bytes_to_schema(schema: Vec<NP_Parsed_Schema<'value>>, address: usize, bytes: &'value Vec<u8>) -> Vec<NP_Parsed_Schema<'value>> {
+        NP_Geo::from_bytes_to_schema(schema, address, bytes)
     }
 }
 
@@ -340,15 +351,15 @@ impl<'value> NP_Value<'value> for NP_Geo {
         }
     }
 
-    fn type_idx() -> (u8, String, NP_TypeKeys) { (NP_TypeKeys::Geo as u8, "geo".to_owned(), NP_TypeKeys::Geo) }
-    fn self_type_idx(&self) -> (u8, String, NP_TypeKeys) { (NP_TypeKeys::Geo as u8, "geo".to_owned(), NP_TypeKeys::Geo) }
+    fn type_idx() -> (&'value str, NP_TypeKeys) { ("geo", NP_TypeKeys::Geo) }
+    fn self_type_idx(&self) -> (&'value str, NP_TypeKeys) { ("geo", NP_TypeKeys::Geo) }
 
-    fn schema_to_json(schema_ptr: &NP_Parsed_Schema)-> Result<NP_JSON, NP_Error> {
+    fn schema_to_json(schema: &Vec<NP_Parsed_Schema<'value>>, address: usize)-> Result<NP_JSON, NP_Error> {
         let mut schema_json = JSMAP::new();
 
-        match schema_ptr {
+        match &schema[address] {
             NP_Parsed_Schema::Geo { i: _, sortable: _, default, size} => {
-                let mut type_str = Self::type_idx().1;
+                let mut type_str = Self::type_idx().0.to_string();
                 type_str.push_str(size.to_string().as_str());
                 schema_json.insert("type".to_owned(), NP_JSON::String(type_str));
             
@@ -367,9 +378,9 @@ impl<'value> NP_Value<'value> for NP_Geo {
 
     }
 
-    fn set_value(cursor_addr: NP_Cursor_Addr, memory: &NP_Memory, value: Box<&Self>) -> Result<NP_Cursor_Addr, NP_Error> {
+    fn set_value(cursor_addr: NP_Cursor_Addr, memory: NP_Memory, value: &Self) -> Result<NP_Cursor_Addr, NP_Error> {
 
-        let cursor = memory.get_cursor_data(&cursor_addr).unwrap();
+        let cursor = cursor_addr.get_data(&memory).unwrap();
 
         if cursor_addr.is_virtual { panic!() }
 
@@ -490,9 +501,9 @@ impl<'value> NP_Value<'value> for NP_Geo {
         
     }
 
-    fn into_value<'into>(cursor_addr: NP_Cursor_Addr, memory: &NP_Memory) -> Result<Option<Box<Self>>, NP_Error> {
+    fn into_value<'into>(cursor_addr: NP_Cursor_Addr, memory: NP_Memory) -> Result<Option<&'value Self>, NP_Error> {
 
-        let cursor = memory.get_cursor_data(&cursor_addr).unwrap();
+        let cursor = cursor_addr.get_data(&memory).unwrap();
 
         // empty value
         if cursor.address_value == 0 {
@@ -559,7 +570,7 @@ impl<'value> NP_Value<'value> for NP_Geo {
         })))
     }
 
-    fn to_json(cursor_addr: NP_Cursor_Addr, memory: &NP_Memory) -> NP_JSON {
+    fn to_json(cursor_addr: NP_Cursor_Addr, memory: NP_Memory) -> NP_JSON {
 
         match Self::into_value(cursor_addr, memory) {
             Ok(x) => {
@@ -573,7 +584,7 @@ impl<'value> NP_Value<'value> for NP_Geo {
                         NP_JSON::Dictionary(object)
                     },
                     None => {
-                        let cursor = memory.get_cursor_data(&cursor_addr).unwrap();
+                        let cursor = cursor_addr.get_data(&memory).unwrap();
                         match &**cursor.schema {
                             NP_Parsed_Schema::Geo { i: _, sortable: _, default, size: _} => {
                                 if let Some(d) = default {
@@ -598,8 +609,8 @@ impl<'value> NP_Value<'value> for NP_Geo {
         }
     }
 
-    fn get_size(cursor_addr: NP_Cursor_Addr, memory: &NP_Memory) -> Result<usize, NP_Error> {
-        let cursor = memory.get_cursor_data(&cursor_addr).unwrap();
+    fn get_size(cursor_addr: NP_Cursor_Addr, memory: NP_Memory) -> Result<usize, NP_Error> {
+        let cursor = cursor_addr.get_data(&memory).unwrap();
 
         if cursor.address_value == 0 {
             return Ok(0) 
@@ -614,7 +625,7 @@ impl<'value> NP_Value<'value> for NP_Geo {
         }
     }
 
-    fn from_json_to_schema(json_schema: &NP_JSON) -> Result<Option<(Vec<u8>, NP_Parsed_Schema)>, NP_Error> {
+    fn from_json_to_schema(schema: Vec<NP_Parsed_Schema<'value>>, json_schema: &'value NP_JSON) -> Result<Option<(Vec<u8>, Vec<NP_Parsed_Schema<'value>>)>, NP_Error> {
 
         let type_str = NP_Schema::_get_type(json_schema)?;
 
@@ -636,12 +647,13 @@ impl<'value> NP_Value<'value> for NP_Geo {
                         None
                     }
                 };
-                Ok(Some((schema_data, NP_Parsed_Schema::Geo {
+                schema.push(NP_Parsed_Schema::Geo {
                     i: NP_TypeKeys::Geo,
                     size: 4,
                     default: default,
                     sortable: false
-                })))
+                });
+                Ok(Some((schema_data, schema)))
             },
             "geo8" => {
                 let mut schema_data: Vec<u8> = Vec::new();
@@ -660,12 +672,13 @@ impl<'value> NP_Value<'value> for NP_Geo {
                         None
                     }
                 };
-                Ok(Some((schema_data, NP_Parsed_Schema::Geo {
+                schema.push(NP_Parsed_Schema::Geo {
                     i: NP_TypeKeys::Geo,
                     size: 8,
                     default: default,
                     sortable: false
-                })))
+                });
+                Ok(Some((schema_data, schema)))
             },
             "geo16" => {
                 let mut schema_data: Vec<u8> = Vec::new();
@@ -684,12 +697,13 @@ impl<'value> NP_Value<'value> for NP_Geo {
                         None
                     }
                 };
-                Ok(Some((schema_data, NP_Parsed_Schema::Geo {
+                schema.push(NP_Parsed_Schema::Geo {
                     i: NP_TypeKeys::Geo,
                     size: 16,
                     default: default,
                     sortable: false
-                })))
+                });
+                Ok(Some((schema_data, schema)))
             },
             _ => {
                 Ok(None)
@@ -697,51 +711,57 @@ impl<'value> NP_Value<'value> for NP_Geo {
         }
     }
 
-    fn from_bytes_to_schema(address: usize, bytes: &Vec<u8>) -> NP_Parsed_Schema { 
+    fn from_bytes_to_schema(schema: Vec<NP_Parsed_Schema<'value>>, address: usize, bytes: &'value Vec<u8>) -> Vec<NP_Parsed_Schema<'value>> { 
         let size = bytes[address + 1];
 
+        // no default
         if bytes[address + 2] == 0 {
-            return NP_Parsed_Schema::Geo {
+            schema.push(NP_Parsed_Schema::Geo {
                 i: NP_TypeKeys::Geo,
                 sortable: false,
                 size: size,
                 default: None
-            }
+            });
+            return schema 
         }
 
+        // has default
         match size {
             4 => {
                 let lat = &bytes[(address + 3)..(address + 5)];
                 let lng = &bytes[(address + 6)..(address + 8)];
                 let default_value = NP_Geo_Bytes { size: size, lat: lat.to_vec(), lng: lng.to_vec()};
-                NP_Parsed_Schema::Geo {
+                schema.push(NP_Parsed_Schema::Geo {
                     i: NP_TypeKeys::Geo,
                     size: size,
                     sortable: false,
                     default: Some(Box::new(default_value.into_geo().unwrap()))
-                }
+                });
+                schema
             },
             8 => {
                 let lat = &bytes[(address + 3)..(address + 7)];
                 let lng = &bytes[(address + 7)..(address + 11)];
                 let default_value = NP_Geo_Bytes { size: size, lat: lat.to_vec(), lng: lng.to_vec()};
-                NP_Parsed_Schema::Geo {
+                schema.push(NP_Parsed_Schema::Geo {
                     i: NP_TypeKeys::Geo,
                     size: size,
                     sortable: false,
                     default: Some(Box::new(default_value.into_geo().unwrap()))
-                }
+                });
+                schema
             },
             16 => {
                 let lat = &bytes[(address + 3)..(address + 11)];
                 let lng = &bytes[(address + 12)..(address + 20)];
                 let default_value = NP_Geo_Bytes { size: size, lat: lat.to_vec(), lng: lng.to_vec()};
-                NP_Parsed_Schema::Geo {
+                schema.push(NP_Parsed_Schema::Geo {
                     i: NP_TypeKeys::Geo,
                     size: size,
                     sortable: false,
                     default: Some(Box::new(default_value.into_geo().unwrap()))
-                }
+                });
+                schema
             },
             _ => {
                 unreachable!();

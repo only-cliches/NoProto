@@ -1,5 +1,6 @@
 //! Top level abstraction for buffer objects
 
+use alloc::rc::Rc;
 use crate::collection::map::NP_Map;
 use crate::{schema::NP_TypeKeys, pointer::NP_Value};
 use crate::pointer::NP_Cursor_Addr;
@@ -8,17 +9,17 @@ use crate::{pointer::NP_Cursor, collection::{NP_Collection, tuple::NP_Tuple}};
 use crate::{schema::NP_Parsed_Schema, collection::table::NP_Table};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
-use core::ops::Index;
 use crate::{collection::{list::NP_List}};
 use crate::error::NP_Error;
 use crate::memory::{NP_Size, NP_Memory};
 use crate::{schema::{NP_Schema}, json_flex::NP_JSON};
-use crate::alloc::string::ToString;
 use crate::alloc::borrow::ToOwned;
 
 /// The address location of the root pointer.
 #[doc(hidden)]
 pub const ROOT_PTR_ADDR: usize = 2;
+
+pub type MEMORY<'mem> = Rc<NP_Memory<'mem>>;
 
 /// Buffers contain the bytes of each object and allow you to perform reads, updates, deletes and compaction.
 /// 
@@ -26,7 +27,6 @@ pub const ROOT_PTR_ADDR: usize = 2;
 #[derive(Debug)]
 pub struct NP_Buffer<'buffer> {
     /// Schema data used by this buffer
-    pub schema: &'buffer NP_Schema<'buffer>,
     memory: NP_Memory<'buffer>,
     cursor: NP_Cursor_Addr
 }
@@ -45,9 +45,9 @@ pub struct NP_Size_Data {
 impl<'buffer> NP_Buffer<'buffer> {
 
     #[doc(hidden)]
-    pub fn _new(schema: &'buffer NP_Schema, memory: NP_Memory<'buffer>) -> Self { // make new buffer
+    pub fn _new(memory: NP_Memory<'buffer>) -> Self { // make new buffer
 
-        let mut root_cursor = NP_Cursor::new(ROOT_PTR_ADDR, None, &memory, &schema.parsed);
+        let mut root_cursor = NP_Cursor::new(ROOT_PTR_ADDR, 0, 0, &memory);
 
         root_cursor.address_value = memory.read_address(ROOT_PTR_ADDR);
 
@@ -55,8 +55,7 @@ impl<'buffer> NP_Buffer<'buffer> {
 
         NP_Buffer {
             cursor: NP_Cursor_Addr { address: ROOT_PTR_ADDR, is_virtual: false},
-            memory: memory,
-            schema: schema
+            memory: memory
         }
     }
 
@@ -88,17 +87,17 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// # Ok::<(), NP_Error>(()) 
     /// ```
     /// 
-    pub fn json_encode(&self, path: &[&str]) -> Result<NP_JSON, NP_Error> {
+    pub fn json_encode<'json>(&'json self, path: &'json [&str]) -> Result<NP_JSON, NP_Error> {
 
-        let value_cursor = NP_Cursor::select(self.cursor.clone(), &self.memory.clone(), path, 0)?;
+        let value_cursor = NP_Cursor::select(self.cursor.clone(), self.memory.clone(), path, 0)?;
 
-        let value_cursor = if let Some(x) = value_cursor {
-            x
+        if let Some(x) = value_cursor {
+            Ok(NP_Cursor::json_encode(x, self.memory.clone()))
         } else {
-            return Ok(NP_JSON::Null);
-        };
+            Ok(NP_JSON::Null)
+        }
 
-        Ok(NP_Cursor::json_encode(value_cursor, &self.memory))
+        
     }
 
     /// Moves the underlying bytes out of the buffer, consuming the buffer in the process.
@@ -136,7 +135,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// Move buffer cursor to new location
     pub fn move_cursor(&mut self, path: &[&str]) -> Result<bool, NP_Error> {
 
-        let cursor = NP_Cursor::select_with_commit(self.cursor, &self.memory.clone(), path, 0)?;
+        let cursor = NP_Cursor::select_with_commit(self.cursor.clone(), self.memory.clone(), path, 0)?;
 
         let cursor = if let Some(x) = cursor {
             x
@@ -144,7 +143,7 @@ impl<'buffer> NP_Buffer<'buffer> {
             return Ok(false);
         };
 
-        self.cursor = cursor;
+        self.cursor = cursor.clone();
 
         Ok(true)
     }
@@ -157,7 +156,6 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// use no_proto::error::NP_Error;
     /// use no_proto::NP_Factory;
     /// use no_proto::buffer::NP_Size_Data;
-    /// use no_proto::path;
     /// 
     /// // a list where each item is a map where each key has a value containing a list of strings
     /// let factory: NP_Factory = NP_Factory::new(r#"{
@@ -170,10 +168,10 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// let mut new_buffer = factory.empty_buffer(None, None);
     /// // third item in the top level list -> key "alpha" of map at 3rd element -> 9th element of list at "alpha" key
     /// // 
-    /// new_buffer.set(path("3.alpha.9"), String::from("look at all this nesting madness"))?;
+    /// new_buffer.set(&["3", "alpha", "9"], String::from("look at all this nesting madness"))?;
     /// 
     /// // get the same item we just set
-    /// let message = new_buffer.get::<String>(path("3.alpha.9"))?;
+    /// let message = new_buffer.get::<String>(&["3", "alpha", "9"])?;
     /// 
     /// assert_eq!(message, Some(Box::new(String::from("look at all this nesting madness"))));
     /// 
@@ -182,13 +180,13 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// 
     pub fn set<X>(&mut self, path: &[&str], value: X) -> Result<bool, NP_Error> where X: NP_Value<'buffer> + Default {
 
-        let value_cursor = NP_Cursor::select_with_commit(self.cursor.clone(), &self.memory.clone(), path, 0)?;
+        let value_cursor = NP_Cursor::select_with_commit(self.cursor.clone(), self.memory.clone(), path, 0)?;
         let value_cursor = if let Some(x) = value_cursor {
             x
         } else {
             return Ok(false);
         };
-        NP_Cursor::set_here(value_cursor, &self.memory, value)?;
+        self.memory.set_value(&value_cursor, value)?;
         Ok(true)
     }
 
@@ -353,9 +351,9 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// # Ok::<(), NP_Error>(()) 
     /// ```
     /// 
-    pub fn get_iter(&mut self, path: &[&str]) -> Result<Option<NP_Generic_Iterator>, NP_Error> {
+    pub fn get_iter<'iter>(&'iter self, path: &'iter [&str]) -> Result<Option<NP_Generic_Iterator<'iter>>, NP_Error> {
 
-        let value = NP_Cursor::select(self.cursor.clone(), &self.memory, path, 0)?;
+        let value = NP_Cursor::select(self.cursor.clone(), self.memory.clone(), path, 0)?;
 
         let value = if let Some(x) = value {
             x
@@ -368,31 +366,31 @@ impl<'buffer> NP_Buffer<'buffer> {
             return Ok(None);
         }
 
-        let value_cursor = self.memory.get_cursor_data(&value).unwrap();
+        let value_schema= value.get_schema_data_owned(self.memory.clone());
 
-        match &**value_cursor.schema {
+        match value_schema {
             NP_Parsed_Schema::Table { i: _, sortable: _, columns: _} => {
                 Ok(Some(NP_Generic_Iterator {
                     index: 0,
-                    iterator: NP_Iterator_Collection::Table(NP_Table::start_iter(&value, &self.memory)?)
+                    iterator: NP_Iterator_Collection::Table(NP_Table::start_iter(value, self.memory.clone())?)
                 }))
             },
             NP_Parsed_Schema::Map { i: _, sortable: _, value: _} => {
                 Ok(Some(NP_Generic_Iterator {
                     index: 0,
-                    iterator: NP_Iterator_Collection::Map(NP_Map::start_iter(&value, &self.memory)?)
+                    iterator: NP_Iterator_Collection::Map(NP_Map::start_iter(value, self.memory.clone())?)
                 }))
             },
             NP_Parsed_Schema::List { i: _, sortable: _, of: _} => {
                 Ok(Some(NP_Generic_Iterator {
                     index: 0,
-                    iterator: NP_Iterator_Collection::List(NP_List::start_iter(&value, &self.memory)?)
+                    iterator: NP_Iterator_Collection::List(NP_List::start_iter(value, self.memory.clone())?)
                 }))
             },
             NP_Parsed_Schema::Tuple { i: _, sortable: _, values: _} => {
                 Ok(Some(NP_Generic_Iterator {
                     index: 0,
-                    iterator: NP_Iterator_Collection::Tuple(NP_Tuple::start_iter(&value, &self.memory)?)
+                    iterator: NP_Iterator_Collection::Tuple(NP_Tuple::start_iter(value, self.memory.clone())?)
                 }))
             },
             _ => {
@@ -456,9 +454,9 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// # Ok::<(), NP_Error>(()) 
     /// ```
     /// 
-    pub fn list_push<'push, X: 'push>(&'push mut self, path: &[&str], value: X) -> Result<Option<u16>, NP_Error> where X: NP_Value<'push> + Default {
+    pub fn list_push<'push, X: 'push>(&'push mut self, path: &'push [&str], value: X) -> Result<Option<u16>, NP_Error> where X: NP_Value<'push> + Default {
 
-        let list_cursor = NP_Cursor::select_with_commit(self.cursor.clone(), &self.memory.clone(), path, 0)?;
+        let list_cursor = NP_Cursor::select_with_commit(self.cursor.clone(), self.memory.clone(), path, 0)?;
 
         let list_cursor = if let Some(x) = list_cursor {
             x
@@ -466,24 +464,24 @@ impl<'buffer> NP_Buffer<'buffer> {
             return Ok(None);
         };
 
-        let cursor = self.memory.get_cursor_data(&list_cursor).unwrap();
-
-        match &**cursor.schema {
+        match list_cursor.get_schema_data(&self.memory) {
             NP_Parsed_Schema::List { i: _, sortable: _, of} => {
 
+                let of_schema = self.memory.schema.get(*of).unwrap();
+
                 // type does not match schema
-                if X::type_idx().0 != of.into_type_data().0 {
+                if X::type_idx().1 != of_schema.get_type_key() {
                     let mut err = "TypeError: Attempted to set value for type (".to_owned();
-                    err.push_str(X::type_idx().1.as_str());
+                    err.push_str(X::type_idx().0);
                     err.push_str(") into schema of type (");
-                    err.push_str(of.into_type_data().1.as_str());
+                    err.push_str(of_schema.get_type_data().0);
                     err.push_str(")\n");
                     return Err(NP_Error::new(err));
                 }
 
-                let (new_cursor, new_memory) = NP_List::push(list_cursor, &self.memory.clone(), None)?;
+                let new_cursor = NP_List::push(list_cursor, &self.memory, None)?;
 
-                NP_List::commit_pointer(&new_cursor, new_memory)?;
+                NP_List::commit_pointer(&new_cursor, &self.memory)?;
 
                 X::set_value(new_cursor, &self.memory, Box::new(&value))?;
 
@@ -525,15 +523,15 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// ```
     /// 
     pub fn get_type(&mut self, path: &[&str]) -> Result<Option<NP_TypeKeys>, NP_Error> {
-        let value_cursor = NP_Cursor::select(self.cursor.clone(), &self.memory.clone(), path, 0)?;
+        let value_cursor = NP_Cursor::select(self.cursor.clone(), self.memory.clone(), path, 0)?;
 
         let found_cursor = if let Some(x) = value_cursor {
             x
         } else {
             return Ok(None)
         };
-        
-        Ok(Some(self.memory.get_cursor_data(&found_cursor).unwrap().schema.get_type_key()))
+
+        Ok(Some(found_cursor.get_schema_data_owned(self.memory.clone()).get_type_key()))
     }
 
     /// Get length of String, Bytes, Table, Tuple, List or Map Type
@@ -652,7 +650,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// ```
     /// 
     pub fn length(&mut self, path: &[&str]) -> Result<Option<usize>, NP_Error> {
-        let value_cursor = NP_Cursor::select(self.cursor.clone(), &self.memory.clone(), path, 0)?;
+        let value_cursor = NP_Cursor::select(self.cursor.clone(), self.memory.clone(), path, 0)?;
 
         let found_cursor = if let Some(x) = value_cursor {
             x
@@ -664,14 +662,12 @@ impl<'buffer> NP_Buffer<'buffer> {
             return Ok(None);
         }
 
-        let cursor = self.memory.get_cursor_data(&found_cursor).unwrap();
-
-        match &**cursor.schema {
+        match &found_cursor.get_schema_data_owned(self.memory.clone()) {
             NP_Parsed_Schema::List { i: _, sortable: _, of: _} => {
-                Ok(Some(NP_List::start_iter(&found_cursor, &self.memory.clone()).into_iter().count()))
+                Ok(Some(NP_List::start_iter(found_cursor.clone(), self.memory.clone()).into_iter().count()))
             },
             NP_Parsed_Schema::Map { i: _, sortable: _, value: _} => {
-                Ok(Some(NP_Map::start_iter(&found_cursor, &self.memory.clone()).into_iter().count()))
+                Ok(Some(NP_Map::start_iter(found_cursor.clone(), self.memory.clone()).into_iter().count()))
             },
             NP_Parsed_Schema::Table { i: _, sortable: _, columns} => {
                 Ok(Some(columns.len()))
@@ -683,6 +679,7 @@ impl<'buffer> NP_Buffer<'buffer> {
                 if *size > 0 {
                     Ok(Some(*size as usize))
                 } else {
+                    let cursor = found_cursor.get_data_owned(self.memory.clone())?;
                     Ok(Some(self.memory.read_address(cursor.address_value)))
                 }
             },
@@ -690,6 +687,7 @@ impl<'buffer> NP_Buffer<'buffer> {
                 if *size > 0 {
                     Ok(Some(*size as usize))
                 } else {
+                    let cursor = found_cursor.get_data_owned(self.memory.clone())?;
                     Ok(Some(self.memory.read_address(cursor.address_value)))
                 }
             },
@@ -729,8 +727,8 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// 
     pub fn del(&mut self, path: &[&str]) -> Result<bool, NP_Error> {
 
-        Ok(match NP_Cursor::select(self.cursor.clone(), &self.memory.clone(), path, 0)? {
-            Some(x) => NP_Cursor::clear_here(x, &self.memory),
+        Ok(match NP_Cursor::select(self.cursor.clone(), self.memory.clone(), path, 0)? {
+            Some(x) => NP_Cursor::clear_here(x, self.memory.clone()),
             None => false
         })
     }
@@ -766,11 +764,11 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// # Ok::<(), NP_Error>(()) 
     /// ```
     /// 
-    pub fn get<'get, X: 'get>(&'get mut self, path: &[&str]) -> Result<Option<Box<X>>, NP_Error> where X: NP_Value<'get> + Default {
-        let value_cursor = NP_Cursor::select(self.cursor.clone(), &self.memory.clone(), path, 0)?;
+    pub fn get<'get, X: 'get>(&'get mut self, path: &[&str]) -> Result<Option<&'get X>, NP_Error> where X: NP_Value<'get> + Default {
+        let value_cursor = NP_Cursor::select(self.cursor.clone(), self.memory.clone(), path, 0)?;
         match value_cursor {
             Some(x) => {
-                X::into_value(x, &self.memory)
+                X::into_value(x, self.memory.clone())
             }
             None => Ok(None)
         }
@@ -901,11 +899,11 @@ impl<'buffer> NP_Buffer<'buffer> {
 
         let root_cursor = NP_Cursor_Addr {address: ROOT_PTR_ADDR, is_virtual: false};
 
-        let new_bytes = NP_Memory::new(Some(capacity), size);
-        let mut new_root_cursor = NP_Cursor::new(ROOT_PTR_ADDR, None, &new_bytes, &self.schema.parsed);
+        let new_bytes = NP_Memory::new(Some(capacity), size, self.memory.schema);
+        let mut new_root_cursor = NP_Cursor::new(ROOT_PTR_ADDR, 0, 0, &new_bytes);
         new_bytes.insert_cache(new_root_cursor);
 
-        self.cursor = NP_Cursor::compact(root_cursor.clone(), &self.memory, root_cursor.clone(), &new_bytes)?;
+        self.cursor = NP_Cursor::compact(root_cursor.clone(), self.memory.clone(), root_cursor.clone(), &new_bytes)?;
 
         self.memory = new_bytes;
 
@@ -938,7 +936,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// 
     pub fn calc_bytes(&self) -> Result<NP_Size_Data, NP_Error> {
 
-        let real_bytes = NP_Cursor::calc_size(NP_Cursor_Addr {address: ROOT_PTR_ADDR, is_virtual: false}, &self.memory)? + ROOT_PTR_ADDR;
+        let real_bytes = NP_Cursor::calc_size(NP_Cursor_Addr {address: ROOT_PTR_ADDR, is_virtual: false}, self.memory.clone())? + ROOT_PTR_ADDR;
         let total_size = self.memory.read_bytes().len();
 
         if total_size >= real_bytes {
@@ -1018,6 +1016,8 @@ impl<'item> NP_Item<'item> {
 #[derive(Debug)]
 #[doc(hidden)]
 pub enum NP_Iterator_Collection<'col> {
+    /// None
+    None,
     /// Map
     Map(NP_Map<'col>),
     /// List

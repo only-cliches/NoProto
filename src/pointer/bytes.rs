@@ -27,7 +27,6 @@ use crate::{schema::{NP_TypeKeys}, pointer::NP_Value, json_flex::NP_JSON};
 use core::hint::unreachable_unchecked;
 
 use alloc::vec::Vec;
-use alloc::vec;
 use alloc::string::String;
 use alloc::boxed::Box;
 use alloc::{borrow::ToOwned};
@@ -62,14 +61,14 @@ impl<'bytes> Default for NP_Bytes<'bytes> {
 impl<'value> NP_Value<'value> for NP_Bytes<'value> {
 
 
-    fn type_idx() -> (u8, String, NP_TypeKeys) { (NP_TypeKeys::Bytes as u8, "bytes".to_owned(), NP_TypeKeys::Bytes) }
-    fn self_type_idx(&self) -> (u8, String, NP_TypeKeys) { (NP_TypeKeys::Bytes as u8, "bytes".to_owned(), NP_TypeKeys::Bytes) }
+    fn type_idx() -> (&'value str, NP_TypeKeys) { ("bytes", NP_TypeKeys::Bytes) }
+    fn self_type_idx(&self) -> (&'value str, NP_TypeKeys) { ("bytes", NP_TypeKeys::Bytes) }
 
-    fn schema_to_json(schema_ptr: &NP_Parsed_Schema)-> Result<NP_JSON, NP_Error> {
+    fn schema_to_json(schema: &Vec<NP_Parsed_Schema<'value>>, address: usize)-> Result<NP_JSON, NP_Error> {
         let mut schema_json = JSMAP::new();
-        schema_json.insert("type".to_owned(), NP_JSON::String(Self::type_idx().1));
+        schema_json.insert("type".to_owned(), NP_JSON::String(Self::type_idx().0.to_string()));
 
-        match schema_ptr {
+        match &schema[address] {
             NP_Parsed_Schema::Bytes { i: _, sortable: _, default, size} => {
                 if *size > 0 {
                     schema_json.insert("size".to_owned(), NP_JSON::Integer(*size as i64));
@@ -103,13 +102,13 @@ impl<'value> NP_Value<'value> for NP_Bytes<'value> {
         }
     }
 
-    fn set_value(cursor_addr: NP_Cursor_Addr, memory: &NP_Memory, value: Box<&Self>) -> Result<NP_Cursor_Addr, NP_Error> {
+    fn set_value(cursor_addr: NP_Cursor_Addr, memory: NP_Memory, value: &Self) -> Result<NP_Cursor_Addr, NP_Error> {
  
         let bytes = value.bytes;
 
         let str_size = bytes.len() as usize;
     
-        let cursor = memory.get_cursor_data(&cursor_addr).unwrap();
+        let cursor = cursor_addr.get_data(&memory).unwrap();
 
         if cursor_addr.is_virtual { panic!() }
     
@@ -248,7 +247,7 @@ impl<'value> NP_Value<'value> for NP_Bytes<'value> {
     
 
     fn into_value<'into>(cursor_addr: NP_Cursor_Addr, memory: &'value NP_Memory) -> Result<Option<Box<Self>>, NP_Error> {
-        let cursor = memory.get_cursor_data(&cursor_addr).unwrap();
+        let cursor = cursor_addr.get_data(&memory).unwrap();
 
         // empty value
         if cursor.address_value == 0 {
@@ -314,7 +313,7 @@ impl<'value> NP_Value<'value> for NP_Bytes<'value> {
                         NP_JSON::Array(bytes)
                     },
                     None => {
-                        let cursor = memory.get_cursor_data(&cursor_addr).unwrap();
+                        let cursor = cursor_addr.get_data(&memory).unwrap();
                         match &**cursor.schema {
                             NP_Parsed_Schema::Bytes { i: _, size: _, default, sortable: _ } => {
                                 match default {
@@ -339,8 +338,8 @@ impl<'value> NP_Value<'value> for NP_Bytes<'value> {
         }
     }
 
-    fn get_size(cursor_addr: NP_Cursor_Addr, memory: &NP_Memory) -> Result<usize, NP_Error> {
-        let cursor = memory.get_cursor_data(&cursor_addr).unwrap();
+    fn get_size(cursor_addr: NP_Cursor_Addr, memory: NP_Memory) -> Result<usize, NP_Error> {
+        let cursor = cursor_addr.get_data(&memory).unwrap();
 
         // empty value
         if cursor.address_value == 0 {
@@ -366,7 +365,7 @@ impl<'value> NP_Value<'value> for NP_Bytes<'value> {
 
     }
 
-    fn from_json_to_schema(json_schema: &NP_JSON) -> Result<Option<(Vec<u8>, NP_Parsed_Schema)>, NP_Error> {
+    fn from_json_to_schema(schema: Vec<NP_Parsed_Schema<'value>>, json_schema: &'value NP_JSON) -> Result<Option<(Vec<u8>, Vec<NP_Parsed_Schema<'value>>)>, NP_Error> {
 
         let type_str = NP_Schema::_get_type(json_schema)?;
 
@@ -426,7 +425,7 @@ impl<'value> NP_Value<'value> for NP_Bytes<'value> {
                 }
             };
 
-            return Ok(Some((schema_data, NP_Parsed_Schema::Bytes {
+            schema.push(NP_Parsed_Schema::Bytes {
                 i: NP_TypeKeys::Bytes,
                 size: size,
                 default: if let Some(d) = default {
@@ -435,13 +434,15 @@ impl<'value> NP_Value<'value> for NP_Bytes<'value> {
                     None
                 },
                 sortable: has_fixed_size
-            })));
+            });
+
+            return Ok(Some((schema_data, schema)));
         }
         
         Ok(None)
     }
 
-    fn from_bytes_to_schema(address: usize, bytes: &Vec<u8>) -> NP_Parsed_Schema {
+    fn from_bytes_to_schema(schema: Vec<NP_Parsed_Schema<'value>>, address: usize, bytes: &'value Vec<u8>) -> Vec<NP_Parsed_Schema<'value>> {
         // fixed size
         let fixed_size = u16::from_be_bytes([
             bytes[address + 1],
@@ -455,22 +456,25 @@ impl<'value> NP_Value<'value> for NP_Bytes<'value> {
         ]) as usize;
 
         if default_size == 0 {
-            return NP_Parsed_Schema::Bytes {
+            schema.push(NP_Parsed_Schema::Bytes {
                 i: NP_TypeKeys::Bytes,
                 default: None,
                 sortable: fixed_size > 0,
                 size: fixed_size
-            }
+            });
+        } else {
+            let default_bytes = &bytes[(address + 5)..(address + 5 + (default_size - 1))];
+
+            schema.push(NP_Parsed_Schema::Bytes {
+                i: NP_TypeKeys::Bytes,
+                default: Some(Box::new(default_bytes)),
+                size: fixed_size,
+                sortable: fixed_size > 0
+            });    
         }
 
-        let default_bytes = &bytes[(address + 5)..(address + 5 + (default_size - 1))];
+        schema
 
-        return NP_Parsed_Schema::Bytes {
-            i: NP_TypeKeys::Bytes,
-            default: Some(Box::new(default_bytes)),
-            size: fixed_size,
-            sortable: fixed_size > 0
-        }
     }
 }
 

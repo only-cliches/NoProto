@@ -1,6 +1,7 @@
 //! Internal buffer memory management
 
-use crate::pointer::{NP_Cursor, NP_Cursor_Addr, NP_Cursor_Kinds};
+use crate::pointer::NP_Value;
+use crate::{schema::NP_Parsed_Schema, pointer::{NP_Cursor, NP_Cursor_Addr, NP_Cursor_Kinds}};
 use crate::{PROTOCOL_VERSION, error::NP_Error};
 use core::cell::UnsafeCell;
 use alloc::rc::Rc;
@@ -18,12 +19,14 @@ pub enum NP_Size {
     U8
 }
 
+
 #[derive(Debug)]
 #[doc(hidden)]
 pub struct NP_Memory<'memory> {
     bytes: Rc<UnsafeCell<Vec<u8>>>,
-    cursor_cache: Rc<UnsafeCell<Vec<NP_Cursor<'memory>>>>,
-    virtual_cursor: Rc<UnsafeCell<NP_Cursor<'memory>>>,
+    pub cursor_cache: Rc<UnsafeCell<Vec<NP_Cursor<'memory>>>>,
+    pub virtual_cursor: Rc<UnsafeCell<NP_Cursor<'memory>>>,
+    pub schema: &'memory Vec<NP_Parsed_Schema<'memory>>,
     pub size: NP_Size
 }
 
@@ -59,11 +62,12 @@ impl<'memory> NP_Memory<'memory> {
             bytes: Rc::clone(&self.bytes),
             cursor_cache: Rc::clone(&self.cursor_cache),
             virtual_cursor: Rc::clone(&self.virtual_cursor),
-            size: self.size.clone()
+            schema: self.schema,
+            size: self.size
         }
     }
 
-    pub fn existing(bytes: Vec<u8>) -> Self {
+    pub fn existing(bytes: Vec<u8>, schema: &'memory Vec<NP_Parsed_Schema<'memory>>) -> Self {
 
         let size = bytes[1];
         
@@ -71,6 +75,7 @@ impl<'memory> NP_Memory<'memory> {
             bytes: Rc::new(UnsafeCell::new(bytes)),
             cursor_cache: Rc::new(UnsafeCell::new(Vec::new())),
             virtual_cursor: Rc::new(UnsafeCell::new(NP_Cursor::default())),
+            schema: schema,
             size: match size {
                 0 => NP_Size::U32,
                 1 => NP_Size::U16,
@@ -83,23 +88,6 @@ impl<'memory> NP_Memory<'memory> {
     pub fn insert_cache(&self, cursor: NP_Cursor<'memory>) {
         let cache = unsafe { &mut *self.cursor_cache.get() };
         cache.insert(cursor.address, cursor);
-    }
-
-    pub fn get_virt_cursor(&self) -> &mut NP_Cursor<'memory> {
-        unsafe { &mut *self.virtual_cursor.get() }
-    }
-
-    pub fn get_cursor_data(&self, addr: &NP_Cursor_Addr) -> Result<&mut NP_Cursor<'memory>, NP_Error> {
-        if addr.is_virtual {
-            Ok(unsafe { &mut *self.virtual_cursor.get() })
-        } else {
-            let cache = unsafe { &mut *self.cursor_cache.get() };
-            if let Some(c) = cache.get_mut(addr.address) {
-                Ok(c)
-            } else {
-                Err(NP_Error::new("Attempted to get cached cursor that didn't exist!"))
-            }
-        }
     }
 
     pub fn max_addr_size(&self) -> usize {
@@ -118,26 +106,6 @@ impl<'memory> NP_Memory<'memory> {
         }
     }
 
-    pub fn write_address(&self, addr: usize, value: usize) -> Result<(), NP_Error> {
-        
-        let addr_bytes = match self.size {
-            NP_Size::U32 => value.to_be_bytes().to_vec(),
-            NP_Size::U16 => (value as u16).to_be_bytes().to_vec(),
-            NP_Size::U8 => (value as u8).to_be_bytes().to_vec()
-        };
-
-        if addr + addr_bytes.len() > self.max_addr_size() {
-            return Err(NP_Error::new("Attempting to write out of bounds!"));
-        }
-
-        let self_bytes = unsafe { &mut *self.bytes.get() };
-
-        for x in 0..addr_bytes.len() {
-            self_bytes[addr + x] = addr_bytes[x];
-        }
-
-        Ok(())
-    }
 
     pub fn read_address(&self, addr: usize) -> usize {
         if addr == 0 {
@@ -161,7 +129,7 @@ impl<'memory> NP_Memory<'memory> {
         }
     }
 
-    pub fn new(capacity: Option<usize>, size: NP_Size) -> Self {
+    pub fn new(capacity: Option<usize>, size: NP_Size, schema: &'memory Vec<NP_Parsed_Schema<'memory>>) -> Self {
         let use_size = match capacity {
             Some(x) => x,
             None => 1024
@@ -192,6 +160,7 @@ impl<'memory> NP_Memory<'memory> {
             bytes: Rc::new(UnsafeCell::new(new_bytes)),
             cursor_cache: Rc::new(UnsafeCell::new(Vec::with_capacity(use_size))),
             virtual_cursor: Rc::new(UnsafeCell::new(NP_Cursor::default())),
+            schema: schema,
             size: size
         }
     }
@@ -286,7 +255,29 @@ impl<'memory> NP_Memory<'memory> {
         }
         empty_bytes
     }
+/*
+    pub fn write_address(&self, addr: usize, value: usize) -> Result<(), NP_Error> {
+        
+        let addr_bytes = match self.size {
+            NP_Size::U32 => value.to_be_bytes().to_vec(),
+            NP_Size::U16 => (value as u16).to_be_bytes().to_vec(),
+            NP_Size::U8 => (value as u8).to_be_bytes().to_vec()
+        };
 
+        if addr + addr_bytes.len() > self.max_addr_size() {
+            return Err(NP_Error::new("Attempting to write out of bounds!"));
+        }
+
+        let self_bytes = unsafe { &mut *self.bytes.get() };
+
+        for x in 0..addr_bytes.len() {
+            self_bytes[addr + x] = addr_bytes[x];
+        }
+
+        Ok(())
+    }
+
+*/
     pub fn set_value_address(&self, address: usize, val: usize) {
 
         let self_bytes = unsafe { &mut *self.bytes.get() };

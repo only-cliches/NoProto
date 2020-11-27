@@ -10,11 +10,11 @@ use super::NP_Collection;
 /// List data type.
 /// 
 #[doc(hidden)]
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct NP_List<'list> { 
-    list_cursor: NP_Cursor_Addr,
+    cursor: NP_Cursor_Addr,
     current: Option<NP_Cursor_Addr>,
-    pub memory: &'list NP_Memory<'list>
+    pub memory: NP_Memory<'list>
 }
 
 impl<'list> NP_List<'list> {
@@ -23,10 +23,10 @@ impl<'list> NP_List<'list> {
     /// The list item may be virtual
     pub fn select_to_ptr(cursor_addr: NP_Cursor_Addr, memory: &'list NP_Memory<'list>, index: u16) -> Result<NP_Cursor_Addr, NP_Error> {
 
-        NP_List::commit_or_cache_list(&cursor_addr, memory)?;
+        Self::commit_or_cache_list(&cursor_addr, memory)?;
 
         // working cursor is list
-        let working_cursor = memory.get_cursor_data(&cursor_addr)?;
+        let working_cursor = cursor_addr.get_data(&memory)?;
 
         let (head, tail, parent_addr) = {(working_cursor.coll_head.unwrap(), working_cursor.coll_tail.unwrap(), cursor_addr.address)};
 
@@ -56,7 +56,7 @@ impl<'list> NP_List<'list> {
         NP_List::cache_list_item(&NP_Cursor_Addr { address: head, is_virtual: false}, list_of, cursor_addr.address, memory)?;
 
         // working cursor is now head
-        let working_cursor = memory.get_cursor_data(&cursor_addr)?;
+        let working_cursor = cursor_addr.get_data(&memory)?;
 
         let offset = memory.addr_size_bytes();
 
@@ -84,7 +84,7 @@ impl<'list> NP_List<'list> {
         NP_List::cache_list_item(&NP_Cursor_Addr { address: tail, is_virtual: false}, list_of, parent_addr, memory)?;
         
         // working cursor is now tail
-        let working_cursor = memory.get_cursor_data(&cursor_addr)?;
+        let working_cursor = cursor_addr.get_data(&memory)?;
 
         // if requesting index higher than tail index, return virtual pointer
         if working_cursor.item_index.unwrap() < index as usize {
@@ -101,7 +101,7 @@ impl<'list> NP_List<'list> {
         }
 
         // index is somewhere in the existing records, loop time!
-        for item in Self::start_iter(&cursor_addr, memory)? {
+        for item in Self::start_iter(&cursor_addr, memory.clone())? {
             let item_index = memory.get_cursor_data(&item)?.item_index.unwrap();
             if item_index == index as usize {
                 return Ok(item.clone())
@@ -112,14 +112,14 @@ impl<'list> NP_List<'list> {
         panic!()
     }
 
-    pub fn cache_list_item<'commit>(cursor_addr: &'commit NP_Cursor_Addr, schema: &'commit Box<NP_Parsed_Schema>, parent: usize, memory: &'commit NP_Memory<'commit>) -> Result<(), NP_Error> {
+    pub fn cache_list_item(cursor_addr: &'list NP_Cursor_Addr, schema: &'list Box<NP_Parsed_Schema>, parent: usize, memory: &'list NP_Memory<'list>) -> Result<(), NP_Error> {
         
         // should never attempt to cache a virtual cursor
         if cursor_addr.is_virtual { panic!() }
 
         // real list item in buffer, (maybe) needs to be cached
-        match memory.get_cursor_data(&cursor_addr) {
-            Ok(_x) => {},
+        match cursor_addr.get_data(&memory) {
+            Ok(_x) => { /* already in cache */ },
             Err(_e) => {
                 let mut new_cursor = NP_Cursor::new(cursor_addr.address, Some(parent), memory, schema);
 
@@ -135,7 +135,7 @@ impl<'list> NP_List<'list> {
                 new_cursor.item_next_addr = Some(memory.read_address(new_cursor.address + addr_size));
                 new_cursor.kind = NP_Cursor_Kinds::ListItem;
 
-                memory.clone().insert_cache(new_cursor);                
+                memory.insert_cache(new_cursor);                
             }
         }
         
@@ -144,9 +144,9 @@ impl<'list> NP_List<'list> {
     }
 
     /// Get details of list object at this location in buffer
-    pub fn commit_or_cache_list<'commit>(cursor_addr: &NP_Cursor_Addr, memory: &'commit NP_Memory<'commit>) -> Result<(), NP_Error> {
+    pub fn commit_or_cache_list(cursor_addr: &NP_Cursor_Addr, memory: &NP_Memory) -> Result<(), NP_Error> {
 
-        let cursor = memory.get_cursor_data(&cursor_addr)?;
+        let cursor = cursor_addr.get_data(&memory)?;
 
         if cursor_addr.is_virtual { // virtual cursor, just return blank details
             cursor.coll_head = Some(0);
@@ -211,11 +211,11 @@ impl<'list> NP_List<'list> {
     }
 
     /// Push a new value onto the back of the list
-    pub fn push<'push>(cursor_addr: NP_Cursor_Addr, memory: &'push NP_Memory<'push>, index: Option<u16>) -> Result<(NP_Cursor_Addr, &'push NP_Memory<'push>), NP_Error> {
+    pub fn push(cursor_addr: NP_Cursor_Addr, memory: &'list NP_Memory<'list>, index: Option<u16>) -> Result<NP_Cursor_Addr, NP_Error> {
 
         NP_List::commit_or_cache_list(&cursor_addr, memory)?;
 
-        let list_cursor = memory.get_cursor_data(&cursor_addr)?;
+        let list_cursor = cursor_addr.get_data(&memory)?;
 
         let list_of = match &**list_cursor.schema {
             NP_Parsed_Schema::List { i: _, sortable: _, of} => {
@@ -237,7 +237,7 @@ impl<'list> NP_List<'list> {
             virtual_cursor.item_index = Some(use_index as usize);
             virtual_cursor.item_prev_addr = None;
             virtual_cursor.item_next_addr = None;
-            return Ok((NP_Cursor_Addr { address: 0, is_virtual: true}, memory))
+            return Ok(NP_Cursor_Addr { address: 0, is_virtual: true})
 
         } else { // get tail information and return virtual pointer behind tail
  
@@ -273,16 +273,16 @@ impl<'list> NP_List<'list> {
             virtual_cursor.item_index = Some(new_index as usize);
             virtual_cursor.item_prev_addr = Some(tail_addr);
             virtual_cursor.item_next_addr = None;
-            return Ok((NP_Cursor_Addr { address: 0, is_virtual: true}, memory))
+            return Ok(NP_Cursor_Addr { address: 0, is_virtual: true})
         }
     }
 }
 
 impl<'collection> NP_Collection<'collection> for NP_List<'collection> {
 
-    fn start_iter(list_cursor_addr: NP_Cursor_Addr, memory: &'collection NP_Memory<'collection>) -> Result<Self, NP_Error> {
+    fn start_iter(list_cursor_addr: &NP_Cursor_Addr, memory: NP_Memory) -> Result<Self, NP_Error> {
 
-        NP_List::commit_or_cache_list(&list_cursor_addr, memory)?;
+        Self::commit_or_cache_list(&list_cursor_addr, &memory)?;
 
         let list_cursor = memory.get_cursor_data(&list_cursor_addr)?;
 
@@ -302,13 +302,13 @@ impl<'collection> NP_Collection<'collection> for NP_List<'collection> {
 
             let head_cursor_addr = NP_Cursor_Addr { address: head, is_virtual: false};
 
-            NP_List::cache_list_item(&head_cursor_addr, list_of, list_cursor_addr.address, memory)?;
+            Self::cache_list_item(&head_cursor_addr, list_of, list_cursor_addr.address, &memory)?;
             let head_cursor = memory.get_cursor_data(&head_cursor_addr)?;
 
             if head_cursor.item_index.unwrap() == 0 { // head item is at index 0, we can return the head pointer
 
-                NP_List {
-                    list_cursor: list_cursor_addr,
+                Self {
+                    cursor: list_cursor_addr.clone(),
                     current: Some(NP_Cursor_Addr { address: head, is_virtual: false}),
                     memory: memory
                 }
@@ -322,8 +322,8 @@ impl<'collection> NP_Collection<'collection> for NP_List<'collection> {
                 virtual_cursor.item_index = Some(0);
                 virtual_cursor.item_prev_addr = None;
                 virtual_cursor.item_next_addr = Some(head);
-                NP_List {
-                    list_cursor: list_cursor_addr,
+                Self {
+                    cursor: list_cursor_addr.clone(),
                     current: Some(NP_Cursor_Addr { address: 0, is_virtual: true}),
                     memory: memory
                 }
@@ -338,17 +338,19 @@ impl<'collection> NP_Collection<'collection> for NP_List<'collection> {
             virtual_cursor.item_index = Some(0);
             virtual_cursor.item_prev_addr = None;
             virtual_cursor.item_next_addr = None;
-            NP_List {
-                list_cursor: list_cursor_addr,
+            Self {
+                cursor: list_cursor_addr.clone(),
                 current: Some(NP_Cursor_Addr { address: 0, is_virtual: true}),
                 memory: memory
             }
         })
     }
 
-    fn step_pointer(cursor_addr: NP_Cursor_Addr, memory: &NP_Memory) -> Option<NP_Cursor_Addr> {
+    fn step_pointer(&self, cursor_addr: &NP_Cursor_Addr) -> Option<NP_Cursor_Addr> {
 
-        let list_item_cursor = memory.get_cursor_data(&cursor_addr).unwrap();
+        NP_List::cache_list_item(&cursor_addr, self.schema, self.cursor.address, &self.memory).unwrap();
+    
+        let list_item_cursor = self.cursor_addr.get_data(&memory).unwrap();
 
         let next_index = list_item_cursor.item_index.unwrap() + 1;
 
@@ -356,9 +358,7 @@ impl<'collection> NP_Collection<'collection> for NP_List<'collection> {
 
         if list_cursor_addr == 0 { return None };
 
-        let list_cursor = memory.get_cursor_data(&NP_Cursor_Addr { address: list_cursor_addr, is_virtual: false}).unwrap();
-
-        let list_of = match &**list_cursor.schema {
+        let list_of = match &**self.schema {
             NP_Parsed_Schema::List { i: _, sortable: _, of} => {
                 of
             },
@@ -371,18 +371,13 @@ impl<'collection> NP_Collection<'collection> for NP_List<'collection> {
         // No more real items left in list, stop
         if 0 == next_item_addr { return None; }
 
-        let head = list_cursor.coll_head.unwrap();
-
-        // list has no items in it, nothing to do
-        if head == 0 { return None };
-
-        let offset = memory.addr_size_bytes();
+        let offset = self.memory.addr_size_bytes();
 
         let next_item_cursor_addr = NP_Cursor_Addr { address: next_item_addr, is_virtual: false};
 
-        NP_List::cache_list_item(&next_item_cursor_addr, list_of, list_item_cursor.parent_addr.unwrap(), &memory.clone()).unwrap();
+        NP_List::cache_list_item(&next_item_cursor_addr, list_of, list_item_cursor.parent_addr.unwrap(), &self.memory.clone()).unwrap();
 
-        let next_pointer = memory.get_cursor_data(&next_item_cursor_addr).unwrap();
+        let next_pointer = self.memory.get_cursor_data(&next_item_cursor_addr).unwrap();
 
         if cursor_addr.is_virtual == true { // handle vritual pointer
 
@@ -393,7 +388,7 @@ impl<'collection> NP_Collection<'collection> for NP_List<'collection> {
                 return Some(NP_Cursor_Addr { address: next_item_addr, is_virtual: false})
             } else { // go to next index with virtual pointer
                 list_item_cursor.item_index = Some(next_index);
-                return Some(cursor_addr);
+                return Some(cursor_addr.clone());
             }
 
         } else { // handle real pointer
@@ -402,7 +397,7 @@ impl<'collection> NP_Collection<'collection> for NP_List<'collection> {
                 next_pointer.item_prev_addr = Some(cursor_addr.address);
                 return Some(NP_Cursor_Addr { address: 0, is_virtual: false})
             } else { // step into virtual pointer
-                let virtual_cursor = memory.get_virt_cursor();
+                let virtual_cursor = self.memory.get_virt_cursor();
                 virtual_cursor.address = 0;
                 virtual_cursor.address_value = 0;
                 virtual_cursor.schema = list_of;
@@ -417,14 +412,15 @@ impl<'collection> NP_Collection<'collection> for NP_List<'collection> {
 
     }
 
-    fn commit_pointer(cursor_addr: NP_Cursor_Addr, memory: &'collection NP_Memory<'collection>) -> Result<NP_Cursor_Addr, NP_Error> {
+    fn commit_pointer<'mem>(cursor_addr: &NP_Cursor_Addr, memory: NP_Memory) -> Result<NP_Cursor_Addr, NP_Error> {
         
         // already committed
         if cursor_addr.address != 0 {
-            return Ok(cursor_addr)
+            return Ok(cursor_addr.clone())
         }
 
-        // all cursors with zero address should be in the virtual cache
+        if cursor_addr.is_virtual == false { panic!() }
+
         let cursor = memory.get_virt_cursor();
 
         let addr_size = memory.addr_size_bytes();
@@ -464,12 +460,12 @@ impl<'collection> NP_Collection<'collection> for NP_List<'collection> {
         
         if prev_addr > 0 {
             // update previous pointer so that it points to this new pointer
-            memory.write_address(prev_addr + addr_size, new_addr)?;
+            memory.set_value_address(prev_addr + addr_size, new_addr);
             // update cache
             memory.get_cursor_data(&NP_Cursor_Addr { address: prev_addr, is_virtual: false}).unwrap().item_next_addr = Some(new_addr);
         } else { 
             // update head
-            memory.write_address(list_cursor.address_value, new_addr);
+            memory.set_value_address(list_cursor.address_value, new_addr);
             // update cache
             list_cursor.coll_head = Some(new_addr);
         }
@@ -477,12 +473,12 @@ impl<'collection> NP_Collection<'collection> for NP_List<'collection> {
         // adjust this pointer to point to next pointer
         if next_addr > 0 {
             // update buffer
-            memory.write_address(new_addr + addr_size, next_addr)?;
+            memory.set_value_address(new_addr + addr_size, next_addr);
             // update cache
             cursor.item_next_addr = Some(next_addr);
         } else { // update tail
             // update tail
-            memory.write_address(list_cursor.address_value + addr_size, new_addr);
+            memory.set_value_address(list_cursor.address_value + addr_size, new_addr);
             // update cache
             list_cursor.coll_tail = Some(new_addr);
         }
@@ -496,36 +492,36 @@ impl<'collection> NP_Collection<'collection> for NP_List<'collection> {
 
 impl<'value> NP_Value<'value> for NP_List<'value> {
 
-    fn type_idx() -> (u8, String, NP_TypeKeys) { (NP_TypeKeys::List as u8, "list".to_owned(), NP_TypeKeys::List) }
-    fn self_type_idx(&self) -> (u8, String, NP_TypeKeys) { (NP_TypeKeys::List as u8, "list".to_owned(), NP_TypeKeys::List) }
+    fn type_idx() -> (&'value str, NP_TypeKeys) { ("list", NP_TypeKeys::List) }
+    fn self_type_idx(&self) -> (&'value str, NP_TypeKeys) { ("list", NP_TypeKeys::List) }
 
-    fn schema_to_json(schema_ptr: &NP_Parsed_Schema)-> Result<NP_JSON, NP_Error> {
+    fn schema_to_json(schema: &Vec<NP_Parsed_Schema<'value>>, address: usize)-> Result<NP_JSON, NP_Error> {
         let mut schema_json = JSMAP::new();
-        schema_json.insert("type".to_owned(), NP_JSON::String(Self::type_idx().1));
+        schema_json.insert("type".to_owned(), NP_JSON::String(Self::type_idx().0.to_string()));
 
 
-        let list_of = match schema_ptr {
+        let list_of = match &schema[address] {
             NP_Parsed_Schema::List { i: _, sortable: _, of} => {
-                of
+                *of
             },
             _ => { unsafe { unreachable_unchecked() } }
         };
 
-        schema_json.insert("of".to_owned(), NP_Schema::_type_to_json(&list_of)?);
+        schema_json.insert("of".to_owned(), NP_Schema::_type_to_json(schema, list_of)?);
 
         Ok(NP_JSON::Dictionary(schema_json))
     }
 
-    fn set_value(cursor_addr: NP_Cursor_Addr, memory: &NP_Memory, value: Box<&Self>) -> Result<NP_Cursor_Addr, NP_Error> {
+    fn set_value(cursor_addr: NP_Cursor_Addr, memory: NP_Memory, value: &Self) -> Result<NP_Cursor_Addr, NP_Error> {
         Err(NP_Error::new("Type (list) doesn't support .set()! Use .into() instead."))
     }
 
-    fn get_size(cursor_addr: NP_Cursor_Addr, memory: &'value NP_Memory<'value>) -> Result<usize, NP_Error> {
+    fn get_size(cursor_addr: NP_Cursor_Addr, memory: &'value NP_Memory) -> Result<usize, NP_Error> {
         if cursor_addr.is_virtual {
             return Ok(0);     
         }
 
-        let cursor = memory.get_cursor_data(&cursor_addr).unwrap();
+        let cursor = cursor_addr.get_data(&memory).unwrap();
 
         if cursor.address_value == 0 {
             return Ok(0);
@@ -540,7 +536,7 @@ impl<'value> NP_Value<'value> for NP_List<'value> {
 
         let mut acc_size = 0usize;
  
-        for l in Self::start_iter(&cursor_addr, memory)? {
+        for l in NP_List::start_iter(&cursor_addr, memory.clone())? {
             acc_size += NP_Cursor::calc_size(l, memory).unwrap();
         }
 
@@ -548,13 +544,13 @@ impl<'value> NP_Value<'value> for NP_List<'value> {
         Ok(acc_size + base_size)
     }
     
-    fn to_json(cursor_addr: NP_Cursor_Addr, memory: &'value NP_Memory<'value>) -> NP_JSON {
+    fn to_json(cursor_addr: NP_Cursor_Addr, memory: &'value NP_Memory) -> NP_JSON {
 
         if cursor_addr.is_virtual { return NP_JSON::Null };
 
         NP_List::commit_or_cache_list(&cursor_addr, memory).unwrap();
 
-        let cursor = memory.get_cursor_data(&cursor_addr).unwrap();
+        let cursor = cursor_addr.get_data(&memory).unwrap();
 
         if cursor.address_value == 0 {
             return NP_JSON::Null;
@@ -562,15 +558,18 @@ impl<'value> NP_Value<'value> for NP_List<'value> {
 
         let mut json_list = Vec::new();
 
-        for l in Self::start_iter(&cursor_addr, memory).unwrap() {
+        for l in Self::start_iter(&cursor_addr, memory.clone()).unwrap() {
             json_list.push(NP_Cursor::json_encode(l, memory));      
         }
 
         NP_JSON::Array(json_list)
     }
 
-    fn do_compact(from_cursor_addr: NP_Cursor_Addr, from_memory: &'value NP_Memory<'value>, to_cursor_addr: NP_Cursor_Addr, to_memory: &'value NP_Memory<'value>) -> Result<NP_Cursor_Addr, NP_Error> where Self: NP_Value<'value> {
+    fn do_compact(from_cursor_addr: NP_Cursor_Addr, from_memory: &'value NP_Memory, to_cursor_addr: NP_Cursor_Addr, to_memory: &'value NP_Memory) -> Result<NP_Cursor_Addr, NP_Error> where Self: NP_Value<'value> {
 
+        if from_cursor_addr.address == 0 {
+            return Ok(to_cursor_addr);
+        }
 
         NP_List::commit_or_cache_list(&from_cursor_addr, from_memory).unwrap();
         NP_List::commit_or_cache_list(&to_cursor_addr, to_memory).unwrap();
@@ -584,14 +583,14 @@ impl<'value> NP_Value<'value> for NP_List<'value> {
             _ => { unsafe { unreachable_unchecked() } }
         };
 
-        for old_item in Self::start_iter(&from_cursor_addr, from_memory)? {
+        for old_item in Self::start_iter(&from_cursor_addr, from_memory.clone())? {
             if old_item.address != 0 { // pointer is not virutal
                 NP_List::cache_list_item(&old_item, list_of, from_cursor.address, from_memory)?;
                 let old_cursor = from_memory.get_cursor_data(&old_item)?;
                 if old_cursor.address_value != 0 { // pointer has value
                     let index = old_cursor.item_index.unwrap();
-                    let (mut new_item, mem) = NP_List::push(to_cursor_addr, to_memory, Some(index as u16))?;
-                    NP_List::commit_pointer(&new_item, to_memory)?;
+                    let mut new_item= NP_List::push(to_cursor_addr, to_memory, Some(index as u16))?;
+                    NP_List::commit_pointer(&new_item, to_memory.clone())?;
                     NP_Cursor::compact(old_item, from_memory, new_item, to_memory)?;
                 }
             } 
@@ -600,7 +599,7 @@ impl<'value> NP_Value<'value> for NP_List<'value> {
         Ok(to_cursor_addr)
     }
 
-    fn from_json_to_schema(json_schema: &NP_JSON) -> Result<Option<(Vec<u8>, NP_Parsed_Schema)>, NP_Error> {
+    fn from_json_to_schema(schema: Vec<NP_Parsed_Schema<'value>>, json_schema: &'value NP_JSON) -> Result<Option<(Vec<u8>, Vec<NP_Parsed_Schema<'value>>)>, NP_Error> {
 
         let type_str = NP_Schema::_get_type(json_schema)?;
 
@@ -615,28 +614,36 @@ impl<'value> NP_Value<'value> for NP_List<'value> {
                 _ => { }
             }
 
-            let child_type = NP_Schema::from_json(Box::new(json_schema["of"].clone()))?;
-            schema_data.extend(child_type.0);
-            return Ok(Some((schema_data, NP_Parsed_Schema::List {
+            let of_addr = schema.len();
+            let (child_bytes, schema) = NP_Schema::from_json(schema, Box::new(json_schema["of"].clone()))?;
+            
+            schema_data.extend(child_bytes);
+            schema.push(NP_Parsed_Schema::List {
                 i: NP_TypeKeys::List,
-                of: Box::new(child_type.1),
+                of: of_addr,
                 sortable: false
-            })))
+            });
+            return Ok(Some((schema_data, schema)))
         }
 
         Ok(None)
     }
 
-    fn schema_default(_schema: &NP_Parsed_Schema) -> Option<Box<Self>> {
+    fn schema_default(_schema: &NP_Parsed_Schema) -> Option<&'value Self> {
         None
     }
 
-    fn from_bytes_to_schema(address: usize, bytes: &Vec<u8>) -> NP_Parsed_Schema {
-        NP_Parsed_Schema::List {
+    fn from_bytes_to_schema(schema: Vec<NP_Parsed_Schema<'value>>, address: usize, bytes: &'value Vec<u8>) -> Vec<NP_Parsed_Schema<'value>> {
+        
+        let of_addr = schema.len();
+        let schema = NP_Schema::from_bytes(schema, address + 1, bytes);
+        
+        schema.push(NP_Parsed_Schema::List {
             i: NP_TypeKeys::List,
             sortable: false,
-            of: Box::new(NP_Schema::from_bytes(address + 1, bytes))
-        }
+            of: of_addr
+        }); 
+        schema
     }
 }
 
@@ -647,7 +654,7 @@ impl<'it> Iterator for NP_List<'it> {
         match &mut self.current {
             Some(x) => {
                 let current = x.clone();
-                self.current = NP_List::step_pointer(&current, self.memory);
+                self.current = self.step_pointer(&current);
                 Some(current)
             },
             None => None
@@ -656,9 +663,9 @@ impl<'it> Iterator for NP_List<'it> {
 
     fn count(self) -> usize where Self: Sized {
         
-        NP_List::commit_or_cache_list(&self.list_cursor, &self.memory).unwrap();
+        NP_List::commit_or_cache_list(&self.cursor, &self.memory).unwrap();
 
-        match self.memory.get_cursor_data(&self.list_cursor) {
+        match self.memory.get_cursor_data(&self.cursor) {
             Ok(list_cursor) => {
 
                 let tail = list_cursor.coll_tail.unwrap();
@@ -674,7 +681,7 @@ impl<'it> Iterator for NP_List<'it> {
 
                 let tail_cursor = NP_Cursor_Addr { address: tail, is_virtual: false};
 
-                NP_List::cache_list_item(&tail_cursor, list_of, list_cursor.address, self.memory).unwrap();
+                NP_List::cache_list_item(&tail_cursor, list_of, list_cursor.address, &self.memory).unwrap();
 
                 let tail_cursor = self.memory.get_cursor_data(&tail_cursor).unwrap();
 

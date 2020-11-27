@@ -14,9 +14,9 @@ pub mod tuple;
 #[doc(hidden)]
 pub trait NP_Collection<'collection> {
     /// Step a pointer to the next item in the collection
-    fn step_pointer(cursor_addr: &NP_Cursor_Addr, memory: &'collection NP_Memory<'collection>) -> Option<NP_Cursor_Addr>;
+    fn step_pointer(&self, cursor_addr: &NP_Cursor_Addr) -> Option<NP_Cursor_Addr>;
     /// Commit a virtual pointer into the buffer
-    fn commit_pointer(cursor_addr: &NP_Cursor_Addr, memory: &'collection NP_Memory<'collection>) -> Result<NP_Cursor_Addr, NP_Error>;
+    fn commit_pointer<'mem>(cursor_addr: &NP_Cursor_Addr, memory: &'collection NP_Memory<'collection>) -> Result<NP_Cursor_Addr, NP_Error>;
     /// Generate this collection as an iterator
-    fn start_iter(list_cursor_addr: &NP_Cursor_Addr, memory: &'collection NP_Memory<'collection>) -> Result<Self, NP_Error>;
+    fn start_iter<'start>(list_cursor_addr: NP_Cursor_Addr, memory: NP_Memory<'start>) -> Result<Self, NP_Error> where Self: core::marker::Sized;
 }

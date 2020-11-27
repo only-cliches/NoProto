@@ -114,19 +114,19 @@ impl Debug for NP_ULID {
 
 impl<'value> NP_Value<'value> for NP_ULID {
 
-    fn type_idx() -> (u8, String, NP_TypeKeys) { (NP_TypeKeys::Ulid as u8, "ulid".to_owned(), NP_TypeKeys::Ulid) }
-    fn self_type_idx(&self) -> (u8, String, NP_TypeKeys) { (NP_TypeKeys::Ulid as u8, "ulid".to_owned(), NP_TypeKeys::Ulid) }
+    fn type_idx() -> (&'value str, NP_TypeKeys) { ("ulid", NP_TypeKeys::Ulid) }
+    fn self_type_idx(&self) -> (&'value str, NP_TypeKeys) { ("ulid", NP_TypeKeys::Ulid) }
 
-    fn schema_to_json(_schema_ptr: &NP_Parsed_Schema)-> Result<NP_JSON, NP_Error> {
+    fn schema_to_json(schema: &Vec<NP_Parsed_Schema<'value>>, address: usize)-> Result<NP_JSON, NP_Error> {
         let mut schema_json = JSMAP::new();
-        schema_json.insert("type".to_owned(), NP_JSON::String(Self::type_idx().1));
+        schema_json.insert("type".to_owned(), NP_JSON::String(Self::type_idx().0.to_string()));
 
         Ok(NP_JSON::Dictionary(schema_json))
     }
 
-    fn set_value(cursor_addr: NP_Cursor_Addr, memory: &NP_Memory, value: Box<&Self>) -> Result<NP_Cursor_Addr, NP_Error> {
+    fn set_value(cursor_addr: NP_Cursor_Addr, memory: NP_Memory, value: &Self) -> Result<NP_Cursor_Addr, NP_Error> {
 
-        let cursor = memory.get_cursor_data(&cursor_addr).unwrap();
+        let cursor = cursor_addr.get_data(&memory).unwrap();
 
         if cursor_addr.is_virtual { panic!() }
 
@@ -168,9 +168,9 @@ impl<'value> NP_Value<'value> for NP_ULID {
         
     }
 
-    fn into_value<'into>(cursor_addr: NP_Cursor_Addr, memory: &NP_Memory) -> Result<Option<Box<Self>>, NP_Error> {
+    fn into_value<'into>(cursor_addr: NP_Cursor_Addr, memory: NP_Memory) -> Result<Option<&'value Self>, NP_Error> {
 
-        let cursor = memory.get_cursor_data(&cursor_addr).unwrap();
+        let cursor = cursor_addr.get_data(&memory).unwrap();
 
         // empty value
         if cursor.address_value == 0 {
@@ -197,7 +197,7 @@ impl<'value> NP_Value<'value> for NP_ULID {
          
     }
 
-    fn to_json(cursor_addr: NP_Cursor_Addr, memory: &NP_Memory) -> NP_JSON {
+    fn to_json(cursor_addr: NP_Cursor_Addr, memory: NP_Memory) -> NP_JSON {
 
         match Self::into_value(cursor_addr, memory) {
             Ok(x) => {
@@ -216,8 +216,8 @@ impl<'value> NP_Value<'value> for NP_ULID {
         }
     }
 
-    fn get_size(cursor_addr: NP_Cursor_Addr, memory: &NP_Memory) -> Result<usize, NP_Error> {
-        let cursor = memory.get_cursor_data(&cursor_addr).unwrap();
+    fn get_size(cursor_addr: NP_Cursor_Addr, memory: NP_Memory) -> Result<usize, NP_Error> {
+        let cursor = cursor_addr.get_data(&memory).unwrap();
 
         if cursor.address_value == 0 {
             return Ok(0) 
@@ -226,31 +226,33 @@ impl<'value> NP_Value<'value> for NP_ULID {
         }
     }
 
-    fn from_json_to_schema(json_schema: &NP_JSON) -> Result<Option<(Vec<u8>, NP_Parsed_Schema)>, NP_Error> {
+    fn from_json_to_schema(schema: Vec<NP_Parsed_Schema<'value>>, json_schema: &'value NP_JSON) -> Result<Option<(Vec<u8>, Vec<NP_Parsed_Schema<'value>>)>, NP_Error> {
 
         let type_str = NP_Schema::_get_type(json_schema)?;
 
         if "ulid" == type_str {
-            let mut schema_data: Vec<u8> = Vec::new();
-            schema_data.push(NP_TypeKeys::Ulid as u8);
-            return Ok(Some((schema_data, NP_Parsed_Schema::Ulid { 
+            let mut schema_bytes: Vec<u8> = Vec::new();
+            schema_bytes.push(NP_TypeKeys::Ulid as u8);
+            schema.push(NP_Parsed_Schema::Ulid { 
                 i: NP_TypeKeys::Ulid,
                 sortable: true
-            })))
+            });
+            return Ok(Some((schema_bytes, schema)))
         }
         
         Ok(None)
     }
 
-    fn schema_default(_schema: &NP_Parsed_Schema) -> Option<Box<Self>> {
+    fn schema_default(_schema: &NP_Parsed_Schema) -> Option<&'value Self> {
         None
     }
 
-    fn from_bytes_to_schema(_address: usize, _bytes: &Vec<u8>) -> NP_Parsed_Schema {
-        NP_Parsed_Schema::Ulid {
+    fn from_bytes_to_schema(schema: Vec<NP_Parsed_Schema<'value>>, address: usize, bytes: &'value Vec<u8>) -> Vec<NP_Parsed_Schema<'value>> {
+        schema.push(NP_Parsed_Schema::Ulid {
             i: NP_TypeKeys::Ulid,
             sortable: true
-        }
+        });
+        schema
     }
 }
 
