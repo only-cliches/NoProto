@@ -6,45 +6,48 @@
 //! use no_proto::error::NP_Error;
 //! use no_proto::NP_Factory;
 //! use no_proto::pointer::uuid::NP_UUID;
-//! use no_proto::here;
 //! 
 //! let factory: NP_Factory = NP_Factory::new(r#"{
 //!    "type": "uuid"
 //! }"#)?;
 //!
 //! let mut new_buffer = factory.empty_buffer(None, None);
-//! new_buffer.set(here(), NP_UUID::generate(50))?;
+//! new_buffer.set(&[], &NP_UUID::generate(50))?;
 //! 
-//! assert_eq!("48E6AAB0-7DF5-409F-4D57-4D969FA065EE", new_buffer.get::<NP_UUID>(here())?.unwrap().to_string());
+//! assert_eq!("48E6AAB0-7DF5-409F-4D57-4D969FA065EE", new_buffer.get::<&NP_UUID>(&[])?.unwrap().to_string());
 //!
 //! # Ok::<(), NP_Error>(()) 
 //! ```
 //! 
 
+use crate::pointer::NP_Scalar;
+use crate::pointer::NP_Cursor;
 use crate::{memory::NP_Memory, schema::{NP_Parsed_Schema}};
 use alloc::vec::Vec;
 use crate::json_flex::{JSMAP, NP_JSON};
-use crate::schema::{NP_Schema, NP_TypeKeys};
+use crate::schema::{NP_TypeKeys};
 use crate::{pointer::NP_Value, error::NP_Error, utils::{Rand}};
 use core::{fmt::{Debug, Formatter, Write}};
 
 use alloc::string::String;
-use alloc::boxed::Box;
 use alloc::borrow::ToOwned;
-
-use super::{NP_Cursor_Addr};
 
 
 /// Holds UUID which is good for random keys.
 /// 
 /// Check out documentation [here](../uuid/index.html).
 /// 
-#[derive(Eq, PartialEq)]
+#[derive(Eq, PartialEq, Clone)]
 #[repr(C)]
 pub struct NP_UUID {
     /// The random bytes for this UUID
     pub value: [u8; 16]
 }
+
+impl NP_Scalar for &NP_UUID {}
+
+/// ULID alias for shared value
+pub type _NP_UUID<'a> = &'a NP_UUID;
 
 impl NP_UUID {
 
@@ -119,63 +122,61 @@ impl Default for NP_UUID {
      }
 }
 
-impl<'value> NP_Value<'value> for NP_UUID {
+impl<'value> NP_Value<'value> for &NP_UUID {
 
     fn type_idx() -> (&'value str, NP_TypeKeys) { ("uuid", NP_TypeKeys::Uuid) }
     fn self_type_idx(&self) -> (&'value str, NP_TypeKeys) { ("uuid", NP_TypeKeys::Uuid) }
 
-    fn schema_to_json(schema: &Vec<NP_Parsed_Schema<'value>>, address: usize)-> Result<NP_JSON, NP_Error> {
+    fn schema_to_json(_schema: &Vec<NP_Parsed_Schema>, _address: usize)-> Result<NP_JSON, NP_Error> {
         let mut schema_json = JSMAP::new();
         schema_json.insert("type".to_owned(), NP_JSON::String(Self::type_idx().0.to_string()));
 
         Ok(NP_JSON::Dictionary(schema_json))
     }
-/*
-    fn set_value(cursor_addr: NP_Cursor_Addr, memory: NP_Memory, value: Self) -> Result<NP_Cursor_Addr, NP_Error> {
 
-        let cursor = cursor_addr.get_data(&memory).unwrap();
+    fn set_value(mut cursor: NP_Cursor, memory: &NP_Memory, value: Self) -> Result<NP_Cursor, NP_Error> {
 
-        if cursor_addr.is_virtual { panic!() }
+        let mut value_address = cursor.value.get_value_address();
 
-        if cursor.address_value != 0 { // existing value, replace
+        if value_address != 0 { // existing value, replace
             let bytes = value.value;
             let write_bytes = memory.write_bytes();
 
             // overwrite existing values in buffer
             for x in 0..bytes.len() {
-                write_bytes[cursor.address_value + x] = bytes[x];
+                write_bytes[value_address + x] = bytes[x];
             }
 
         } else { // new value
 
-            let bytes = value.value;
-            cursor.address_value = memory.malloc(bytes.to_vec())?;
-            memory.set_value_address(cursor.address, cursor.address_value);
+            value_address = memory.malloc_borrow(&value.value)?;
+            cursor.value = cursor.value.update_value_address(value_address);
+            memory.write_address(cursor.buff_addr, value_address);
         }                    
         
-        Ok(cursor_addr)
+        Ok(cursor)
     }
 
-    fn into_value<'into>(cursor_addr: NP_Cursor_Addr, memory: &'into NP_Memory<'into>) -> Result<Option<&'into *const Self>, NP_Error> {
+    fn into_value(cursor: NP_Cursor, memory: &NP_Memory<'value>) -> Result<Option<Self>, NP_Error> {
 
-        let cursor = cursor_addr.get_data(&memory).unwrap();
+        let value_addr = cursor.value.get_value_address();
 
         // empty value
-        if cursor.address_value == 0 {
+        if value_addr == 0 {
             return Ok(None);
         }
 
-        Ok(match memory.get_16_bytes(cursor.address_value) {
+        Ok(match memory.get_16_bytes(value_addr) {
             Some(x) => {
-                Some(&unsafe { x.as_ptr() as *const NP_UUID })
+                Some(unsafe { &*(x.as_ptr() as *const NP_UUID) })
             },
             None => None
         })
     }
-*/
-    fn to_json(cursor_addr: NP_Cursor_Addr, memory: NP_Memory) -> NP_JSON {
 
-        match Self::into_value(cursor_addr, memory) {
+    fn to_json(cursor: &NP_Cursor, memory: &NP_Memory) -> NP_JSON {
+
+        match Self::into_value(cursor.clone(), memory) {
             Ok(x) => {
                 match x {
                     Some(y) => {
@@ -192,43 +193,38 @@ impl<'value> NP_Value<'value> for NP_UUID {
         }
     }
 
-    fn get_size(cursor_addr: NP_Cursor_Addr, memory: NP_Memory) -> Result<usize, NP_Error> {
-        let cursor = cursor_addr.get_data(&memory).unwrap();
+    fn get_size(cursor: NP_Cursor, _memory: &NP_Memory) -> Result<usize, NP_Error> {
 
-        if cursor.address_value == 0 {
+        if cursor.value.get_value_address() == 0 {
             Ok(0) 
         } else {
             Ok(16)
         }
     }
 
-    fn from_json_to_schema(schema: Vec<NP_Parsed_Schema<'value>>, json_schema: &'value NP_JSON) -> Result<Option<(Vec<u8>, Vec<NP_Parsed_Schema<'value>>)>, NP_Error> {
+    fn from_json_to_schema(mut schema: Vec<NP_Parsed_Schema>, _json_schema: &Box<NP_JSON>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {
 
-        let type_str = NP_Schema::_get_type(json_schema)?;
-
-        if "uuid" == type_str {
-            let mut schema_bytes: Vec<u8> = Vec::new();
-            schema_bytes.push(NP_TypeKeys::Uuid as u8);
-            schema.push(NP_Parsed_Schema::Uuid { 
-                i: NP_TypeKeys::Uuid,
-                sortable: true
-            });
-            return Ok(Some((schema_bytes, schema)))
-        }
-        
-        Ok(None)
+       
+        let mut schema_bytes: Vec<u8> = Vec::new();
+        schema_bytes.push(NP_TypeKeys::Uuid as u8);
+        schema.push(NP_Parsed_Schema::Uuid { 
+            i: NP_TypeKeys::Uuid,
+            sortable: true
+        });
+        return Ok((true, schema_bytes, schema))
+    
     }
 
-    fn schema_default(_schema: &NP_Parsed_Schema) -> Option<&'value Self> {
+    fn schema_default(_schema: &NP_Parsed_Schema) -> Option<Self> {
         None
     }
 
-    fn from_bytes_to_schema(schema: Vec<NP_Parsed_Schema<'value>>, address: usize, bytes: &'value Vec<u8>) -> Vec<NP_Parsed_Schema<'value>> {
+    fn from_bytes_to_schema(mut schema: Vec<NP_Parsed_Schema>, _address: usize, _bytes: &Vec<u8>) -> (bool, Vec<NP_Parsed_Schema>) {
         schema.push(NP_Parsed_Schema::Uuid {
             i: NP_TypeKeys::Uuid,
             sortable: true
         });
-        schema
+        (true, schema)
     }
 }
 
@@ -248,13 +244,11 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"uuid\"}";
     let factory = crate::NP_Factory::new(schema)?;
     let mut buffer = factory.empty_buffer(None, None);
-    {
-        buffer.set(&[], &NP_UUID::generate(212))?;
-    }
-    
-    assert_eq!(buffer.get::<NP_UUID>(&[])?, Some(&NP_UUID::generate(212)));
+    buffer.set(&[], &NP_UUID::generate(212))?;
+    assert_eq!(buffer.get::<&NP_UUID>(&[])?, Some(&NP_UUID::generate(212)));
+    assert_eq!(buffer.get::<&NP_UUID>(&[])?.unwrap().to_string(), "9EE6AAB0-2C94-41FE-FB88-42F73253F217");
     buffer.del(&[])?;
-    assert_eq!(buffer.get::<NP_UUID>(&[])?, None);
+    assert_eq!(buffer.get::<&NP_UUID>(&[])?, None);
 
     buffer.compact(None, None)?;
     assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);

@@ -23,450 +23,304 @@ pub mod uuid;
 pub mod option;
 pub mod date;
 
-use crate::{collection::NP_Collection, pointer::dec::NP_Dec, schema::NP_Schema_Addr};
+use std::hint::unreachable_unchecked;
+
+use crate::{pointer::dec::NP_Dec, schema::NP_Schema_Addr, memory::NP_Size};
 use crate::NP_Parsed_Schema;
 use crate::{json_flex::NP_JSON};
 use crate::memory::{NP_Memory};
 use crate::NP_Error;
-use crate::{schema::{NP_TypeKeys}, collection::{map::NP_Map, table::NP_Table, list::NP_List, tuple::NP_Tuple}, utils::{print_path}};
+use crate::{schema::{NP_TypeKeys}, collection::{map::NP_Map, table::NP_Table, list::NP_List, tuple::NP_Tuple}};
 
-use alloc::{boxed::Box, string::String, vec::Vec, borrow::ToOwned};
+use alloc::{string::String, vec::Vec, borrow::ToOwned};
 use bytes::NP_Bytes;
 
-use self::{date::NP_Date, geo::NP_Geo, option::NP_Option, ulid::NP_ULID, uuid::NP_UUID};
+use self::{date::NP_Date, geo::NP_Geo, option::NP_Enum, string::NP_String, ulid::{NP_ULID, _NP_ULID}, uuid::{NP_UUID, _NP_UUID}};
 
-#[derive(Debug, Clone, Copy)]
-pub struct NP_Cursor_Addr {
-    pub address: usize,
-    pub is_virtual: bool
+
+#[doc(hidden)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NP_Cursor_Value {
+    None,
+    Standard { value_addr: usize },   // u32(4 bytes [4]), u16(2 bytes [2])
+
+    // collection items
+    MapItem { value_addr: usize, next: usize, key_addr: usize },  // [addr | next | key] u32(12 bytes  [4, 4, 4]),  u16(6 bytes [2, 2, 2]), 
+    TableItem { value_addr: usize, next: usize, index: usize },   // [addr | next | i: u8]  u32(9  bytes  [4, 4, 1]),  u16(5 bytes [2, 2, 1]),   
+    ListItem { value_addr: usize, next: usize, index: usize },   // [addr | next | i: u16] u32(10 bytes  [4, 4, 2]),  u16(6 bytes [2, 2, 2]),
+    TupleItem  { value_addr: usize, index: usize}                // [addr]u32(4 bytes  [4]),  u16(2 bytes [2])           
 }
 
-impl<'cursor> NP_Cursor_Addr {
-
-    pub fn get_schema_data(&self, memory: &'cursor NP_Memory<'cursor>) -> &'cursor NP_Parsed_Schema<'cursor> {
-        &memory.schema[self.get_data(memory).unwrap().schema]
-    }
-
-    pub fn get_schema_data_owned(&self, memory: NP_Memory<'cursor>) -> &'cursor NP_Parsed_Schema<'cursor> {
-        &memory.schema[self.get_data(&memory).unwrap().schema]
-    }
-
-    pub fn get_data<'data>(&'data self, memory: &'data NP_Memory<'data>) -> Result<&mut NP_Cursor<'data>, NP_Error> {
-        if self.is_virtual {
-            Ok(unsafe { &mut *memory.virtual_cursor.get() })
-        } else {
-            let cache = unsafe { &mut *memory.cursor_cache.get() };
-            if let Some(c) = cache.get_mut(self.address) {
-                Ok(c)
-            } else {
-                Err(NP_Error::new("Attempted to get cached cursor that didn't exist!"))
-            }
+impl<'kind> NP_Cursor_Value {
+    /// Get the value address of this cursor
+    pub fn get_value_address(&self) -> usize {
+        match self {
+            NP_Cursor_Value::None => 0,
+            NP_Cursor_Value::Standard { value_addr } => { *value_addr },
+            NP_Cursor_Value::TableItem { value_addr, .. } => { *value_addr },
+            NP_Cursor_Value::ListItem { value_addr, .. } =>  { *value_addr },
+            NP_Cursor_Value::TupleItem { value_addr, .. } => { *value_addr },
+            NP_Cursor_Value::MapItem { value_addr, .. } => { *value_addr }
         }
     }
-
-    pub fn get_data_owned(&self, memory: NP_Memory<'cursor>) -> Result<&mut NP_Cursor<'cursor>, NP_Error> {
-        if self.is_virtual {
-            Ok(unsafe { &mut *memory.virtual_cursor.get() })
-        } else {
-            let cache = unsafe { &mut *memory.cursor_cache.get() };
-            if let Some(c) = cache.get_mut(self.address) {
-                Ok(c)
-            } else {
-                Err(NP_Error::new("Attempted to get cached cursor that didn't exist!"))
-            }
-        }
-    }
-
-    /// Delete value at this pointer
-    pub fn clear_here<'clear>(&self, memory: NP_Memory<'clear>) -> bool {
-
-        if self.is_virtual == false {
-            let cursor = self.get_data(&memory).unwrap();
-            if cursor.address_value != 0 {
-                cursor.address_value = 0;
-                memory.set_value_address(cursor.address, 0);
-                true
-            } else {
-                false
-            }
-        } else {
-            false     
+    /// Update the value address (doesn't touch the buffer)
+    pub fn update_value_address(&self, new_value: usize) -> Self {
+        match self {
+            NP_Cursor_Value::None => NP_Cursor_Value::None,
+            NP_Cursor_Value::Standard { value_addr: _ } => { NP_Cursor_Value::Standard { value_addr: new_value } },
+            NP_Cursor_Value::TableItem { value_addr: _, next , index  } => { NP_Cursor_Value::TableItem { value_addr: new_value, next: *next, index: *index } },
+            NP_Cursor_Value::ListItem { value_addr: _, next , index } =>  { NP_Cursor_Value::ListItem { value_addr: new_value, next: *next, index: *index } },
+            NP_Cursor_Value::TupleItem { value_addr: _, index } => { NP_Cursor_Value::TupleItem { value_addr: new_value, index: *index } },
+            NP_Cursor_Value::MapItem { value_addr: _, next , key_addr  } => { NP_Cursor_Value::MapItem { value_addr: new_value, next: *next, key_addr: *key_addr} }
         }
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct NP_Cursor<'cursor> {
-    pub address: usize,
-    pub address_value: usize,
-    pub schema: NP_Schema_Addr,
-    pub parent_addr: usize,
-    pub kind: NP_Cursor_Kinds,
-
-    pub item_next_addr: Option<usize>,
-    pub item_prev_addr: Option<usize>,
-    pub item_index: Option<usize>,
-    pub item_key_addr: Option<usize>,
-    pub item_key: Option<&'cursor str>,
-
-    pub coll_head: Option<usize>,
-    pub coll_tail: Option<usize>,
-    pub coll_length: Option<usize>
+impl<'kind> Default for NP_Cursor_Value {
+    fn default() -> Self { NP_Cursor_Value::None }
 }
 
-impl<'cursor> Default for NP_Cursor<'cursor> {
-    fn default() -> Self {
-        NP_Cursor {
-            address: 0,
-            address_value: 0,
-            schema: 0,
-            parent_addr: 0,
-            kind: NP_Cursor_Kinds::None,
-            item_next_addr: None,
-            item_prev_addr: None,
-            item_index: None,
-            item_key_addr: None,
-            item_key: None,
-            coll_head: None,
-            coll_tail: None,
-            coll_length: None
-        }
-    }
+#[doc(hidden)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NP_Cursor_Parent {
+    None,
+    List { head: usize, tail: usize, addr: usize, schema_addr: usize},
+    Map { head: usize, length: usize, addr: usize, schema_addr: usize},
+    Table { head: usize, addr: usize, schema_addr: usize},
+    Tuple { addr: usize, schema_addr: usize}
 }
 
-impl<'cursor> NP_Cursor<'cursor> {
+impl Default for NP_Cursor_Parent {
+    fn default() -> Self { NP_Cursor_Parent::None }
+}
+
+/// Cursor for pointer value in buffer
+/// 
+#[derive(Debug, Clone, Copy, Default)]
+pub struct NP_Cursor {
+    /// The location of this cursor in the buffer
+    pub buff_addr: usize,
+    /// The address of the schema for this cursor
+    pub schema_addr: NP_Schema_Addr,
+    /// the values of the buffer pointer
+    pub value: NP_Cursor_Value,
+    /// Information about the parent cursor
+    pub parent: NP_Cursor_Parent,
+    /// The previous cursor
+    pub prev_cursor: Option<usize>,
+    /// The next cursor 
+    pub next_cursor: Option<usize>
+}
 
 
-    pub fn new(address: usize, parent: usize, schema_addr: NP_Schema_Addr, memory: &NP_Memory) -> Self {
-        NP_Cursor {
-            address: address,
-            address_value: memory.read_address(address),
-            schema: schema_addr,
-            parent_addr: parent,
-            kind: NP_Cursor_Kinds::Standard,
-            item_next_addr: None,
-            item_prev_addr: None,
-            item_index: None,
-            item_key_addr: None,
-            item_key: None,
-            coll_head: None,
-            coll_tail: None,
-            coll_length: None
+impl<'cursor> NP_Cursor {
+
+    /// Clone a cursor without the previous or next data
+    pub fn clone_lite(&self) -> Self {
+        Self {
+            buff_addr: self.buff_addr,
+            schema_addr: self.schema_addr,
+            value: self.value,
+            parent: self.parent,
+            prev_cursor: None,
+            next_cursor: None
         }
     }
 
-    pub fn schema_data(&self, memory: &'cursor NP_Memory<'cursor>) -> &'cursor NP_Parsed_Schema<'cursor> {
-        &memory.schema[self.schema]
-    }
-
-    /// Deep get a value
+    /// Create a new cursor and read details from buffer
     /// 
-    pub fn select(cursor_addr: NP_Cursor_Addr, memory: NP_Memory, path: &'cursor [&str], path_index: usize) -> Result<Option<NP_Cursor_Addr>, NP_Error> {
-
-        if path.len() == path_index {
-            return Ok(Some(cursor_addr));
-        }
-
-        match cursor_addr.get_schema_data(&memory).get_type_key() {
-            NP_TypeKeys::Table => {
-                let new_cursor = NP_Table::select_to_ptr(cursor_addr, &memory, &path[path_index], None)?;
-                match new_cursor {
-                    Some(x ) => NP_Cursor::select(x, memory, path, path_index + 1),
-                    None => Ok(None)
-                }
-                
-            },
-            NP_TypeKeys::Map => {
-                let new_cursor = NP_Map::select_to_ptr(cursor_addr, &memory, &path[path_index], false)?;
-                NP_Cursor::select(new_cursor, memory, path, path_index + 1)
-            },
-            NP_TypeKeys::List => {
-            
-                let list_key = &path[path_index];
-                let list_key_int = list_key.parse::<u16>();
-                match list_key_int {
-                    Ok(x) => {
-                        let new_cursor = NP_List::select_to_ptr(cursor_addr, &memory, x)?;
-                        NP_Cursor::select(new_cursor, memory, path, path_index + 1)
-                    },
-                    Err(_e) => {
-                        let mut err = String::from("Can't query list with string, need number! Path: \n");
-                        err.push_str(print_path(&path, path_index).as_str());
-                        Err(NP_Error::new(err))
-                    }
-                }
-           
-            },
-            NP_TypeKeys::Tuple => {
-
-                let list_key = &path[path_index];
-                let list_key_int = list_key.parse::<u8>();
-                match list_key_int {
-                    Ok(x) => {
-                        match NP_Tuple::select_to_ptr(cursor_addr, &memory, x as usize)? {
-                            Some(y) => NP_Cursor::select(y, memory, path, path_index + 1),
-                            None => Ok(None)
+    pub fn new(buff_addr: usize, schema_addr: NP_Schema_Addr, memory: &NP_Memory<'cursor>, parent: NP_Cursor_Parent) -> Self {
+    
+        Self {
+            buff_addr,
+            schema_addr,
+            value: if buff_addr > 0 {
+                match parent {
+                    NP_Cursor_Parent::None => NP_Cursor_Value::Standard { value_addr: memory.read_address(buff_addr) },
+                    NP_Cursor_Parent::List { .. } => {
+                        NP_Cursor_Value::ListItem { 
+                            value_addr:  memory.read_address(buff_addr),
+                            next:  memory.read_address_offset(buff_addr, 1),
+                            index: if buff_addr == 0 { 0 } else { match &memory.size {
+                                NP_Size::U32 => u16::from_be_bytes(*memory.get_2_bytes(buff_addr + 8).unwrap_or(&[0; 2])) as usize,
+                                NP_Size::U16 => u16::from_be_bytes(*memory.get_2_bytes(buff_addr + 4).unwrap_or(&[0; 2])) as usize,
+                                NP_Size::U8 => u8::from_be_bytes([memory.get_1_byte(buff_addr + 2).unwrap_or(0)]) as usize
+                            }}
                         }
                     },
-                    Err(_e) => {
-                        let mut err = String::from("Can't query tuple with string, need number! Path: \n");
-                        err.push_str(print_path(&path, path_index).as_str());
-                        Err(NP_Error::new(err))
-                    }
-                }
-                 
-            },
-            _ => { 
-                // we're not at the end of the select path but we've reached a scalar value
-                // so the select has failed to find anything
-                return Ok(Some(cursor_addr));
-            }
-        }
-    }
-
-    pub fn select_with_commit<'sel>(cursor_addr: NP_Cursor_Addr, memory: NP_Memory, path: &'sel [&str], path_index: usize) -> Result<Option<NP_Cursor_Addr>, NP_Error> {
-
-        if path.len() == path_index {
-            return Ok(Some(cursor_addr));
-        }
-
-        match cursor_addr.get_schema_data(&memory).get_type_key() {
-            NP_TypeKeys::Table => {
-                let mut new_cursor = NP_Table::select_to_ptr(cursor_addr, &memory, &path[path_index], None)?;
-                match new_cursor {
-                    Some(x) => {
-                        let new_cursor = NP_Table::commit_pointer(&x, &memory)?;
-                        NP_Cursor::select_with_commit(new_cursor, memory, path, path_index + 1)
-                    },
-                    None => Ok(None)
-                }
-            },
-            NP_TypeKeys::Map => {
-                let mut new_cursor = NP_Map::select_to_ptr(cursor_addr, &memory, &path[path_index], false)?;
-                new_cursor = NP_Map::commit_pointer(&new_cursor, &memory)?;
-                NP_Cursor::select_with_commit(new_cursor, memory, path, path_index + 1)
-            },
-            NP_TypeKeys::List => {
-
-                let list_key_int = (&path[path_index]).parse::<u16>();
-                match list_key_int {
-                    Ok(x) => {
-                        let new_cursor = NP_List::select_to_ptr(cursor_addr, &memory, x)?;
-                        let new_cursor = NP_List::commit_pointer(&new_cursor, &memory)?;
-                        NP_Cursor::select_with_commit(new_cursor, memory, path, path_index + 1)
-
-                    },
-                    Err(_e) => {
-                        let mut err = String::from("Can't query list with string, need number! Path: \n");
-                        err.push_str(print_path(&path, path_index).as_str());
-                        Err(NP_Error::new(err))
-                    }
-                }
-            },
-            NP_TypeKeys::Tuple => {
-
-                let list_key = &path[path_index];
-                let list_key_int = list_key.parse::<u8>();
-                match list_key_int {
-                    Ok(x) => {
-                        match NP_Tuple::select_to_ptr(cursor_addr, &memory, x as usize)? {
-                            Some(y) => NP_Cursor::select_with_commit(y, memory, path, path_index + 1),
-                            None => Ok(None)
+                    NP_Cursor_Parent::Table { schema_addr: t_schema_addr, .. } => {
+                        let index = if buff_addr == 0 { 0 } else { match &memory.size {
+                            NP_Size::U32 => memory.read_bytes()[buff_addr + 8] as usize,
+                            NP_Size::U16 => memory.read_bytes()[buff_addr + 4] as usize,
+                            NP_Size::U8 => memory.read_bytes()[buff_addr + 2] as usize
+                        }};
+                        NP_Cursor_Value::TableItem { 
+                            value_addr:  memory.read_address(buff_addr),
+                            next:  memory.read_address_offset(buff_addr, 1),
+                            index: index
                         }
                     },
-                    Err(_e) => {
-                        let mut err = String::from("Can't query tuple with string, need number! Path: \n");
-                        err.push_str(print_path(&path, path_index).as_str());
-                        Err(NP_Error::new(err))
+                    NP_Cursor_Parent::Map { .. } => {
+                        let key_addr = memory.read_address_offset(buff_addr, 2);
+                        NP_Cursor_Value::MapItem { 
+                            value_addr: memory.read_address(buff_addr),
+                            next: memory.read_address_offset(buff_addr,  1),
+                            key_addr: key_addr
+                        }
+                    },
+                    NP_Cursor_Parent::Tuple { addr, .. } => {
+                        let addr_size = memory.addr_size_bytes();
+                        let index = (buff_addr - addr) / addr_size;
+                        NP_Cursor_Value::TupleItem { value_addr: memory.read_address(buff_addr), index: index}
                     }
                 }
-
-            },
-            _ => { // scalar type
-                
-                Ok(Some(cursor_addr))
-            }
-        }
-    }
-
-    /// Get value at this address
-    pub fn get_here<'get, T: 'get>(cursor_addr: NP_Cursor_Addr, memory: &'get NP_Memory<'get>) -> Result<Option<&'get *const T>, NP_Error> where T: Default + NP_Value<'get> {
-        
-        let schema_data = cursor_addr.get_schema_data(&memory);
-
-        if schema_data.get_type_data().1 != T::type_idx().1 {
-            return Err(NP_Error::new("typecast error!"))
-        }
-        match T::into_value(cursor_addr, &memory)? {
-            Some(x) => {
-                Ok(Some(x))
-            },
-            None => {
-                Ok(T::schema_default(schema_data))
-            }
-        }
-    }
-
-
-
-    pub fn get_json<'json>(cursor_addr: NP_Cursor_Addr, memory: &'json NP_Memory<'json>, path: &'json [&str]) -> NP_JSON {
-        
-        match NP_Cursor::select(cursor_addr, memory.clone(), path, 0) {
-            Ok(new_addr) => {
-                if let Some(x) = new_addr {
-                    NP_Cursor::json_encode(x, memory.clone())
-                } else {
-                    NP_JSON::Null
+            } else {
+                match parent {
+                    NP_Cursor_Parent::None => NP_Cursor_Value::Standard { value_addr: 0 },
+                    NP_Cursor_Parent::List { .. } => {
+                        NP_Cursor_Value::ListItem { 
+                            value_addr:  0,
+                            next:  0,
+                            index: 0
+                        }
+                    },
+                    NP_Cursor_Parent::Table { .. } => {
+                        NP_Cursor_Value::TableItem { 
+                            value_addr:  0,
+                            next:  0,
+                            index: 0
+                        }
+                    },
+                    NP_Cursor_Parent::Map { .. } => {
+                        NP_Cursor_Value::MapItem { 
+                            value_addr: 0,
+                            next: 0,
+                            key_addr: 0
+                        }
+                    },
+                    NP_Cursor_Parent::Tuple { .. } => {
+                        NP_Cursor_Value::TupleItem { 
+                            value_addr: 0, 
+                            index: 0
+                        }
+                    }
                 }
             },
-            Err(_e) => {
-                NP_JSON::Null
-            }
+            parent: parent,
+            prev_cursor: None,
+            next_cursor: None
         }
     }
 
     /// Exports this pointer and all it's descendants into a JSON object.
     /// This will create a copy of the underlying data and return default values where there isn't data.
     /// 
-    pub fn json_encode<'json>(cursor_addr: NP_Cursor_Addr, memory: NP_Memory<'json>) -> NP_JSON {
+    pub fn json_encode(cursor: &NP_Cursor, memory: &NP_Memory<'cursor>) -> NP_JSON {
 
-        let cursor = cursor_addr.get_data(&memory);
-
-        match cursor {
-            Ok(data) => {
-                if data.address_value == 0 {
-                    return NP_JSON::Null;
-                }
-
-                match data.schema_data(&memory).get_type_key() {
-                    NP_TypeKeys::None           => { NP_JSON::Null },
-                    NP_TypeKeys::Any            => { NP_JSON::Null },
-                    NP_TypeKeys::UTF8String     => {    String::to_json(cursor_addr, memory) },
-                    NP_TypeKeys::Bytes          => {  NP_Bytes::to_json(cursor_addr, memory) },
-                    NP_TypeKeys::Int8           => {        i8::to_json(cursor_addr, memory) },
-                    NP_TypeKeys::Int16          => {       i16::to_json(cursor_addr, memory) },
-                    NP_TypeKeys::Int32          => {       i32::to_json(cursor_addr, memory) },
-                    NP_TypeKeys::Int64          => {       i64::to_json(cursor_addr, memory) },
-                    NP_TypeKeys::Uint8          => {        u8::to_json(cursor_addr, memory) },
-                    NP_TypeKeys::Uint16         => {       u16::to_json(cursor_addr, memory) },
-                    NP_TypeKeys::Uint32         => {       u32::to_json(cursor_addr, memory) },
-                    NP_TypeKeys::Uint64         => {       u64::to_json(cursor_addr, memory) },
-                    NP_TypeKeys::Float          => {       f32::to_json(cursor_addr, memory) },
-                    NP_TypeKeys::Double         => {       f64::to_json(cursor_addr, memory) },
-                    NP_TypeKeys::Decimal        => {    NP_Dec::to_json(cursor_addr, memory) },
-                    NP_TypeKeys::Boolean        => {      bool::to_json(cursor_addr, memory) },
-                    NP_TypeKeys::Geo            => {    NP_Geo::to_json(cursor_addr, memory) },
-                    NP_TypeKeys::Uuid           => {   NP_UUID::to_json(cursor_addr, memory) },
-                    NP_TypeKeys::Ulid           => {   NP_ULID::to_json(cursor_addr, memory) },
-                    NP_TypeKeys::Date           => {   NP_Date::to_json(cursor_addr, memory) },
-                    NP_TypeKeys::Enum           => { NP_Option::to_json(cursor_addr, memory) },
-                    NP_TypeKeys::Table          => {  NP_Table::to_json(cursor_addr, memory) },
-                    NP_TypeKeys::Map            => {    NP_Map::to_json(cursor_addr, memory) },
-                    NP_TypeKeys::List           => {   NP_List::to_json(cursor_addr, memory) },
-                    NP_TypeKeys::Tuple          => {  NP_Tuple::to_json(cursor_addr, memory) }
-                }
-
-            },
-            Err(_e) => return NP_JSON::Null
+        match memory.schema[cursor.schema_addr].get_type_key() {
+            NP_TypeKeys::None           => { NP_JSON::Null },
+            NP_TypeKeys::Any            => { NP_JSON::Null },
+            NP_TypeKeys::UTF8String     => {    NP_String::to_json(cursor, memory) },
+            NP_TypeKeys::Bytes          => {  NP_Bytes::to_json(cursor, memory) },
+            NP_TypeKeys::Int8           => {        i8::to_json(cursor, memory) },
+            NP_TypeKeys::Int16          => {       i16::to_json(cursor, memory) },
+            NP_TypeKeys::Int32          => {       i32::to_json(cursor, memory) },
+            NP_TypeKeys::Int64          => {       i64::to_json(cursor, memory) },
+            NP_TypeKeys::Uint8          => {        u8::to_json(cursor, memory) },
+            NP_TypeKeys::Uint16         => {       u16::to_json(cursor, memory) },
+            NP_TypeKeys::Uint32         => {       u32::to_json(cursor, memory) },
+            NP_TypeKeys::Uint64         => {       u64::to_json(cursor, memory) },
+            NP_TypeKeys::Float          => {       f32::to_json(cursor, memory) },
+            NP_TypeKeys::Double         => {       f64::to_json(cursor, memory) },
+            NP_TypeKeys::Decimal        => {    NP_Dec::to_json(cursor, memory) },
+            NP_TypeKeys::Boolean        => {      bool::to_json(cursor, memory) },
+            NP_TypeKeys::Geo            => {    NP_Geo::to_json(cursor, memory) },
+            NP_TypeKeys::Uuid           => {   _NP_UUID::to_json(cursor, memory) },
+            NP_TypeKeys::Ulid           => {   _NP_ULID::to_json(cursor, memory) },
+            NP_TypeKeys::Date           => {   NP_Date::to_json(cursor, memory) },
+            NP_TypeKeys::Enum           => { NP_Enum::to_json(cursor, memory) },
+            NP_TypeKeys::Table          => {  NP_Table::to_json(cursor, memory) },
+            NP_TypeKeys::Map            => {    NP_Map::to_json(cursor, memory) },
+            NP_TypeKeys::List           => {   NP_List::to_json(cursor, memory) },
+            NP_TypeKeys::Tuple          => {  NP_Tuple::to_json(cursor, memory) }
         }
 
     }
 
-    pub fn compact<'comp>(from_cursor: NP_Cursor_Addr, from_memory: &'comp NP_Memory<'comp>, to_cursor: NP_Cursor_Addr, to_memory: &'comp NP_Memory<'comp>) -> Result<NP_Cursor_Addr, NP_Error> {
+    /// Compact from old cursor and memory into new cursor and memory
+    /// 
+    pub fn compact(from_cursor: &NP_Cursor, from_memory: &NP_Memory<'cursor>, to_cursor: NP_Cursor, to_memory: &NP_Memory<'cursor>) -> Result<NP_Cursor, NP_Error> {
 
-        let cursor = from_cursor.get_data(&from_memory);
-
-        match cursor {
-            Ok(data) => {
-                if data.address_value == 0 {
-                    return Ok(to_cursor)
-                }
-
-                match data.schema_data(&from_memory).get_type_key() {
-                    NP_TypeKeys::Any           => { Ok(to_cursor) }
-                    NP_TypeKeys::UTF8String    => {    String::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-                    NP_TypeKeys::Bytes         => {  NP_Bytes::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-                    NP_TypeKeys::Int8          => {        i8::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-                    NP_TypeKeys::Int16         => {       i16::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-                    NP_TypeKeys::Int32         => {       i32::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-                    NP_TypeKeys::Int64         => {       i64::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-                    NP_TypeKeys::Uint8         => {        u8::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-                    NP_TypeKeys::Uint16        => {       u16::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-                    NP_TypeKeys::Uint32        => {       u32::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-                    NP_TypeKeys::Uint64        => {       u64::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-                    NP_TypeKeys::Float         => {       f32::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-                    NP_TypeKeys::Double        => {       f64::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-                    NP_TypeKeys::Decimal       => {    NP_Dec::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-                    NP_TypeKeys::Boolean       => {      bool::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-                    NP_TypeKeys::Geo           => {    NP_Geo::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-                    NP_TypeKeys::Uuid          => {   NP_UUID::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-                    NP_TypeKeys::Ulid          => {   NP_ULID::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-                    NP_TypeKeys::Date          => {   NP_Date::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-                    NP_TypeKeys::Enum          => { NP_Option::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-                    NP_TypeKeys::Table         => {  NP_Table::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-                    NP_TypeKeys::Map           => {    NP_Map::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-                    NP_TypeKeys::List          => {   NP_List::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-                    NP_TypeKeys::Tuple         => {  NP_Tuple::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-                    _ => { panic!() }
-                }
-
-            },
-            Err(_e) => return Ok(to_cursor)
+        match from_memory.schema[from_cursor.schema_addr].get_type_key() {
+            NP_TypeKeys::Any           => { Ok(to_cursor) }
+            NP_TypeKeys::UTF8String    => {       NP_String::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
+            NP_TypeKeys::Bytes         => {  NP_Bytes::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
+            NP_TypeKeys::Int8          => {        i8::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
+            NP_TypeKeys::Int16         => {       i16::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
+            NP_TypeKeys::Int32         => {       i32::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
+            NP_TypeKeys::Int64         => {       i64::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
+            NP_TypeKeys::Uint8         => {        u8::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
+            NP_TypeKeys::Uint16        => {       u16::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
+            NP_TypeKeys::Uint32        => {       u32::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
+            NP_TypeKeys::Uint64        => {       u64::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
+            NP_TypeKeys::Float         => {       f32::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
+            NP_TypeKeys::Double        => {       f64::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
+            NP_TypeKeys::Decimal       => {    NP_Dec::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
+            NP_TypeKeys::Boolean       => {      bool::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
+            NP_TypeKeys::Geo           => {    NP_Geo::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
+            NP_TypeKeys::Uuid          => {   _NP_UUID::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
+            NP_TypeKeys::Ulid          => {   _NP_ULID::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
+            NP_TypeKeys::Date          => {   NP_Date::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
+            NP_TypeKeys::Enum          => { NP_Enum::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
+            NP_TypeKeys::Table         => {  NP_Table::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
+            NP_TypeKeys::Map           => {    NP_Map::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
+            NP_TypeKeys::List          => {   NP_List::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
+            NP_TypeKeys::Tuple         => {  NP_Tuple::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
+            _ => { panic!() }
         }
     }
 
-    pub fn set_default<'default>(cursor_addr: NP_Cursor_Addr, memory: &'default NP_Memory<'default>) -> Result<(), NP_Error> {
+    /// Set default for this value.  Not related to the schema default, this is the default value for this data type
+    /// 
+    pub fn set_default(cursor: NP_Cursor, memory: &NP_Memory<'cursor>) -> Result<(), NP_Error> {
 
-        let cursor = cursor_addr.get_data(&memory);
-
-        match cursor {
-            Ok(data) => {
-                if data.address_value == 0 {
-                    return Ok(())
-                }
-
-                match data.schema_data(&memory).get_type_key() {
-                    NP_TypeKeys::None        => { },
-                    NP_TypeKeys::Any         => { },
-                    NP_TypeKeys::Table       => { },
-                    NP_TypeKeys::Map         => { },
-                    NP_TypeKeys::List        => { },
-                    NP_TypeKeys::Tuple       => { },
-                    NP_TypeKeys::UTF8String  => {     String::set_value(cursor_addr, memory, String::default())?; },
-                    NP_TypeKeys::Bytes       => {   NP_Bytes::set_value(cursor_addr, memory, NP_Bytes::default())?; },
-                    NP_TypeKeys::Int8        => {         i8::set_value(cursor_addr, memory, i8::default())?; },
-                    NP_TypeKeys::Int16       => {        i16::set_value(cursor_addr, memory, i16::default())?; },
-                    NP_TypeKeys::Int32       => {        i32::set_value(cursor_addr, memory, i32::default())?; },
-                    NP_TypeKeys::Int64       => {        i64::set_value(cursor_addr, memory, i64::default())?; },
-                    NP_TypeKeys::Uint8       => {         u8::set_value(cursor_addr, memory, u8::default())?; },
-                    NP_TypeKeys::Uint16      => {        u16::set_value(cursor_addr, memory, u16::default())?; },
-                    NP_TypeKeys::Uint32      => {        u32::set_value(cursor_addr, memory, u32::default())?; },
-                    NP_TypeKeys::Uint64      => {        u64::set_value(cursor_addr, memory, u64::default())?; },
-                    NP_TypeKeys::Float       => {        f32::set_value(cursor_addr, memory, f32::default())?; },
-                    NP_TypeKeys::Double      => {        f64::set_value(cursor_addr, memory, f64::default())?; },
-                    NP_TypeKeys::Decimal     => {     NP_Dec::set_value(cursor_addr, memory, NP_Dec::default())?; },
-                    NP_TypeKeys::Boolean     => {       bool::set_value(cursor_addr, memory, bool::default())?; },
-                    NP_TypeKeys::Geo         => {     NP_Geo::set_value(cursor_addr, memory, NP_Geo::default())?; },
-                    NP_TypeKeys::Uuid        => {    NP_UUID::set_value(cursor_addr, memory, NP_UUID::default())?; },
-                    NP_TypeKeys::Ulid        => {    NP_ULID::set_value(cursor_addr, memory, NP_ULID::default())?; },
-                    NP_TypeKeys::Date        => {    NP_Date::set_value(cursor_addr, memory, NP_Date::default())?; },
-                    NP_TypeKeys::Enum        => {  NP_Option::set_value(cursor_addr, memory, NP_Option::default())?; }
-                }
-
-            },
-            Err(_e) => { }
+        match memory.schema[cursor.schema_addr].get_type_key() {
+            NP_TypeKeys::None        => { panic!() },
+            NP_TypeKeys::Any         => { panic!() },
+            NP_TypeKeys::Table       => { panic!() },
+            NP_TypeKeys::Map         => { panic!() },
+            NP_TypeKeys::List        => { panic!() },
+            NP_TypeKeys::Tuple       => { panic!() },
+            NP_TypeKeys::UTF8String  => {  NP_String::set_value(cursor, memory, &String::default())?; },
+            NP_TypeKeys::Bytes       => {   NP_Bytes::set_value(cursor, memory, &NP_Bytes::default())?; },
+            NP_TypeKeys::Int8        => {         i8::set_value(cursor, memory, i8::default())?; },
+            NP_TypeKeys::Int16       => {        i16::set_value(cursor, memory, i16::default())?; },
+            NP_TypeKeys::Int32       => {        i32::set_value(cursor, memory, i32::default())?; },
+            NP_TypeKeys::Int64       => {        i64::set_value(cursor, memory, i64::default())?; },
+            NP_TypeKeys::Uint8       => {         u8::set_value(cursor, memory, u8::default())?; },
+            NP_TypeKeys::Uint16      => {        u16::set_value(cursor, memory, u16::default())?; },
+            NP_TypeKeys::Uint32      => {        u32::set_value(cursor, memory, u32::default())?; },
+            NP_TypeKeys::Uint64      => {        u64::set_value(cursor, memory, u64::default())?; },
+            NP_TypeKeys::Float       => {        f32::set_value(cursor, memory, f32::default())?; },
+            NP_TypeKeys::Double      => {        f64::set_value(cursor, memory, f64::default())?; },
+            NP_TypeKeys::Decimal     => {     NP_Dec::set_value(cursor, memory, NP_Dec::default())?; },
+            NP_TypeKeys::Boolean     => {       bool::set_value(cursor, memory, bool::default())?; },
+            NP_TypeKeys::Geo         => {     NP_Geo::set_value(cursor, memory, NP_Geo::default())?; },
+            NP_TypeKeys::Uuid        => {    _NP_UUID::set_value(cursor, memory, &NP_UUID::default())?; },
+            NP_TypeKeys::Ulid        => {    _NP_ULID::set_value(cursor, memory, &NP_ULID::default())?; },
+            NP_TypeKeys::Date        => {    NP_Date::set_value(cursor, memory, NP_Date::default())?; },
+            NP_TypeKeys::Enum        => {  NP_Enum::set_value(cursor, memory, NP_Enum::default())?; }
         }
+
         Ok(())
     }
 
     /// Calculate the number of bytes used by this pointer and it's descendants.
     /// 
-    pub fn calc_size<'size>(cursor_addr: NP_Cursor_Addr, memory: &'size NP_Memory<'size>) -> Result<usize, NP_Error> {
-
-        let cursor = cursor_addr.get_data(&memory)?;
+    pub fn calc_size(cursor: NP_Cursor, memory: &NP_Memory<'cursor>) -> Result<usize, NP_Error> {
 
         // no pointer, no size
-        if cursor.address == 0 {
+        if cursor.buff_addr == 0 {
             return Ok(0);
         }
 
@@ -474,37 +328,37 @@ impl<'cursor> NP_Cursor<'cursor> {
         let base_size = memory.ptr_size(&cursor);
 
         // pointer is in buffer but has no value set
-        if cursor.address_value == 0 { // no value, just base size
+        if cursor.value.get_value_address() == 0 { // no value, just base size
             return Ok(base_size);
         }
 
         // get the size of the value based on schema
-        let type_size = match cursor.schema_data(&memory).get_type_key() {
+        let type_size = match memory.schema[cursor.schema_addr].get_type_key() {
             NP_TypeKeys::None         => { Ok(0) },
             NP_TypeKeys::Any          => { Ok(0) },
-            NP_TypeKeys::UTF8String   => {    String::get_size(cursor_addr, memory) },
-            NP_TypeKeys::Bytes        => {  NP_Bytes::get_size(cursor_addr, memory) },
-            NP_TypeKeys::Int8         => {        i8::get_size(cursor_addr, memory) },
-            NP_TypeKeys::Int16        => {       i16::get_size(cursor_addr, memory) },
-            NP_TypeKeys::Int32        => {       i32::get_size(cursor_addr, memory) },
-            NP_TypeKeys::Int64        => {       i64::get_size(cursor_addr, memory) },
-            NP_TypeKeys::Uint8        => {        u8::get_size(cursor_addr, memory) },
-            NP_TypeKeys::Uint16       => {       u16::get_size(cursor_addr, memory) },
-            NP_TypeKeys::Uint32       => {       u32::get_size(cursor_addr, memory) },
-            NP_TypeKeys::Uint64       => {       u64::get_size(cursor_addr, memory) },
-            NP_TypeKeys::Float        => {       f32::get_size(cursor_addr, memory) },
-            NP_TypeKeys::Double       => {       f64::get_size(cursor_addr, memory) },
-            NP_TypeKeys::Decimal      => {    NP_Dec::get_size(cursor_addr, memory) },
-            NP_TypeKeys::Boolean      => {      bool::get_size(cursor_addr, memory) },
-            NP_TypeKeys::Geo          => {    NP_Geo::get_size(cursor_addr, memory) },
-            NP_TypeKeys::Uuid         => {   NP_UUID::get_size(cursor_addr, memory) },
-            NP_TypeKeys::Ulid         => {   NP_ULID::get_size(cursor_addr, memory) },
-            NP_TypeKeys::Date         => {   NP_Date::get_size(cursor_addr, memory) },
-            NP_TypeKeys::Enum         => { NP_Option::get_size(cursor_addr, memory) },
-            NP_TypeKeys::Table        => {  NP_Table::get_size(cursor_addr, memory) },
-            NP_TypeKeys::Map          => {    NP_Map::get_size(cursor_addr, memory) },
-            NP_TypeKeys::List         => {   NP_List::get_size(cursor_addr, memory) },
-            NP_TypeKeys::Tuple        => {  NP_Tuple::get_size(cursor_addr, memory) }
+            NP_TypeKeys::UTF8String   => {       NP_String::get_size(cursor, memory) },
+            NP_TypeKeys::Bytes        => {  NP_Bytes::get_size(cursor, memory) },
+            NP_TypeKeys::Int8         => {        i8::get_size(cursor, memory) },
+            NP_TypeKeys::Int16        => {       i16::get_size(cursor, memory) },
+            NP_TypeKeys::Int32        => {       i32::get_size(cursor, memory) },
+            NP_TypeKeys::Int64        => {       i64::get_size(cursor, memory) },
+            NP_TypeKeys::Uint8        => {        u8::get_size(cursor, memory) },
+            NP_TypeKeys::Uint16       => {       u16::get_size(cursor, memory) },
+            NP_TypeKeys::Uint32       => {       u32::get_size(cursor, memory) },
+            NP_TypeKeys::Uint64       => {       u64::get_size(cursor, memory) },
+            NP_TypeKeys::Float        => {       f32::get_size(cursor, memory) },
+            NP_TypeKeys::Double       => {       f64::get_size(cursor, memory) },
+            NP_TypeKeys::Decimal      => {    NP_Dec::get_size(cursor, memory) },
+            NP_TypeKeys::Boolean      => {      bool::get_size(cursor, memory) },
+            NP_TypeKeys::Geo          => {    NP_Geo::get_size(cursor, memory) },
+            NP_TypeKeys::Uuid         => {   _NP_UUID::get_size(cursor, memory) },
+            NP_TypeKeys::Ulid         => {   _NP_ULID::get_size(cursor, memory) },
+            NP_TypeKeys::Date         => {   NP_Date::get_size(cursor, memory) },
+            NP_TypeKeys::Enum         => { NP_Enum::get_size(cursor, memory) },
+            NP_TypeKeys::Table        => {  NP_Table::get_size(cursor, memory) },
+            NP_TypeKeys::Map          => {    NP_Map::get_size(cursor, memory) },
+            NP_TypeKeys::List         => {   NP_List::get_size(cursor, memory) },
+            NP_TypeKeys::Tuple        => {  NP_Tuple::get_size(cursor, memory) }
         }?;
 
         Ok(type_size + base_size)
@@ -512,6 +366,8 @@ impl<'cursor> NP_Cursor<'cursor> {
 }
 
 
+/// This trait is used to restrict which types can be set/get in the buffer
+pub trait NP_Scalar {}
 
 /// This trait is used to implement types as NoProto buffer types.
 /// This includes all the type data, encoding and decoding methods.
@@ -528,73 +384,55 @@ pub trait NP_Value<'value> {
 
     /// Convert the schema byte array for this type into JSON
     /// 
-    fn schema_to_json(schema: &Vec<NP_Parsed_Schema<'value>>, address: usize)-> Result<NP_JSON, NP_Error>;
+    fn schema_to_json(schema: &Vec<NP_Parsed_Schema>, address: usize)-> Result<NP_JSON, NP_Error>;
 
     /// Get the default schema value for this type
     /// 
-    fn schema_default<'default>(_schema: &'default NP_Parsed_Schema) -> Option<&'default *const Self>;
+    fn schema_default(_schema: &'value NP_Parsed_Schema) -> Option<Self> where Self: Sized;
 
     /// Parse JSON schema into schema
     ///
-    fn from_json_to_schema(schema: Vec<NP_Parsed_Schema<'value>>, json_schema: &'value NP_JSON) -> Result<Option<(Vec<u8>, Vec<NP_Parsed_Schema<'value>>)>, NP_Error>;
+    fn from_json_to_schema(schema: Vec<NP_Parsed_Schema>, json_schema: &Box<NP_JSON>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error>;
 
     /// Parse bytes into schema
     /// 
-    fn from_bytes_to_schema(schema: Vec<NP_Parsed_Schema<'value>>, address: usize, bytes: &'value Vec<u8>) -> Vec<NP_Parsed_Schema<'value>>;
+    fn from_bytes_to_schema(schema: Vec<NP_Parsed_Schema>, address: usize, bytes: &Vec<u8>) -> (bool, Vec<NP_Parsed_Schema>);
 
     /// Set the value of this scalar into the buffer
     /// 
-    fn set_value<'set>(_cursor: NP_Cursor_Addr, _memory: &'set NP_Memory<'set>, _value: Self) -> Result<NP_Cursor_Addr, NP_Error> where Self: core::marker::Sized {
+    fn set_value(_cursor: NP_Cursor, _memory: &NP_Memory<'value>, _value: Self) -> Result<NP_Cursor, NP_Error> where Self: Sized {
         let message = "This type doesn't support set_value!".to_owned();
         Err(NP_Error::new(message.as_str()))
     }
 
     /// Pull the data from the buffer and convert into type
     /// 
-    fn into_value<'into>(_cursor: NP_Cursor_Addr, _memory: &'into NP_Memory<'into>) -> Result<Option<&'into *const Self>, NP_Error> {
+    fn into_value(_cursor: NP_Cursor, _memory: &'value NP_Memory<'value>) -> Result<Option<Self>, NP_Error> where Self: Sized {
         let message = "This type doesn't support into!".to_owned();
         Err(NP_Error::new(message.as_str()))
     }
 
     /// Convert this type into a JSON value (recursive for collections)
     /// 
-    fn to_json<'json>(value: &'json *const Self) -> NP_JSON;
+    fn to_json(_cursor: &NP_Cursor, _memory: &'value NP_Memory<'value>) -> NP_JSON;
 
     /// Calculate the size of this pointer and it's children (recursive for collections)
     /// 
-    fn get_size<'size>(_cursor: NP_Cursor_Addr, _memory: &'size NP_Memory<'size>) -> Result<usize, NP_Error>;
+    fn get_size(_cursor: NP_Cursor, memory: &NP_Memory<'value>) -> Result<usize, NP_Error>;
     
     /// Handle copying from old pointer/buffer to new pointer/buffer (recursive for collections)
     /// 
-    fn do_compact<'compact>(from_cursor: NP_Cursor_Addr, from_memory: &'compact NP_Memory<'compact>, to_cursor: NP_Cursor_Addr, to_memory: &'compact NP_Memory<'compact>) -> Result<NP_Cursor_Addr, NP_Error> where Self: 'compact + Clone {
+    fn do_compact(from_cursor: &NP_Cursor, from_memory: &'value NP_Memory<'value>, to_cursor: NP_Cursor, to_memory: &'value NP_Memory<'value>) -> Result<NP_Cursor, NP_Error> where Self: 'value + Sized {
 
-        match Self::into_value(from_cursor, from_memory)? {
+        match Self::into_value(from_cursor.clone(), from_memory)? {
             Some(x) => {
-                return Self::set_value(to_cursor, to_memory, *x.clone());
+                return Self::set_value(to_cursor, to_memory, x);
             },
             None => { }
         }
 
         Ok(to_cursor)
     }
-}
-
-#[doc(hidden)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum NP_Cursor_Kinds {
-    None,
-    Standard,   // u32(4 bytes [4]), u16(2 bytes [2])
-
-    Map,        // u32(4 bytes [4]), u16(2 bytes [2])
-    Table,      // u32(4 bytes [4]), u16(2 bytes [2])
-    List,       // u32(4 bytes [4]), u16(2 bytes [2])
-    Tuple,      // u32(4 bytes [4]), u16(2 bytes [2])
-
-    // collection items
-    MapItem,    // [addr | next | key] u32(12 bytes  [4, 4, 4]),  u16(6 bytes [2, 2, 2]), 
-    TableItem,  // [addr | next | i: u8]  u32(9  bytes  [4, 4, 1]),  u16(5 bytes [2, 2, 1]),   
-    ListItem,   // [addr | next | i: u16] u32(10 bytes  [4, 4, 2]),  u16(6 bytes [2, 2, 2]),
-    TupleItem   // [addr]u32(4 bytes  [4]),  u16(2 bytes [2])           
 }
 
 

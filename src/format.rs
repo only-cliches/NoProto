@@ -105,7 +105,6 @@
 //! ```
 //! use no_proto::error::NP_Error;
 //! use no_proto::NP_Factory;
-//! use no_proto::path;
 //! 
 //! let factory: NP_Factory = NP_Factory::new(r#"{
 //!     "type": "table",
@@ -115,7 +114,7 @@
 //! }"#)?;
 //!
 //! let mut new_buffer = factory.empty_buffer(None, None);
-//! new_buffer.set(path("age"), 20u8)?;
+//! new_buffer.set(&["age"], 20u8)?;
 //!
 //! assert_eq!(vec![1, 1, 0, 4, 0, 6, 0, 11, 0, 0, 0, 20], new_buffer.close());
 //! 
@@ -134,7 +133,6 @@
 //! ```
 //! use no_proto::error::NP_Error;
 //! use no_proto::NP_Factory;
-//! use no_proto::path;
 //! 
 //! let factory: NP_Factory = NP_Factory::new(r#"{
 //!     "type": "list",
@@ -142,7 +140,7 @@
 //! }"#)?;
 //!
 //! let mut new_buffer = factory.empty_buffer(None, None);
-//! new_buffer.set(path("4"), 20u8)?;
+//! new_buffer.set(&["4"], 20u8)?;
 //! assert_eq!(vec![1, 1, 0, 4, 0, 8, 0, 8, 0, 14, 0, 0, 0, 4, 20], new_buffer.close());
 //! 
 //! // [1, 1,     0, 4,   0, 8, 0, 8,   0, 14, 0, 0, 0, 4,    20]
@@ -158,7 +156,6 @@
 //! ```
 //! use no_proto::error::NP_Error;
 //! use no_proto::NP_Factory;
-//! use no_proto::path;
 //! 
 //! let factory: NP_Factory = NP_Factory::new(r#"{
 //!     "type": "map",
@@ -166,7 +163,7 @@
 //! }"#)?;
 //!
 //! let mut new_buffer = factory.empty_buffer(None, None);
-//! new_buffer.set(path("age"), 20u8)?;
+//! new_buffer.set(&["age"], 20u8)?;
 //! assert_eq!(vec![1, 1, 0, 4, 0, 8, 0, 1, 0, 19, 0, 0, 0, 14, 0, 3, 97, 103, 101, 20], new_buffer.close());
 //! 
 //! // [1, 1,     0, 4, 0, 8, 0, 1, 0, 19, 0, 0, 0, 14, 0, 3, 97, 103, 101,     20]
@@ -198,8 +195,8 @@
 //! 
 //!
 //! let mut new_buffer = factory.empty_buffer(None, None);
-//! new_buffer.set(path("0"), 20u8)?;
-//! new_buffer.set(path("1"), String::from("hello"))?;
+//! new_buffer.set(&["0"], 20u8)?;
+//! new_buffer.set(&["1"], "hello")?;
 //! assert_eq!(vec![1, 1, 0, 4, 0, 8, 0, 9, 20, 0, 5, 104, 101, 108, 108, 111], new_buffer.close());
 //! 
 //! // [1, 1,     0, 4,   0, 8, 0, 9,   20,   0, 5, 104, 101, 108, 108, 111]
@@ -221,14 +218,13 @@
 //! ```
 //! use no_proto::error::NP_Error;
 //! use no_proto::NP_Factory;
-//! use no_proto::here;
 //! 
 //! let factory: NP_Factory = NP_Factory::new(r#"{
 //!    "type": "i32"
 //! }"#)?;
 //!
 //! let mut new_buffer = factory.empty_buffer(None, None);
-//! new_buffer.set(here(), -2023830i32)?;
+//! new_buffer.set(&[], -2023830i32)?;
 //! assert_eq!(vec![1, 1, 0, 4, 127, 225, 30, 106], new_buffer.close());
 //! 
 //! // [1, 1,     0, 4,   127, 225, 30, 106]
@@ -246,14 +242,13 @@
 //! ```
 //! use no_proto::error::NP_Error;
 //! use no_proto::NP_Factory;
-//! use no_proto::here;
 //! 
 //! let factory: NP_Factory = NP_Factory::new(r#"{
 //!    "type": "u32"
 //! }"#)?;
 //!
 //! let mut new_buffer = factory.empty_buffer(None, None);
-//! new_buffer.set(here(), 28378u32)?;
+//! new_buffer.set(&[], 28378u32)?;
 //! assert_eq!(vec![1, 1, 0, 4, 0, 0, 110, 218], new_buffer.close());
 //! 
 //! // [1, 1,     0, 4,      0, 0, 110, 218]
@@ -271,14 +266,13 @@
 //! ```
 //! use no_proto::error::NP_Error;
 //! use no_proto::NP_Factory;
-//! use no_proto::here;
 //! 
 //! let factory: NP_Factory = NP_Factory::new(r#"{
 //!    "type": "f32"
 //! }"#)?;
 //!
 //! let mut new_buffer = factory.empty_buffer(None, None);
-//! new_buffer.set(here(), 2.389988f32)?;
+//! new_buffer.set(&[], 2.389988f32)?;
 //! assert_eq!(vec![1, 1, 0, 4, 64, 24, 245, 144], new_buffer.close());
 //! 
 //! // [1, 1,     0, 4,    64, 24, 245, 144]
@@ -296,8 +290,7 @@
 //! ```
 //! use no_proto::error::NP_Error;
 //! use no_proto::NP_Factory;
-//! use no_proto::pointer::option::NP_Option;
-//! use no_proto::here;
+//! use no_proto::pointer::option::NP_Enum;
 //! 
 //! let factory: NP_Factory = NP_Factory::new(r#"{
 //!    "type": "option",
@@ -305,7 +298,7 @@
 //! }"#)?;
 //!
 //! let mut new_buffer = factory.empty_buffer(None, None);
-//! new_buffer.set(here(), NP_Option::new("red"))?;
+//! new_buffer.set(&[], NP_Enum::new("red"))?;
 //! assert_eq!(vec![1, 1, 0, 4, 2], new_buffer.close());
 //! 
 //! // [1, 1,     0, 4,      2]
@@ -321,14 +314,13 @@
 //! ```
 //! use no_proto::error::NP_Error;
 //! use no_proto::NP_Factory;
-//! use no_proto::here;
 //! 
 //! let factory: NP_Factory = NP_Factory::new(r#"{
 //!    "type": "bool"
 //! }"#)?;
 //!
 //! let mut new_buffer = factory.empty_buffer(None, None);
-//! new_buffer.set(here(), true)?;
+//! new_buffer.set(&[], true)?;
 //! assert_eq!(vec![1, 1, 0, 4, 1], new_buffer.close());
 //! 
 //! // [1, 1,     0, 4,      1]
@@ -351,7 +343,6 @@
 //! use no_proto::error::NP_Error;
 //! use no_proto::NP_Factory;
 //! use no_proto::pointer::dec::NP_Dec;
-//! use no_proto::here;
 //! 
 //! let factory: NP_Factory = NP_Factory::new(r#"{
 //!    "type": "decimal",
@@ -359,7 +350,7 @@
 //! }"#)?;
 //!
 //! let mut new_buffer = factory.empty_buffer(None, None);
-//! new_buffer.set(here(), NP_Dec::new(200, 0))?;
+//! new_buffer.set(&[], NP_Dec::new(200, 0))?;
 //! assert_eq!(vec![1, 1, 0, 4, 128, 0, 0, 0, 0, 0, 78, 32], new_buffer.close());
 //! 
 //! // [1, 1,     0, 4,  128, 0, 0, 0, 0, 0, 78, 32]
@@ -401,14 +392,13 @@
 //! use no_proto::error::NP_Error;
 //! use no_proto::NP_Factory;
 //! use no_proto::pointer::geo::NP_Geo;
-//! use no_proto::here;
 //! 
 //! let factory: NP_Factory = NP_Factory::new(r#"{
 //!    "type": "geo8"
 //! }"#)?;
 //!
 //! let mut new_buffer = factory.empty_buffer(None, None);
-//! new_buffer.set(here(), NP_Geo::new(8, 41.303921, -81.901693))?;
+//! new_buffer.set(&[], NP_Geo::new(8, 41.303921, -81.901693))?;
 //! assert_eq!(vec![1, 1, 0, 4, 152, 158, 122, 106, 79, 46, 203, 30], new_buffer.close());
 //! 
 //! // [1, 1,     0, 4,  152, 158, 122, 106, 79, 46, 203, 30]
@@ -427,14 +417,13 @@
 //! use no_proto::error::NP_Error;
 //! use no_proto::NP_Factory;
 //! use no_proto::pointer::uuid::NP_UUID;
-//! use no_proto::here;
 //! 
 //! let factory: NP_Factory = NP_Factory::new(r#"{
 //!    "type": "uuid"
 //! }"#)?;
 //!
 //! let mut new_buffer = factory.empty_buffer(None, None);
-//! new_buffer.set(here(), NP_UUID::generate(32))?;
+//! new_buffer.set(&[], &NP_UUID::generate(32))?;
 //! assert_eq!(vec![1, 1, 0, 4, 202, 230, 170, 176, 127, 103, 66, 13, 89, 65, 221, 4, 153, 160, 117, 252], new_buffer.close());
 //! 
 //! // [1, 1,     0, 4,   202, 230, 170, 176, 127, 103, 66, 13, 89, 65, 221, 4, 153, 160, 117, 252]
@@ -461,14 +450,13 @@
 //! ```
 //! use no_proto::error::NP_Error;
 //! use no_proto::NP_Factory;
-//! use no_proto::here;
 //! 
 //! let factory: NP_Factory = NP_Factory::new(r#"{
 //!    "type": "string"
 //! }"#)?;
 //!
 //! let mut new_buffer = factory.empty_buffer(None, None);
-//! new_buffer.set(here(), String::from("hello, world!"))?;
+//! new_buffer.set(&[], "hello, world!")?;
 //! assert_eq!(vec![1, 1, 0, 4, 0, 13, 104, 101, 108, 108, 111, 44, 32, 119, 111, 114, 108, 100, 33], new_buffer.close());
 //! 
 //! // 1, 1,     0, 4,   0, 13, 104, 101, 108, 108, 111, 44, 32, 119, 111, 114, 108, 100, 33]
@@ -484,14 +472,13 @@
 //! use no_proto::error::NP_Error;
 //! use no_proto::NP_Factory;
 //! use no_proto::pointer::date::NP_Date;
-//! use no_proto::here;
 //! 
 //! let factory: NP_Factory = NP_Factory::new(r#"{
 //!    "type": "date"
 //! }"#)?;
 //!
 //! let mut new_buffer = factory.empty_buffer(None, None);
-//! new_buffer.set(here(), NP_Date::new(1598490738507))?;
+//! new_buffer.set(&[], NP_Date::new(1598490738507))?;
 //! assert_eq!(vec![1, 1, 0, 4, 0, 0, 1, 116, 45, 120, 255, 75], new_buffer.close());
 //! 
 //! // [1, 1,     0, 4,    0, 0, 1, 116, 45, 120, 255, 75]
@@ -557,7 +544,7 @@
 //! ```
 //! use no_proto::error::NP_Error;
 //! use no_proto::NP_Factory;
-//! use no_proto::pointer::option::NP_Option;
+//! use no_proto::pointer::option::NP_Enum;
 //! 
 //! let factory: NP_Factory = NP_Factory::new(r#"{
 //!    "type": "option",
@@ -595,7 +582,7 @@
 //! ```
 //! use no_proto::error::NP_Error;
 //! use no_proto::NP_Factory;
-//! use no_proto::pointer::option::NP_Option;
+//! use no_proto::pointer::option::NP_Enum;
 //! 
 //! let factory: NP_Factory = NP_Factory::new(r#"{
 //!    "type": "bool",

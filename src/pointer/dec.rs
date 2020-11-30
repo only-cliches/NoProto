@@ -48,7 +48,6 @@
 //! use no_proto::error::NP_Error;
 //! use no_proto::NP_Factory;
 //! use no_proto::pointer::dec::NP_Dec;
-//! use no_proto::here;
 //! 
 //! let factory: NP_Factory = NP_Factory::new(r#"{
 //!    "type": "dec",
@@ -56,27 +55,25 @@
 //! }"#)?;
 //!
 //! let mut new_buffer = factory.empty_buffer(None, None);
-//! new_buffer.set(here(), NP_Dec::new(50283, 2))?;
+//! new_buffer.set(&[], NP_Dec::new(50283, 2))?;
 //! 
-//! assert_eq!(502.83f64, new_buffer.get::<NP_Dec>(here())?.unwrap().to_float());
+//! assert_eq!(502.83f64, new_buffer.get::<NP_Dec>(&[])?.unwrap().to_float());
 //!
 //! # Ok::<(), NP_Error>(()) 
 //! ```
 //!
 
+use crate::utils::to_signed;
 use crate::schema::{NP_Parsed_Schema};
 use alloc::vec::Vec;
-use crate::utils::to_signed;
 use crate::utils::to_unsigned;
 use crate::json_flex::{JSMAP, NP_JSON};
-use crate::schema::{NP_Schema, NP_TypeKeys};
+use crate::schema::{NP_TypeKeys};
 use crate::{pointer::NP_Value, error::NP_Error};
 use core::{fmt::{Debug}, hint::unreachable_unchecked};
 
-use alloc::string::String;
-use alloc::boxed::Box;
 use alloc::borrow::ToOwned;
-use super::{NP_Cursor_Addr};
+use super::{NP_Cursor};
 use crate::NP_Memory;
 
 
@@ -91,6 +88,8 @@ pub struct NP_Dec {
     /// The exponent of this number
     pub exp: u8
 }
+
+impl super::NP_Scalar for NP_Dec {}
 
 impl NP_Dec {
     /// Convert an NP_Dec into a native floating point value.
@@ -672,7 +671,7 @@ impl<'value> NP_Value<'value> for NP_Dec {
     fn type_idx() -> (&'value str, NP_TypeKeys) { ("decimal", NP_TypeKeys::Decimal) }
     fn self_type_idx(&self) -> (&'value str, NP_TypeKeys) { ("decimal", NP_TypeKeys::Decimal) }
 
-    fn schema_to_json(schema: &Vec<NP_Parsed_Schema<'value>>, address: usize)-> Result<NP_JSON, NP_Error> {
+    fn schema_to_json(schema: &Vec<NP_Parsed_Schema>, address: usize)-> Result<NP_JSON, NP_Error> {
         let mut schema_json = JSMAP::new();
         schema_json.insert("type".to_owned(), NP_JSON::String(Self::type_idx().0.to_string()));
 
@@ -691,13 +690,12 @@ impl<'value> NP_Value<'value> for NP_Dec {
         }
     }
 
-    fn schema_default(schema: &NP_Parsed_Schema) -> Option<Box<Self>> {
+    fn schema_default(schema: &'value NP_Parsed_Schema) -> Option<Self> {
 
         match schema {
-            NP_Parsed_Schema::Decimal { i: _, sortable: _, default, exp} => {
+            NP_Parsed_Schema::Decimal { i: _, sortable: _, default, exp: _} => {
                 if let Some(d) = default {
-                    let value = NP_Dec::new(d.num.clone(), exp.clone());
-                    Some(Box::new(value))
+                    Some(d.clone())
                 } else {
                     None
                 }
@@ -705,13 +703,13 @@ impl<'value> NP_Value<'value> for NP_Dec {
             _ => { unsafe { unreachable_unchecked() } }
         }
     }
-    fn set_value(cursor_addr: NP_Cursor_Addr, memory: NP_Memory, value: &Self) -> Result<NP_Cursor_Addr, NP_Error> {
 
-        let cursor = cursor_addr.get_data(&memory).unwrap();
+    fn set_value(mut cursor: NP_Cursor, memory: &NP_Memory, value: Self) -> Result<NP_Cursor, NP_Error> {
 
-        if cursor_addr.is_virtual { panic!() }
+        let mut value_address = cursor.value.get_value_address();
 
-        let exp = match &&**cursor.schema {
+
+        let exp = match memory.schema[cursor.schema_addr] {
             NP_Parsed_Schema::Decimal { i: _, sortable: _, default: _, exp} => {
                 exp
             },
@@ -719,12 +717,12 @@ impl<'value> NP_Value<'value> for NP_Dec {
         };
 
 
-        let mut cloned_value = (*value).clone();
-        cloned_value.shift_exp(*exp);
+        let mut cloned_value = (value).clone();
+        cloned_value.shift_exp(exp);
 
         let i64_value = cloned_value.num;
 
-        if cursor.address_value != 0 { // existing value, replace
+        if value_address != 0 { // existing value, replace
             let mut bytes = i64_value.to_be_bytes();
 
             // convert to unsigned
@@ -734,7 +732,7 @@ impl<'value> NP_Value<'value> for NP_Dec {
 
             // overwrite existing values in buffer
             for x in 0..bytes.len() {
-                write_bytes[cursor.address_value + x] = bytes[x];
+                write_bytes[value_address + x] = bytes[x];
             }
 
         } else { // new value
@@ -744,24 +742,25 @@ impl<'value> NP_Value<'value> for NP_Dec {
             // convert to unsigned
             be_bytes[0] = to_unsigned(be_bytes[0]);
 
-            cursor.address_value = memory.malloc_borrow(&be_bytes)?;
-            memory.set_value_address(cursor.address, cursor.address_value);
+            value_address = memory.malloc_borrow(&be_bytes)?;
+            cursor.value = cursor.value.update_value_address(value_address);
+            memory.write_address(cursor.buff_addr, value_address);
 
         }
 
-        Ok(cursor_addr)
+        Ok(cursor)
     }
 
-    fn into_value<'into>(cursor_addr: NP_Cursor_Addr, memory: NP_Memory) -> Result<Option<&'value Self>, NP_Error> {
+    fn into_value(cursor: NP_Cursor, memory: &NP_Memory) -> Result<Option<Self>, NP_Error> {
 
-        let cursor = cursor_addr.get_data(&memory).unwrap();
+        let value_addr = cursor.value.get_value_address();
 
         // empty value
-        if cursor.address_value == 0 {
+        if value_addr == 0 {
             return Ok(None);
         }
 
-        let exp = match &**cursor.schema {
+        let exp = match memory.schema[cursor.schema_addr] {
             NP_Parsed_Schema::Decimal { i: _, sortable: _, default: _, exp} => {
                 exp
             },
@@ -769,47 +768,46 @@ impl<'value> NP_Value<'value> for NP_Dec {
         };
 
 
-        Ok(match memory.get_8_bytes(cursor.address_value) {
+        Ok(match memory.get_8_bytes(value_addr) {
             Some(x) => {
                 let mut be_bytes = x.clone();
                 be_bytes[0] = to_signed(be_bytes[0]);
-                Some(Box::new(NP_Dec::new(i64::from_be_bytes(be_bytes), *exp)))
+                Some(NP_Dec::new(i64::from_be_bytes(be_bytes), exp))
             },
             None => None
         })
     }
 
-    fn to_json(cursor_addr: NP_Cursor_Addr, memory: NP_Memory) -> NP_JSON {
+    fn to_json(cursor: &NP_Cursor, memory: &NP_Memory) -> NP_JSON {
 
-        let cursor = cursor_addr.get_data(&memory).unwrap();
 
-        let exp = match &**cursor.schema {
-            NP_Parsed_Schema::Decimal { i: _, sortable: _, default: _, exp} => {
+        let exp = match memory.schema[cursor.schema_addr] {
+            NP_Parsed_Schema::Decimal { exp, .. } => {
                 exp
             },
             _ => { unsafe { unreachable_unchecked() } }
         };
 
 
-        match Self::into_value(cursor_addr, memory) {
+        match Self::into_value(cursor.clone(), memory) {
             Ok(x) => {
                 match x {
                     Some(y) => {
                         let mut object = JSMAP::new();
 
                         object.insert("num".to_owned(), NP_JSON::Integer(y.num));
-                        object.insert("exp".to_owned(), NP_JSON::Integer(*exp as i64));
+                        object.insert("exp".to_owned(), NP_JSON::Integer(exp as i64));
                         
                         NP_JSON::Dictionary(object)
                     },
                     None => {
-                        match &**cursor.schema {
+                        match memory.schema[cursor.schema_addr] {
                             NP_Parsed_Schema::Decimal { i: _, sortable: _, default, exp} => {
                                 if let Some(d) = default {
                                     let mut object = JSMAP::new();
 
                                     object.insert("num".to_owned(), NP_JSON::Integer(d.num.clone()));
-                                    object.insert("exp".to_owned(), NP_JSON::Integer(*exp as i64));
+                                    object.insert("exp".to_owned(), NP_JSON::Integer(exp as i64));
                                     
                                     NP_JSON::Dictionary(object)
                                 } else {
@@ -827,75 +825,69 @@ impl<'value> NP_Value<'value> for NP_Dec {
         }
     }
 
-    fn get_size(cursor_addr: NP_Cursor_Addr, memory: NP_Memory) -> Result<usize, NP_Error> {
-        let cursor = cursor_addr.get_data(&memory).unwrap();
+    fn get_size(cursor: NP_Cursor, _memory: &NP_Memory) -> Result<usize, NP_Error> {
 
-        if cursor.address_value == 0 {
-            return Ok(0) 
+        if cursor.value.get_value_address() == 0 {
+            Ok(0) 
         } else {
             Ok(core::mem::size_of::<i64>())
         }
     }
 
-    fn from_json_to_schema(schema: Vec<NP_Parsed_Schema<'value>>, json_schema: &'value NP_JSON) -> Result<Option<(Vec<u8>, Vec<NP_Parsed_Schema<'value>>)>, NP_Error> {
+    fn from_json_to_schema(mut schema: Vec<NP_Parsed_Schema>, json_schema: &Box<NP_JSON>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {
 
-        let type_str = NP_Schema::_get_type(json_schema)?;
+        let mut schema_data: Vec<u8> = Vec::new();
+        schema_data.push(NP_TypeKeys::Decimal as u8);
 
-        if "decimal" == type_str || "dec" == type_str {
-            let mut schema_data: Vec<u8> = Vec::new();
-            schema_data.push(NP_TypeKeys::Decimal as u8);
+        let exp: u8;
 
-            let exp: u8;
-
-            match json_schema["exp"] {
-                NP_JSON::Integer(x) => {
-                    if x > 255 || x < 0 {
-                        return Err(NP_Error::new("Decimal 'exp' property must be between 0 and 255!"))
-                    }
-                    exp = x as u8;
-                    schema_data.push(x as u8);
-                },
-                _ => {
-                    return Err(NP_Error::new("Decimal type requires 'exp' property!"))
+        match json_schema["exp"] {
+            NP_JSON::Integer(x) => {
+                if x > 255 || x < 0 {
+                    return Err(NP_Error::new("Decimal 'exp' property must be between 0 and 255!"))
                 }
+                exp = x as u8;
+                schema_data.push(x as u8);
+            },
+            _ => {
+                return Err(NP_Error::new("Decimal type requires 'exp' property!"))
             }
-
-            let mult = 10i64.pow(exp as u32);
-
-            let default = match json_schema["default"] {
-                NP_JSON::Float(x) => {
-                    schema_data.push(1);
-                    let value = x * (mult as f64);
-                    schema_data.extend((value as i64).to_be_bytes().to_vec());
-                    Some(Box::new(NP_Dec::new(value as i64, exp)))
-                },
-                NP_JSON::Integer(x) => {
-                    schema_data.push(1);
-                    let value = x * (mult as i64);
-                    schema_data.extend((value as i64).to_be_bytes().to_vec());
-                    Some(Box::new(NP_Dec::new(value as i64, exp)))
-                },
-                _ => {
-                    schema_data.push(0);
-                    // schema_data.extend(0i64.to_be_bytes().to_vec())
-                    None
-                }
-            };
-
-            schema.push(NP_Parsed_Schema::Decimal {
-                i: NP_TypeKeys::Decimal,
-                default,
-                sortable: true,
-                exp: exp
-            });
-
-            return Ok(Some((schema_data, schema)))
         }
 
-        Ok(None)
+        let mult = 10i64.pow(exp as u32);
+
+        let default = match json_schema["default"] {
+            NP_JSON::Float(x) => {
+                schema_data.push(1);
+                let value = x * (mult as f64);
+                schema_data.extend((value as i64).to_be_bytes().to_vec());
+                Some(NP_Dec::new(value as i64, exp))
+            },
+            NP_JSON::Integer(x) => {
+                schema_data.push(1);
+                let value = x * (mult as i64);
+                schema_data.extend((value as i64).to_be_bytes().to_vec());
+                Some(NP_Dec::new(value as i64, exp))
+            },
+            _ => {
+                schema_data.push(0);
+                // schema_data.extend(0i64.to_be_bytes().to_vec())
+                None
+            }
+        };
+
+        schema.push(NP_Parsed_Schema::Decimal {
+            i: NP_TypeKeys::Decimal,
+            default,
+            sortable: true,
+            exp: exp
+        });
+
+        return Ok((true, schema_data, schema))
+   
     }
 
-    fn from_bytes_to_schema(schema: Vec<NP_Parsed_Schema<'value>>, address: usize, bytes: &'value Vec<u8>) -> Vec<NP_Parsed_Schema<'value>> {
+    fn from_bytes_to_schema(mut schema: Vec<NP_Parsed_Schema>, address: usize, bytes: &Vec<u8>) -> (bool, Vec<NP_Parsed_Schema>) {
         let exp = bytes[address + 1];
 
         let default = if bytes[address + 2] == 0 {
@@ -904,7 +896,7 @@ impl<'value> NP_Value<'value> for NP_Dec {
             let mut slice = 0i64.to_be_bytes();
             slice.copy_from_slice(&bytes[(address + 3)..address + 11]);
             let value = i64::from_be_bytes(slice);
-            Some(Box::new(NP_Dec::new(value, exp)))
+            Some(NP_Dec::new(value, exp))
         };
 
         schema.push(NP_Parsed_Schema::Decimal {
@@ -914,7 +906,7 @@ impl<'value> NP_Value<'value> for NP_Dec {
             sortable: true
         });
 
-        schema
+        (true, schema)
     }
 }
 
@@ -935,8 +927,8 @@ fn schema_parsing_works() -> Result<(), NP_Error> {
 fn default_value_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"decimal\",\"exp\":3,\"default\":203.293}";
     let factory = crate::NP_Factory::new(schema)?;
-    let mut buffer = factory.empty_buffer(None, None);
-    assert_eq!(buffer.get(&[])?.unwrap(), Box::new(NP_Dec::new(203293, 3)));
+    let buffer = factory.empty_buffer(None, None);
+    assert_eq!(buffer.get::<NP_Dec>(&[])?.unwrap(), NP_Dec::new(203293, 3));
 
     Ok(())
 }
@@ -948,7 +940,7 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let factory = crate::NP_Factory::new(schema)?;
     let mut buffer = factory.empty_buffer(None, None);
     buffer.set(&[], NP_Dec::new(203293, 3))?;
-    assert_eq!(buffer.get::<NP_Dec>(&[])?.unwrap(), Box::new(NP_Dec::new(203293, 3)));
+    assert_eq!(buffer.get::<NP_Dec>(&[])?.unwrap(), NP_Dec::new(203293, 3));
     buffer.del(&[])?;
     assert_eq!(buffer.get::<NP_Dec>(&[])?, None);
 

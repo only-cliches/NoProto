@@ -3,8 +3,7 @@
 //! ```
 //! use no_proto::error::NP_Error;
 //! use no_proto::NP_Factory;
-//! use no_proto::pointer::option::NP_Option;
-//! use no_proto::here;
+//! use no_proto::pointer::option::NP_Enum;
 //! 
 //! let factory: NP_Factory = NP_Factory::new(r#"{
 //!    "type": "option",
@@ -12,9 +11,9 @@
 //! }"#)?;
 //!
 //! let mut new_buffer = factory.empty_buffer(None, None);
-//! new_buffer.set(here(), NP_Option::new("green"))?;
+//! new_buffer.set(&[], NP_Enum::new("green"))?;
 //! 
-//! assert_eq!(Box::new(NP_Option::new("green")), new_buffer.get::<NP_Option>(here())?.unwrap());
+//! assert_eq!(NP_Enum::new("green"), new_buffer.get::<NP_Enum>(&[])?.unwrap());
 //!
 //! # Ok::<(), NP_Error>(()) 
 //! ```
@@ -23,7 +22,7 @@
 use crate::{memory::NP_Memory, schema::{NP_Parsed_Schema}};
 use alloc::vec::Vec;
 use crate::json_flex::{JSMAP, NP_JSON};
-use crate::schema::{NP_Schema, NP_TypeKeys};
+use crate::schema::{NP_TypeKeys};
 use crate::{pointer::NP_Value, error::NP_Error};
 use core::{fmt::{Debug}, hint::unreachable_unchecked};
 
@@ -31,51 +30,65 @@ use alloc::string::String;
 use alloc::boxed::Box;
 use alloc::borrow::ToOwned;
 use alloc::{string::ToString};
-use super::{NP_Cursor_Addr};
+use super::{NP_Cursor};
 
 /// Holds Enum / Option type data.
 /// 
 /// Check out documentation [here](../option/index.html).
 /// 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct NP_Option<'opt> {
-    /// The value of this option type
-    pub value: Option<&'opt str>
+pub enum NP_Enum {
+    /// No value
+    None,
+    /// Value
+    Some(String)
 }
 
-impl<'opt> NP_Option<'opt> {
+impl super::NP_Scalar for NP_Enum {}
+
+impl NP_Enum {
     /// Create a new option type with the given string
-    pub fn new(value: &'opt str) -> Self {
-        NP_Option {
-            value: Some(value)
+    pub fn new<S: Into<String>>(value: S) -> Self {
+        NP_Enum::Some(value.into())
+    }
+
+    /// get length of value
+    pub fn len(&self) -> usize {
+        match self {
+            NP_Enum::None => 0,
+            NP_Enum::Some(x) => x.len()
         }
     }
 
-    /// Create a new empty option type
-    pub fn empty() -> Self {
-        NP_Option {
-            value: None
+    /// get value as bytes
+    pub fn as_bytes(&self) -> &[u8] {
+        match self {
+            NP_Enum::None => &[],
+            NP_Enum::Some(x) => x.as_bytes()
         }
     }
-    
-    /// Set the value of this option type
-    pub fn set(&mut self, value: Option<&'opt str>) {
-        self.value = value;
+
+    /// get string of value
+    pub fn to_string(&self) -> String {
+        match self {
+            NP_Enum::None => String::from(""),
+            NP_Enum::Some(x) => x.clone()
+        }
     }
 }
 
-impl<'opt> Default for NP_Option<'opt> {
+impl Default for NP_Enum {
     fn default() -> Self { 
-        NP_Option { value: None }
+        NP_Enum::None
      }
 }
 
-impl<'value> NP_Value<'value> for NP_Option<'value> {
+impl<'value> NP_Value<'value> for NP_Enum {
 
     fn type_idx() -> (&'value str, NP_TypeKeys) { ("option", NP_TypeKeys::Enum) }
     fn self_type_idx(&self) -> (&'value str, NP_TypeKeys) { ("option", NP_TypeKeys::Enum) }
 
-    fn schema_to_json(schema: &Vec<NP_Parsed_Schema<'value>>, address: usize)-> Result<NP_JSON, NP_Error> {
+    fn schema_to_json(schema: &Vec<NP_Parsed_Schema>, address: usize)-> Result<NP_JSON, NP_Error> {
         let mut schema_json = JSMAP::new();
         schema_json.insert("type".to_owned(), NP_JSON::String(Self::type_idx().0.to_string()));
 
@@ -87,7 +100,9 @@ impl<'value> NP_Value<'value> for NP_Option<'value> {
                 }).collect();
             
                 if let Some(d) = default {
-                    schema_json.insert("default".to_owned(), options[**d as usize].clone());
+                    if let NP_Enum::Some(x) = &d {
+                        schema_json.insert("default".to_owned(), NP_JSON::String(x.to_string()));
+                    }
                 }
         
                 schema_json.insert("choices".to_owned(), NP_JSON::Array(options));
@@ -98,12 +113,12 @@ impl<'value> NP_Value<'value> for NP_Option<'value> {
         Ok(NP_JSON::Dictionary(schema_json))
     }
 
-    fn schema_default(schema: &'value NP_Parsed_Schema) -> Option<Box<Self>> {
+    fn schema_default(schema: &'value NP_Parsed_Schema) -> Option<Self> {
 
         match schema {
-            NP_Parsed_Schema::Enum { i: _, choices, default, sortable: _} => {
+            NP_Parsed_Schema::Enum { i: _, choices: _, default, sortable: _} => {
                 if let Some(d) = default {
-                    Some(Box::new(NP_Option::new(choices[**d as usize])))
+                    Some(d.clone())
                 } else {
                     None
                 }
@@ -112,21 +127,20 @@ impl<'value> NP_Value<'value> for NP_Option<'value> {
         }
     }
 
-    fn set_value(cursor_addr: NP_Cursor_Addr, memory: NP_Memory, value: &Self) -> Result<NP_Cursor_Addr, NP_Error> {
+    fn set_value(mut cursor: NP_Cursor, memory: &NP_Memory, value: Self) -> Result<NP_Cursor, NP_Error> {
 
-        let cursor = cursor_addr.get_data(&memory).unwrap();
+        assert_ne!(cursor.buff_addr, 0);
 
-        if cursor_addr.is_virtual { panic!() }
-
-        match &cursor.schema_data(&memory) {
+        match &memory.schema[cursor.schema_addr] {
             NP_Parsed_Schema::Enum { i: _, choices, default: _, sortable: _} => {
+
                 let mut value_num: i32 = -1;
 
                 {
                     let mut ct: u16 = 0;
         
                     for opt in choices {
-                        if value.value == Some(opt) {
+                        if *opt == value {
                             value_num = ct as i32;
                         }
                         ct += 1;
@@ -138,45 +152,48 @@ impl<'value> NP_Value<'value> for NP_Option<'value> {
                 }
         
                 let bytes = value_num as u8;
+
+                let mut addr_value = cursor.value.get_value_address();
         
-                if cursor.address_value != 0 { // existing value, replace
+                if addr_value != 0 { // existing value, replace
         
                     let write_bytes = memory.write_bytes();
         
-                    write_bytes[cursor.address_value] = bytes;
-                    return Ok(cursor_addr);
+                    write_bytes[addr_value] = bytes;
+                    return Ok(cursor);
         
                 } else { // new value
         
-                    cursor.address_value = memory.malloc_borrow(&[bytes])?;
+                    addr_value = memory.malloc_borrow(&[bytes])?;
+                    memory.write_address(cursor.buff_addr, addr_value);
+                    cursor.value = cursor.value.update_value_address(addr_value);
 
-                    memory.set_value_address(cursor.address, cursor.address_value);
-                    return Ok(cursor_addr);
+                    return Ok(cursor);
                 }     
             },
             _ => { unsafe { unreachable_unchecked() } }
         }               
     }
 
-    fn into_value(cursor_addr: NP_Cursor_Addr, memory: NP_Memory) -> Result<Option<Box<Self>>, NP_Error> {
+    fn into_value(cursor: NP_Cursor, memory: &NP_Memory) -> Result<Option<Self>, NP_Error> {
 
-        let cursor = cursor_addr.get_data(&memory).unwrap();
+        let value_addr = cursor.value.get_value_address();
 
         // empty value
-        if cursor.address_value == 0 {
+        if value_addr == 0 {
             return Ok(None);
         }
   
-        match &cursor.schema_data(&memory) {
+        match &memory.schema[cursor.schema_addr] {
             NP_Parsed_Schema::Enum { i: _, choices, default: _, sortable: _} => {
-                Ok(match memory.get_1_byte(cursor.address_value) {
+                Ok(match memory.get_1_byte(value_addr) {
                     Some(x) => {
-                        let value_num = u8::from_be_bytes([x]) as usize;
+                        let value_num = x as usize;
         
                         if value_num > choices.len() {
                             None
                         } else {
-                            Some(Box::new(NP_Option { value: Some(choices[value_num].to_string().as_str()) }))
+                            Some(choices[value_num].clone())
                         }
                     },
                     None => None
@@ -186,22 +203,28 @@ impl<'value> NP_Value<'value> for NP_Option<'value> {
         }
     }
 
-    fn to_json(cursor_addr: NP_Cursor_Addr, memory: NP_Memory) -> NP_JSON {
+    fn to_json(cursor: &NP_Cursor, memory: &NP_Memory<'value>) -> NP_JSON {
 
-        match Self::into_value(cursor_addr, memory) {
+        match Self::into_value(cursor.clone(), memory) {
             Ok(x) => {
                 match x {
                     Some(y) => {
-                        match y.value {
-                            Some(str_value) => {
+                        match y {
+                            NP_Enum::Some(str_value) => {
                                 NP_JSON::String(str_value.to_string())
                             },
-                            None => {
-                                let cursor = cursor_addr.get_data(&memory).unwrap();
-                                match &cursor.schema_data(&memory) {
-                                    NP_Parsed_Schema::Enum { i: _, choices, default, sortable: _} => {
+                            NP_Enum::None => {
+                                match &memory.schema[cursor.schema_addr] {
+                                    NP_Parsed_Schema::Enum { i: _, choices: _, default, sortable: _} => {
                                         if let Some(d) = default {
-                                            NP_JSON::String(choices[**d as usize].to_string())
+                                            match d {
+                                                NP_Enum::Some(val) => {
+                                                    NP_JSON::String(val.clone())
+                                                },
+                                                NP_Enum::None => {
+                                                    NP_JSON::Null
+                                                }
+                                            }
                                         } else {
                                             NP_JSON::Null
                                         }
@@ -212,11 +235,14 @@ impl<'value> NP_Value<'value> for NP_Option<'value> {
                         }
                     },
                     None => {
-                        let cursor = cursor_addr.get_data(&memory).unwrap();
-                        match &cursor.schema_data(&memory) {
-                            NP_Parsed_Schema::Enum { i: _, choices, default, sortable: _} => {
+
+                        match &memory.schema[cursor.schema_addr] {
+                            NP_Parsed_Schema::Enum { i: _, choices: _, default, sortable: _} => {
                                 if let Some(d) = default {
-                                    NP_JSON::String(choices[**d as usize].to_string())
+                                    match d {
+                                        NP_Enum::Some(x) => NP_JSON::String(x.clone()),
+                                        NP_Enum::None => NP_JSON::Null
+                                    }
                                 } else {
                                     NP_JSON::Null
                                 }
@@ -232,118 +258,123 @@ impl<'value> NP_Value<'value> for NP_Option<'value> {
         }
     }
 
-    fn get_size(cursor_addr: NP_Cursor_Addr, memory: NP_Memory) -> Result<usize, NP_Error> {
-        let cursor = cursor_addr.get_data(&memory).unwrap();
+    fn get_size(cursor: NP_Cursor, _memory: &NP_Memory) -> Result<usize, NP_Error> {
 
-        if cursor.address_value == 0 {
+        if cursor.value.get_value_address() == 0 {
             return Ok(0) 
         } else {
             Ok(core::mem::size_of::<u8>())
         }
     }
 
-    fn from_json_to_schema(schema: Vec<NP_Parsed_Schema<'value>>, json_schema: &'value NP_JSON) -> Result<Option<(Vec<u8>, Vec<NP_Parsed_Schema<'value>>)>, NP_Error> {
+    fn from_json_to_schema(mut schema: Vec<NP_Parsed_Schema>, json_schema: &Box<NP_JSON>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {
 
-        let type_str = NP_Schema::_get_type(json_schema)?;
 
-        if "option" == type_str || "enum" == type_str {
-            let mut schema_data: Vec<u8> = Vec::new();
-            schema_data.push(NP_TypeKeys::Enum as u8);
+        let mut schema_data: Vec<u8> = Vec::new();
+        schema_data.push(NP_TypeKeys::Enum as u8);
 
-            let mut choices: Vec<&str> = Vec::new();
+        let mut choices: Vec<NP_Enum> = Vec::new();
 
-            let mut default_stir: Option<String> = None;
+        let mut default_stir: Option<String> = None;
 
-            match &json_schema["default"] {
-                NP_JSON::String(def) => {
-                    default_stir = Some(def.clone());
-                },
-                _ => {}
-            }
-
-            let mut default_index: Option<Box<u8>> = None;
-
-            match &json_schema["choices"] {
-                NP_JSON::Array(x) => {
-                    for opt in x {
-                        match opt {
-                            NP_JSON::String(stir) => {
-                                if stir.len() > 255 {
-                                    return Err(NP_Error::new("'option' choices cannot be longer than 255 characters each!"))
-                                }
-
-                                if let Some(def) = &default_stir {
-                                    if def == stir {
-                                        default_index = Some(Box::new(choices.len() as u8));
-                                    }
-                                }
-                                choices.push(stir.as_str());
-                            },
-                            _ => {}
-                        }
-                    }
-                },
-                _ => {
-                    return Err(NP_Error::new("'option' type requires a 'choices' key with an array of strings!"))
-                }
-            }
-
-            if choices.len() > 254 {
-                return Err(NP_Error::new("'option' type cannot have more than 254 choices!"))
-            }
-
-            // default value
-            match &default_index {
-                Some(x) => schema_data.push(**x + 1),
-                None => schema_data.push(0)
-            }
-
-            // choices
-            schema_data.push(choices.len() as u8);
-            for choice in &choices {
-                schema_data.push(choice.len() as u8);
-                schema_data.extend(choice.as_bytes().to_vec())
-            }
-
-            schema.push(NP_Parsed_Schema::Enum { 
-                i: NP_TypeKeys::Enum,
-                default: default_index,
-                choices: choices,
-                sortable: true
-            });
-
-            return Ok(Some((schema_data, schema)));
+        match &json_schema["default"] {
+            NP_JSON::String(def) => {
+                default_stir = Some(def.clone());
+            },
+            _ => {}
         }
-        
-        Ok(None)
+
+        let mut default_value: Option<NP_Enum> = None;
+        let mut default_index: Option<u8> = None;
+
+        match &json_schema["choices"] {
+            NP_JSON::Array(x) => {
+                for opt in x {
+                    match opt {
+                        NP_JSON::String(stir) => {
+                            if stir.len() > 255 {
+                                return Err(NP_Error::new("'option' choices cannot be longer than 255 characters each!"))
+                            }
+
+                            if let Some(def) = &default_stir {
+                                if def == stir {
+                                    default_value = Some(NP_Enum::new(def.clone()));
+                                    default_index = Some(choices.len() as u8);
+                                }
+                            }
+                            choices.push(NP_Enum::new(stir.clone()));
+                        },
+                        _ => {}
+                    }
+                }
+            },
+            _ => {
+                return Err(NP_Error::new("'option' type requires a 'choices' key with an array of strings!"))
+            }
+        }
+
+        if choices.len() > 254 {
+            return Err(NP_Error::new("'option' type cannot have more than 254 choices!"))
+        }
+
+        // default value
+        match &default_index {
+            Some(x) => schema_data.push(*x + 1),
+            None => schema_data.push(0)
+        }
+
+        // choices
+        schema_data.push(choices.len() as u8);
+        for choice in &choices {
+            schema_data.push(choice.len() as u8);
+            schema_data.extend(choice.as_bytes().to_vec())
+        }
+
+        schema.push(NP_Parsed_Schema::Enum { 
+            i: NP_TypeKeys::Enum,
+            default: default_value,
+            choices: choices,
+            sortable: true
+        });
+
+        return Ok((true, schema_data, schema));
+    
     }
 
-    fn from_bytes_to_schema(schema: Vec<NP_Parsed_Schema<'value>>, address: usize, bytes: &'value Vec<u8>) -> Vec<NP_Parsed_Schema<'value>> {
-        let mut default_index: Option<Box<u8>> = None;
+    fn from_bytes_to_schema(mut schema: Vec<NP_Parsed_Schema>, address: usize, bytes: &Vec<u8>) -> (bool, Vec<NP_Parsed_Schema>) {
+        let mut default_index: Option<u8> = None;
+        let mut default_value: Option<NP_Enum> = None;
 
         if bytes[address + 1] > 0 {
-            default_index = Some(Box::new(bytes[address + 1] - 1));
+            default_index = Some(bytes[address + 1] - 1);
         }
 
         let choices_len = bytes[address + 2];
 
-        let mut choices: Vec<&str> = Vec::new();
+        let mut choices: Vec<NP_Enum> = Vec::new();
         let mut offset: usize = address + 3;
-        for _x in 0..choices_len {
+        for x in 0..choices_len {
             let choice_size = bytes[offset] as usize;
             let choice_bytes = &bytes[(offset + 1)..(offset + 1 + choice_size)];
-            choices.push(unsafe { core::str::from_utf8_unchecked(choice_bytes) });
+            let choice_string = unsafe { core::str::from_utf8_unchecked(choice_bytes) };
+            choices.push(NP_Enum::new(choice_string.to_string()));
             offset += 1 + choice_size;
+
+            if let Some(def) = default_index {
+                if def == x {
+                    default_value = Some(NP_Enum::new(choice_string.to_string()));
+                }
+            }
         }
 
         schema.push(NP_Parsed_Schema::Enum {
             i: NP_TypeKeys::Enum,
             sortable: true,
-            default: default_index,
+            default: default_value,
             choices: choices
         });
 
-        schema
+        (true, schema)
     }
 }
 
@@ -365,8 +396,8 @@ fn schema_parsing_works() -> Result<(), NP_Error> {
 fn default_value_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"option\",\"default\":\"hello\",\"choices\":[\"hello\",\"world\"]}";
     let factory = crate::NP_Factory::new(schema)?;
-    let mut buffer = factory.empty_buffer(None, None);
-    assert_eq!(buffer.get(&[])?.unwrap(), Box::new(NP_Option::new("hello")));
+    let buffer = factory.empty_buffer(None, None);
+    assert_eq!(buffer.get::<NP_Enum>(&[])?.unwrap(), NP_Enum::new("hello"));
 
     Ok(())
 }
@@ -376,10 +407,10 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"option\",\"choices\":[\"hello\",\"world\"]}";
     let factory = crate::NP_Factory::new(schema)?;
     let mut buffer = factory.empty_buffer(None, None);
-    buffer.set(&[], NP_Option::new("hello"))?;
-    assert_eq!(buffer.get::<NP_Option>(&[])?, Some(Box::new(NP_Option::new("hello"))));
+    buffer.set(&[], NP_Enum::new("hello"))?;
+    assert_eq!(buffer.get::<NP_Enum>(&[])?, Some(NP_Enum::new("hello")));
     buffer.del(&[])?;
-    assert_eq!(buffer.get::<NP_Option>(&[])?, None);
+    assert_eq!(buffer.get::<NP_Enum>(&[])?, None);
 
     buffer.compact(None, None)?;
     assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);

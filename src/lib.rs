@@ -75,8 +75,6 @@
 //! use no_proto::error::NP_Error;
 //! use no_proto::NP_Factory;
 //! use no_proto::collection::table::NP_Table;
-//! use no_proto::pointer::NP_Ptr;
-//! use no_proto::path;
 //! 
 //! // JSON is used to describe schema for the factory
 //! // Each factory represents a single schema
@@ -97,14 +95,14 @@
 //! let mut user_buffer = user_factory.empty_buffer(None, None); // optional capacity, optional address size (u16 by default)
 //! 
 //! // set an internal value of the buffer, set the  "name" column
-//! user_buffer.set(path("name"), String::from("Billy Joel"))?;
+//! user_buffer.set(&["name"], "Billy Joel")?;
 //! 
 //! // assign nested internal values, sets the first tag element
-//! user_buffer.set(path("tags.0"), String::from("first tag"))?;
+//! user_buffer.set(&["tags", "0"], "first tag")?;
 //! 
 //! // get an internal value of the buffer from the "name" column
-//! let name = user_buffer.get::<String>(path("name"))?;
-//! assert_eq!(name, Some(Box::new(String::from("Billy Joel"))));
+//! let name = user_buffer.get::<&str>(&["name"])?;
+//! assert_eq!(name, Some("Billy Joel"));
 //! 
 //! // close buffer and get internal bytes
 //! let user_bytes: Vec<u8> = user_buffer.close();
@@ -113,13 +111,13 @@
 //! let user_buffer = user_factory.open_buffer(user_bytes);
 //! 
 //! // get nested internal value, first tag from the tag list
-//! let tag = user_buffer.get::<String>(path("tags.0"))?;
-//! assert_eq!(tag, Some(Box::new(String::from("first tag"))));
+//! let tag = user_buffer.get::<&str>(&["tags", "0"])?;
+//! assert_eq!(tag, Some("first tag"));
 //! 
 //! // get nested internal value, the age field
-//! let age = user_buffer.get::<u16>(path("age"))?;
+//! let age = user_buffer.get::<u16>(&["age"])?;
 //! // returns default value from schema
-//! assert_eq!(age, Some(Box::new(0u16)));
+//! assert_eq!(age, Some(0u16));
 //! 
 //! // close again
 //! let user_bytes: Vec<u8> = user_buffer.close();
@@ -136,8 +134,8 @@
 //! 
 //! // confirm the new byte schema works with existing buffers
 //! let user_buffer = user_factory2.open_buffer(user_bytes);
-//! let tag = user_buffer.get::<String>(path("tags.0"))?;
-//! assert_eq!(tag, Some(Box::new(String::from("first tag"))));
+//! let tag = user_buffer.get::<&str>(&["tags", "0"])?;
+//! assert_eq!(tag, Some("first tag"));
 //! 
 //! 
 //! # Ok::<(), NP_Error>(()) 
@@ -200,7 +198,6 @@ mod utils;
 
 extern crate alloc;
 
-use alloc::prelude::v1::Box;
 use crate::json_flex::NP_JSON;
 use crate::schema::NP_Schema;
 use crate::json_flex::json_decode;
@@ -224,7 +221,6 @@ const PROTOCOL_VERSION: u8 = 1;
 /// ```
 /// use no_proto::error::NP_Error;
 /// use no_proto::NP_Factory;
-/// use no_proto::path;
 /// 
 /// let user_factory = NP_Factory::new(r#"{
 ///     "type": "table",
@@ -242,10 +238,10 @@ const PROTOCOL_VERSION: u8 = 1;
 /// let mut user_buffer = user_factory.empty_buffer(None, None); // optional capacity, optional address size
 ///    
 /// // set the "name" column of the table
-/// user_buffer.set(path("name"), "Billy Joel".to_owned())?;
+/// user_buffer.set(&["name"], "Billy Joel")?;
 /// 
 /// // set the first todo
-/// user_buffer.set(path("todos.0"), "Write a rust library.".to_owned())?;
+/// user_buffer.set(&["todos", "0"], "Write a rust library.")?;
 /// 
 /// // close buffer 
 /// let user_vec:Vec<u8> = user_buffer.close();
@@ -254,16 +250,16 @@ const PROTOCOL_VERSION: u8 = 1;
 /// let user_buffer_2 = user_factory.open_buffer(user_vec);
 /// 
 /// // read column value
-/// let name_column = user_buffer_2.get::<String>(path("name"))?;
-/// assert_eq!(name_column, Some(Box::new("Billy Joel".to_owned())));
+/// let name_column = user_buffer_2.get::<&str>(&["name"])?;
+/// assert_eq!(name_column, Some("Billy Joel"));
 /// 
 /// 
 /// // read first todo
-/// let todo_value = user_buffer_2.get::<String>(path("todos.0"))?;
-/// assert_eq!(todo_value, Some(Box::new("Write a rust library.".to_owned())));
+/// let todo_value = user_buffer_2.get::<&str>(&["todos", "0"])?;
+/// assert_eq!(todo_value, Some("Write a rust library."));
 /// 
 /// // read second todo
-/// let todo_value = user_buffer_2.get::<String>(path("todos.1"))?;
+/// let todo_value = user_buffer_2.get::<&str>(&["todos", "1"])?;
 /// assert_eq!(todo_value, None);
 /// 
 /// 
@@ -281,12 +277,13 @@ const PROTOCOL_VERSION: u8 = 1;
 /// [Go to NP_Buffer docs](./buffer/struct.NP_Buffer.html)
 /// 
 #[derive(Debug)]
-pub struct NP_Factory<'factory> {
+pub struct NP_Factory {
     /// schema data used by this factory
-    pub schema: NP_Schema<'factory>
+    pub schema: NP_Schema,
+    schema_bytes: Vec<u8>
 }
 
-impl<'factory> NP_Factory<'factory> {
+impl NP_Factory {
     
     /// Generate a new factory from the given schema.
     /// 
@@ -294,25 +291,19 @@ impl<'factory> NP_Factory<'factory> {
     /// 
     pub fn new(json_schema: &str) -> Result<NP_Factory, NP_Error> {
 
-        let parsed = json_decode(json_schema.to_owned());
+        let parsed_value = json_decode(json_schema.to_owned())?;
 
-        match parsed {
-            Ok(good_parsed) => {
+    
+        let (is_sortable, schema_bytes, schema) = NP_Schema::from_json(Vec::new(), &parsed_value)?;
 
-                let schema = NP_Schema::from_json(Vec::new(), good_parsed)?;
-
-                Ok(NP_Factory {
-                    schema:  NP_Schema {
-                        is_sortable: schema.1[0].is_sortable(),
-                        bytes: schema.0,
-                        parsed: schema.1
-                    }
-                })
-            },
-            Err(_x) => {
-                Err(NP_Error::new("Schema JSON Parse Error"))
+        Ok(Self {
+            schema_bytes: schema_bytes,
+            schema:  NP_Schema {
+                is_sortable: is_sortable,
+                parsed: schema
             }
-        }
+        })      
+        
     }
 
     /// Create a new factory from a compiled schema byte array.
@@ -320,12 +311,12 @@ impl<'factory> NP_Factory<'factory> {
     /// 
     pub fn new_compiled(schema_bytes: Vec<u8>) -> Self {
         
-        let schema = NP_Schema::from_bytes(Vec::new(), 0, &schema_bytes);
+        let (is_sortable, schema) = NP_Schema::from_bytes(Vec::new(), 0, &schema_bytes);
 
-        NP_Factory {
+        Self {
+            schema_bytes: schema_bytes,
             schema:  NP_Schema { 
-                is_sortable: schema[0].is_sortable(),
-                bytes: schema_bytes,
+                is_sortable: is_sortable,
                 parsed: schema
             }
         }
@@ -334,7 +325,7 @@ impl<'factory> NP_Factory<'factory> {
     /// Get a copy of the compiled schema byte array
     /// 
     pub fn compile_schema(&self) -> Vec<u8> {
-        self.schema.bytes.clone()
+        self.schema_bytes.clone()
     }
 
 

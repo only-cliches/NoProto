@@ -6,16 +6,15 @@
 //! use no_proto::error::NP_Error;
 //! use no_proto::NP_Factory;
 //! use no_proto::pointer::ulid::NP_ULID;
-//! use no_proto::here;
 //! 
 //! let factory: NP_Factory = NP_Factory::new(r#"{
 //!    "type": "ulid"
 //! }"#)?;
 //!
 //! let mut new_buffer = factory.empty_buffer(None, None);
-//! new_buffer.set(here(), NP_ULID::generate(1604965249484, 50))?;
+//! new_buffer.set(&[], &NP_ULID::generate(1604965249484, 50))?;
 //! 
-//! assert_eq!("1EPQP4CEC3KANC3XYNG9YKAQ", new_buffer.get::<NP_ULID>(here())?.unwrap().to_string());
+//! assert_eq!("1EPQP4CEC3KANC3XYNG9YKAQ", new_buffer.get::<&NP_ULID>(&[])?.unwrap().to_string());
 //!
 //! # Ok::<(), NP_Error>(()) 
 //! ```
@@ -25,7 +24,7 @@ use crate::{memory::NP_Memory, schema::{NP_Parsed_Schema}};
 use alloc::vec::Vec;
 use crate::utils::to_base32;
 use crate::json_flex::{JSMAP, NP_JSON};
-use crate::schema::{NP_Schema, NP_TypeKeys};
+use crate::schema::{NP_TypeKeys};
 use crate::{pointer::NP_Value, error::NP_Error, utils::{Rand}};
 use core::{fmt::{Debug, Formatter}};
 
@@ -33,20 +32,23 @@ use alloc::string::String;
 use alloc::boxed::Box;
 use alloc::borrow::ToOwned;
 
-use super::{NP_Cursor_Addr};
+use super::{NP_Cursor};
 
 
 /// Holds ULIDs which are good for time series keys.
 /// 
 /// Check out documentation [here](../ulid/index.html).
 /// 
-#[derive(Eq, PartialEq)]
+#[derive(Eq, PartialEq, Clone)]
+#[repr(C)]
 pub struct NP_ULID {
-    /// The unix timestamp in milliseconds for this ULID
-    pub time: u64,
-    /// The random bytes for this ULID
-    pub id: u128
+    value: [u8; 16]
 }
+
+/// ULID alias for shared type
+pub type _NP_ULID<'a> = &'a NP_ULID;
+
+impl super::NP_Scalar for &NP_ULID {}
 
 impl NP_ULID {
 
@@ -60,13 +62,18 @@ impl NP_ULID {
 
         let mut id: [u8; 16] = [0; 16];
 
-        for x in 6..id.len() {
-            id[x] = rng.gen_range(0, 255) as u8;
+        let time_bytes = now_ms.to_be_bytes();
+
+        for x in 0..id.len() {
+            if x < 6 {
+                id[x] = time_bytes[x + 2];
+            } else {
+                id[x] = rng.gen_range(0, 255) as u8;
+            }
         }
 
         NP_ULID {
-            time: now_ms,
-            id: u128::from_be_bytes(id)
+            value: id
         }
     }
 
@@ -77,14 +84,28 @@ impl NP_ULID {
 
         let mut id: [u8; 16] = [0; 16];
 
-        for x in 6..id.len() {
-            id[x] = random_fn(0, 255);
+        let time_bytes = now_ms.to_be_bytes();
+
+        for x in 0..id.len() {
+            if x < 6 {
+                id[x] = time_bytes[x + 2];
+            } else {
+                id[x] = random_fn(0, 255) as u8;
+            }
         }
 
         NP_ULID {
-            time: now_ms,
-            id: u128::from_be_bytes(id)
+            value: id
         }
+    }
+    
+    /// Get just the time component for this ULID
+    pub fn get_time(&self) -> u64 {
+        let mut time_bytes: [u8; 8] = [0; 8];
+        for (i, x) in self.value.iter().take(6).enumerate() {
+            time_bytes[i + 2] = *x;
+        }
+        u64::from_be_bytes(time_bytes)
     }
 
     /// Generates a stringified version of this ULID with base32.
@@ -92,8 +113,19 @@ impl NP_ULID {
     pub fn to_string(&self) -> String {
         let mut result: String = "".to_owned();
 
-        result.push_str(to_base32(self.time as u128, 10).as_str());
-        result.push_str(to_base32(self.id, 16).as_str());
+        let mut time_bytes: [u8; 16] = [0; 16];
+        let mut rand_bytes: [u8; 16] = [0; 16];
+
+        for (i, x) in self.value.iter().enumerate() {
+            if i < 6 {
+                time_bytes[i + 10] = *x;
+            } else {
+                rand_bytes[i] = *x;
+            }
+        }
+
+        result.push_str(to_base32(u128::from_be_bytes(time_bytes), 10).as_str());
+        result.push_str(to_base32(u128::from_be_bytes(rand_bytes), 16).as_str());
 
         result
     }
@@ -102,7 +134,7 @@ impl NP_ULID {
 
 impl Default for NP_ULID {
     fn default() -> Self { 
-        NP_ULID { id: 0, time: 0 }
+        NP_ULID { value: [0u8; 16]}
      }
 }
 
@@ -112,94 +144,62 @@ impl Debug for NP_ULID {
     }
 }
 
-impl<'value> NP_Value<'value> for NP_ULID {
+impl<'value> NP_Value<'value> for &NP_ULID {
 
     fn type_idx() -> (&'value str, NP_TypeKeys) { ("ulid", NP_TypeKeys::Ulid) }
     fn self_type_idx(&self) -> (&'value str, NP_TypeKeys) { ("ulid", NP_TypeKeys::Ulid) }
 
-    fn schema_to_json(schema: &Vec<NP_Parsed_Schema<'value>>, address: usize)-> Result<NP_JSON, NP_Error> {
+    fn schema_to_json(_schema: &Vec<NP_Parsed_Schema>, _address: usize)-> Result<NP_JSON, NP_Error> {
         let mut schema_json = JSMAP::new();
         schema_json.insert("type".to_owned(), NP_JSON::String(Self::type_idx().0.to_string()));
 
         Ok(NP_JSON::Dictionary(schema_json))
     }
 
-    fn set_value(cursor_addr: NP_Cursor_Addr, memory: NP_Memory, value: &Self) -> Result<NP_Cursor_Addr, NP_Error> {
+ 
+    fn set_value(mut cursor: NP_Cursor, memory: &NP_Memory, value: Self) -> Result<NP_Cursor, NP_Error> {
 
-        let cursor = cursor_addr.get_data(&memory).unwrap();
+        let value_address = cursor.value.get_value_address();
 
-        if cursor_addr.is_virtual { panic!() }
-
-        let time_bytes: [u8; 8] = value.time.to_be_bytes();
-        let id_bytes: [u8; 16] = value.id.to_be_bytes();
-
-        if cursor.address_value != 0 { // existing value, replace
-
+        if value_address != 0 { // existing value, replace
+            let bytes = value.value;
             let write_bytes = memory.write_bytes();
 
             // overwrite existing values in buffer
-            for x in 0..16 {
-                if x < 6 {
-                    write_bytes[cursor.address_value + x] = time_bytes[x + 2];
-                } else {
-                    write_bytes[cursor.address_value + x] = id_bytes[x];
-                }
+            for x in 0..bytes.len() {
+                write_bytes[value_address + x] = bytes[x];
             }
-
 
         } else { // new value
 
-            let mut bytes: [u8; 16] = [0; 16];
-
-            for x in 0..bytes.len() {
-                if x < 6 {
-                    bytes[x] = time_bytes[x + 2];
-                } else {
-                    bytes[x] = id_bytes[x];
-                }
-            }
-
-            cursor.address_value = memory.malloc_borrow(&bytes)?;
-
-            memory.set_value_address(cursor.address, cursor.address_value);
-        }              
+            let new_addr = memory.malloc_borrow(&value.value)?;
+            cursor.value = cursor.value.update_value_address(new_addr);
+            memory.write_address(cursor.buff_addr, new_addr);
+        }                    
         
-        Ok(cursor_addr)
-        
+        Ok(cursor)
     }
 
-    fn into_value<'into>(cursor_addr: NP_Cursor_Addr, memory: NP_Memory) -> Result<Option<&'value Self>, NP_Error> {
+    fn into_value(cursor: NP_Cursor, memory: &NP_Memory) -> Result<Option<Self>, NP_Error> {
 
-        let cursor = cursor_addr.get_data(&memory).unwrap();
+        let value_addr = cursor.value.get_value_address();
 
         // empty value
-        if cursor.address_value == 0 {
+        if value_addr == 0 {
             return Ok(None);
         }
 
-        let mut time_bytes: [u8; 8] = [0; 8];
-        let mut id_bytes: [u8; 16] = [0; 16];
-
-        let read_bytes: &[u8; 16] = memory.get_16_bytes(cursor.address_value).unwrap_or(&[0; 16]);
-
-        for x in 0..read_bytes.len() {
-            if x < 6 {
-                time_bytes[x + 2] = read_bytes[x];
-            } else {
-                id_bytes[x] = read_bytes[x];
-            }
-        }
-
-        Ok(Some(Box::new(NP_ULID {
-            time: u64::from_be_bytes(time_bytes),
-            id: u128::from_be_bytes(id_bytes)
-        })))
-         
+        Ok(match memory.get_16_bytes(value_addr) {
+            Some(x) => {
+                Some(unsafe { &*(x.as_ptr() as *const NP_ULID) })
+            },
+            None => None
+        })
     }
 
-    fn to_json(cursor_addr: NP_Cursor_Addr, memory: NP_Memory) -> NP_JSON {
+    fn to_json(cursor: &NP_Cursor, memory: &NP_Memory) -> NP_JSON {
 
-        match Self::into_value(cursor_addr, memory) {
+        match Self::into_value(cursor.clone(), memory) {
             Ok(x) => {
                 match x {
                     Some(y) => {
@@ -216,43 +216,37 @@ impl<'value> NP_Value<'value> for NP_ULID {
         }
     }
 
-    fn get_size(cursor_addr: NP_Cursor_Addr, memory: NP_Memory) -> Result<usize, NP_Error> {
-        let cursor = cursor_addr.get_data(&memory).unwrap();
+    fn get_size(cursor: NP_Cursor, _memory: &NP_Memory) -> Result<usize, NP_Error> {
 
-        if cursor.address_value == 0 {
-            return Ok(0) 
+        if cursor.value.get_value_address() == 0 {
+            Ok(0) 
         } else {
             Ok(16)
         }
     }
 
-    fn from_json_to_schema(schema: Vec<NP_Parsed_Schema<'value>>, json_schema: &'value NP_JSON) -> Result<Option<(Vec<u8>, Vec<NP_Parsed_Schema<'value>>)>, NP_Error> {
+    fn from_json_to_schema(mut schema: Vec<NP_Parsed_Schema>, _json_schema: &Box<NP_JSON>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {
 
-        let type_str = NP_Schema::_get_type(json_schema)?;
+        let mut schema_bytes: Vec<u8> = Vec::new();
+        schema_bytes.push(NP_TypeKeys::Ulid as u8);
+        schema.push(NP_Parsed_Schema::Ulid { 
+            i: NP_TypeKeys::Ulid,
+            sortable: true
+        });
+        return Ok((true, schema_bytes, schema))
 
-        if "ulid" == type_str {
-            let mut schema_bytes: Vec<u8> = Vec::new();
-            schema_bytes.push(NP_TypeKeys::Ulid as u8);
-            schema.push(NP_Parsed_Schema::Ulid { 
-                i: NP_TypeKeys::Ulid,
-                sortable: true
-            });
-            return Ok(Some((schema_bytes, schema)))
-        }
-        
-        Ok(None)
     }
 
-    fn schema_default(_schema: &NP_Parsed_Schema) -> Option<&'value Self> {
+    fn schema_default(_schema: &NP_Parsed_Schema) -> Option<Self> {
         None
     }
 
-    fn from_bytes_to_schema(schema: Vec<NP_Parsed_Schema<'value>>, address: usize, bytes: &'value Vec<u8>) -> Vec<NP_Parsed_Schema<'value>> {
+    fn from_bytes_to_schema(mut schema: Vec<NP_Parsed_Schema>, _address: usize, _bytes: &Vec<u8>) -> (bool, Vec<NP_Parsed_Schema>) {
         schema.push(NP_Parsed_Schema::Ulid {
             i: NP_TypeKeys::Ulid,
             sortable: true
         });
-        schema
+        (true, schema)
     }
 }
 
@@ -271,10 +265,11 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"ulid\"}";
     let factory = crate::NP_Factory::new(schema)?;
     let mut buffer = factory.empty_buffer(None, None);
-    buffer.set(&[], NP_ULID::generate(2039203, 212))?;
-    assert_eq!(buffer.get::<NP_ULID>(&[])?, Some(Box::new(NP_ULID::generate(2039203, 212))));
+    buffer.set(&[], &NP_ULID::generate(1606680515909, 212))?;
+    assert_eq!(buffer.get::<&NP_ULID>(&[])?, Some(&(NP_ULID::generate(1606680515909, 212))));
+    assert_eq!(buffer.get::<&NP_ULID>(&[])?.unwrap().to_string(), "1ERASY5A5VKANC1CJGRZXYW8");
     buffer.del(&[])?;
-    assert_eq!(buffer.get::<NP_ULID>(&[])?, None);
+    assert_eq!(buffer.get::<&NP_ULID>(&[])?, None);
 
     buffer.compact(None, None)?;
     assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);

@@ -9,4 +9,5 @@ edition = "2018"
 [dependencies]
 flate2 = "1.0.19"
 no_proto = { path = "../" }
+# no_proto = "0.4.2"
 rand = "0.7.3"

@@ -6,16 +6,15 @@
 //! use no_proto::error::NP_Error;
 //! use no_proto::NP_Factory;
 //! use no_proto::pointer::date::NP_Date;
-//! use no_proto::here;
 //! 
 //! let factory: NP_Factory = NP_Factory::new(r#"{
 //!    "type": "date"
 //! }"#)?;
 //!
 //! let mut new_buffer = factory.empty_buffer(None, None);
-//! new_buffer.set(here(), NP_Date::new(1604965249484))?;
+//! new_buffer.set(&[], NP_Date::new(1604965249484))?;
 //! 
-//! assert_eq!(Box::new(NP_Date::new(1604965249484)), new_buffer.get::<NP_Date>(here())?.unwrap());
+//! assert_eq!(NP_Date::new(1604965249484), new_buffer.get::<NP_Date>(&[])?.unwrap());
 //!
 //! # Ok::<(), NP_Error>(()) 
 //! ```
@@ -24,25 +23,29 @@
 use crate::schema::{NP_Parsed_Schema};
 use alloc::vec::Vec;
 use crate::json_flex::{JSMAP, NP_JSON};
-use crate::schema::{NP_Schema, NP_TypeKeys};
+use crate::schema::{NP_TypeKeys};
 use crate::{pointer::NP_Value, error::NP_Error};
 use core::{fmt::{Debug, Formatter}, hint::unreachable_unchecked};
 
-use alloc::string::String;
 use alloc::boxed::Box;
 use alloc::borrow::ToOwned;
-use super::{NP_Cursor_Addr};
+use super::{NP_Cursor};
 use crate::NP_Memory;
+
+
 
 /// Holds Date data.
 /// 
 /// Check out documentation [here](../date/index.html).
 /// 
 #[derive(Clone, Copy, Eq, PartialEq)]
+#[repr(C)]
 pub struct NP_Date {
     /// The value of the date
     pub value: u64
 }
+
+impl super::NP_Scalar for NP_Date {}
 
 impl NP_Date {
     /// Create a new date type with the given time
@@ -68,7 +71,7 @@ impl<'value> NP_Value<'value> for NP_Date {
     fn type_idx() -> (&'value str, NP_TypeKeys) { ("date", NP_TypeKeys::Date) }
     fn self_type_idx(&self) -> (&'value str, NP_TypeKeys) { ("date", NP_TypeKeys::Date) }
 
-    fn schema_to_json(schema: &Vec<NP_Parsed_Schema<'value>>, address: usize)-> Result<NP_JSON, NP_Error> {
+    fn schema_to_json(schema: &Vec<NP_Parsed_Schema>, address: usize)-> Result<NP_JSON, NP_Error> {
         let mut schema_json = JSMAP::new();
         schema_json.insert("type".to_owned(), NP_JSON::String(Self::type_idx().0.to_string()));
 
@@ -84,9 +87,9 @@ impl<'value> NP_Value<'value> for NP_Date {
         Ok(NP_JSON::Dictionary(schema_json))
     }
 
-    fn schema_default(schema: &NP_Parsed_Schema) -> Option<Box<Self>> {
+    fn schema_default(schema: &'value NP_Parsed_Schema) -> Option<Self> {
         match schema {
-            NP_Parsed_Schema::Date { i: _, default, sortable: _ } => {
+            NP_Parsed_Schema::Date { default, .. } => {
                 if let Some(d) = default {
                     Some(d.clone())
                 } else {
@@ -97,59 +100,59 @@ impl<'value> NP_Value<'value> for NP_Date {
         }
     }
 
-    fn set_value(cursor_addr: NP_Cursor_Addr, memory: NP_Memory, value: &Self) -> Result<NP_Cursor_Addr, NP_Error> {
+    fn set_value(mut cursor: NP_Cursor, memory: &NP_Memory, value: Self) -> Result<NP_Cursor, NP_Error> {
 
-        let cursor = cursor_addr.get_data(&memory).unwrap();
+        let mut value_address = cursor.value.get_value_address();
 
-        if cursor_addr.is_virtual { panic!() }
-
-        if cursor.address_value != 0 { // existing value, replace
+        if value_address != 0 { // existing value, replace
             let bytes = value.value.to_be_bytes();
 
             let write_bytes = memory.write_bytes();
 
             // overwrite existing values in buffer
             for x in 0..bytes.len() {
-                write_bytes[cursor.address_value + x] = bytes[x];
+                write_bytes[value_address + x] = bytes[x];
             }
 
         } else { // new value
 
             let bytes = value.value.to_be_bytes();
-            cursor.address_value = memory.malloc_borrow(&bytes)?;
-            memory.set_value_address(cursor.address, cursor.address_value);
+            value_address = memory.malloc_borrow(&bytes)?;
+            cursor.value = cursor.value.update_value_address(value_address);
+            memory.write_address(cursor.buff_addr, value_address);
         }                    
 
-        Ok(cursor_addr)
+        Ok(cursor)
     }
 
-    fn into_value<'into>(cursor_addr: NP_Cursor_Addr, memory: NP_Memory) -> Result<Option<&'value Self>, NP_Error> {
-        let cursor = cursor_addr.get_data(&memory).unwrap();
+    fn into_value(cursor: NP_Cursor, memory: &NP_Memory) -> Result<Option<Self>, NP_Error> {
+
+        let value_addr = cursor.value.get_value_address();
 
         // empty value
-        if cursor.address_value == 0 {
+        if value_addr == 0 {
             return Ok(None);
         }
 
-        Ok(match memory.get_8_bytes(cursor.address_value) {
+        Ok(match memory.get_8_bytes(value_addr) {
             Some(x) => {
-                Some(Box::new(NP_Date { value: u64::from_be_bytes(*x) }))
+                Some(NP_Date { value: u64::from_be_bytes(*x) })
             },
             None => None
         })
     }
 
-    fn to_json(cursor_addr: NP_Cursor_Addr, memory: NP_Memory) -> NP_JSON {
+    fn to_json(cursor: &NP_Cursor, memory: &NP_Memory) -> NP_JSON {
 
-        match Self::into_value(cursor_addr, memory) {
+        match Self::into_value(cursor.clone(), memory) {
             Ok(x) => {
                 match x {
                     Some(y) => {
                         NP_JSON::Integer(y.value as i64)
                     },
                     None => {
-                        let cursor = cursor_addr.get_data(&memory).unwrap();
-                        match &**cursor.schema {
+
+                        match memory.schema[cursor.schema_addr] {
                             NP_Parsed_Schema::Date { i: _, default, sortable: _} => {
                                 if let Some(d) = default {
                                     NP_JSON::Integer(d.value.clone() as i64)
@@ -168,50 +171,43 @@ impl<'value> NP_Value<'value> for NP_Date {
         }
     }
 
-    fn get_size(cursor_addr: NP_Cursor_Addr, memory: NP_Memory) -> Result<usize, NP_Error> {
-        let cursor = cursor_addr.get_data(&memory).unwrap();
+    fn get_size(cursor: NP_Cursor, _memory: &NP_Memory) -> Result<usize, NP_Error> {
 
-        if cursor.address_value == 0 {
-            return Ok(0) 
+        if cursor.value.get_value_address() == 0 {
+            Ok(0) 
         } else {
             Ok(core::mem::size_of::<u64>())
         }
     }
 
-    fn from_json_to_schema(schema: Vec<NP_Parsed_Schema<'value>>, json_schema: &'value NP_JSON) -> Result<Option<(Vec<u8>, Vec<NP_Parsed_Schema<'value>>)>, NP_Error> {
+    fn from_json_to_schema(mut schema: Vec<NP_Parsed_Schema>, json_schema: &Box<NP_JSON>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {
 
-        let type_str = NP_Schema::_get_type(json_schema)?;
+        let mut schema_data: Vec<u8> = Vec::new();
+        schema_data.push(NP_TypeKeys::Date as u8);
 
-        if "date" == type_str {
+        let default = match json_schema["default"] {
+            NP_JSON::Integer(x) => {
+                schema_data.push(1);
+                schema_data.extend((x as u64).to_be_bytes().to_vec());
+                Some(NP_Date { value: x as u64})
+            },
+            _ => {
+                schema_data.push(0);
+                None
+            }
+        };
+        
+        schema.push(NP_Parsed_Schema::Date {
+            i: NP_TypeKeys::Date,
+            default: default,
+            sortable: true
+        });
 
-            let mut schema_data: Vec<u8> = Vec::new();
-            schema_data.push(NP_TypeKeys::Date as u8);
+        return Ok((true, schema_data, schema));
 
-            let default = match json_schema["default"] {
-                NP_JSON::Integer(x) => {
-                    schema_data.push(1);
-                    schema_data.extend((x as u64).to_be_bytes().to_vec());
-                    Some(Box::new(NP_Date { value: x as u64}))
-                },
-                _ => {
-                    schema_data.push(0);
-                    None
-                }
-            };
-            
-            schema.push(NP_Parsed_Schema::Date {
-                i: NP_TypeKeys::Date,
-                default: default,
-                sortable: true
-            });
-
-            return Ok(Some((schema_data, schema)));
-        }
-
-        Ok(None)
     }
 
-    fn from_bytes_to_schema(schema: Vec<NP_Parsed_Schema<'value>>, address: usize, bytes: &'value Vec<u8>) -> Vec<NP_Parsed_Schema<'value>> {
+    fn from_bytes_to_schema(mut schema: Vec<NP_Parsed_Schema>, address: usize, bytes: &Vec<u8>) -> (bool, Vec<NP_Parsed_Schema>) {
         let has_default = bytes[address + 1];
 
         let default = if has_default == 0 {
@@ -221,7 +217,7 @@ impl<'value> NP_Value<'value> for NP_Date {
 
             let mut u64_bytes = 0u64.to_be_bytes();
             u64_bytes.copy_from_slice(bytes_slice);
-            Some(Box::new(NP_Date { value: u64::from_be_bytes(u64_bytes)}))
+            Some(NP_Date { value: u64::from_be_bytes(u64_bytes)})
         };
 
         schema.push(NP_Parsed_Schema::Date {
@@ -229,7 +225,7 @@ impl<'value> NP_Value<'value> for NP_Date {
             sortable: true,
             default: default
         });
-        schema
+        (true, schema)
     }
 }
 
@@ -246,8 +242,8 @@ fn schema_parsing_works() -> Result<(), NP_Error> {
 fn default_value_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"date\",\"default\":1605138980392}";
     let factory = crate::NP_Factory::new(schema)?;
-    let mut buffer = factory.empty_buffer(None, None);
-    assert_eq!(buffer.get(&[])?.unwrap(), Box::new(NP_Date::new(1605138980392)));
+    let buffer = factory.empty_buffer(None, None);
+    assert_eq!(buffer.get::<NP_Date>(&[])?.unwrap(), NP_Date::new(1605138980392));
 
     Ok(())
 }
@@ -258,7 +254,7 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let factory = crate::NP_Factory::new(schema)?;
     let mut buffer = factory.empty_buffer(None, None);
     buffer.set(&[], NP_Date::new(1605138980392))?;
-    assert_eq!(buffer.get::<NP_Date>(&[])?, Some(Box::new(NP_Date::new(1605138980392))));
+    assert_eq!(buffer.get::<NP_Date>(&[])?, Some(NP_Date::new(1605138980392)));
     buffer.del(&[])?;
     assert_eq!(buffer.get::<NP_Date>(&[])?, None);
 

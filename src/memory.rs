@@ -1,15 +1,14 @@
 //! Internal buffer memory management
 
-use crate::pointer::NP_Value;
-use crate::{schema::NP_Parsed_Schema, pointer::{NP_Cursor, NP_Cursor_Addr, NP_Cursor_Kinds}};
+use crate::{schema::NP_Parsed_Schema, pointer::{NP_Cursor, NP_Cursor_Value}};
 use crate::{PROTOCOL_VERSION, error::NP_Error};
 use core::cell::UnsafeCell;
-use alloc::rc::Rc;
 use alloc::vec::Vec;
+
 
 /// The different address sizes availalbe for buffers
 /// 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum NP_Size {
     /// 32 bit address, 4 bytes in size
     U32,
@@ -19,14 +18,11 @@ pub enum NP_Size {
     U8
 }
 
-
 #[derive(Debug)]
 #[doc(hidden)]
 pub struct NP_Memory<'memory> {
-    bytes: Rc<UnsafeCell<Vec<u8>>>,
-    pub cursor_cache: Rc<UnsafeCell<Vec<NP_Cursor<'memory>>>>,
-    pub virtual_cursor: Rc<UnsafeCell<NP_Cursor<'memory>>>,
-    pub schema: &'memory Vec<NP_Parsed_Schema<'memory>>,
+    bytes: UnsafeCell<Vec<u8>>,
+    pub schema: &'memory Vec<NP_Parsed_Schema>,
     pub size: NP_Size
 }
 
@@ -35,46 +31,17 @@ const MAX_SIZE_SMALL: usize = core::u16::MAX as usize;
 const MAX_SIZE_XSMALL: usize = core::u8::MAX as usize;
 
 
-pub fn blank_ptr_u32_standard()   -> [u8;  4] { [0;  4] }
-pub fn blank_ptr_u32_tuple_item() -> [u8;  4] { [0;  4] }
-pub fn blank_ptr_u32_map_item()   -> [u8; 12] { [0; 12] }
-pub fn blank_ptr_u32_table_item() -> [u8;  9] { [0;  9] }
-pub fn blank_ptr_u32_list_item()  -> [u8; 10] { [0; 10] }
-
-pub fn blank_ptr_u16_standard()   -> [u8;  2] { [0;  2] }
-pub fn blank_ptr_u16_tuple_item() -> [u8;  2] { [0;  2] }
-pub fn blank_ptr_u16_map_item()   -> [u8;  6] { [0;  6] }
-pub fn blank_ptr_u16_table_item() -> [u8;  5] { [0;  5] }
-pub fn blank_ptr_u16_list_item()  -> [u8;  6] { [0;  6] }
-
-pub fn blank_ptr_u8_standard()    -> [u8;  1] { [0;  1] }
-pub fn blank_ptr_u8_tuple_item()  -> [u8;  1] { [0;  1] }
-pub fn blank_ptr_u8_map_item()    -> [u8;  3] { [0;  3] }
-pub fn blank_ptr_u8_table_item()  -> [u8;  3] { [0;  3] }
-pub fn blank_ptr_u8_list_item()   -> [u8;  3] { [0;  3] }
-
 
 #[doc(hidden)]
 impl<'memory> NP_Memory<'memory> {
 
-    pub fn clone(&self) -> Self {
-        NP_Memory {
-            bytes: Rc::clone(&self.bytes),
-            cursor_cache: Rc::clone(&self.cursor_cache),
-            virtual_cursor: Rc::clone(&self.virtual_cursor),
-            schema: self.schema,
-            size: self.size
-        }
-    }
 
-    pub fn existing(bytes: Vec<u8>, schema: &'memory Vec<NP_Parsed_Schema<'memory>>) -> Self {
+    pub fn existing(bytes: Vec<u8>, schema: &'memory Vec<NP_Parsed_Schema>) -> Self {
 
         let size = bytes[1];
         
         NP_Memory {
-            bytes: Rc::new(UnsafeCell::new(bytes)),
-            cursor_cache: Rc::new(UnsafeCell::new(Vec::new())),
-            virtual_cursor: Rc::new(UnsafeCell::new(NP_Cursor::default())),
+            bytes: UnsafeCell::new(bytes),
             schema: schema,
             size: match size {
                 0 => NP_Size::U32,
@@ -85,10 +52,6 @@ impl<'memory> NP_Memory<'memory> {
         }
     }
 
-    pub fn insert_cache(&self, cursor: NP_Cursor<'memory>) {
-        let cache = unsafe { &mut *self.cursor_cache.get() };
-        cache.insert(cursor.address, cursor);
-    }
 
     pub fn max_addr_size(&self) -> usize {
         match &self.size {
@@ -106,7 +69,6 @@ impl<'memory> NP_Memory<'memory> {
         }
     }
 
-
     pub fn read_address(&self, addr: usize) -> usize {
         if addr == 0 {
             return 0;
@@ -118,18 +80,18 @@ impl<'memory> NP_Memory<'memory> {
         }
     }
 
-    pub fn read_address_offset(&self, addr: usize, u32_off: usize, u16_off: usize, u8_off: usize) -> usize {
+    pub fn read_address_offset(&self, addr: usize, offset: usize) -> usize {
         if addr == 0 {
             return 0;
         }
         match self.size {
-            NP_Size::U8 =>  { u8::from_be_bytes([self.get_1_byte(addr + u8_off).unwrap_or(0)]) as usize },
-            NP_Size::U16 => { u16::from_be_bytes(*self.get_2_bytes(addr + u16_off).unwrap_or(&[0; 2])) as usize },
-            NP_Size::U32 => { u32::from_be_bytes(*self.get_4_bytes(addr + u32_off).unwrap_or(&[0; 4])) as usize }
+            NP_Size::U8 =>  { u8::from_be_bytes([self.get_1_byte(addr + offset).unwrap_or(0)]) as usize },
+            NP_Size::U16 => { u16::from_be_bytes(*self.get_2_bytes(addr + (offset * 2)).unwrap_or(&[0; 2])) as usize },
+            NP_Size::U32 => { u32::from_be_bytes(*self.get_4_bytes(addr + (offset * 4)).unwrap_or(&[0; 4])) as usize }
         }
     }
 
-    pub fn new(capacity: Option<usize>, size: NP_Size, schema: &'memory Vec<NP_Parsed_Schema<'memory>>) -> Self {
+    pub fn new(capacity: Option<usize>, size: NP_Size, schema: &'memory Vec<NP_Parsed_Schema>) -> Self {
         let use_size = match capacity {
             Some(x) => x,
             None => 1024
@@ -157,9 +119,7 @@ impl<'memory> NP_Memory<'memory> {
 
 
         NP_Memory {
-            bytes: Rc::new(UnsafeCell::new(new_bytes)),
-            cursor_cache: Rc::new(UnsafeCell::new(Vec::with_capacity(use_size))),
-            virtual_cursor: Rc::new(UnsafeCell::new(NP_Cursor::default())),
+            bytes: UnsafeCell::new(new_bytes),
             schema: schema,
             size: size
         }
@@ -199,86 +159,79 @@ impl<'memory> NP_Memory<'memory> {
         self_bytes
     }
 
-    pub fn ptr_size(&self, cursor: &NP_Cursor) -> usize {
+    pub fn malloc_cursor(&self, value: &NP_Cursor_Value) -> Result<usize, NP_Error> {
         // Get the size of this pointer based it's kind
         match self.size {
             NP_Size::U32 => {
-                match cursor.kind {
-                    NP_Cursor_Kinds::None       =>    {  0 },
-                    NP_Cursor_Kinds::Standard   =>    {  4 },
-                    NP_Cursor_Kinds::Table      =>    {  4 },
-                    NP_Cursor_Kinds::Tuple      =>    {  4 },
-                    NP_Cursor_Kinds::Map        =>    {  4 },
-                    NP_Cursor_Kinds::List       =>    {  4 },
-                    NP_Cursor_Kinds::TupleItem  =>    {  4 },
-                    NP_Cursor_Kinds::MapItem    =>    { 12 },
-                    NP_Cursor_Kinds::TableItem  =>    {  9 },
-                    NP_Cursor_Kinds::ListItem   =>    { 10 }
+                match value {
+                    NP_Cursor_Value::None       =>    {  panic!() },
+                    NP_Cursor_Value::Standard { .. }  =>    {  self.malloc_borrow(&[0; 4]) },
+                    NP_Cursor_Value::TupleItem { .. }  =>    {  self.malloc_borrow(&[0; 4]) },
+                    NP_Cursor_Value::MapItem { .. }   =>    { self.malloc_borrow(&[0; 12]) },
+                    NP_Cursor_Value::TableItem { .. }  =>    {  self.malloc_borrow(&[0; 9]) },
+                    NP_Cursor_Value::ListItem { .. }  =>    { self.malloc_borrow(&[0; 10]) }
                 }
             },
             NP_Size::U16 => {
-                match cursor.kind {
-                    NP_Cursor_Kinds::None        =>    { 0 },
-                    NP_Cursor_Kinds::Standard    =>    { 2 },
-                    NP_Cursor_Kinds::Table      =>     { 2 },
-                    NP_Cursor_Kinds::Tuple      =>     { 2 },
-                    NP_Cursor_Kinds::Map        =>     { 2 },
-                    NP_Cursor_Kinds::List       =>     { 2 },
-                    NP_Cursor_Kinds::TupleItem   =>    { 4 },
-                    NP_Cursor_Kinds::MapItem     =>    { 6 },
-                    NP_Cursor_Kinds::TableItem   =>    { 5 },
-                    NP_Cursor_Kinds::ListItem    =>    { 6 }
+                match value {
+                    NP_Cursor_Value::None        =>    { panic!() },
+                    NP_Cursor_Value::Standard { .. }    =>    { self.malloc_borrow(&[0; 2]) },
+                    NP_Cursor_Value::TupleItem { .. }  =>    { self.malloc_borrow(&[0; 4]) },
+                    NP_Cursor_Value::MapItem { .. }    =>    { self.malloc_borrow(&[0; 6]) },
+                    NP_Cursor_Value::TableItem  {  .. } =>    { self.malloc_borrow(&[0; 5]) },
+                    NP_Cursor_Value::ListItem { .. }   =>    { self.malloc_borrow(&[0; 6]) }
                 }
             },
             NP_Size::U8 => {
-                match cursor.kind {
-                    NP_Cursor_Kinds::None        =>    { 0 },
-                    NP_Cursor_Kinds::Standard    =>    { 1 },
-                    NP_Cursor_Kinds::Table      =>     { 1 },
-                    NP_Cursor_Kinds::Tuple      =>     { 1 },
-                    NP_Cursor_Kinds::Map        =>     { 1 },
-                    NP_Cursor_Kinds::List       =>     { 1 },
-                    NP_Cursor_Kinds::TupleItem   =>    { 1 },
-                    NP_Cursor_Kinds::MapItem     =>    { 3 },
-                    NP_Cursor_Kinds::TableItem   =>    { 3 },
-                    NP_Cursor_Kinds::ListItem    =>    { 3 }
+                match value {
+                    NP_Cursor_Value::None        =>    { panic!() },
+                    NP_Cursor_Value::Standard { .. }   =>    { self.malloc_borrow(&[0; 1]) },
+                    NP_Cursor_Value::TupleItem { .. }  =>    { self.malloc_borrow(&[0; 1]) },
+                    NP_Cursor_Value::MapItem   { .. }  =>    { self.malloc_borrow(&[0; 3]) },
+                    NP_Cursor_Value::TableItem  { .. } =>    { self.malloc_borrow(&[0; 3]) },
+                    NP_Cursor_Value::ListItem  { .. }  =>    { self.malloc_borrow(&[0; 3]) }
                 }
             }
         }
     }
 
-    pub fn blank_ptr_bytes(&self, cursor: &NP_Cursor) -> Vec<u8> {
-        let size = self.ptr_size(cursor);
-        let mut empty_bytes = Vec::with_capacity(size as usize);
-        for _x in 0..size {
-            empty_bytes.push(0);
+    pub fn ptr_size(&self, cursor: &NP_Cursor) -> usize {
+        // Get the size of this pointer based it's kind
+        match self.size {
+            NP_Size::U32 => {
+                match cursor.value {
+                    NP_Cursor_Value::None       =>    {  0 },
+                    NP_Cursor_Value::Standard { .. }  =>    {  4 },
+                    NP_Cursor_Value::TupleItem { .. }  =>    {  4 },
+                    NP_Cursor_Value::MapItem { .. }   =>    { 12 },
+                    NP_Cursor_Value::TableItem { .. }  =>    {  9 },
+                    NP_Cursor_Value::ListItem { .. }  =>    { 10 }
+                }
+            },
+            NP_Size::U16 => {
+                match cursor.value {
+                    NP_Cursor_Value::None        =>    { 0 },
+                    NP_Cursor_Value::Standard { .. }    =>    { 2 },
+                    NP_Cursor_Value::TupleItem { .. }  =>    { 4 },
+                    NP_Cursor_Value::MapItem { .. }    =>    { 6 },
+                    NP_Cursor_Value::TableItem  {  .. } =>    { 5 },
+                    NP_Cursor_Value::ListItem { .. }   =>    { 6 }
+                }
+            },
+            NP_Size::U8 => {
+                match cursor.value {
+                    NP_Cursor_Value::None        =>    { 0 },
+                    NP_Cursor_Value::Standard { .. }   =>    { 1 },
+                    NP_Cursor_Value::TupleItem { .. }  =>    { 1 },
+                    NP_Cursor_Value::MapItem   { .. }  =>    { 3 },
+                    NP_Cursor_Value::TableItem  { .. } =>    { 3 },
+                    NP_Cursor_Value::ListItem  { .. }  =>    { 3 }
+                }
+            }
         }
-        empty_bytes
     }
-/*
-    pub fn write_address(&self, addr: usize, value: usize) -> Result<(), NP_Error> {
-        
-        let addr_bytes = match self.size {
-            NP_Size::U32 => value.to_be_bytes().to_vec(),
-            NP_Size::U16 => (value as u16).to_be_bytes().to_vec(),
-            NP_Size::U8 => (value as u8).to_be_bytes().to_vec()
-        };
 
-        if addr + addr_bytes.len() > self.max_addr_size() {
-            return Err(NP_Error::new("Attempting to write out of bounds!"));
-        }
-
-        let self_bytes = unsafe { &mut *self.bytes.get() };
-
-        for x in 0..addr_bytes.len() {
-            self_bytes[addr + x] = addr_bytes[x];
-        }
-
-        Ok(())
-    }
-
-*/
-    pub fn set_value_address(&self, address: usize, val: usize) {
+    pub fn write_address(&self, address: usize, val: usize) {
 
         let self_bytes = unsafe { &mut *self.bytes.get() };
 

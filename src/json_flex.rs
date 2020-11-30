@@ -127,6 +127,8 @@ pub enum NP_JSON {
 
 
 impl NP_JSON {
+
+
     /// copy this value and it's children
     pub fn clone(&self) -> NP_JSON {
 
@@ -492,7 +494,7 @@ fn recursive(v: &mut NP_JSON,
 }
 
 /// Parse a JSON string into a JSON object in memory
-pub fn json_decode(text: String) -> Result<Box<NP_JSON>, NP_Error> {
+pub fn json_decode<'json>(text: String) -> Result<Box<NP_JSON>, NP_Error> {
 
     let mut ret = Box::new(NP_JSON::Null);
 
