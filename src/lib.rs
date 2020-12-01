@@ -154,9 +154,9 @@
 //! 
 //! | Library            | Encode | Decode | Update | Size | Size (Zlib) |
 //! |--------------------|--------|--------|--------|------|-------------|
-//! | NoProto            | 5.6s   | x      | 0.8s   | 417  | 325         |
-//! | FlatBuffers        | 1.5s   | x      | 2.0s   | 336  | 214         |
-//! | Protocol Buffers 2 | 2s     | x      | x      | 220  | 163         |
+//! | NoProto            | 5.6s   | x      | 0.6s   | 417  | 324         |
+//! | FlatBuffers        | 1.5s   | x      | 1.5s   | 336  | 214         |
+//! | Protocol Buffers 2 | 2.0s   | x      | 3.8s   | 220  | 163         |
 //! 
 //! <sub>* Benchmarks ran on a 2020 MacBook Air with M1 CPU and 8GB Ram</sub>
 //! 
@@ -175,7 +175,7 @@
 //! #### Non Goals / Known Tradeoffs
 //! There are formats that focus on being as compact as possible.  While NoProto is not intentionally wasteful, it's primary focus is not on compactness.  If you need the smallest possible format MessagePack is a good choice.  It's all about tradeoffs, NoProto uses up extra bytes over other formats to make zero copy de/serialization, traversal and mutation as fast as possible.
 //! 
-//! If every CPU cycle counts, you don't mind compiling fixed schemas and you don't plan to mutate your buffers/objects, FlatBuffers/CapnProto is probably the way to go.  NoProto is usually within the same magnitude of performance as FlatBuffers/CapN Proto, but it's impossible to make it as fast as formats that compile your schemas.
+//! If every CPU cycle counts, you don't mind compiling fixed schemas and you don't plan to mutate your buffers/objects, FlatBuffers/CapnProto is probably the way to go.  NoProto is usually within the same magnitude of performance as FlatBuffers/CapN Proto, but it's impossible to make it as fast as formats that compile your schemas ahead of time.
 //! 
 //! ----------------------
 //! 
@@ -351,7 +351,6 @@ impl NP_Factory {
     }
 
     /// Open existing Vec<u8> as buffer for this factory.  
-    /// This just moves the Vec<u8> into the buffer object, no deserialization or copying is done here.
     /// 
     pub fn open_buffer<'buffer>(&'buffer self, bytes: Vec<u8>) -> NP_Buffer<'buffer> {
         NP_Buffer::_new(NP_Memory::existing(bytes, &self.schema.parsed))

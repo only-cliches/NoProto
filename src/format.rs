@@ -9,7 +9,7 @@
 //! 
 //! Pointers contain one or more addresses depending on the pointer type.  The addresses will point to data or other pointers.
 //! 
-//! There are 2 different address sizes, u16 and u32.  All numbers (including addresses) are always stored in big endian format and addresses are always zero based from the beginning of the buffer.  In other words, address `23` always means 23 bytes from the beginning of the buffer.
+//! There are 2 different address sizes, u16 and u32.  Addresses are always stored in little endian format and addresses are always zero based from the beginning of the buffer.  In other words, address `23` always means 23 bytes from the beginning of the buffer.
 //! 
 //! | Pointer Kind | u16 size (bytes) | u32 size (bytes) |
 //! |--------------|------------------|------------------|

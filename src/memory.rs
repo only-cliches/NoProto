@@ -22,6 +22,7 @@ pub enum NP_Size {
 #[doc(hidden)]
 pub struct NP_Memory<'memory> {
     bytes: UnsafeCell<Vec<u8>>,
+    cache: UnsafeCell<Vec<NP_Cursor>>,
     pub schema: &'memory Vec<NP_Parsed_Schema>,
     pub size: NP_Size
 }
@@ -39,8 +40,16 @@ impl<'memory> NP_Memory<'memory> {
     pub fn existing(bytes: Vec<u8>, schema: &'memory Vec<NP_Parsed_Schema>) -> Self {
 
         let size = bytes[1];
+
+        let addr_size = match size {
+            2 => 1usize,
+            1 => 2,
+            0 => 4,
+            _ => 2
+        };
         
         NP_Memory {
+            cache: UnsafeCell::new(Vec::with_capacity(bytes.len() / addr_size)),
             bytes: UnsafeCell::new(bytes),
             schema: schema,
             size: match size {
@@ -61,6 +70,7 @@ impl<'memory> NP_Memory<'memory> {
         }
     }
 
+    #[inline(always)]
     pub fn addr_size_bytes(&self) -> usize {
         match &self.size {
             NP_Size::U32 => 4,
@@ -69,6 +79,7 @@ impl<'memory> NP_Memory<'memory> {
         }
     }
 
+    #[inline(always)]
     pub fn read_address(&self, addr: usize) -> usize {
         if addr == 0 {
             return 0;
@@ -80,6 +91,7 @@ impl<'memory> NP_Memory<'memory> {
         }
     }
 
+    #[inline(always)]
     pub fn read_address_offset(&self, addr: usize, offset: usize) -> usize {
         if addr == 0 {
             return 0;
@@ -117,9 +129,15 @@ impl<'memory> NP_Memory<'memory> {
             }
         };
 
+        let addr_size = match size {
+            NP_Size::U8 => 1usize,
+            NP_Size::U16 => 2,
+            NP_Size::U32 => 4
+        };
 
         NP_Memory {
             bytes: UnsafeCell::new(new_bytes),
+            cache: UnsafeCell::new(Vec::with_capacity(use_size / addr_size)),
             schema: schema,
             size: size
         }
@@ -149,14 +167,30 @@ impl<'memory> NP_Memory<'memory> {
         self.malloc_borrow(&bytes)
     }
 
+    #[inline(always)]
     pub fn read_bytes(&self) -> &Vec<u8> {
         let self_bytes = unsafe { &*self.bytes.get() };
         self_bytes
-    }
+    }   
 
+    #[inline(always)]
     pub fn write_bytes(&self) -> &mut Vec<u8> {
         let self_bytes = unsafe { &mut *self.bytes.get() };
         self_bytes
+    }
+
+    #[inline(always)]
+    pub fn get_cache(&self, index: usize) -> &mut NP_Cursor {
+        let size = self.addr_size_bytes();
+        let self_cache = unsafe { &mut *self.cache.get() };
+        &mut self_cache[index / size]
+    }
+
+    #[inline(always)]
+    pub fn insert_cache(&self, index: usize, cursor: NP_Cursor) {
+        let size = self.addr_size_bytes();
+        let self_cache = unsafe { &mut *self.cache.get() };
+        self_cache.insert(index / size, cursor);
     }
 
     pub fn malloc_cursor(&self, value: &NP_Cursor_Value) -> Result<usize, NP_Error> {
@@ -195,6 +229,7 @@ impl<'memory> NP_Memory<'memory> {
         }
     }
 
+    #[inline(always)]
     pub fn ptr_size(&self, cursor: &NP_Cursor) -> usize {
         // Get the size of this pointer based it's kind
         match self.size {
@@ -231,6 +266,7 @@ impl<'memory> NP_Memory<'memory> {
         }
     }
 
+    #[inline(always)]
     pub fn write_address(&self, address: usize, val: usize) {
 
         let self_bytes = unsafe { &mut *self.bytes.get() };
@@ -258,6 +294,7 @@ impl<'memory> NP_Memory<'memory> {
 
     }
 
+    #[inline(always)]
     pub fn get_1_byte(&self, address: usize) -> Option<u8> {
 
         // empty value
@@ -270,6 +307,7 @@ impl<'memory> NP_Memory<'memory> {
         Some(self_bytes[address])
     }
 
+    #[inline(always)]
     pub fn get_2_bytes(&self, address: usize) -> Option<&[u8; 2]> {
 
         // empty value
@@ -288,6 +326,7 @@ impl<'memory> NP_Memory<'memory> {
         Some(unsafe { &*(slice as *const [u8] as *const [u8; 2]) })
     }
 
+    #[inline(always)]
     pub fn get_4_bytes(&self, address: usize) -> Option<&[u8; 4]> {
 
         // empty value
@@ -306,6 +345,7 @@ impl<'memory> NP_Memory<'memory> {
         Some(unsafe { &*(slice as *const [u8] as *const [u8; 4]) })
     }
 
+    #[inline(always)]
     pub fn get_8_bytes(&self, address: usize) -> Option<&[u8; 8]> {
 
         // empty value
@@ -324,6 +364,7 @@ impl<'memory> NP_Memory<'memory> {
         Some(unsafe { &*(slice as *const [u8] as *const [u8; 8]) })
     }
 
+    #[inline(always)]
     pub fn get_16_bytes(&self, address: usize) -> Option<&[u8; 16]> {
 
         // empty value
@@ -342,6 +383,7 @@ impl<'memory> NP_Memory<'memory> {
         Some(unsafe { &*(slice as *const [u8] as *const [u8; 16]) })
     }
 
+    #[inline(always)]
     pub fn get_32_bytes(&self, address: usize) -> Option<&[u8; 32]> {
 
         // empty value
