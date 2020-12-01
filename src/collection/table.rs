@@ -1,11 +1,12 @@
+use alloc::string::String;
 use crate::pointer::{NP_Cursor_Parent, NP_Cursor_Value};
 use crate::{pointer::{NP_Cursor}, schema::{NP_Parsed_Schema, NP_Schema_Addr}};
 use crate::{memory::{NP_Size, NP_Memory}, pointer::{NP_Value}, error::NP_Error, schema::{NP_Schema, NP_TypeKeys}, json_flex::{JSMAP, NP_JSON}};
 
+use alloc::string::ToString;
 use alloc::vec::Vec;
-use alloc::string::String;
 use alloc::boxed::Box;
-use alloc::{borrow::ToOwned};
+use alloc::borrow::ToOwned;
 use core::{result::Result, hint::unreachable_unchecked};
 
 /// The data type for tables in NoProto buffers.

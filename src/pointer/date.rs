@@ -31,7 +31,7 @@ use alloc::boxed::Box;
 use alloc::borrow::ToOwned;
 use super::{NP_Cursor};
 use crate::NP_Memory;
-
+use alloc::string::ToString;
 
 
 /// Holds Date data.

@@ -1,3 +1,4 @@
+use alloc::string::String;
 use crate::schema::NP_Schema_Addr;
 use crate::pointer::NP_Cursor_Parent;
 use crate::pointer::NP_Cursor;
@@ -5,6 +6,7 @@ use crate::{json_flex::JSMAP, pointer::{NP_Cursor_Value}};
 use crate::pointer::{NP_Value};
 use crate::{memory::{NP_Size, NP_Memory}, schema::{NP_Schema, NP_TypeKeys, NP_Parsed_Schema}, error::NP_Error, json_flex::NP_JSON};
 
+use alloc::string::ToString;
 use alloc::vec::Vec;
 use alloc::boxed::Box;
 use alloc::borrow::ToOwned;

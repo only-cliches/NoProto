@@ -16,6 +16,7 @@
 //! # Ok::<(), NP_Error>(())
 //! ```
 
+use alloc::prelude::v1::Box;
 use core::hint::unreachable_unchecked;
 
 use crate::error::NP_Error;
@@ -31,6 +32,7 @@ use alloc::vec::Vec;
 use super::{NP_Cursor, NP_Scalar};
 use alloc::borrow::ToOwned;
 use core::str;
+use alloc::string::ToString;
 
 /// &str type alias
 pub type NP_String<'string> = &'string str;

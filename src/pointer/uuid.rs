@@ -20,6 +20,7 @@
 //! ```
 //! 
 
+use alloc::prelude::v1::Box;
 use crate::pointer::NP_Scalar;
 use crate::pointer::NP_Cursor;
 use crate::{memory::NP_Memory, schema::{NP_Parsed_Schema}};
@@ -31,6 +32,7 @@ use core::{fmt::{Debug, Formatter, Write}};
 
 use alloc::string::String;
 use alloc::borrow::ToOwned;
+use alloc::string::ToString;
 
 
 /// Holds UUID which is good for random keys.

@@ -566,6 +566,7 @@
 //! [Go to NP_Factory docs](../struct.NP_Factory.html)
 //! 
 
+use alloc::string::String;
 use core::{fmt::Debug};
 use crate::{json_flex::NP_JSON, pointer::{string::NP_String, ulid::_NP_ULID, uuid::_NP_UUID}};
 use crate::pointer::any::NP_Any;

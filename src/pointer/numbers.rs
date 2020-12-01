@@ -31,6 +31,7 @@
 //! 
 
 
+use alloc::prelude::v1::Box;
 use crate::schema::NP_Parsed_Schema;
 use alloc::vec::Vec;
 use crate::utils::to_unsigned;
@@ -38,6 +39,7 @@ use crate::utils::to_signed;
 use crate::error::NP_Error;
 use crate::{schema::NP_TypeKeys, pointer::NP_Value, json_flex::NP_JSON, json_flex::JSMAP};
 
+use alloc::string::ToString;
 use alloc::{borrow::ToOwned};
 use super::{NP_Cursor};
 use crate::NP_Memory;

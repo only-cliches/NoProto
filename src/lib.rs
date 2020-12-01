@@ -1,6 +1,6 @@
 #![warn(missing_docs, missing_debug_implementations)]
 #![allow(non_camel_case_types)]
-// #![no_std]
+#![no_std]
 
 //! ## Simple & Performant Zero-Copy Serialization
 //! Performance of Flatbuffers / Cap'N Proto with flexibility of JSON

@@ -13,6 +13,7 @@ use crate::error::NP_Error;
 use crate::memory::{NP_Size, NP_Memory};
 use crate::{json_flex::NP_JSON};
 use crate::alloc::borrow::ToOwned;
+use alloc::string::ToString;
 
 /// The address location of the root pointer.
 #[doc(hidden)]

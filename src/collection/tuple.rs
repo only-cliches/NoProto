@@ -8,6 +8,7 @@ use crate::{memory::{NP_Size, NP_Memory}, schema::{NP_Schema, NP_TypeKeys, NP_Pa
 use alloc::vec::Vec;
 use alloc::borrow::ToOwned;
 use alloc::{boxed::Box};
+use alloc::string::ToString;
 
 /// Tuple data type.
 /// 

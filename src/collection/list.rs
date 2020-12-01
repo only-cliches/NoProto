@@ -6,6 +6,7 @@ use alloc::borrow::ToOwned;
 use alloc::boxed::Box;
 use alloc::{vec::*};
 use core::{hint::unreachable_unchecked};
+use alloc::string::ToString;
 
 /// List data type.
 /// 
@@ -546,8 +547,6 @@ impl<'it> Iterator for NP_List<'it> {
     fn count(self) -> usize where Self: Sized {
 
         let list_addr = self.cursor.value.get_value_address();
-
-        println!("{:?}", list_addr);
 
         if self.cursor.buff_addr == 0 || list_addr == 0 {
             return 0;

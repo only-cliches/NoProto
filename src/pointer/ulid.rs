@@ -30,6 +30,7 @@ use core::{fmt::{Debug, Formatter}};
 
 use alloc::string::String;
 use alloc::boxed::Box;
+use alloc::string::ToString;
 use alloc::borrow::ToOwned;
 
 use super::{NP_Cursor};

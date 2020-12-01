@@ -23,6 +23,7 @@ pub mod uuid;
 pub mod option;
 pub mod date;
 
+use alloc::prelude::v1::Box;
 use crate::{pointer::dec::NP_Dec, schema::NP_Schema_Addr, memory::NP_Size};
 use crate::NP_Parsed_Schema;
 use crate::{json_flex::NP_JSON};

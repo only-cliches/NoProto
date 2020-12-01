@@ -63,6 +63,7 @@
 //! ```
 //!
 
+use alloc::prelude::v1::Box;
 use crate::utils::to_signed;
 use crate::schema::{NP_Parsed_Schema};
 use alloc::vec::Vec;
@@ -75,7 +76,7 @@ use core::{fmt::{Debug}, hint::unreachable_unchecked};
 use alloc::borrow::ToOwned;
 use super::{NP_Cursor};
 use crate::NP_Memory;
-
+use alloc::string::ToString;
 
 /// Holds fixed decimal data.
 /// 
