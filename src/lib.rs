@@ -141,13 +141,28 @@
 //! # Ok::<(), NP_Error>(()) 
 //! ```
 //! 
-//! 
 //! ## Guided Learning / Next Steps:
 //! 1. [`Schemas`](https://docs.rs/no_proto/latest/no_proto/schema/index.html) - Learn how to build & work with schemas.
 //! 2. [`Factories`](https://docs.rs/no_proto/latest/no_proto/struct.NP_Factory.html) - Parsing schemas into something you can work with.
 //! 3. [`Buffers`](https://docs.rs/no_proto/latest/no_proto/buffer/struct.NP_Buffer.html) - How to create, update & compact buffers/data.
 //! 4. [`Data Format`](https://docs.rs/no_proto/latest/no_proto/format/index.html) - Learn how data is saved into the buffer.
 //! 
+//! ## Benchmarks
+//! While it's difficult to properly benchmark libraries like these in a fair way, I've made an attempt in the graph below.  These benchmarks are available in the `bench` folder and you can easily run them yourself with `cargo run`.
+//! 
+//! The format and data used in the benchmarks were taken from the `flatbuffers` benchmarks github repo.  You should always benchmark/test your own use case for each library before making any decisions on what to use.
+//! 
+//! | Library            | Encode | Decode | Update | Size | Size (Zlib) |
+//! |--------------------|--------|--------|--------|------|-------------|
+//! | NoProto            | 5.6s   | x      | 0.8s   | 417  | 325         |
+//! | FlatBuffers        | 1.5s   | x      | 2.0s   | 336  | 214         |
+//! | Protocol Buffers 2 | 2s     | x      | x      | 220  | 163         |
+//! 
+//! <sub>* Benchmarks ran on a 2020 MacBook Air with M1 CPU and 8GB Ram</sub>
+//! 
+//! - *encode*: Transfer a collection of data into a serialized form 1,000,000 times.
+//! - *decode*: Decode/Deserialize an entire object into all it's parts 1,000,000 times.
+//! - *update*: Deserialize, update a single property, then serialize an object 1,000,000 times.
 //! 
 //! #### Limitations
 //! - Buffers cannot be larger than 2^32 bytes (~4GB).
@@ -160,7 +175,7 @@
 //! #### Non Goals / Known Tradeoffs
 //! There are formats that focus on being as compact as possible.  While NoProto is not intentionally wasteful, it's primary focus is not on compactness.  If you need the smallest possible format MessagePack is a good choice.  It's all about tradeoffs, NoProto uses up extra bytes over other formats to make zero copy de/serialization, traversal and mutation as fast as possible.
 //! 
-//! If every CPU cycle counts, you don't mind compiling fixed schemas and you don't plan to mutate your buffers/objects, FlatBuffers/CapnProto is probably the way to go.  While NoProto makes good tradeoffs with flexibility and performance, it cannot be as fast as languages that compile the schema into source code.
+//! If every CPU cycle counts, you don't mind compiling fixed schemas and you don't plan to mutate your buffers/objects, FlatBuffers/CapnProto is probably the way to go.  NoProto is usually within the same magnitude of performance as FlatBuffers/CapN Proto, but it's impossible to make it as fast as formats that compile your schemas.
 //! 
 //! ----------------------
 //! 
