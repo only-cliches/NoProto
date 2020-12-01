@@ -24,8 +24,9 @@ impl<'list> NP_List<'list> {
 
     /// Generate a new list iterator
     /// 
-    pub fn new(cursor: NP_Cursor, memory: &'list NP_Memory<'list>, real_only: bool) -> Self {
-        let value_addr = cursor.value.get_value_address();
+    pub fn new(mut cursor: NP_Cursor, memory: &'list NP_Memory<'list>, real_only: bool) -> Self {
+        let value_addr = if cursor.buff_addr != 0 { memory.read_address(cursor.buff_addr) } else { 0 };
+        cursor.value = cursor.value.update_value_address(value_addr);
         let addr_size = memory.addr_size_bytes();
         Self {
             cursor: cursor,
@@ -542,6 +543,8 @@ impl<'it> Iterator for NP_List<'it> {
     fn count(self) -> usize where Self: Sized {
 
         let list_addr = self.cursor.value.get_value_address();
+
+        println!("{:?}", list_addr);
 
         if self.cursor.buff_addr == 0 || list_addr == 0 {
             return 0;

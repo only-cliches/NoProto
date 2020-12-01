@@ -183,7 +183,6 @@
 //! ```
 //! use no_proto::error::NP_Error;
 //! use no_proto::NP_Factory;
-//! use no_proto::path;
 //! 
 //! let factory: NP_Factory = NP_Factory::new(r#"{
 //!    "type": "tuple",

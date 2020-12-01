@@ -23,8 +23,6 @@ pub mod uuid;
 pub mod option;
 pub mod date;
 
-use std::hint::unreachable_unchecked;
-
 use crate::{pointer::dec::NP_Dec, schema::NP_Schema_Addr, memory::NP_Size};
 use crate::NP_Parsed_Schema;
 use crate::{json_flex::NP_JSON};
@@ -148,7 +146,7 @@ impl<'cursor> NP_Cursor {
                             }}
                         }
                     },
-                    NP_Cursor_Parent::Table { schema_addr: t_schema_addr, .. } => {
+                    NP_Cursor_Parent::Table { schema_addr: _schema_addr, .. } => {
                         let index = if buff_addr == 0 { 0 } else { match &memory.size {
                             NP_Size::U32 => memory.read_bytes()[buff_addr + 8] as usize,
                             NP_Size::U16 => memory.read_bytes()[buff_addr + 4] as usize,
@@ -220,7 +218,7 @@ impl<'cursor> NP_Cursor {
         match memory.schema[cursor.schema_addr].get_type_key() {
             NP_TypeKeys::None           => { NP_JSON::Null },
             NP_TypeKeys::Any            => { NP_JSON::Null },
-            NP_TypeKeys::UTF8String     => {    NP_String::to_json(cursor, memory) },
+            NP_TypeKeys::UTF8String     => { NP_String::to_json(cursor, memory) },
             NP_TypeKeys::Bytes          => {  NP_Bytes::to_json(cursor, memory) },
             NP_TypeKeys::Int8           => {        i8::to_json(cursor, memory) },
             NP_TypeKeys::Int16          => {       i16::to_json(cursor, memory) },
@@ -235,10 +233,10 @@ impl<'cursor> NP_Cursor {
             NP_TypeKeys::Decimal        => {    NP_Dec::to_json(cursor, memory) },
             NP_TypeKeys::Boolean        => {      bool::to_json(cursor, memory) },
             NP_TypeKeys::Geo            => {    NP_Geo::to_json(cursor, memory) },
-            NP_TypeKeys::Uuid           => {   _NP_UUID::to_json(cursor, memory) },
-            NP_TypeKeys::Ulid           => {   _NP_ULID::to_json(cursor, memory) },
+            NP_TypeKeys::Uuid           => {  _NP_UUID::to_json(cursor, memory) },
+            NP_TypeKeys::Ulid           => {  _NP_ULID::to_json(cursor, memory) },
             NP_TypeKeys::Date           => {   NP_Date::to_json(cursor, memory) },
-            NP_TypeKeys::Enum           => { NP_Enum::to_json(cursor, memory) },
+            NP_TypeKeys::Enum           => {   NP_Enum::to_json(cursor, memory) },
             NP_TypeKeys::Table          => {  NP_Table::to_json(cursor, memory) },
             NP_TypeKeys::Map            => {    NP_Map::to_json(cursor, memory) },
             NP_TypeKeys::List           => {   NP_List::to_json(cursor, memory) },
@@ -253,7 +251,7 @@ impl<'cursor> NP_Cursor {
 
         match from_memory.schema[from_cursor.schema_addr].get_type_key() {
             NP_TypeKeys::Any           => { Ok(to_cursor) }
-            NP_TypeKeys::UTF8String    => {       NP_String::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
+            NP_TypeKeys::UTF8String    => { NP_String::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
             NP_TypeKeys::Bytes         => {  NP_Bytes::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
             NP_TypeKeys::Int8          => {        i8::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
             NP_TypeKeys::Int16         => {       i16::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
@@ -268,10 +266,10 @@ impl<'cursor> NP_Cursor {
             NP_TypeKeys::Decimal       => {    NP_Dec::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
             NP_TypeKeys::Boolean       => {      bool::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
             NP_TypeKeys::Geo           => {    NP_Geo::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-            NP_TypeKeys::Uuid          => {   _NP_UUID::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-            NP_TypeKeys::Ulid          => {   _NP_ULID::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
+            NP_TypeKeys::Uuid          => {  _NP_UUID::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
+            NP_TypeKeys::Ulid          => {  _NP_ULID::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
             NP_TypeKeys::Date          => {   NP_Date::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-            NP_TypeKeys::Enum          => { NP_Enum::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
+            NP_TypeKeys::Enum          => {   NP_Enum::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
             NP_TypeKeys::Table         => {  NP_Table::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
             NP_TypeKeys::Map           => {    NP_Map::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
             NP_TypeKeys::List          => {   NP_List::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
@@ -306,10 +304,10 @@ impl<'cursor> NP_Cursor {
             NP_TypeKeys::Decimal     => {     NP_Dec::set_value(cursor, memory, NP_Dec::default())?; },
             NP_TypeKeys::Boolean     => {       bool::set_value(cursor, memory, bool::default())?; },
             NP_TypeKeys::Geo         => {     NP_Geo::set_value(cursor, memory, NP_Geo::default())?; },
-            NP_TypeKeys::Uuid        => {    _NP_UUID::set_value(cursor, memory, &NP_UUID::default())?; },
-            NP_TypeKeys::Ulid        => {    _NP_ULID::set_value(cursor, memory, &NP_ULID::default())?; },
+            NP_TypeKeys::Uuid        => {   _NP_UUID::set_value(cursor, memory, &NP_UUID::default())?; },
+            NP_TypeKeys::Ulid        => {   _NP_ULID::set_value(cursor, memory, &NP_ULID::default())?; },
             NP_TypeKeys::Date        => {    NP_Date::set_value(cursor, memory, NP_Date::default())?; },
-            NP_TypeKeys::Enum        => {  NP_Enum::set_value(cursor, memory, NP_Enum::default())?; }
+            NP_TypeKeys::Enum        => {    NP_Enum::set_value(cursor, memory, NP_Enum::default())?; }
         }
 
         Ok(())
@@ -336,7 +334,7 @@ impl<'cursor> NP_Cursor {
         let type_size = match memory.schema[cursor.schema_addr].get_type_key() {
             NP_TypeKeys::None         => { Ok(0) },
             NP_TypeKeys::Any          => { Ok(0) },
-            NP_TypeKeys::UTF8String   => {       NP_String::get_size(cursor, memory) },
+            NP_TypeKeys::UTF8String   => { NP_String::get_size(cursor, memory) },
             NP_TypeKeys::Bytes        => {  NP_Bytes::get_size(cursor, memory) },
             NP_TypeKeys::Int8         => {        i8::get_size(cursor, memory) },
             NP_TypeKeys::Int16        => {       i16::get_size(cursor, memory) },
@@ -351,10 +349,10 @@ impl<'cursor> NP_Cursor {
             NP_TypeKeys::Decimal      => {    NP_Dec::get_size(cursor, memory) },
             NP_TypeKeys::Boolean      => {      bool::get_size(cursor, memory) },
             NP_TypeKeys::Geo          => {    NP_Geo::get_size(cursor, memory) },
-            NP_TypeKeys::Uuid         => {   _NP_UUID::get_size(cursor, memory) },
-            NP_TypeKeys::Ulid         => {   _NP_ULID::get_size(cursor, memory) },
+            NP_TypeKeys::Uuid         => {  _NP_UUID::get_size(cursor, memory) },
+            NP_TypeKeys::Ulid         => {  _NP_ULID::get_size(cursor, memory) },
             NP_TypeKeys::Date         => {   NP_Date::get_size(cursor, memory) },
-            NP_TypeKeys::Enum         => { NP_Enum::get_size(cursor, memory) },
+            NP_TypeKeys::Enum         => {   NP_Enum::get_size(cursor, memory) },
             NP_TypeKeys::Table        => {  NP_Table::get_size(cursor, memory) },
             NP_TypeKeys::Map          => {    NP_Map::get_size(cursor, memory) },
             NP_TypeKeys::List         => {   NP_List::get_size(cursor, memory) },

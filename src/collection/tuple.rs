@@ -1,4 +1,4 @@
-use crate::pointer::{NP_Cursor_Parent, NP_Cursor_Value};
+use crate::pointer::{NP_Cursor_Parent};
 use core::hint::unreachable_unchecked;
 
 use crate::{json_flex::JSMAP, pointer::{NP_Cursor}};
@@ -22,10 +22,10 @@ pub struct NP_Tuple<'tuple> {
 
 impl<'tuple> NP_Tuple<'tuple> {
 
-
-    pub fn new(cursor: NP_Cursor, memory: &'tuple NP_Memory<'tuple>) -> Self {
-        let value_addr = cursor.value.get_value_address();
-        let addr_size = memory.addr_size_bytes();
+    /// Generate a new tuple iterator
+    pub fn new(mut cursor: NP_Cursor, memory: &'tuple NP_Memory<'tuple>) -> Self {
+        let value_addr = if cursor.buff_addr != 0 { memory.read_address(cursor.buff_addr) } else { 0 };
+        cursor.value = cursor.value.update_value_address(value_addr);
         Self {
             cursor: cursor,
             tuple: NP_Cursor_Parent::Tuple {
@@ -57,7 +57,7 @@ impl<'tuple> NP_Tuple<'tuple> {
                 let tuple_size = addr_size * tuple_size;
 
                 let mut empty_bytes = Vec::with_capacity(tuple_size);
-                for x in 0..tuple_size {
+                for _x in 0..tuple_size {
                     empty_bytes.push(0);
                 }
 
@@ -270,7 +270,7 @@ impl<'value> NP_Value<'value> for NP_Tuple<'value> {
         None
     }
 
-    fn from_bytes_to_schema(mut schema: Vec<NP_Parsed_Schema>, address: usize, bytes: &Vec<u8>) -> (bool, Vec<NP_Parsed_Schema>) {
+    fn from_bytes_to_schema(schema: Vec<NP_Parsed_Schema>, address: usize, bytes: &Vec<u8>) -> (bool, Vec<NP_Parsed_Schema>) {
         let is_sorted = bytes[address + 1];
 
         let column_len = bytes[address + 2];
@@ -296,7 +296,7 @@ impl<'value> NP_Value<'value> for NP_Tuple<'value> {
             ]) as usize;
 
             tuple_values.push(working_schema.len());
-            let (sortable, schema_) = NP_Schema::from_bytes(working_schema, offset + 2, bytes);
+            let (_sortable, schema_) = NP_Schema::from_bytes(working_schema, offset + 2, bytes);
             working_schema = schema_;
 
             offset += schema_size + 2;
@@ -318,7 +318,7 @@ impl<'it> Iterator for NP_Tuple<'it> {
 
     fn next(&mut self) -> Option<Self::Item> {
 
-        if let Some((index, current)) = self.current { // go to next one
+        if let Some((index, _current)) = self.current { // go to next one
             let values_len = match &self.memory.schema[self.cursor.schema_addr] {
                 NP_Parsed_Schema::Tuple { values, ..} => {
                     values.len()

@@ -17,16 +17,38 @@ pub struct NP_Table<'table> {
     table: NP_Cursor_Parent,
     current: Option<(usize, &'table String, NP_Cursor)>,
     memory: &'table NP_Memory<'table>,
-    remaining_cols: Vec<u8>
+    remaining_cols: [bool; 256],
+    col_step: usize,
+    col_length: usize,
 }
 
+fn pop_cols(cols: &[bool; 256], index: usize, length: usize) -> Option<usize> {
+    // end of cols
+    if length - 1 == index { return None }; 
+
+    let value = cols[index];
+
+    // already visited
+    if value == true { return pop_cols(cols, index + 1, length) }; 
+
+    return Some(index);
+}
 
 impl<'table> NP_Table<'table> {
 
     /// Create new table iterator
     ///
-    pub fn new(cursor: NP_Cursor, memory: &'table NP_Memory<'table>) -> Self {
-        let value_addr = cursor.value.get_value_address();
+    pub fn new(mut cursor: NP_Cursor, memory: &'table NP_Memory<'table>) -> Self {
+        let value_addr = if cursor.buff_addr != 0 { memory.read_address(cursor.buff_addr) } else { 0 };
+        cursor.value = cursor.value.update_value_address(value_addr);
+
+        let (cols_idx, cols_len) = match &memory.schema[cursor.schema_addr] {
+            NP_Parsed_Schema::Table { columns, .. } => {
+                ([false; 256], columns.len())
+            },
+            _ => { unsafe {  unreachable_unchecked() } }
+        };
+
         Self {
             cursor: cursor,
             table: NP_Cursor_Parent::Table {
@@ -34,13 +56,10 @@ impl<'table> NP_Table<'table> {
                 addr: value_addr,
                 schema_addr: cursor.schema_addr
             },
-            remaining_cols: match &memory.schema[cursor.schema_addr] {
-                NP_Parsed_Schema::Table { columns, .. } => {
-                    columns.iter().map(|x| x.0).collect()
-                },
-                _ => { unsafe {  unreachable_unchecked() } }
-            },
+            remaining_cols: cols_idx,
             current: None,
+            col_length: cols_len,
+            col_step: 0,
             memory: memory
         }
     }
@@ -181,8 +200,6 @@ impl<'table> NP_Table<'table> {
             return Ok(Some(virtual_cursor))
         }
 
-        let mut running_ptr: usize = 0;
-
         for (_ikey, icol, item) in NP_Table::new(table_cursor.clone(), memory) {
             if col == icol {
                 if create_path {
@@ -191,27 +208,10 @@ impl<'table> NP_Table<'table> {
                     return Ok(Some(item.clone()))
                 }
             }
-            running_ptr = item.buff_addr;
         }
 
 
-        let mut virtual_cursor = NP_Cursor::new(0, col_schema_addr, memory, NP_Cursor_Parent::Table { head, addr: table_cursor.buff_addr , schema_addr: table_cursor.schema_addr});
-        virtual_cursor.value = NP_Cursor_Value::TableItem { value_addr: 0, index: col_index, next: 0 };
-
-        if create_path {
-            virtual_cursor.buff_addr = memory.malloc_cursor(&virtual_cursor.value)?;
-
-            // update previous pointer NEXT to this one
-            memory.write_address(running_ptr + addr_size, virtual_cursor.buff_addr);
-
-            // write index in buffer
-            virtual_cursor.value = NP_Cursor_Value::TableItem { index: col_index,  value_addr: 0, next: 0 };
-            memory.write_bytes()[virtual_cursor.buff_addr + addr_size + addr_size] = col_index as u8;
-
-            virtual_cursor.value = NP_Cursor_Value::TableItem { value_addr: 0, index: col_index, next: 0 };
-        }
-
-        return Ok(Some(virtual_cursor))
+       return Ok(None);
     }
 }
 
@@ -457,21 +457,25 @@ impl<'it> Iterator for NP_Table<'it> {
                     next_cursor.next_cursor = Some(next_next_addr);
                 }
 
-                self.remaining_cols.retain(|x| *x != col_index as u8);
+                self.remaining_cols[col_index] = true;
                 
                 self.current = Some((col_index, col_key, next_cursor));
 
                 self.current
-            } else { // no real columns left in table, loop through virtual
+            } else { // no columns with pointers left in table, loop through virtual
 
-                match self.remaining_cols.pop() {
-                    Some(next_col_idx) => {
+                match pop_cols(&self.remaining_cols, self.col_step, self.col_length) {
+                    Some(col_step) => {
+                        self.col_step = col_step;
+
                         let (col_index, col_key, col_schema_addr) = match &self.memory.schema[self.cursor.schema_addr] {
                             NP_Parsed_Schema::Table { columns, .. } => {
-                                &columns[next_col_idx as usize]
+                                &columns[self.col_step as usize]
                             },
                             _ => { unsafe { unreachable_unchecked() } }
                         };
+                        
+
                         let mut virtual_cursor = NP_Cursor::new(0, *col_schema_addr, &self.memory, current.2.parent.clone());
                         virtual_cursor.value = NP_Cursor_Value::TableItem {value_addr: 0, index: *col_index as usize, next: 0 };
                         virtual_cursor.prev_cursor = if current.2.buff_addr != 0 {
@@ -479,9 +483,11 @@ impl<'it> Iterator for NP_Table<'it> {
                         } else {
                             current.2.prev_cursor
                         };
+
+                        self.col_step += 1;
                         
                         self.current = Some(((*col_index) as usize, col_key, virtual_cursor));
-
+                        
                         self.current
                     },
                     None => None
@@ -509,7 +515,7 @@ impl<'it> Iterator for NP_Table<'it> {
             let mut first_cursor = NP_Cursor::new(head, *col_schema_addr, &self.memory, NP_Cursor_Parent::Table { addr: table_cursor.buff_addr, head, schema_addr: self.cursor.schema_addr });
        
             match first_cursor.value {
-                NP_Cursor_Value::TableItem { next, index, ..} => {
+                NP_Cursor_Value::TableItem { next, ..} => {
                     if next != 0 {
                         first_cursor.next_cursor = Some(next);
                     }
@@ -517,8 +523,8 @@ impl<'it> Iterator for NP_Table<'it> {
                 _ => { unsafe { unreachable_unchecked() }}
             }
 
-            self.remaining_cols.retain(|x| x != col_index);
-
+            self.remaining_cols[*col_index as usize] = true;
+            
             self.current = Some(((*col_index).into(), col_key, first_cursor));
 
             self.current

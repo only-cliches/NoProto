@@ -60,7 +60,7 @@ fn main() -> Result<(), NP_Error> {
     // show bytes
     let user_bytes: Vec<u8> = user_buffer.close();
     println!("bytes: {:?}", user_bytes);
-    let mut user_buffer = user_factory.open_buffer(user_bytes);
+    let user_buffer = user_factory.open_buffer(user_bytes);
 
 
     // get nested internal value, the age field

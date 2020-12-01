@@ -1,3 +1,11 @@
+use crate::bench_generated::benchfb::FooBarContainerArgs;
+use crate::bench_generated::benchfb::FooBarContainer;
+use crate::bench_generated::benchfb::FooBarArgs;
+use crate::bench_generated::benchfb::FooBar;
+use crate::bench_generated::benchfb::Bar;
+use crate::bench_generated::benchfb::Foo;
+use crate::bench_generated::benchfb::Enum;
+use flatbuffers::FlatBufferBuilder;
 use no_proto::error::NP_Error;
 use no_proto::NP_Factory;
 use no_proto::memory::NP_Size;
@@ -7,10 +15,13 @@ use flate2::Compression;
 use flate2::write::ZlibEncoder;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+mod bench_generated;
+extern crate flatbuffers;
+
 /*
 1,000,000 iterations
-0.4.2 - 105s
-0.5.0 - 15s
+0.4.2 - 144s
+0.5.0 - 9.5s
 
 */
 
@@ -103,16 +114,87 @@ fn main() -> Result<(), NP_Error> {
 
     let start = SystemTime::now();
 
-    for x in 0..1_000 {
+    for _x in 0..1_000_000 {
+
+
+        // 0.5.0 and greater API
+        let mut new_buffer = user_factory.empty_buffer(None, Some(NP_Size::U16));
+
+        new_buffer.fast_insert("initialized", example_data.initialized)?;
+        new_buffer.fast_insert("location", example_data.location)?;
+        new_buffer.fast_insert("fruit", example_data.fruit)?;
+
+        for (i, list) in example_data.list.iter().enumerate() {
+
+            new_buffer.cursor_to_root();
+            new_buffer.move_cursor(&["list", i.to_string().as_str()])?;
+            new_buffer.fast_insert("name", list.name)?;
+            new_buffer.fast_insert("rating", list.rating)?;
+            new_buffer.fast_insert("postfix", list.postfix)?;
+
+            new_buffer.move_cursor(&["sibling"])?;
+            new_buffer.fast_insert("time", list.sibling.time)?;
+            new_buffer.fast_insert("ratio", list.sibling.ratio)?;
+            new_buffer.fast_insert("size", list.sibling.size)?;
+
+            new_buffer.move_cursor(&["parent"])?;
+            new_buffer.fast_insert("id", list.sibling.parent.id)?;
+            new_buffer.fast_insert("count", list.sibling.parent.count)?;
+            new_buffer.fast_insert("prefix", list.sibling.parent.prefix)?;
+            new_buffer.fast_insert("length", list.sibling.parent.length)?;
+            
+        }
+
+        assert_eq!(new_buffer.close().len(), 192);
+
+        // let bytes = new_buffer.close();
+    }
+
+    let time = SystemTime::now().duration_since(start).expect("Time went backwards");
+    println!("NoProto {:?}", time);
+
+    let start = SystemTime::now();
+
+
+    for x in 0..1_000_000 {
+
+        let mut fbb: FlatBufferBuilder = FlatBufferBuilder::new();
+        let mut vector = Vec::new();
+
+        for _y in 0..3 {
+            let foo = Foo::new(0xABADCAFEABADCAFE + (x as u64), 10000 + (x as i16), "@".as_bytes()[0] as i8, 1000000 + (x as u32));
+            let bar = Bar::new(&foo, 123456 + (x as i32), 3.14159 + (x as f32), 10000 + (x as u16));
+            let name = fbb.create_string("Hello, World!");
+            let foobar_args = FooBarArgs { name: Some(name), sibling: Some(&bar), rating:  3.1415432432445543543 + (x as f64), postfix:  "!".as_bytes()[0]};
+            let foobar = FooBar::create(&mut fbb, &foobar_args);
+            vector.push(foobar);
+        }
+
+        let location = fbb.create_string("http://google.com/flatbuffers/");
+        let foobarvec = fbb.create_vector(&vector[..]);
+        let foobarcontainer_args = FooBarContainerArgs { fruit: Enum::Apples, initialized: true, location: Some(location), list: Some(foobarvec) };
+        let foobarcontainer = FooBarContainer::create(&mut fbb, &foobarcontainer_args);
+
+        fbb.finish(foobarcontainer, None);
+        assert_eq!(fbb.finished_data().len(), 344);
+    }
+
+    let time = SystemTime::now().duration_since(start).expect("Time went backwards");
+    println!("Flatbuffers {:?}", time);
+
+    Ok(())
+}
+
+
+
 /*
         // 0.4.2 API
         let mut new_buffer = user_factory.empty_buffer(None, Some(NP_Size::U16));
 
         new_buffer.set("initialized", true)?;
         new_buffer.set("location", String::from("https://arstechnica.com"))?;
-        assert_eq!(new_buffer.set("fruit", 2u8)?, true);
+        new_buffer.set("fruit", 2u8)?;
 
-     
         for x in 0..3 {
 
             new_buffer.set(format!("list.{}.name", x).as_str(), String::from("Hello, world!"))?;
@@ -129,39 +211,3 @@ fn main() -> Result<(), NP_Error> {
             new_buffer.set(format!("list.{}.sibling.parent.length", x).as_str(), 1000000 + (x as u32))?;
         }
 */
-
-        // 0.5.0 and greater API
-        let mut new_buffer = user_factory.empty_buffer(None, Some(NP_Size::U16));
-
-        new_buffer.set(&["initialized"], example_data.initialized)?;
-        new_buffer.set(&["location"], example_data.location)?;
-        new_buffer.set(&["fruit"], example_data.fruit)?;
-
-        for (i, list) in example_data.list.iter().enumerate() {
-
-            new_buffer.reset_cursor();
-            new_buffer.move_cursor(&["list", i.to_string().as_str()])?;
-            new_buffer.set(&["name"], list.name)?;
-            new_buffer.set(&["rating"], list.rating)?;
-            new_buffer.set(&["postfix"], list.postfix)?;
-
-            new_buffer.move_cursor(&["sibling"])?;
-            new_buffer.set(&["time"], list.sibling.time)?;
-            new_buffer.set(&["ratio"], list.sibling.ratio)?;
-            new_buffer.set(&["size"], list.sibling.size)?;
-
-            new_buffer.move_cursor(&["parent"])?;
-            new_buffer.set(&["id"], list.sibling.parent.id)?;
-            new_buffer.set(&["count"], list.sibling.parent.count)?;
-            new_buffer.set(&["prefix"], list.sibling.parent.prefix)?;
-            new_buffer.set(&["length"], list.sibling.parent.length)?;
-        }
-
-        // let bytes = new_buffer.close();
-    }
-
-    let time = SystemTime::now().duration_since(start).expect("Time went backwards");
-    println!("{:?}", time);
-
-    Ok(())
-}

@@ -2,7 +2,7 @@
 - Complete rewrite with major performance improvements.
 - Optimizations and cleaning code.
 - More documentation, less noise.
-- Nearly 10x performance improvements.
+- 10 - 15x performance improvements on data inserts
 
 # 0.4.2 November 20, 2020
 - Optimizations and cleaning code.

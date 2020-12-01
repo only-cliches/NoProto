@@ -27,8 +27,9 @@ impl<'map> NP_Map<'map> {
 
     /// Create new map iterator
     /// 
-    pub fn new(cursor: NP_Cursor, memory: &'map NP_Memory<'map>) -> Self {
-        let value_addr = cursor.value.get_value_address();
+    pub fn new(mut cursor: NP_Cursor, memory: &'map NP_Memory<'map>) -> Self {
+        let value_addr = if cursor.buff_addr != 0 { memory.read_address(cursor.buff_addr) } else { 0 };
+        cursor.value = cursor.value.update_value_address(value_addr);
         let addr_size = memory.addr_size_bytes();
         Self {
             cursor: cursor,
@@ -114,7 +115,7 @@ impl<'map> NP_Map<'map> {
 
         let addr_size = memory.addr_size_bytes();
 
-        let (map_cursor, mut head, length) = Self::read_map(cursor.buff_addr, cursor.schema_addr, &memory, create_path)?;
+        let (map_cursor, mut head, mut length) = Self::read_map(cursor.buff_addr, cursor.schema_addr, &memory, create_path)?;
 
         let map_value_addr = map_cursor.value.get_value_address();
 
@@ -138,6 +139,17 @@ impl<'map> NP_Map<'map> {
                 }?;
                 memory.malloc_borrow(key.as_bytes())?;
                 memory.write_address(virtual_cursor.buff_addr + addr_size + addr_size, key_addr);
+
+                // adjust length
+                length += 1;
+                match memory.size {
+                    NP_Size::U8 => { memory.write_bytes()[map_value_addr + 1] = length as u8 },
+                    _ => {
+                        for (i, x) in (length as u16).to_be_bytes().iter().enumerate() {
+                            memory.write_bytes()[map_value_addr + addr_size + i] = *x;
+                        }
+                    }
+                }
 
                 virtual_cursor.value = NP_Cursor_Value::MapItem { value_addr: 0, key_addr: key_addr, next: 0 };
             }
@@ -173,6 +185,17 @@ impl<'map> NP_Map<'map> {
                 memory.malloc_borrow(key.as_bytes())?;
                 memory.write_address(virtual_cursor.buff_addr + addr_size + addr_size, key_addr);
 
+                // adjust length
+                length += 1;
+                match memory.size {
+                    NP_Size::U8 => { memory.write_bytes()[map_value_addr + 1] = length as u8 },
+                    _ => {
+                        for (i, x) in (length as u16).to_be_bytes().iter().enumerate() {
+                            memory.write_bytes()[map_value_addr + addr_size + i] = *x;
+                        }
+                    }
+                }
+
                 virtual_cursor.value = NP_Cursor_Value::MapItem { value_addr: 0, key_addr: key_addr, next: next_addr };
             }
 
@@ -207,6 +230,17 @@ impl<'map> NP_Map<'map> {
             }?;
             memory.malloc_borrow(key.as_bytes())?;
             memory.write_address(virtual_cursor.buff_addr + addr_size + addr_size, key_addr);
+
+            // adjust length
+            length += 1;
+            match memory.size {
+                NP_Size::U8 => { memory.write_bytes()[map_value_addr + 1] = length as u8 },
+                _ => {
+                    for (i, x) in (length as u16).to_be_bytes().iter().enumerate() {
+                        memory.write_bytes()[map_value_addr + addr_size + i] = *x;
+                    }
+                }
+            }
 
             virtual_cursor.value = NP_Cursor_Value::MapItem { value_addr: 0, key_addr: key_addr, next: 0 };
         }
