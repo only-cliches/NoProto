@@ -16,7 +16,7 @@ pub struct NP_Table<'table> {
     cursor: NP_Cursor,
     table: NP_Cursor_Parent,
     current: Option<(usize, &'table String, NP_Cursor)>,
-    memory: &'table NP_Memory<'table>,
+    pub memory: &'table NP_Memory<'table>,
     remaining_cols: [bool; 256],
     col_step: usize,
     col_length: usize,
@@ -24,7 +24,7 @@ pub struct NP_Table<'table> {
 
 fn pop_cols(cols: &[bool; 256], index: usize, length: usize) -> Option<usize> {
     // end of cols
-    if length - 1 == index { return None }; 
+    if length == index { return None }; 
 
     let value = cols[index];
 
@@ -38,6 +38,7 @@ impl<'table> NP_Table<'table> {
 
     /// Create new table iterator
     ///
+    #[inline(always)]
     pub fn new(mut cursor: NP_Cursor, memory: &'table NP_Memory<'table>) -> Self {
         let value_addr = if cursor.buff_addr != 0 { memory.read_address(cursor.buff_addr) } else { 0 };
         cursor.value = cursor.value.update_value_address(value_addr);
@@ -66,6 +67,7 @@ impl<'table> NP_Table<'table> {
 
     /// Read or save table into buffer
     /// 
+    #[inline(always)]
     pub fn read_table(buff_addr: usize, schema_addr: usize, memory: &NP_Memory<'table>, create: bool) -> Result<(NP_Cursor, usize), NP_Error> {
         let mut cursor = NP_Cursor::new(buff_addr, schema_addr, &memory, NP_Cursor_Parent::None);
         let mut value_addr = cursor.value.get_value_address();
@@ -94,6 +96,7 @@ impl<'table> NP_Table<'table> {
 
     /// Commit a virtual cursor into the buffer
     /// 
+    #[inline(always)]
     pub fn commit_virtual_cursor<'commit>(mut cursor: NP_Cursor, memory: &'commit NP_Memory<'commit>) -> Result<NP_Cursor, NP_Error> {
 
         if cursor.buff_addr != 0 {
@@ -129,6 +132,7 @@ impl<'table> NP_Table<'table> {
     }
 
     /// Select into pointer
+    #[inline(always)]
     pub fn select_into(cursor: NP_Cursor, memory: &'table NP_Memory, col: &'table str, create_path: bool, quick_select: bool) -> Result<Option<NP_Cursor>, NP_Error> {
 
         let addr_size = memory.addr_size_bytes();

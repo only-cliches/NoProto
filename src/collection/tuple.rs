@@ -17,12 +17,13 @@ pub struct NP_Tuple<'tuple> {
     cursor: NP_Cursor,
     tuple: NP_Cursor_Parent,
     current: Option<(usize, NP_Cursor)>,
-    memory: &'tuple NP_Memory<'tuple>
+    pub memory: &'tuple NP_Memory<'tuple>
 }
 
 impl<'tuple> NP_Tuple<'tuple> {
 
     /// Generate a new tuple iterator
+    #[inline(always)]
     pub fn new(mut cursor: NP_Cursor, memory: &'tuple NP_Memory<'tuple>) -> Self {
         let value_addr = if cursor.buff_addr != 0 { memory.read_address(cursor.buff_addr) } else { 0 };
         cursor.value = cursor.value.update_value_address(value_addr);
@@ -39,6 +40,7 @@ impl<'tuple> NP_Tuple<'tuple> {
 
     /// Read or save a list into the buffer
     /// 
+    #[inline(always)]
     pub fn read_tuple(buff_addr: usize, schema_addr: usize, memory: &NP_Memory<'tuple>, create: bool) -> Result<NP_Cursor, NP_Error> {
 
         let mut cursor = NP_Cursor::new(buff_addr, schema_addr, &memory, NP_Cursor_Parent::None);
@@ -76,6 +78,7 @@ impl<'tuple> NP_Tuple<'tuple> {
     }
 
     /// Select into pointer
+    #[inline(always)]
     pub fn select_into(cursor: NP_Cursor, memory: &'tuple NP_Memory<'tuple>, col: usize, create_path: bool) -> Result<Option<NP_Cursor>, NP_Error> {
 
         let addr_size = memory.addr_size_bytes();

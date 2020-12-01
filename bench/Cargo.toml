@@ -9,9 +9,12 @@ edition = "2018"
 [dependencies]
 flatbuffers = "0.7.0"
 flate2 = "1.0.19"
+json = "0.12.4"
 no_proto = { path = "../" }
+protobuf = "2.18.1"
 # no_proto = "0.4.2"
 rand = "0.7.3"
 
-[profile.release]
-debug = true
+
+[target.x86_64-apple-darwin]
+rustflags = ["-Ctarget-cpu=native"]

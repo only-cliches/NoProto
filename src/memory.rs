@@ -200,31 +200,31 @@ impl<'memory> NP_Memory<'memory> {
         match self.size {
             NP_Size::U32 => {
                 match cursor.value {
-                    NP_Cursor_Value::None       =>    {  0 },
-                    NP_Cursor_Value::Standard { .. }  =>    {  4 },
-                    NP_Cursor_Value::TupleItem { .. }  =>    {  4 },
-                    NP_Cursor_Value::MapItem { .. }   =>    { 12 },
-                    NP_Cursor_Value::TableItem { .. }  =>    {  9 },
-                    NP_Cursor_Value::ListItem { .. }  =>    { 10 }
+                    NP_Cursor_Value::None               =>    {  0 },
+                    NP_Cursor_Value::Standard   { .. }  =>    {  4 },
+                    NP_Cursor_Value::TupleItem  { .. }  =>    {  4 },
+                    NP_Cursor_Value::MapItem    { .. }   =>   { 12 },
+                    NP_Cursor_Value::TableItem  { .. }  =>    {  9 },
+                    NP_Cursor_Value::ListItem   { .. }  =>    { 10 }
                 }
             },
             NP_Size::U16 => {
                 match cursor.value {
-                    NP_Cursor_Value::None        =>    { 0 },
-                    NP_Cursor_Value::Standard { .. }    =>    { 2 },
-                    NP_Cursor_Value::TupleItem { .. }  =>    { 4 },
-                    NP_Cursor_Value::MapItem { .. }    =>    { 6 },
-                    NP_Cursor_Value::TableItem  {  .. } =>    { 5 },
-                    NP_Cursor_Value::ListItem { .. }   =>    { 6 }
+                    NP_Cursor_Value::None               =>    { 0 },
+                    NP_Cursor_Value::Standard  { .. }   =>    { 2 },
+                    NP_Cursor_Value::TupleItem { .. }   =>    { 4 },
+                    NP_Cursor_Value::MapItem   { .. }   =>    { 6 },
+                    NP_Cursor_Value::TableItem { .. }   =>    { 5 },
+                    NP_Cursor_Value::ListItem  { .. }   =>    { 6 }
                 }
             },
             NP_Size::U8 => {
                 match cursor.value {
-                    NP_Cursor_Value::None        =>    { 0 },
-                    NP_Cursor_Value::Standard { .. }   =>    { 1 },
+                    NP_Cursor_Value::None              =>    { 0 },
+                    NP_Cursor_Value::Standard  { .. }  =>    { 1 },
                     NP_Cursor_Value::TupleItem { .. }  =>    { 1 },
                     NP_Cursor_Value::MapItem   { .. }  =>    { 3 },
-                    NP_Cursor_Value::TableItem  { .. } =>    { 3 },
+                    NP_Cursor_Value::TableItem { .. }  =>    { 3 },
                     NP_Cursor_Value::ListItem  { .. }  =>    { 3 }
                 }
             }

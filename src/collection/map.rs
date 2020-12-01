@@ -19,14 +19,14 @@ pub struct NP_Map<'map> {
     map: NP_Cursor_Parent,
     map_of_addr: NP_Schema_Addr,
     current: Option<(&'map str, NP_Cursor)>,
-    memory: &'map NP_Memory<'map>
+    pub memory: &'map NP_Memory<'map>
 }
 
 
 impl<'map> NP_Map<'map> {
 
     /// Create new map iterator
-    /// 
+    #[inline(always)]
     pub fn new(mut cursor: NP_Cursor, memory: &'map NP_Memory<'map>) -> Self {
         let value_addr = if cursor.buff_addr != 0 { memory.read_address(cursor.buff_addr) } else { 0 };
         cursor.value = cursor.value.update_value_address(value_addr);
@@ -54,6 +54,7 @@ impl<'map> NP_Map<'map> {
     }
 
     /// Get the key for a given cursor
+    #[inline(always)]
     pub fn get_key(cursor: NP_Cursor, memory: &'map NP_Memory<'map>) -> (&'map str, NP_Cursor) {
         match cursor.value {
             NP_Cursor_Value::MapItem { key_addr, .. } => {
@@ -69,6 +70,7 @@ impl<'map> NP_Map<'map> {
 
     /// Read and/or write a map into the buffer
     /// 
+    #[inline(always)]
     pub fn read_map(buff_addr: usize, schema_addr: usize, memory: &NP_Memory<'map>, create: bool) -> Result<(NP_Cursor, usize, usize), NP_Error> {
 
         let mut cursor = NP_Cursor::new(buff_addr, schema_addr, &memory, NP_Cursor_Parent::None);
@@ -104,6 +106,7 @@ impl<'map> NP_Map<'map> {
 
     /// Accepts a cursor that is currently on a list type and moves the cursor to a list item
     /// The list item may be virtual
+    #[inline(always)]
     pub fn select_into(cursor: NP_Cursor, memory: &NP_Memory<'map>, key: &'map str, create_path: bool, quick_select: bool) -> Result<NP_Cursor, NP_Error> {
        
         let map_of_schema_addr = match &memory.schema[cursor.schema_addr] {

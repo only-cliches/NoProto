@@ -1,10 +1,19 @@
-use crate::bench_generated::benchfb::FooBarContainerArgs;
-use crate::bench_generated::benchfb::FooBarContainer;
-use crate::bench_generated::benchfb::FooBarArgs;
-use crate::bench_generated::benchfb::FooBar;
-use crate::bench_generated::benchfb::Bar;
-use crate::bench_generated::benchfb::Foo;
-use crate::bench_generated::benchfb::Enum;
+use crate::protobuf::Message;
+use crate::bench_generated::benchfb::FooBarContainerArgs as FooBarContainerArgsFB;
+use crate::bench_generated::benchfb::FooBarContainer as FooBarContainerFB;
+use crate::bench_generated::benchfb::FooBarArgs as FooBarArgsFB;
+use crate::bench_generated::benchfb::FooBar as FooBarFB;
+use crate::bench_generated::benchfb::Bar as BarFB;
+use crate::bench_generated::benchfb::Foo as FooFB;
+use crate::bench_generated::benchfb::Enum as EnumFB;
+
+
+use crate::bench_pb::FooBarContainer;
+use crate::bench_pb::FooBar;
+use crate::bench_pb::Bar;
+use crate::bench_pb::Foo;
+use crate::bench_pb::Enum;
+
 use flatbuffers::FlatBufferBuilder;
 use no_proto::error::NP_Error;
 use no_proto::NP_Factory;
@@ -15,13 +24,19 @@ use flate2::Compression;
 use flate2::write::ZlibEncoder;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+const LOOPS: usize = 1_000_000;
+
 mod bench_generated;
+mod bench_pb;
+extern crate protobuf;
 extern crate flatbuffers;
+#[macro_use] 
+extern crate json;
 
 /*
 1,000,000 iterations
 0.4.2 - 144s
-0.5.0 - 9.5s
+0.5.0 - 6s
 
 */
 
@@ -64,7 +79,7 @@ fn main() -> Result<(), NP_Error> {
                 "columns": [
                     ["name", {"type": "string"}],
                     ["rating", {"type": "float"}],
-                    ["postfix", {"type": "string"}],
+                    ["postfix", {"type": "string", "size": 2}],
                     ["sibling", {"type": "table", "columns": [
                         ["time", {"type": "u32"}],
                         ["ratio", {"type": "float"}],
@@ -114,7 +129,7 @@ fn main() -> Result<(), NP_Error> {
 
     let start = SystemTime::now();
 
-    for _x in 0..1_000_000 {
+    for _x in 0..LOOPS {
 
 
         // 0.5.0 and greater API
@@ -145,42 +160,82 @@ fn main() -> Result<(), NP_Error> {
             
         }
 
-        assert_eq!(new_buffer.close().len(), 192);
+        assert_eq!(new_buffer.close().len(), 414);
 
         // let bytes = new_buffer.close();
     }
 
     let time = SystemTime::now().duration_since(start).expect("Time went backwards");
-    println!("NoProto {:?}", time);
+    println!("NoProto:     {:?} size: {} zlib: {}", time, 414, 325);
 
     let start = SystemTime::now();
 
-
-    for x in 0..1_000_000 {
+    for _x in 0..LOOPS {
 
         let mut fbb: FlatBufferBuilder = FlatBufferBuilder::new();
         let mut vector = Vec::new();
 
-        for _y in 0..3 {
-            let foo = Foo::new(0xABADCAFEABADCAFE + (x as u64), 10000 + (x as i16), "@".as_bytes()[0] as i8, 1000000 + (x as u32));
-            let bar = Bar::new(&foo, 123456 + (x as i32), 3.14159 + (x as f32), 10000 + (x as u16));
+        for x in 0..3 {
+            let foo = FooFB::new(0xABADCAFEABADCAFE + (x as u64), 1000 + (x as i16), "@".as_bytes()[0] as i8, 10000 + (x as u32));
+            let bar = BarFB::new(&foo, 123456 + (x as i32), 3.14159 + (x as f32), 10000 + (x as u16));
             let name = fbb.create_string("Hello, World!");
-            let foobar_args = FooBarArgs { name: Some(name), sibling: Some(&bar), rating:  3.1415432432445543543 + (x as f64), postfix:  "!".as_bytes()[0]};
-            let foobar = FooBar::create(&mut fbb, &foobar_args);
+            let foobar_args = FooBarArgsFB { name: Some(name), sibling: Some(&bar), rating:  3.1415432432445543543 + (x as f64), postfix:  "!".as_bytes()[0]};
+            let foobar = FooBarFB::create(&mut fbb, &foobar_args);
             vector.push(foobar);
         }
 
-        let location = fbb.create_string("http://google.com/flatbuffers/");
+        let location = fbb.create_string("http://arstechnica.com");
         let foobarvec = fbb.create_vector(&vector[..]);
-        let foobarcontainer_args = FooBarContainerArgs { fruit: Enum::Apples, initialized: true, location: Some(location), list: Some(foobarvec) };
-        let foobarcontainer = FooBarContainer::create(&mut fbb, &foobarcontainer_args);
+        let foobarcontainer_args = FooBarContainerArgsFB { fruit: EnumFB::Apples, initialized: true, location: Some(location), list: Some(foobarvec) };
+        let foobarcontainer = FooBarContainerFB::create(&mut fbb, &foobarcontainer_args);
 
         fbb.finish(foobarcontainer, None);
-        assert_eq!(fbb.finished_data().len(), 344);
+        assert_eq!(fbb.finished_data().len(), 336);
     }
 
     let time = SystemTime::now().duration_since(start).expect("Time went backwards");
-    println!("Flatbuffers {:?}", time);
+    println!("Flatbuffers: {:?} size: {} zlib: {}", time, 336, 214);
+    
+
+    let start = SystemTime::now();
+
+    for x in 0..LOOPS {
+        let mut foobarcontainer = FooBarContainer::new();
+        let mut foobarlist: protobuf::RepeatedField<FooBar> = protobuf::RepeatedField::new();
+        for y in 0..3 {
+            let mut foobar = FooBar::new();
+            foobar.set_name(String::from("Hello, World!"));
+            foobar.set_rating(3.1415432432445543543 + y as f64);
+            foobar.set_postfix("!".as_bytes()[0] as u32);
+            let mut bar = Bar::new();
+            bar.set_time(123456 + y as i32);
+            bar.set_ratio(3.14159f32 + y as f32);
+            bar.set_size(10000 + y as u32);
+            let mut foo = Foo::new();
+            foo.set_id(0xABADCAFEABADCAFE );
+            foo.set_count(10000 );
+            foo.set_prefix("@".as_bytes()[0] as i32);
+            foo.set_length(1000000 );
+            bar.set_parent(foo);
+            foobar.set_sibling(bar);
+            foobarlist.push(foobar);
+        }
+
+        foobarcontainer.set_location(String::from("http://arstechnica.com"));
+        foobarcontainer.set_initialized(true);
+        foobarcontainer.set_fruit(Enum::Apples);
+        foobarcontainer.set_list(foobarlist);
+
+        let mut bytes: Vec<u8> = Vec::new();
+        let mut message = protobuf::CodedOutputStream::vec(&mut bytes);
+        foobarcontainer.compute_size();
+        foobarcontainer.write_to_with_cached_sizes(&mut message).unwrap();
+        message.flush().unwrap();
+        assert_eq!(bytes.len(), 220);
+    }
+
+    let time = SystemTime::now().duration_since(start).expect("Time went backwards");
+    println!("PBuffers:    {:?} size: {} zlib: {}", time, 220, 163);
 
     Ok(())
 }

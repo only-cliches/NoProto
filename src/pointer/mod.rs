@@ -51,6 +51,7 @@ pub enum NP_Cursor_Value {
 
 impl<'kind> NP_Cursor_Value {
     /// Get the value address of this cursor
+    #[inline(always)]
     pub fn get_value_address(&self) -> usize {
         match self {
             NP_Cursor_Value::None => 0,
@@ -62,6 +63,7 @@ impl<'kind> NP_Cursor_Value {
         }
     }
     /// Update the value address (doesn't touch the buffer)
+    #[inline(always)]
     pub fn update_value_address(&self, new_value: usize) -> Self {
         match self {
             NP_Cursor_Value::None => NP_Cursor_Value::None,

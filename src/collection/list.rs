@@ -16,7 +16,7 @@ pub struct NP_List<'list> {
     list: NP_Cursor_Parent,
     list_of_addr: NP_Schema_Addr,
     current: Option<(usize, NP_Cursor)>,
-    memory: &'list NP_Memory<'list>,
+    pub memory: &'list NP_Memory<'list>,
     real_only: bool
 }
 
@@ -24,6 +24,7 @@ impl<'list> NP_List<'list> {
 
     /// Generate a new list iterator
     /// 
+    #[inline(always)]
     pub fn new(mut cursor: NP_Cursor, memory: &'list NP_Memory<'list>, real_only: bool) -> Self {
         let value_addr = if cursor.buff_addr != 0 { memory.read_address(cursor.buff_addr) } else { 0 };
         cursor.value = cursor.value.update_value_address(value_addr);
@@ -50,6 +51,7 @@ impl<'list> NP_List<'list> {
 
     /// Read or save a list into the buffer
     /// 
+    #[inline(always)]
     pub fn read_list(buff_addr: usize, schema_addr: usize, memory: &NP_Memory<'list>, create: bool) -> Result<(NP_Cursor, usize, usize), NP_Error> {
 
         let mut cursor = NP_Cursor::new(buff_addr, schema_addr, &memory, NP_Cursor_Parent::None);
@@ -78,6 +80,7 @@ impl<'list> NP_List<'list> {
     }
 
     /// Accepts a cursor that is currently on a list type and moves the cursor to a list item
+    #[inline(always)]
     pub fn select_into(cursor: NP_Cursor, memory: &'list NP_Memory<'list>, create_path: bool, index: usize) -> Result<NP_Cursor, NP_Error> {
 
         let addr_size = memory.addr_size_bytes();

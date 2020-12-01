@@ -1,4 +1,4 @@
-# 0.5.0
+# 0.5.0 November 30, 2020
 - Complete rewrite with major performance improvements.
 - Optimizations and cleaning code.
 - More documentation, less noise.

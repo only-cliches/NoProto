@@ -350,7 +350,6 @@ impl<'value> NP_Value<'value> for &'value str {
                 }
                 NP_Size::U16 => {
                     let size_bytes: &[u8; 2] = memory.get_2_bytes(addr_value).unwrap_or(&[0; 2]);
-                        
                     u16::from_be_bytes(*size_bytes) as usize
                 }
                 NP_Size::U32 => {
