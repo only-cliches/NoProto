@@ -1,3 +1,6 @@
+# 0.5.2
+
+
 # 0.5.1 November 30, 2020
 - Forgot to apply `no_std` after debugging in previous release.
 

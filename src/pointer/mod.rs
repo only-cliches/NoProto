@@ -95,6 +95,15 @@ impl Default for NP_Cursor_Parent {
     fn default() -> Self { NP_Cursor_Parent::None }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum NP_Cursor_Collection {
+    None,
+    List { head: usize, tail: usize },
+    Map { head: usize, length: usize },
+    Tuple { values: [usize; 255] },
+    Table { values: [usize; 255] }
+}
+
 /// Cursor for pointer value in buffer
 /// 
 #[derive(Debug, Clone, Copy, Default)]

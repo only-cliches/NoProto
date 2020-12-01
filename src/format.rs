@@ -15,7 +15,6 @@
 //! |--------------|------------------|------------------|
 //! | Standard     | 2                | 4                |
 //! | Map Item     | 6                | 12               |
-//! | Table Item   | 5                | 9                |
 //! | List Item    | 6                | 10               |
 //!  
 //! The first two bytes of every buffer are:
@@ -60,17 +59,6 @@
 //! 
 //! The `key` is always stored as a variable sequence of bytes provided by the client.  If you go to the address of the key you should find a length (u16/u32) followed by a sequence of bytes that represents the key.
 //! 
-//! ### Table Item Pointer
-//! 
-//! Used by items in a table object.  Contains the following:
-//! ```text
-//! | address of data | next table item pointer address | column index |
-//! |   u16/u32       |          u16/u32                |    u8        |
-//! ```
-//! 
-//! Tables are a linked list of these pointers.  There should only be table item pointers for columns that have data.
-//! 
-//! The last table item pointer should have a zero in the next item address for no further table items.
 //! 
 //! ### List Item Pointer
 //! 
@@ -100,7 +88,21 @@
 //! 
 //! ### Table (Collection)
 //! 
-//! The table data type stores a single address (u16/u32) to the first `TableItem` pointer for this table.
+//! The table data type stores one or more vtables for the column values.  Each vtable contains:
+//! - 1 leading byte that tells you how many columns are in the vtable
+//! - 1 or more address (u32/u16) pointers for the table column values
+//! - a trailing address(u32/u16) of the next vtable (should be zero if no more vtables)
+//! 
+//! The column indexes should accumulate across the vtables, and there should be at least one vtable entry for each column.
+//! 
+//! For example, if you have 4 columns and 2 vtables, the indexes could be arranged like this:
+//! | vtable 1 | vtable 2 |
+//! |  0, 1, 2 |  3, 4    |
+//! 
+//! Vtables can contain as few as one column entry or as many as the total columns in the schema (up to 255).
+//! 
+//! Typically you won't have more than 1 vtable unless the schema has been modified with additional columns.
+//! 
 //! 
 //! ```
 //! use no_proto::error::NP_Error;
