@@ -352,7 +352,7 @@ impl NP_Factory {
 
     /// Open existing Vec<u8> as buffer for this factory.  
     /// 
-    pub fn open_buffer<'buffer>(&'buffer self, bytes: Vec<u8>) -> NP_Buffer<'buffer> {
+    pub fn open_buffer<'buffer>(&'buffer self, bytes: Vec<u8>) -> Result<NP_Buffer<'buffer>, NP_Error> {
         NP_Buffer::_new(NP_Memory::existing(bytes, &self.schema.parsed))
     }
 
@@ -363,7 +363,7 @@ impl NP_Factory {
     /// The second optional argument, ptr_size, controls how much address space you get in the buffer and how large the addresses are.  Every value in the buffer contains at least one address, sometimes more.  `NP_Size::U16` (the default) gives you an address space of just over 16KB but is more space efficeint since the address pointers are only 2 bytes each.  `NP_Size::U32` gives you an address space of just over 4GB, but the addresses take up twice as much space in the buffer compared to `NP_Size::U16`.
     /// You can change the address size through compaction after the buffer is created, so it's fine to start with a smaller address space and convert it to a larger one later as needed.  It's also possible to go the other way, you can convert larger address space down to a smaller one durring compaction.
     /// 
-    pub fn empty_buffer<'buffer>(&'buffer self, capacity: Option<usize>, ptr_size: Option<NP_Size>) -> NP_Buffer<'buffer> {
+    pub fn empty_buffer<'buffer>(&'buffer self, capacity: Option<usize>, ptr_size: Option<NP_Size>) -> Result<NP_Buffer<'buffer>, NP_Error> {
         let use_size = match ptr_size {
             Some(x) => x,
             None => NP_Size::U16

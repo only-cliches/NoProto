@@ -45,9 +45,9 @@ pub enum NP_Cursor_Value {
 
     // collection items
     MapItem { value_addr: usize, next: usize, key_addr: usize },  // [addr | next | key] u32(12 bytes  [4, 4, 4]),  u16(6 bytes [2, 2, 2]), 
-    TableItem { value_addr: usize, next: usize, index: usize },   // [addr | next | i: u8]  u32(9  bytes  [4, 4, 1]),  u16(5 bytes [2, 2, 1]),   
-    ListItem { value_addr: usize, next: usize, index: usize },   // [addr | next | i: u16] u32(10 bytes  [4, 4, 2]),  u16(6 bytes [2, 2, 2]),
-    TupleItem  { value_addr: usize, index: usize}                // [addr]u32(4 bytes  [4]),  u16(2 bytes [2])           
+    TableItem { value_addr: usize },                // [addr]u32(4 bytes  [4]),  u16(2 bytes [2])    
+    ListItem { value_addr: usize, next: usize, index: usize },    // [addr | next | i: u16] u32(10 bytes  [4, 4, 2]),  u16(6 bytes [2, 2, 2]),
+    TupleItem  { value_addr: usize }                 // [addr]u32(4 bytes  [4]),  u16(2 bytes [2])           
 }
 
 impl<'kind> NP_Cursor_Value {
@@ -56,11 +56,11 @@ impl<'kind> NP_Cursor_Value {
     pub fn get_value_address(&self) -> usize {
         match self {
             NP_Cursor_Value::None => 0,
-            NP_Cursor_Value::Standard { value_addr } => { *value_addr },
+            NP_Cursor_Value::Standard  { value_addr }     => { *value_addr },
             NP_Cursor_Value::TableItem { value_addr, .. } => { *value_addr },
-            NP_Cursor_Value::ListItem { value_addr, .. } =>  { *value_addr },
+            NP_Cursor_Value::ListItem  { value_addr, .. } => { *value_addr },
             NP_Cursor_Value::TupleItem { value_addr, .. } => { *value_addr },
-            NP_Cursor_Value::MapItem { value_addr, .. } => { *value_addr }
+            NP_Cursor_Value::MapItem   { value_addr, .. } => { *value_addr }
         }
     }
     /// Update the value address (doesn't touch the buffer)
@@ -68,10 +68,10 @@ impl<'kind> NP_Cursor_Value {
     pub fn update_value_address(&self, new_value: usize) -> Self {
         match self {
             NP_Cursor_Value::None => NP_Cursor_Value::None,
-            NP_Cursor_Value::Standard { value_addr: _ } => { NP_Cursor_Value::Standard { value_addr: new_value } },
-            NP_Cursor_Value::TableItem { value_addr: _, next , index  } => { NP_Cursor_Value::TableItem { value_addr: new_value, next: *next, index: *index } },
-            NP_Cursor_Value::ListItem { value_addr: _, next , index } =>  { NP_Cursor_Value::ListItem { value_addr: new_value, next: *next, index: *index } },
-            NP_Cursor_Value::TupleItem { value_addr: _, index } => { NP_Cursor_Value::TupleItem { value_addr: new_value, index: *index } },
+            NP_Cursor_Value::Standard { value_addr: _ }                               => { NP_Cursor_Value::Standard { value_addr: new_value } },
+            NP_Cursor_Value::TableItem { value_addr: _  }                => { NP_Cursor_Value::TableItem { value_addr: new_value } },
+            NP_Cursor_Value::ListItem { value_addr: _, next , index }    => { NP_Cursor_Value::ListItem { value_addr: new_value, next: *next, index: *index } },
+            NP_Cursor_Value::TupleItem { value_addr: _ }                 => { NP_Cursor_Value::TupleItem { value_addr: new_value } },
             NP_Cursor_Value::MapItem { value_addr: _, next , key_addr  } => { NP_Cursor_Value::MapItem { value_addr: new_value, next: *next, key_addr: *key_addr} }
         }
     }
@@ -81,27 +81,20 @@ impl<'kind> Default for NP_Cursor_Value {
     fn default() -> Self { NP_Cursor_Value::None }
 }
 
-#[doc(hidden)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum NP_Cursor_Parent {
-    None,
-    List { head: usize, tail: usize, addr: usize, schema_addr: usize},
-    Map { head: usize, length: usize, addr: usize, schema_addr: usize},
-    Table { head: usize, addr: usize, schema_addr: usize},
-    Tuple { addr: usize, schema_addr: usize}
-}
-
-impl Default for NP_Cursor_Parent {
-    fn default() -> Self { NP_Cursor_Parent::None }
-}
 
 #[derive(Debug, Clone, Copy)]
-pub enum NP_Cursor_Collection {
-    None,
+pub enum NP_Cursor_Data {
+    Scalar,
     List { head: usize, tail: usize },
     Map { head: usize, length: usize },
-    Tuple { values: [usize; 255] },
-    Table { values: [usize; 255] }
+    Tuple { values: [usize; 255], length: usize },
+    Table { values: [usize; 255], length: usize }
+}
+
+impl Default for NP_Cursor_Data {
+    fn default() -> Self {
+        NP_Cursor_Data::Scalar
+    }
 }
 
 /// Cursor for pointer value in buffer
@@ -110,115 +103,270 @@ pub enum NP_Cursor_Collection {
 pub struct NP_Cursor {
     /// The location of this cursor in the buffer
     pub buff_addr: usize,
+    /// Stores information about the data at this pointer
+    pub data: NP_Cursor_Data,
     /// The address of the schema for this cursor
     pub schema_addr: NP_Schema_Addr,
     /// the values of the buffer pointer
     pub value: NP_Cursor_Value,
     /// Information about the parent cursor
-    pub parent: NP_Cursor_Parent,
+    pub parent_addr: usize,
     /// The previous cursor
-    pub prev_cursor: Option<usize>,
-    /// The next cursor 
-    pub next_cursor: Option<usize>
+    pub prev_cursor: Option<usize>
 }
 
+/// Represents a cursor address in the memory
+#[derive(Debug, Clone, Copy)]
+pub enum NP_Cursor_Addr {
+    Virtual,
+    Real(usize)
+}
 
 impl<'cursor> NP_Cursor {
 
-    /// Clone a cursor without the previous or next data
-    pub fn clone_lite(&self) -> Self {
-        Self {
-            buff_addr: self.buff_addr,
-            schema_addr: self.schema_addr,
-            value: self.value,
-            parent: self.parent,
+
+    pub fn parse(buff_addr: usize, schema_addr: NP_Schema_Addr, parent_addr: usize, memory: &NP_Memory<'cursor>) -> Result<NP_Cursor_Addr, NP_Error> {
+
+        assert!(buff_addr != 0);
+
+        let addr_size = memory.addr_size_bytes();
+
+        let mut new_cursor = NP_Cursor { 
+            buff_addr: buff_addr, 
+            schema_addr: schema_addr, 
+            data: NP_Cursor_Data::Scalar,
+            value: NP_Cursor::parse_cursor_value(buff_addr, parent_addr, memory), 
+            parent_addr: parent_addr,
             prev_cursor: None,
-            next_cursor: None
+        };
+
+        match memory.schema[schema_addr] {
+            _ => {
+                memory.insert_cache(buff_addr, new_cursor);
+            },
+            NP_Parsed_Schema::Table { columns, .. } => {
+
+                let table_addr = memory.read_address(buff_addr);
+
+                // value has previously been cleared at this pointer
+                if table_addr == 0 { 
+                    new_cursor.data = NP_Cursor_Data::Table { values: [0usize; 255], length: columns.len() };
+                    memory.insert_cache(buff_addr, new_cursor);
+                    return Ok(NP_Cursor_Addr::Real(buff_addr))
+                }
+
+                // read vtables
+                let mut v_table_size = memory.read_bytes()[table_addr];
+                let mut offset = table_addr + 1;
+                let mut index = 0usize;
+                let mut table_column_addr = [0usize; 255];
+                let mut last_v_table: usize = 0;
+
+                loop {
+                    last_v_table = offset - 1;
+                    for x in 0..v_table_size {
+                        table_column_addr[index] = offset;
+                        index += 1;
+                        offset += addr_size;
+                    }
+
+                    // next vtable
+                    offset = memory.read_address(offset);
+                    if offset == 0 {
+                        break;
+                    } else {
+                        v_table_size = memory.read_bytes()[offset];
+                        offset += 1;
+                    }
+                }
+
+                // columns have been added to schema
+                // need to add another vtable
+                if index + 1 < columns.len() {
+
+                    offset = memory.read_bytes().len() + 1;
+
+                    let mut remaining_cols = columns.len() - index;
+                    let mut new_vtable_bytes: Vec<u8> = Vec::new();
+                    new_vtable_bytes.push(remaining_cols as u8);
+                    while remaining_cols > 0 {
+                        match memory.size {
+                            NP_Size::U8 => new_vtable_bytes.extend_from_slice(&[0u8; 1]),
+                            NP_Size::U16 => new_vtable_bytes.extend_from_slice(&[0u8; 2]),
+                            NP_Size::U32 => new_vtable_bytes.extend_from_slice(&[0u8; 4])
+                        }
+                        remaining_cols -= 1;
+
+                        table_column_addr[index] = offset;
+                        index += 1;
+                        offset += addr_size;
+                    }
+
+                    let new_vtable_addr = memory.malloc(new_vtable_bytes)?;
+
+                    let last_vtable_size = memory.read_bytes()[last_v_table] as usize;
+                    last_v_table = 1 + (last_vtable_size * addr_size);
+                    memory.write_address(last_v_table, new_vtable_addr);
+                }
+
+                // insert table data into cache
+                new_cursor.data = NP_Cursor_Data::Table { values: table_column_addr.clone(), length: columns.len() };
+
+                memory.insert_cache(buff_addr, new_cursor);
+
+                // parse columns
+                for idx in 0..columns.len() {
+                    NP_Cursor::parse(table_column_addr[idx], columns[index].2, buff_addr, memory);
+                }
+
+            },
+            NP_Parsed_Schema::List  { of, .. } => {
+                let list_addr = memory.read_address(buff_addr);
+
+                // value has previously been cleared at this pointer
+                if list_addr == 0 { 
+                    new_cursor.data = NP_Cursor_Data::List { head: 0, tail: 0};
+                    memory.insert_cache(buff_addr, new_cursor);
+                    return Ok(NP_Cursor_Addr::Real(buff_addr))
+                }
+
+
+            },
+            NP_Parsed_Schema::Tuple { values, .. } => {
+                let tuple_addr = memory.read_address(buff_addr);
+
+                // value has previously been cleared at this pointer
+                if tuple_addr == 0 { 
+                    new_cursor.data = NP_Cursor_Data::Tuple { values: [0usize; 255], length: values.len() };
+                    memory.insert_cache(buff_addr, new_cursor);
+                    return Ok(NP_Cursor_Addr::Real(buff_addr))
+                }
+
+                // read vtables
+                let mut v_table_size = memory.read_bytes()[tuple_addr];
+                let mut offset = tuple_addr + 1;
+                let mut index = 0usize;
+                let mut table_column_addr = [0usize; 255];
+                let mut last_v_table: usize = 0;
+
+                loop {
+                    last_v_table = offset - 1;
+                    for x in 0..v_table_size {
+                        table_column_addr[index] = offset;
+                        index += 1;
+                        offset += addr_size;
+                    }
+
+                    // next vtable
+                    offset = memory.read_address(offset);
+                    if offset == 0 {
+                        break;
+                    } else {
+                        v_table_size = memory.read_bytes()[offset];
+                        offset += 1;
+                    }
+                }
+
+                // columns have been added to schema
+                // need to add another vtable
+                if index + 1 < values.len() {
+
+                    offset = memory.read_bytes().len() + 1;
+
+                    let mut remaining_cols = values.len() - index;
+                    let mut new_vtable_bytes: Vec<u8> = Vec::new();
+                    new_vtable_bytes.push(remaining_cols as u8);
+                    while remaining_cols > 0 {
+                        match memory.size {
+                            NP_Size::U8 => new_vtable_bytes.extend_from_slice(&[0u8; 1]),
+                            NP_Size::U16 => new_vtable_bytes.extend_from_slice(&[0u8; 2]),
+                            NP_Size::U32 => new_vtable_bytes.extend_from_slice(&[0u8; 4])
+                        }
+                        remaining_cols -= 1;
+
+                        table_column_addr[index] = offset;
+                        index += 1;
+                        offset += addr_size;
+                    }
+
+                    let new_vtable_addr = memory.malloc(new_vtable_bytes)?;
+
+                    let last_vtable_size = memory.read_bytes()[last_v_table] as usize;
+                    last_v_table = 1 + (last_vtable_size * addr_size);
+                    memory.write_address(last_v_table, new_vtable_addr);
+                }
+
+                // insert table data into cache
+                new_cursor.data = NP_Cursor_Data::Table { values: table_column_addr.clone(), length: values.len() };
+
+                memory.insert_cache(buff_addr, new_cursor);
+
+                // parse columns
+                for idx in 0..values.len() {
+                    NP_Cursor::parse(table_column_addr[idx], values[index], buff_addr, memory);
+                }
+
+            },
+            NP_Parsed_Schema::Map   { value, .. } => {
+                let map_addr = memory.read_address(buff_addr);
+
+                // value has previously been cleared at this pointer
+                if map_addr == 0 { 
+                    new_cursor.data = NP_Cursor_Data::Map { head: 0, length: 0};
+                    memory.insert_cache(buff_addr, new_cursor);
+                    return Ok(NP_Cursor_Addr::Real(buff_addr))
+                }
+
+
+            }
         }
+
+        Ok(NP_Cursor_Addr::Real(buff_addr))
     }
 
-    /// Create a new cursor and read details from buffer
-    /// 
-    pub fn new(buff_addr: usize, schema_addr: NP_Schema_Addr, memory: &NP_Memory<'cursor>, parent: NP_Cursor_Parent) -> Self {
-    
-        Self {
-            buff_addr,
-            schema_addr,
-            value: if buff_addr > 0 {
-                match parent {
-                    NP_Cursor_Parent::None => NP_Cursor_Value::Standard { value_addr: memory.read_address(buff_addr) },
-                    NP_Cursor_Parent::List { .. } => {
-                        NP_Cursor_Value::ListItem { 
-                            value_addr:  memory.read_address(buff_addr),
-                            next:  memory.read_address_offset(buff_addr, 1),
-                            index: if buff_addr == 0 { 0 } else { match &memory.size {
-                                NP_Size::U32 => u16::from_be_bytes(*memory.get_2_bytes(buff_addr + 8).unwrap_or(&[0; 2])) as usize,
-                                NP_Size::U16 => u16::from_be_bytes(*memory.get_2_bytes(buff_addr + 4).unwrap_or(&[0; 2])) as usize,
-                                NP_Size::U8 => u8::from_be_bytes([memory.get_1_byte(buff_addr + 2).unwrap_or(0)]) as usize
-                            }}
-                        }
-                    },
-                    NP_Cursor_Parent::Table { schema_addr: _schema_addr, .. } => {
-                        let index = if buff_addr == 0 { 0 } else { match &memory.size {
-                            NP_Size::U32 => memory.read_bytes()[buff_addr + 8] as usize,
-                            NP_Size::U16 => memory.read_bytes()[buff_addr + 4] as usize,
-                            NP_Size::U8 => memory.read_bytes()[buff_addr + 2] as usize
-                        }};
-                        NP_Cursor_Value::TableItem { 
-                            value_addr:  memory.read_address(buff_addr),
-                            next:  memory.read_address_offset(buff_addr, 1),
-                            index: index
-                        }
-                    },
-                    NP_Cursor_Parent::Map { .. } => {
-                        let key_addr = memory.read_address_offset(buff_addr, 2);
-                        NP_Cursor_Value::MapItem { 
-                            value_addr: memory.read_address(buff_addr),
-                            next: memory.read_address_offset(buff_addr,  1),
-                            key_addr: key_addr
-                        }
-                    },
-                    NP_Cursor_Parent::Tuple { addr, .. } => {
-                        let addr_size = memory.addr_size_bytes();
-                        let index = (buff_addr - addr) / addr_size;
-                        NP_Cursor_Value::TupleItem { value_addr: memory.read_address(buff_addr), index: index}
+    #[inline(always)]
+    pub fn parse_cursor_value(buff_addr: usize, parent_addr: usize, memory: &NP_Memory<'cursor>) -> NP_Cursor_Value {
+        if parent_addr == 0 {
+            NP_Cursor_Value::Standard { value_addr: memory.read_address(buff_addr) }
+        } else {
+            let parent_cursor = memory.get_cache(parent_addr);
+
+            match memory.schema[parent_cursor.schema_addr] {
+                NP_Parsed_Schema::Table { .. } => {
+                    NP_Cursor_Value::TableItem { 
+                        value_addr:  memory.read_address(buff_addr)
                     }
-                }
-            } else {
-                match parent {
-                    NP_Cursor_Parent::None => NP_Cursor_Value::Standard { value_addr: 0 },
-                    NP_Cursor_Parent::List { .. } => {
-                        NP_Cursor_Value::ListItem { 
-                            value_addr:  0,
-                            next:  0,
-                            index: 0
-                        }
-                    },
-                    NP_Cursor_Parent::Table { .. } => {
-                        NP_Cursor_Value::TableItem { 
-                            value_addr:  0,
-                            next:  0,
-                            index: 0
-                        }
-                    },
-                    NP_Cursor_Parent::Map { .. } => {
-                        NP_Cursor_Value::MapItem { 
-                            value_addr: 0,
-                            next: 0,
-                            key_addr: 0
-                        }
-                    },
-                    NP_Cursor_Parent::Tuple { .. } => {
-                        NP_Cursor_Value::TupleItem { 
-                            value_addr: 0, 
-                            index: 0
+                },
+                NP_Parsed_Schema::List { .. } => {
+                    NP_Cursor_Value::ListItem { 
+                        value_addr:  memory.read_address(buff_addr),
+                        next:  memory.read_address_offset(buff_addr, 1),
+                        index: match &memory.size {
+                            NP_Size::U32 => u16::from_be_bytes(*memory.get_2_bytes(buff_addr + 8).unwrap_or(&[0; 2])) as usize,
+                            NP_Size::U16 => u16::from_be_bytes(*memory.get_2_bytes(buff_addr + 4).unwrap_or(&[0; 2])) as usize,
+                            NP_Size::U8 => u8::from_be_bytes([memory.get_1_byte(buff_addr + 2).unwrap_or(0)]) as usize
                         }
                     }
+                },
+                NP_Parsed_Schema::Tuple { .. } => {
+                    NP_Cursor_Value::TupleItem { 
+                        value_addr: memory.read_address(buff_addr) 
+                    }
+                },
+                NP_Parsed_Schema::Map { .. } => {
+                    let key_addr = memory.read_address_offset(buff_addr, 2);
+                    NP_Cursor_Value::MapItem { 
+                        value_addr: memory.read_address(buff_addr),
+                        next: memory.read_address_offset(buff_addr,  1),
+                        key_addr: key_addr
+                    }
+                },
+                _ => {
+                    NP_Cursor_Value::Standard { 
+                        value_addr: memory.read_address(buff_addr) 
+                    }
                 }
-            },
-            parent: parent,
-            prev_cursor: None,
-            next_cursor: None
+            }
         }
     }
 

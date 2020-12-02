@@ -198,32 +198,32 @@ impl<'memory> NP_Memory<'memory> {
         match self.size {
             NP_Size::U32 => {
                 match value {
-                    NP_Cursor_Value::None       =>    {  panic!() },
-                    NP_Cursor_Value::Standard { .. }  =>    {  self.malloc_borrow(&[0; 4]) },
-                    NP_Cursor_Value::TupleItem { .. }  =>    {  self.malloc_borrow(&[0; 4]) },
-                    NP_Cursor_Value::MapItem { .. }   =>    { self.malloc_borrow(&[0; 12]) },
-                    NP_Cursor_Value::TableItem { .. }  =>    {  self.malloc_borrow(&[0; 9]) },
-                    NP_Cursor_Value::ListItem { .. }  =>    { self.malloc_borrow(&[0; 10]) }
+                    NP_Cursor_Value::None              =>    { panic!() },
+                    NP_Cursor_Value::Standard  { .. }  =>    { self.malloc_borrow(&[0; 4])  },
+                    NP_Cursor_Value::TupleItem { .. }  =>    { self.malloc_borrow(&[0; 4])  },
+                    NP_Cursor_Value::MapItem   { .. }  =>    { self.malloc_borrow(&[0; 12]) },
+                    NP_Cursor_Value::TableItem { .. }  =>    { self.malloc_borrow(&[0; 4])  },
+                    NP_Cursor_Value::ListItem  { .. }  =>    { self.malloc_borrow(&[0; 10]) }
                 }
             },
             NP_Size::U16 => {
                 match value {
-                    NP_Cursor_Value::None        =>    { panic!() },
-                    NP_Cursor_Value::Standard { .. }    =>    { self.malloc_borrow(&[0; 2]) },
+                    NP_Cursor_Value::None              =>    { panic!() },
+                    NP_Cursor_Value::Standard  { .. }  =>    { self.malloc_borrow(&[0; 2]) },
                     NP_Cursor_Value::TupleItem { .. }  =>    { self.malloc_borrow(&[0; 4]) },
-                    NP_Cursor_Value::MapItem { .. }    =>    { self.malloc_borrow(&[0; 6]) },
-                    NP_Cursor_Value::TableItem  {  .. } =>    { self.malloc_borrow(&[0; 5]) },
-                    NP_Cursor_Value::ListItem { .. }   =>    { self.malloc_borrow(&[0; 6]) }
+                    NP_Cursor_Value::MapItem   { .. }  =>    { self.malloc_borrow(&[0; 6]) },
+                    NP_Cursor_Value::TableItem { .. }  =>    { self.malloc_borrow(&[0; 2]) },
+                    NP_Cursor_Value::ListItem  { .. }  =>    { self.malloc_borrow(&[0; 6]) }
                 }
             },
             NP_Size::U8 => {
                 match value {
-                    NP_Cursor_Value::None        =>    { panic!() },
-                    NP_Cursor_Value::Standard { .. }   =>    { self.malloc_borrow(&[0; 1]) },
-                    NP_Cursor_Value::TupleItem { .. }  =>    { self.malloc_borrow(&[0; 1]) },
-                    NP_Cursor_Value::MapItem   { .. }  =>    { self.malloc_borrow(&[0; 3]) },
-                    NP_Cursor_Value::TableItem  { .. } =>    { self.malloc_borrow(&[0; 3]) },
-                    NP_Cursor_Value::ListItem  { .. }  =>    { self.malloc_borrow(&[0; 3]) }
+                    NP_Cursor_Value::None              =>    { panic!() },
+                    NP_Cursor_Value::Standard   { .. } =>    { self.malloc_borrow(&[0; 1]) },
+                    NP_Cursor_Value::TupleItem  { .. } =>    { self.malloc_borrow(&[0; 1]) },
+                    NP_Cursor_Value::MapItem    { .. } =>    { self.malloc_borrow(&[0; 3]) },
+                    NP_Cursor_Value::TableItem  { .. } =>    { self.malloc_borrow(&[0; 1]) },
+                    NP_Cursor_Value::ListItem   { .. } =>    { self.malloc_borrow(&[0; 3]) }
                 }
             }
         }
@@ -239,7 +239,7 @@ impl<'memory> NP_Memory<'memory> {
                     NP_Cursor_Value::Standard   { .. }  =>    {  4 },
                     NP_Cursor_Value::TupleItem  { .. }  =>    {  4 },
                     NP_Cursor_Value::MapItem    { .. }   =>   { 12 },
-                    NP_Cursor_Value::TableItem  { .. }  =>    {  9 },
+                    NP_Cursor_Value::TableItem  { .. }  =>    {  4 },
                     NP_Cursor_Value::ListItem   { .. }  =>    { 10 }
                 }
             },
@@ -249,7 +249,7 @@ impl<'memory> NP_Memory<'memory> {
                     NP_Cursor_Value::Standard  { .. }   =>    { 2 },
                     NP_Cursor_Value::TupleItem { .. }   =>    { 4 },
                     NP_Cursor_Value::MapItem   { .. }   =>    { 6 },
-                    NP_Cursor_Value::TableItem { .. }   =>    { 5 },
+                    NP_Cursor_Value::TableItem { .. }   =>    { 2 },
                     NP_Cursor_Value::ListItem  { .. }   =>    { 6 }
                 }
             },
@@ -259,7 +259,7 @@ impl<'memory> NP_Memory<'memory> {
                     NP_Cursor_Value::Standard  { .. }  =>    { 1 },
                     NP_Cursor_Value::TupleItem { .. }  =>    { 1 },
                     NP_Cursor_Value::MapItem   { .. }  =>    { 3 },
-                    NP_Cursor_Value::TableItem { .. }  =>    { 3 },
+                    NP_Cursor_Value::TableItem { .. }  =>    { 1 },
                     NP_Cursor_Value::ListItem  { .. }  =>    { 3 }
                 }
             }

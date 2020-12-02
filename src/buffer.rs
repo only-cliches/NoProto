@@ -1,7 +1,7 @@
 //! Top level abstraction for buffer objects
 
-use crate::pointer::{NP_Cursor_Value, NP_Scalar};
-use crate::{pointer::NP_Cursor_Parent, collection::map::NP_Map, utils::print_path};
+use crate::pointer::{NP_Cursor_Addr, NP_Cursor_Value, NP_Scalar};
+use crate::{collection::map::NP_Map, utils::print_path};
 use crate::{schema::NP_TypeKeys, pointer::NP_Value};
 use crate::pointer::NP_Cursor;
 use alloc::string::String;
@@ -29,7 +29,7 @@ pub const LIST_MAX_SIZE: usize = core::u16::MAX as usize;
 pub struct NP_Buffer<'buffer> {
     /// Schema data used by this buffer
     memory: NP_Memory<'buffer>,
-    cursor: NP_Cursor
+    cursor_addr: NP_Cursor_Addr
 }
 
 /// When calling `maybe_compact` on a buffer, this struct is provided to help make a choice on wether to compact or not.
@@ -46,14 +46,16 @@ pub struct NP_Size_Data {
 impl<'buffer> NP_Buffer<'buffer> {
 
     #[doc(hidden)]
-    pub fn _new(memory: NP_Memory<'buffer>) -> Self { // make new buffer
+    pub fn _new(memory: NP_Memory<'buffer>) -> Result<Self, NP_Error> { // make new buffer
 
-        let root_cursor = NP_Cursor::new(ROOT_PTR_ADDR, 0, &memory, NP_Cursor_Parent::None);
+        // let root_cursor = NP_Cursor::new(ROOT_PTR_ADDR, 0, &memory, NP_Cursor_Parent::None);
 
-        NP_Buffer {
-            cursor: root_cursor,
+        NP_Cursor::parse(ROOT_PTR_ADDR, 0, 0, &memory)?;
+
+        Ok(NP_Buffer {
+            cursor_addr: NP_Cursor_Addr::Real(ROOT_PTR_ADDR),
             memory: memory
-        }
+        })
     }
 
 
