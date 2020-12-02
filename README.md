@@ -89,7 +89,7 @@ let user_factory = NP_Factory::new(r#"{
 
 
 // create a new empty buffer
-let mut user_buffer = user_factory.empty_buffer(None, None); // optional capacity, optional address size (u16 by default)
+let mut user_buffer = user_factory.empty_buffer(None, None)?; // optional capacity, optional address size (u16 by default)
 
 // set an internal value of the buffer, set the  "name" column
 user_buffer.set(&["name"], "Billy Joel")?;

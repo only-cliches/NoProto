@@ -11,7 +11,7 @@
 //!    "type": "ulid"
 //! }"#)?;
 //!
-//! let mut new_buffer = factory.empty_buffer(None, None);
+//! let mut new_buffer = factory.empty_buffer(None, None)?;
 //! new_buffer.set(&[], &NP_ULID::generate(1604965249484, 50))?;
 //! 
 //! assert_eq!("1EPQP4CEC3KANC3XYNG9YKAQ", new_buffer.get::<&NP_ULID>(&[])?.unwrap().to_string());
@@ -265,7 +265,7 @@ fn schema_parsing_works() -> Result<(), NP_Error> {
 fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"ulid\"}";
     let factory = crate::NP_Factory::new(schema)?;
-    let mut buffer = factory.empty_buffer(None, None);
+    let mut buffer = factory.empty_buffer(None, None)?;
     buffer.set(&[], &NP_ULID::generate(1606680515909, 212))?;
     assert_eq!(buffer.get::<&NP_ULID>(&[])?, Some(&(NP_ULID::generate(1606680515909, 212))));
     assert_eq!(buffer.get::<&NP_ULID>(&[])?.unwrap().to_string(), "1ERASY5A5VKANC1CJGRZXYW8");

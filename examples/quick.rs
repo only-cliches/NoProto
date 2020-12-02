@@ -21,7 +21,7 @@ fn main() -> Result<(), NP_Error> {
     // create a new empty buffer
     let user_buffer = user_factory
         // optional capacity, optional address size (u16 by default)
-        .empty_buffer(None, None);
+        .empty_buffer(None, None)?;
 
 
     // close buffer and get internal bytes

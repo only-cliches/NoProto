@@ -48,9 +48,8 @@ impl<'buffer> NP_Buffer<'buffer> {
     #[doc(hidden)]
     pub fn _new(memory: NP_Memory<'buffer>) -> Result<Self, NP_Error> { // make new buffer
 
-        // let root_cursor = NP_Cursor::new(ROOT_PTR_ADDR, 0, &memory, NP_Cursor_Parent::None);
-
-        NP_Cursor::parse(ROOT_PTR_ADDR, 0, 0, &memory)?;
+        // Parse root
+        NP_Cursor::parse(ROOT_PTR_ADDR, 0, 0, &memory, 1)?;
 
         Ok(NP_Buffer {
             cursor_addr: NP_Cursor_Addr::Real(ROOT_PTR_ADDR),
@@ -74,7 +73,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     ///     ]
     /// }"#)?;
     /// 
-    /// let mut new_buffer = factory.empty_buffer(None, None);
+    /// let mut new_buffer = factory.empty_buffer(None, None)?;
     /// new_buffer.set(&["name"], "Jeb Kermin");
     /// new_buffer.set(&["age"], 30u8);
     /// 
@@ -107,7 +106,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     ///    "type": "string"
     /// }"#)?;
     /// 
-    /// let mut new_buffer = factory.empty_buffer(None, None);
+    /// let mut new_buffer = factory.empty_buffer(None, None)?;
     /// // set initial value
     /// new_buffer.set(&[], "hello")?;
     /// // close buffer and get bytes
@@ -147,7 +146,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// Reset cursor position to root of buffer
     /// 
     pub fn cursor_to_root(&mut self) {
-        self.cursor = NP_Cursor::new(ROOT_PTR_ADDR, 0, &self.memory, NP_Cursor_Parent::None);
+        self.cursor_addr = NP_Cursor_Addr::Real(ROOT_PTR_ADDR);
     }
 
     /// Used to set scalar values inside the buffer, the path only works with dot notation.
@@ -167,7 +166,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     ///     }}
     /// }"#)?;
     /// 
-    /// let mut new_buffer = factory.empty_buffer(None, None);
+    /// let mut new_buffer = factory.empty_buffer(None, None)?;
     /// // third item in the top level list -> key "alpha" of map at 3rd element -> 9th element of list at "alpha" key
     /// // 
     /// new_buffer.set(&["3", "alpha", "9"], "look at all this nesting madness")?;
@@ -211,7 +210,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     ///     "of": {"type": "string"}
     /// }"#)?;
     /// 
-    /// let mut new_buffer = factory.empty_buffer(None, None);
+    /// let mut new_buffer = factory.empty_buffer(None, None)?;
     /// // set value at 1 index
     /// new_buffer.set(&["1"], "hello")?;
     /// // set value at 4 index
@@ -251,7 +250,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     ///     ]
     /// }"#)?;
     /// 
-    /// let mut new_buffer = factory.empty_buffer(None, None);
+    /// let mut new_buffer = factory.empty_buffer(None, None)?;
     /// // set value of age
     /// new_buffer.set(&["age"], 20u8)?;
     /// // set value of name
@@ -291,7 +290,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     ///    "value": {"type": "string"}
     /// }"#)?;
     /// 
-    /// let mut new_buffer = factory.empty_buffer(None, None);
+    /// let mut new_buffer = factory.empty_buffer(None, None)?;
     /// // set value of color key
     /// new_buffer.set(&["color"], "blue")?;
     /// // set value of sport key
@@ -325,7 +324,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     ///     ]
     /// }"#)?;
     /// 
-    /// let mut new_buffer = factory.empty_buffer(None, None);
+    /// let mut new_buffer = factory.empty_buffer(None, None)?;
     /// // set value at 0 index
     /// new_buffer.set(&["0"], "hello")?;
     /// // set value at 2 index
@@ -465,7 +464,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     ///     "of": {"type": "string"}
     /// }"#)?;
     /// 
-    /// let mut new_buffer = factory.empty_buffer(None, None);
+    /// let mut new_buffer = factory.empty_buffer(None, None)?;
     /// new_buffer.set(&["3"], "launch")?;
     /// new_buffer.list_push(&[], "this")?;
     /// new_buffer.list_push(&[], "rocket")?;
@@ -483,7 +482,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     ///     };
     /// });
     /// 
-    /// let mut new_buffer = factory.empty_buffer(None, None);
+    /// let mut new_buffer = factory.empty_buffer(None, None)?;
     /// new_buffer.list_push(&[], "launch")?;
     /// new_buffer.list_push(&[], "this")?;
     /// new_buffer.list_push(&[], "rocket")?;
@@ -544,7 +543,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     ///    "type": "string"
     /// }"#)?;
     /// 
-    /// let mut new_buffer = factory.empty_buffer(None, None);
+    /// let mut new_buffer = factory.empty_buffer(None, None)?;
     /// // get schema of root
     /// let type_key = new_buffer.get_type(&[])?.unwrap();
     /// 
@@ -589,7 +588,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     ///    "type": "string"
     /// }"#)?;
     /// 
-    /// let mut new_buffer = factory.empty_buffer(None, None);
+    /// let mut new_buffer = factory.empty_buffer(None, None)?;
     /// // set initial value
     /// new_buffer.set(&[], "hello")?;
     /// // get length of value at root (String)
@@ -609,7 +608,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     ///     "of": {"type": "string"}
     /// }"#)?;
     /// 
-    /// let mut new_buffer = factory.empty_buffer(None, None);
+    /// let mut new_buffer = factory.empty_buffer(None, None)?;
     /// // set value at 9th index
     /// new_buffer.set(&["9"], "hello")?;
     /// // get length of value at root (List)
@@ -632,7 +631,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     ///     ]
     /// }"#)?;
     /// 
-    /// let mut new_buffer = factory.empty_buffer(None, None);
+    /// let mut new_buffer = factory.empty_buffer(None, None)?;
     /// // get length of value at root (Table)
     /// assert_eq!(new_buffer.length(&[])?, Some(2));
     /// 
@@ -650,7 +649,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     ///    "value": {"type": "string"}
     /// }"#)?;
     /// 
-    /// let mut new_buffer = factory.empty_buffer(None, None);
+    /// let mut new_buffer = factory.empty_buffer(None, None)?;
     /// // set values
     /// new_buffer.set(&["foo"], "bar")?;
     /// new_buffer.set(&["foo2"], "bar2")?;
@@ -674,7 +673,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     ///     ]
     /// }"#)?;
     /// 
-    /// let mut new_buffer = factory.empty_buffer(None, None);
+    /// let mut new_buffer = factory.empty_buffer(None, None)?;
     /// // get length of value at root (Tuple)
     /// assert_eq!(new_buffer.length(&[])?, Some(2));
     /// 
@@ -743,7 +742,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     ///     "of": {"type": "string"}
     /// }"#)?;
     /// 
-    /// let mut new_buffer = factory.empty_buffer(None, None);
+    /// let mut new_buffer = factory.empty_buffer(None, None)?;
     /// // set index 0
     /// new_buffer.set(&["0"], "hello")?;
     /// // del index 0
@@ -788,7 +787,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     ///     }}
     /// }"#)?;
     /// 
-    /// let mut new_buffer = factory.empty_buffer(None, None);
+    /// let mut new_buffer = factory.empty_buffer(None, None)?;
     /// // third item in the top level list -> key "alpha" of map at 3rd element -> 9th element of list at "alpha" key
     /// // 
     /// new_buffer.set(&["3", "alpha", "9"], "who would build a schema like this")?;
@@ -843,7 +842,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     ///    "type": "string"
     /// }"#)?;
     /// 
-    /// let mut new_buffer = factory.empty_buffer(None, None);
+    /// let mut new_buffer = factory.empty_buffer(None, None)?;
     /// // set initial value
     /// new_buffer.set(&[], "hello")?;
     /// // using 11 bytes
@@ -906,7 +905,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     ///    "type": "string"
     /// }"#)?;
     /// 
-    /// let mut new_buffer = factory.empty_buffer(None, None);
+    /// let mut new_buffer = factory.empty_buffer(None, None)?;
     /// // set initial value
     /// new_buffer.set(&[], "hello")?;
     /// // using 11 bytes
@@ -971,7 +970,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     ///    "type": "string"
     /// }"#)?;
     /// 
-    /// let mut new_buffer = factory.empty_buffer(None, None);
+    /// let mut new_buffer = factory.empty_buffer(None, None)?;
     /// new_buffer.set(&[], "hello")?;
     /// assert_eq!(NP_Size_Data {
     ///     current_buffer: 11,

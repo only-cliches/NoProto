@@ -125,7 +125,7 @@ pub enum NP_Cursor_Addr {
 impl<'cursor> NP_Cursor {
 
 
-    pub fn parse(buff_addr: usize, schema_addr: NP_Schema_Addr, parent_addr: usize, memory: &NP_Memory<'cursor>) -> Result<NP_Cursor_Addr, NP_Error> {
+    pub fn parse(buff_addr: usize, schema_addr: NP_Schema_Addr, parent_addr: usize, memory: &NP_Memory<'cursor>) -> Result<(), NP_Error> {
 
         assert!(buff_addr != 0);
 
@@ -152,7 +152,7 @@ impl<'cursor> NP_Cursor {
                 if table_addr == 0 { 
                     new_cursor.data = NP_Cursor_Data::Table { values: [0usize; 255], length: columns.len() };
                     memory.insert_cache(buff_addr, new_cursor);
-                    return Ok(NP_Cursor_Addr::Real(buff_addr))
+                    return Ok(())
                 }
 
                 // read vtables
@@ -216,7 +216,7 @@ impl<'cursor> NP_Cursor {
 
                 // parse columns
                 for idx in 0..columns.len() {
-                    NP_Cursor::parse(table_column_addr[idx], columns[index].2, buff_addr, memory);
+                    NP_Cursor::parse(table_column_addr[idx], columns[index].2, buff_addr, memory)?;
                 }
 
             },
@@ -227,9 +227,20 @@ impl<'cursor> NP_Cursor {
                 if list_addr == 0 { 
                     new_cursor.data = NP_Cursor_Data::List { head: 0, tail: 0};
                     memory.insert_cache(buff_addr, new_cursor);
-                    return Ok(NP_Cursor_Addr::Real(buff_addr))
+                    return Ok(())
                 }
 
+                let head = memory.read_address(list_addr);
+                let tail = memory.read_address(list_addr + addr_size);
+
+                new_cursor.data = NP_Cursor_Data::List { head: head, tail: tail };
+
+                memory.insert_cache(buff_addr, new_cursor);
+
+                // parse list children
+                if head != 0 {
+
+                }
 
             },
             NP_Parsed_Schema::Tuple { values, .. } => {
@@ -239,7 +250,7 @@ impl<'cursor> NP_Cursor {
                 if tuple_addr == 0 { 
                     new_cursor.data = NP_Cursor_Data::Tuple { values: [0usize; 255], length: values.len() };
                     memory.insert_cache(buff_addr, new_cursor);
-                    return Ok(NP_Cursor_Addr::Real(buff_addr))
+                    return Ok(())
                 }
 
                 // read vtables
@@ -303,7 +314,7 @@ impl<'cursor> NP_Cursor {
 
                 // parse columns
                 for idx in 0..values.len() {
-                    NP_Cursor::parse(table_column_addr[idx], values[index], buff_addr, memory);
+                    NP_Cursor::parse(table_column_addr[idx], values[index], buff_addr, memory)?;
                 }
 
             },
@@ -314,14 +325,14 @@ impl<'cursor> NP_Cursor {
                 if map_addr == 0 { 
                     new_cursor.data = NP_Cursor_Data::Map { head: 0, length: 0};
                     memory.insert_cache(buff_addr, new_cursor);
-                    return Ok(NP_Cursor_Addr::Real(buff_addr))
+                    return Ok(())
                 }
 
 
             }
         }
 
-        Ok(NP_Cursor_Addr::Real(buff_addr))
+        Ok(())
     }
 
     #[inline(always)]

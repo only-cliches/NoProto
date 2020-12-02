@@ -587,7 +587,7 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let factory = crate::NP_Factory::new(schema)?;
 
     // compaction removes values no longer in buffer
-    let mut buffer = factory.empty_buffer(None, None);
+    let mut buffer = factory.empty_buffer(None, None)?;
     buffer.set(&["10"], "hello, world")?;
     assert_eq!(buffer.get::<&str>(&["10"])?, Some("hello, world"));
     assert_eq!(buffer.calc_bytes()?.current_buffer, 28usize);
@@ -596,7 +596,7 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);
 
     // values preserved through compaction
-    let mut buffer = factory.empty_buffer(None, None);
+    let mut buffer = factory.empty_buffer(None, None)?;
     buffer.set(&["10"], "hello, world")?;
     buffer.set(&["12"], "hello, world2")?;
     assert_eq!(buffer.get::<&str>(&["10"])?, Some("hello, world"));
