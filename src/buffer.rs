@@ -2,7 +2,7 @@
 
 use core::hint::unreachable_unchecked;
 
-use crate::pointer::{NP_Cursor_Addr, NP_Cursor_Data, NP_Cursor_Value, NP_Scalar};
+use crate::pointer::{NP_Cursor_Addr, NP_Cursor_Data, NP_Scalar};
 use crate::{collection::map::NP_Map, utils::print_path};
 use crate::{schema::NP_TypeKeys, pointer::NP_Value};
 use crate::pointer::NP_Cursor;
@@ -87,10 +87,10 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// 
     pub fn json_encode(&self, path: &'buffer [&str]) -> Result<NP_JSON, NP_Error> {
 
-        let value_cursor = self.select(self.cursor.clone(), false, path, 0)?;
+        let value_cursor = self.select(&self.cursor_addr, false, path, 0)?;
 
         if let Some(x) = value_cursor {
-            Ok(NP_Cursor::json_encode(&x, &self.memory))
+            Ok(NP_Cursor::json_encode(x, &self.memory))
         } else {
             Ok(NP_JSON::Null)
         }
@@ -132,7 +132,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// 
     pub fn move_cursor(&mut self, path: &[&str]) -> Result<bool, NP_Error> {
 
-        let value_cursor = self.select(self.cursor.clone(), true, path, 0)?;
+        let value_cursor = self.select(&self.cursor_addr, true, path, 0)?;
 
         let cursor = if let Some(x) = value_cursor {
             x
@@ -140,7 +140,7 @@ impl<'buffer> NP_Buffer<'buffer> {
             return Ok(false);
         };
 
-        self.cursor = cursor;
+        self.cursor_addr = cursor;
 
         Ok(true)
     }
@@ -183,14 +183,10 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// 
     pub fn set<X>(&mut self, path: &[&str], value: X) -> Result<bool, NP_Error> where X: NP_Value<'buffer> + NP_Scalar {
 
-        let value_cursor = self.select(self.cursor.clone(), true, path, 0)?;
+        let value_cursor = self.select(&self.cursor_addr, true, path, 0)?;
         match value_cursor {
             Some(x) => {
-                if path.len() == 0 {
-                    self.cursor = X::set_value(x, &self.memory, value)?;
-                } else {
-                    X::set_value(x, &self.memory, value)?;
-                }
+                X::set_value(x, &self.memory, value)?;
                 Ok(true)
             }
             None => Ok(false)
@@ -396,61 +392,6 @@ impl<'buffer> NP_Buffer<'buffer> {
     
     }
 
-
-
-    /// Allows quick and efficient inserting into lists, maps and tables.
-    /// CAREFUL.  Unlike the `set` method, **this one does not check for existing records with the provided key**.  This works for `Lists`, `Maps` and `Tables`.
-    /// 
-    /// You get a very fast insert into the buffer at the desired key, but **you must gaurantee that you're not inserting a key that's already been inserted.**.
-    /// 
-    /// This method will let you insert duplicate keys all day long, then when you go to compact the buffer the **duplicates will not be deleted**.
-    /// 
-    /// This is best used to quickly fill data into a new buffer.
-    /// 
-    /// 
-    pub fn fast_insert<X>(&mut self, key: &str, value: X) -> Result<bool, NP_Error> where X: NP_Value<'buffer> + NP_Scalar {
-        let collection_cursor = self.cursor.clone();
-
-        match self.memory.schema[collection_cursor.schema_addr] {
-            NP_Parsed_Schema::List { of, .. } => { // list push
-
-                let of_schema = &self.memory.schema[of];
-
-                // type does not match schema
-                if X::type_idx().1 != *of_schema.get_type_key() {
-                    let mut err = "TypeError: Attempted to set value for type (".to_owned();
-                    err.push_str(X::type_idx().0);
-                    err.push_str(") into schema of type (");
-                    err.push_str(of_schema.get_type_data().0);
-                    err.push_str(")\n");
-                    return Err(NP_Error::new(err));
-                }
-
-                let (_new_index, new_cursor) = NP_List::push(collection_cursor, &self.memory, None)?;
-
-                X::set_value(new_cursor, &self.memory, value)?;
-
-                Ok(true)
-            },
-            NP_Parsed_Schema::Map { .. } => {
-                let new_cursor = NP_Map::select_into(collection_cursor, &self.memory, key, true, true)?;
-                X::set_value(new_cursor, &self.memory, value)?;
-                Ok(true)
-            },
-            NP_Parsed_Schema::Table { .. } => {
-                let new_cursor = NP_Table::select_into(collection_cursor, &self.memory, key, true, true)?;
-                match new_cursor {
-                    Some(x) => { 
-                        X::set_value(x, &self.memory, value)?;
-                        Ok(true)
-                    },
-                    None => Ok(false)
-                }
-            },
-            _ => Ok(false)
-        }
-    }
-
     /// Push a value onto the end of a list.
     /// The path provided must resolve to a list type, and the type being pushed must match the schema
     /// 
@@ -563,7 +504,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// ```
     /// 
     pub fn get_type(&self, path: &[&str]) -> Result<Option<&'buffer NP_TypeKeys>, NP_Error> {
-        let value_cursor = self.select(self.cursor.clone(), false, path, 0)?;
+        let value_cursor = self.select(&self.cursor_addr, false, path, 0)?;
 
         let found_cursor = if let Some(x) = value_cursor {
             x
@@ -571,7 +512,7 @@ impl<'buffer> NP_Buffer<'buffer> {
             return Ok(None)
         };
 
-        Ok(Some(self.memory.schema[found_cursor.schema_addr].get_type_key()))
+        Ok(Some(self.memory.get_schema(&found_cursor).get_type_key()))
     }
 
     /// Get length of String, Bytes, Table, Tuple, List or Map Type
@@ -757,15 +698,11 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// 
     pub fn del(&mut self, path: &[&str]) -> Result<bool, NP_Error> {
 
-        let value_cursor = self.select(self.cursor.clone(), false, path, 0)?;
+        let value_cursor = self.select(&self.cursor_addr, false, path, 0)?;
         match value_cursor {
             Some(x) => {
                 // clear value address in buffer
-                self.memory.write_address(x.buff_addr, 0);
-                if path.len() == 0 {
-                    self.cursor.value = self.cursor.value.update_value_address(0);
-                }
-
+                unsafe { (*self.memory.get_parsed(&x).value).set_addr_value(0) };
                 Ok(true)
             }
             None => Ok(false)
@@ -1000,7 +937,7 @@ impl<'buffer> NP_Buffer<'buffer> {
         }
     }
 
-    fn select(&self, cursor: NP_Cursor_Addr, create_path: bool, path: &[&str], mut path_index: usize) -> Result<Option<NP_Cursor_Addr>, NP_Error> {
+    fn select(&self, cursor: &NP_Cursor_Addr, create_path: bool, path: &[&str], mut path_index: usize) -> Result<Option<NP_Cursor_Addr>, NP_Error> {
 
         let mut loop_cursor = cursor;
 

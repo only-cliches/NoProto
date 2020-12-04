@@ -23,6 +23,7 @@ pub mod uuid;
 pub mod option;
 pub mod date;
 
+use crate::hashmap::NP_HashMap;
 use core::hint::unreachable_unchecked;
 
 use alloc::prelude::v1::Box;
@@ -64,102 +65,188 @@ pub struct NP_Pointer_Map_Item {
     pub key_hash: [u8; 4]
 }
 
-#[doc(hidden)]
-#[derive(Debug)]
-#[repr(C)]
-pub struct NP_Pointer_Tuple_item {
-    pub addr_value: [u8; 2]
+pub trait NP_Pointer_Bytes {
+    fn get_addr_value(&self) -> u16         { panic!() }
+    fn set_addr_value(&mut self, addr: u16) { panic!() }
+    fn get_next_addr(&self) -> u16          { panic!() }
+    fn set_next_addr(&self, addr: u16)      { panic!() }
+    fn set_index(&self, index: u8)          { panic!() }
+    fn get_index(&self) -> u8               { panic!() }
+    fn set_key_hash(&self, hash: u32)       { panic!() }
+    fn get_key_hash(&self) -> u32           { panic!() }
+    fn reset(&mut self)                     { panic!() }
+    fn get_size(&self) -> usize             { panic!() }
 }
 
-#[doc(hidden)]
-#[derive(Debug)]
-#[repr(C)]
-pub struct NP_Pointer_Table_Item {
-    pub addr_value: [u8; 2]
-}
-
-pub trait NP_Pointer_T {}
-
-
-pub struct Test {
-    pub test: *mut dyn NP_Pointer_T
-}
-
-#[doc(hidden)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum NP_Cursor_Value {
-    None,
-    Standard { value_addr: usize },   // u32(4 bytes [4]), u16(2 bytes [2])
-
-    // collection items
-    MapItem { value_addr: usize, next: usize, key_addr: usize },  // [addr | next | key] u32(12 bytes  [4, 4, 4]),  u16(6 bytes [2, 2, 2]), 
-    TableItem { value_addr: usize },                // [addr]u32(4 bytes  [4]),  u16(2 bytes [2])    
-    ListItem { value_addr: usize, next: usize, index: usize },    // [addr | next | i: u16] u32(10 bytes  [4, 4, 2]),  u16(6 bytes [2, 2, 2]),
-    TupleItem  { value_addr: usize }                 // [addr]u32(4 bytes  [4]),  u16(2 bytes [2])           
-}
-
-impl<'kind> NP_Cursor_Value {
-    /// Get the value address of this cursor
+impl NP_Pointer_Bytes for NP_Pointer_Scalar {
     #[inline(always)]
-    pub fn get_value_address(&self) -> usize {
-        match self {
-            NP_Cursor_Value::None => 0,
-            NP_Cursor_Value::Standard  { value_addr }     => { *value_addr },
-            NP_Cursor_Value::TableItem { value_addr, .. } => { *value_addr },
-            NP_Cursor_Value::ListItem  { value_addr, .. } => { *value_addr },
-            NP_Cursor_Value::TupleItem { value_addr, .. } => { *value_addr },
-            NP_Cursor_Value::MapItem   { value_addr, .. } => { *value_addr }
+    fn get_addr_value(&self) -> u16 { u16::from_be_bytes(self.addr_value) }
+    #[inline(always)]
+    fn set_addr_value(&mut self, addr: u16) { self.addr_value = addr.to_be_bytes() }
+    #[inline(always)]
+    fn reset(&mut self) { self.addr_value = [0; 2] }
+    #[inline(always)]
+    fn get_size(&self) -> usize { 2 }
+}
+impl NP_Pointer_Bytes for NP_Pointer_List_Item {
+    #[inline(always)]
+    fn get_addr_value(&self) -> u16 { u16::from_be_bytes(self.addr_value) }
+    #[inline(always)]
+    fn set_addr_value(&mut self, addr: u16) { self.addr_value = addr.to_be_bytes() }
+    #[inline(always)]
+    fn get_next_addr(&self) -> u16 { u16::from_be_bytes(self.next_value) }
+    #[inline(always)]
+    fn set_next_addr(&self, addr: u16) { self.next_value = addr.to_be_bytes() }
+    #[inline(always)]
+    fn set_index(&self, index: u8)  { self.index = index }
+    #[inline(always)]
+    fn get_index(&self) -> u8  { self.index }
+    #[inline(always)]
+    fn reset(&mut self) { self.addr_value = [0; 2]; self.index = 0; self.next_value = [0; 2]; }
+    #[inline(always)]
+    fn get_size(&self) -> usize { 5 }
+}
+impl NP_Pointer_Bytes for NP_Pointer_Map_Item {
+    #[inline(always)]
+    fn get_addr_value(&self) -> u16 { u16::from_be_bytes(self.addr_value) }
+    #[inline(always)]
+    fn set_addr_value(&mut self, addr: u16) { self.addr_value = addr.to_be_bytes() }
+    #[inline(always)]
+    fn get_next_addr(&self) -> u16 { u16::from_be_bytes(self.next_value) }
+    #[inline(always)]
+    fn set_next_addr(&self, addr: u16) { self.next_value = addr.to_be_bytes() }
+    #[inline(always)]
+    fn set_key_hash(&self, hash: u32)  { self.key_hash = hash.to_be_bytes(); }
+    #[inline(always)]
+    fn get_key_hash(&self) -> u32  { u32::from_be_bytes(self.key_hash) }
+    #[inline(always)]
+    fn reset(&mut self) { self.addr_value = [0; 2]; self.key_hash = [0; 4]; self.next_value = [0; 2]; }
+    #[inline(always)]
+    fn get_size(&self) -> usize { 8 }
+}
+
+impl NP_Pointer_Bytes for [u8; 8] {
+    #[inline(always)]
+    fn get_addr_value(&self) -> u16 { u16::from_be_bytes(unsafe { *(&self[0..2] as *const [u8] as *const [u8; 2]) }) }
+    #[inline(always)]
+    fn set_addr_value(&mut self, addr: u16) {
+        let b = addr.to_be_bytes();
+        self[0] = b[0];
+        self[1] = b[1];
+    }
+    #[inline(always)]
+    fn get_next_addr(&self) -> u16 { u16::from_be_bytes(unsafe { *(&self[2..4] as *const [u8] as *const [u8; 2]) }) }
+    #[inline(always)]
+    fn set_next_addr(&self, addr: u16) { 
+        let b = addr.to_be_bytes();
+        self[2] = b[0];
+        self[3] = b[1];
+    }
+    #[inline(always)]
+    fn set_index(&self, index: u8)  { self[4] = index }
+    #[inline(always)]
+    fn get_index(&self) -> u8  { self[4] }
+    #[inline(always)]
+    fn set_key_hash(&self, hash: u32)  { 
+        let b = hash.to_be_bytes();
+        self[4] = b[0];
+        self[5] = b[1];
+        self[6] = b[2];
+        self[7] = b[3];
+    }
+    #[inline(always)]
+    fn get_key_hash(&self) -> u32 { u32::from_be_bytes(unsafe { *(&self[4..8] as *const [u8] as *const [u8; 4]) }) }
+    #[inline(always)]
+    fn reset(&mut self) {
+        for (i, x) in self.iter().enumerate() {
+            self[i] = 0;
         }
     }
-    /// Update the value address (doesn't touch the buffer)
-    #[inline(always)]
-    pub fn update_value_address(&self, new_value: usize) -> Self {
-        match self {
-            NP_Cursor_Value::None => NP_Cursor_Value::None,
-            NP_Cursor_Value::Standard { value_addr: _ }                               => { NP_Cursor_Value::Standard { value_addr: new_value } },
-            NP_Cursor_Value::TableItem { value_addr: _  }                => { NP_Cursor_Value::TableItem { value_addr: new_value } },
-            NP_Cursor_Value::ListItem { value_addr: _, next , index }    => { NP_Cursor_Value::ListItem { value_addr: new_value, next: *next, index: *index } },
-            NP_Cursor_Value::TupleItem { value_addr: _ }                 => { NP_Cursor_Value::TupleItem { value_addr: new_value } },
-            NP_Cursor_Value::MapItem { value_addr: _, next , key_addr  } => { NP_Cursor_Value::MapItem { value_addr: new_value, next: *next, key_addr: *key_addr} }
-        }
-    }
 }
 
-impl<'kind> Default for NP_Cursor_Value {
-    fn default() -> Self { NP_Cursor_Value::None }
-}
-
-
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug)]
 pub enum NP_Cursor_Data {
+    Virtual,
     Scalar,
-    List { head: usize, tail: usize },
-    Map { head: usize, length: usize },
-    Tuple { values: [usize; 255], length: usize },
-    Table { values: [usize; 255], length: usize }
+    List { bytes: *mut NP_List_Bytes },
+    Map { value_map: NP_HashMap, bytes: *mut NP_Map_Bytes },
+    Tuple { bytes: [(bool, *mut NP_Vtable); 64] }, // (exists_in_buffer, VTable )
+    Table { bytes: [(bool, *mut NP_Vtable); 64] }  // (exists_in_buffer, VTable )
 }
 
-impl NP_Cursor_Data {
-    pub fn new(schema: &NP_Parsed_Schema) -> Self {
-        match schema {
-            NP_Parsed_Schema::Table { columns, .. } => NP_Cursor_Data::Table { values: [0; 255], length: columns.len() },
-            NP_Parsed_Schema::Tuple { values, .. } => NP_Cursor_Data::Tuple { values: [0; 255], length: values.len() },
-            NP_Parsed_Schema::List { .. } => NP_Cursor_Data::List { head: 0, tail: 0},
-            NP_Parsed_Schema::Map { .. } => NP_Cursor_Data::Map { head: 0, length: 0},
-            _ => NP_Cursor_Data::Scalar
-        }
+#[repr(C)]
+pub struct NP_List_Bytes {
+    head: [u8; 2],
+    tail: [u8; 2]
+}
+
+impl NP_List_Bytes {
+    #[inline(always)]
+    pub fn set_head(&mut self, head: u16) {
+        self.head = head.to_be_bytes();
+    }
+    #[inline(always)]
+    pub fn get_head(&self) -> u16 {
+        u16::from_be_bytes(self.head)
+    }
+    #[inline(always)]
+    pub fn set_tail(&mut self, tail: u16) {
+        self.tail = tail.to_be_bytes();
+    }
+    #[inline(always)]
+    pub fn get_tail(&self) -> u16 {
+        u16::from_be_bytes(self.tail)
     }
 }
+
+#[repr(C)]
+pub struct NP_Map_Bytes {
+    head: [u8; 2],  
+}
+
+impl NP_Map_Bytes {
+    #[inline(always)]
+    pub fn set_head(&mut self, head: u16) {
+        self.head = head.to_be_bytes();
+    }
+    #[inline(always)]
+    pub fn get_head(&self) -> u16 {
+        u16::from_be_bytes(self.head)
+    }
+}
+
+// holds 4 u16 addresses and a next value (10 bytes)
+#[repr(C)]
+pub struct NP_Vtable {
+    pub values: [NP_Pointer_Scalar; 4],
+    next: [u8; 2]
+}
+
+impl NP_Vtable {
+
+    #[inline(always)]
+    pub fn get_next(&self) -> u16 {
+        u16::from_be_bytes(unsafe { *(&self.next as *const [u8] as *const [u8; 2]) }) 
+    }
+
+    #[inline(always)]
+    pub fn set_next(&mut self, value: u16) {
+        let bytes = value.to_be_bytes();
+        self.next[0] = bytes[0];
+        self.next[1] = bytes[1];
+    }
+}
+
 
 impl Default for NP_Cursor_Data {
     fn default() -> Self {
-        NP_Cursor_Data::Scalar
+        NP_Cursor_Data::Virtual
     }
 }
 
 /// Cursor for pointer value in buffer
 /// 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug)]
 pub struct NP_Cursor {
     /// The location of this cursor in the buffer
     pub buff_addr: usize,
@@ -167,8 +254,10 @@ pub struct NP_Cursor {
     pub data: NP_Cursor_Data,
     /// The address of the schema for this cursor
     pub schema_addr: NP_Schema_Addr,
+    /// Virtual cursor bytes
+    pub temp_bytes: Option<[u8; 8]>,
     /// the values of the buffer pointer
-    pub value: NP_Cursor_Value,
+    pub value: *mut dyn NP_Pointer_Bytes,
     /// Information about the parent cursor
     pub parent_addr: usize,
     /// The previous cursor
@@ -184,25 +273,35 @@ pub enum NP_Cursor_Addr {
 
 impl<'cursor> NP_Cursor {
 
+    pub fn new_virtual() -> Self {
+        let bytes = [0u8; 8];
+        Self {
+            buff_addr: 0,
+            data: NP_Cursor_Data::Virtual,
+            schema_addr: 0,
+            temp_bytes: Some(bytes),
+            value: unsafe { &mut bytes as *mut dyn NP_Pointer_Bytes},
+            parent_addr: 0,
+            prev_cursor: None
+        }
+    }
 
     pub fn parse(buff_addr: usize, schema_addr: NP_Schema_Addr, parent_addr: usize, memory: &NP_Memory<'cursor>) -> Result<(), NP_Error> {
 
-        assert!(buff_addr != 0);
-
-        let addr_size = memory.addr_size_bytes();
 
         let mut new_cursor = NP_Cursor { 
             buff_addr: buff_addr, 
             schema_addr: schema_addr, 
             data: NP_Cursor_Data::Scalar,
-            value: NP_Cursor::parse_cursor_value(buff_addr, parent_addr, memory), 
+            temp_bytes: None,
+            value: unsafe { memory.write_bytes().as_ptr() as *mut NP_Pointer_Scalar }, 
             parent_addr: parent_addr,
             prev_cursor: None,
         };
 
         match memory.schema[schema_addr] {
             _ => {
-                memory.insert_cache(buff_addr, new_cursor);
+                memory.insert_parsed(buff_addr, new_cursor);
             },
             NP_Parsed_Schema::Table { columns, .. } => {
 
@@ -436,6 +535,7 @@ impl<'cursor> NP_Cursor {
         Ok(())
     }
 
+    /*
     #[inline(always)]
     pub fn parse_cursor_value(buff_addr: usize, parent_addr: usize, memory: &NP_Memory<'cursor>) -> NP_Cursor_Value {
         if parent_addr == 0 {
@@ -480,14 +580,14 @@ impl<'cursor> NP_Cursor {
                 }
             }
         }
-    }
+    }*/
 
     /// Exports this pointer and all it's descendants into a JSON object.
     /// This will create a copy of the underlying data and return default values where there isn't data.
     /// 
     pub fn json_encode(cursor: NP_Cursor_Addr, memory: &NP_Memory<'cursor>) -> NP_JSON {
 
-        match memory.schema[memory.get_cache(&cursor).schema_addr].get_type_key() {
+        match memory.schema[memory.get_parsed(&cursor).schema_addr].get_type_key() {
             NP_TypeKeys::None           => { NP_JSON::Null },
             NP_TypeKeys::Any            => { NP_JSON::Null },
             NP_TypeKeys::UTF8String     => { NP_String::to_json(cursor, memory) },
@@ -521,7 +621,7 @@ impl<'cursor> NP_Cursor {
     /// 
     pub fn compact(from_cursor: NP_Cursor_Addr, from_memory: &NP_Memory<'cursor>, to_cursor: NP_Cursor_Addr, to_memory: &NP_Memory<'cursor>) -> Result<NP_Cursor_Addr, NP_Error> {
 
-        match from_memory.schema[from_memory.get_cache(&from_cursor).schema_addr].get_type_key() {
+        match from_memory.schema[from_memory.get_parsed(&from_cursor).schema_addr].get_type_key() {
             NP_TypeKeys::Any           => { Ok(to_cursor) }
             NP_TypeKeys::UTF8String    => { NP_String::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
             NP_TypeKeys::Bytes         => {  NP_Bytes::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
@@ -554,7 +654,7 @@ impl<'cursor> NP_Cursor {
     /// 
     pub fn set_default(cursor: NP_Cursor_Addr, memory: &NP_Memory<'cursor>) -> Result<(), NP_Error> {
 
-        match memory.schema[memory.get_cache(&cursor).schema_addr].get_type_key() {
+        match memory.schema[memory.get_parsed(&cursor).schema_addr].get_type_key() {
             NP_TypeKeys::None        => { panic!() },
             NP_TypeKeys::Any         => { panic!() },
             NP_TypeKeys::Table       => { panic!() },
@@ -591,13 +691,13 @@ impl<'cursor> NP_Cursor {
 
         if let NP_Cursor_Addr::Real(buff_addr) = cursor_addr {
 
-            let cursor = memory.get_cache(&cursor_addr);
+            let cursor = memory.get_parsed(&cursor_addr);
 
             // size of pointer
-            let base_size = memory.ptr_size(cursor);
+            let base_size = unsafe { (*cursor.value).get_size() };
 
             // pointer is in buffer but has no value set
-            if cursor.value.get_value_address() == 0 { // no value, just base size
+            if unsafe { (*cursor.value).get_addr_value() } == 0 { // no value, just base size
                 return Ok(base_size);
             }
 

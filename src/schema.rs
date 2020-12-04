@@ -568,7 +568,7 @@
 
 use alloc::string::String;
 use core::{fmt::Debug};
-use crate::{json_flex::NP_JSON, pointer::{string::NP_String, ulid::_NP_ULID, uuid::_NP_UUID}};
+use crate::{hashmap::NP_HashMap, json_flex::NP_JSON, pointer::{string::NP_String, ulid::_NP_ULID, uuid::_NP_UUID}};
 use crate::pointer::any::NP_Any;
 use crate::pointer::date::NP_Date;
 use crate::pointer::geo::NP_Geo;
@@ -658,7 +658,7 @@ pub type NP_Schema_Addr = usize;
 
 /// When a schema is parsed from JSON or Bytes, it is stored in this recursive type
 /// 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 #[allow(missing_docs)]
 pub enum NP_Parsed_Schema {
     None,
@@ -682,7 +682,7 @@ pub enum NP_Parsed_Schema {
     Enum       { sortable: bool, i:NP_TypeKeys, default: Option<NP_Enum>, choices: Vec<NP_Enum> },
     Uuid       { sortable: bool, i:NP_TypeKeys },
     Ulid       { sortable: bool, i:NP_TypeKeys },
-    Table      { sortable: bool, i:NP_TypeKeys, columns: Vec<(u8, String, NP_Schema_Addr)> },
+    Table      { sortable: bool, i:NP_TypeKeys, columns: Vec<(u8, String, NP_Schema_Addr)>, columns_mapped: NP_HashMap },
     Map        { sortable: bool, i:NP_TypeKeys, value: NP_Schema_Addr}, 
     List       { sortable: bool, i:NP_TypeKeys, of: NP_Schema_Addr },
     Tuple      { sortable: bool, i:NP_TypeKeys, values: Vec<NP_Schema_Addr>}
@@ -694,31 +694,31 @@ impl NP_Parsed_Schema {
     /// Get the type key for this schema
     pub fn get_type_key(&self) -> &NP_TypeKeys {
         match self {
-            NP_Parsed_Schema::None                                                             => { &NP_TypeKeys::None }
-            NP_Parsed_Schema::Any        { sortable: _, i }                        => { i }
-            NP_Parsed_Schema::UTF8String { sortable: _, i, size:_, default:_ }     => { i }
-            NP_Parsed_Schema::Bytes      { sortable: _, i, size:_, default:_ }     => { i }
-            NP_Parsed_Schema::Int8       { sortable: _, i, default: _ }            => { i }
-            NP_Parsed_Schema::Int16      { sortable: _, i , default: _ }           => { i }
-            NP_Parsed_Schema::Int32      { sortable: _, i , default: _ }           => { i }
-            NP_Parsed_Schema::Int64      { sortable: _, i , default: _ }           => { i }
-            NP_Parsed_Schema::Uint8      { sortable: _, i , default: _ }           => { i }
-            NP_Parsed_Schema::Uint16     { sortable: _, i , default: _ }           => { i }
-            NP_Parsed_Schema::Uint32     { sortable: _, i , default: _ }           => { i }
-            NP_Parsed_Schema::Uint64     { sortable: _, i , default: _ }           => { i }
-            NP_Parsed_Schema::Float      { sortable: _, i , default: _ }           => { i }
-            NP_Parsed_Schema::Double     { sortable: _, i , default: _ }           => { i }
-            NP_Parsed_Schema::Decimal    { sortable: _, i, exp:_, default:_ }      => { i }
-            NP_Parsed_Schema::Boolean    { sortable: _, i, default:_ }             => { i }
-            NP_Parsed_Schema::Geo        { sortable: _, i, default:_, size:_ }     => { i }
-            NP_Parsed_Schema::Uuid       { sortable: _, i }                        => { i }
-            NP_Parsed_Schema::Ulid       { sortable: _, i }                        => { i }
-            NP_Parsed_Schema::Date       { sortable: _, i, default:_ }             => { i }
-            NP_Parsed_Schema::Enum       { sortable: _, i, default:_, choices: _ } => { i }
-            NP_Parsed_Schema::Table      { sortable: _, i, columns:_ }             => { i }
-            NP_Parsed_Schema::Map        { sortable: _, i, value:_ }               => { i }
-            NP_Parsed_Schema::List       { sortable: _, i, of:_ }                  => { i }
-            NP_Parsed_Schema::Tuple      { sortable: _, i, values:_ }              => { i }
+            NP_Parsed_Schema::None                                 => { &NP_TypeKeys::None }
+            NP_Parsed_Schema::Any        { i, .. }     => { i }
+            NP_Parsed_Schema::UTF8String { i, .. }     => { i }
+            NP_Parsed_Schema::Bytes      { i, .. }     => { i }
+            NP_Parsed_Schema::Int8       { i, .. }     => { i }
+            NP_Parsed_Schema::Int16      { i, .. }     => { i }
+            NP_Parsed_Schema::Int32      { i, .. }     => { i }
+            NP_Parsed_Schema::Int64      { i, .. }     => { i }
+            NP_Parsed_Schema::Uint8      { i, .. }     => { i }
+            NP_Parsed_Schema::Uint16     { i, .. }     => { i }
+            NP_Parsed_Schema::Uint32     { i, .. }     => { i }
+            NP_Parsed_Schema::Uint64     { i, .. }     => { i }
+            NP_Parsed_Schema::Float      { i, .. }     => { i }
+            NP_Parsed_Schema::Double     { i, .. }     => { i }
+            NP_Parsed_Schema::Decimal    { i, .. }     => { i }
+            NP_Parsed_Schema::Boolean    { i, .. }     => { i }
+            NP_Parsed_Schema::Geo        { i, .. }     => { i }
+            NP_Parsed_Schema::Uuid       { i, .. }     => { i }
+            NP_Parsed_Schema::Ulid       { i, .. }     => { i }
+            NP_Parsed_Schema::Date       { i, .. }     => { i }
+            NP_Parsed_Schema::Enum       { i, .. }     => { i }
+            NP_Parsed_Schema::Table      { i, .. }     => { i }
+            NP_Parsed_Schema::Map        { i, .. }     => { i }
+            NP_Parsed_Schema::List       { i, .. }     => { i }
+            NP_Parsed_Schema::Tuple      { i, .. }     => { i }
         }
     }
 
@@ -726,30 +726,30 @@ impl NP_Parsed_Schema {
     pub fn get_type_data(&self) -> (&str, NP_TypeKeys) {
         match self {
             NP_Parsed_Schema::None => ("", NP_TypeKeys::None),
-            NP_Parsed_Schema::Any        { sortable: _, i }                        => { i.into_type_idx() }
-            NP_Parsed_Schema::UTF8String { sortable: _, i, size:_, default:_ }     => { i.into_type_idx() }
-            NP_Parsed_Schema::Bytes      { sortable: _, i, size:_, default:_ }     => { i.into_type_idx() }
-            NP_Parsed_Schema::Int8       { sortable: _, i, default: _ }            => { i.into_type_idx() }
-            NP_Parsed_Schema::Int16      { sortable: _, i , default: _ }           => { i.into_type_idx() }
-            NP_Parsed_Schema::Int32      { sortable: _, i , default: _ }           => { i.into_type_idx() }
-            NP_Parsed_Schema::Int64      { sortable: _, i , default: _ }           => { i.into_type_idx() }
-            NP_Parsed_Schema::Uint8      { sortable: _, i , default: _ }           => { i.into_type_idx() }
-            NP_Parsed_Schema::Uint16     { sortable: _, i , default: _ }           => { i.into_type_idx() }
-            NP_Parsed_Schema::Uint32     { sortable: _, i , default: _ }           => { i.into_type_idx() }
-            NP_Parsed_Schema::Uint64     { sortable: _, i , default: _ }           => { i.into_type_idx() }
-            NP_Parsed_Schema::Float      { sortable: _, i , default: _ }           => { i.into_type_idx() }
-            NP_Parsed_Schema::Double     { sortable: _, i , default: _ }           => { i.into_type_idx() }
-            NP_Parsed_Schema::Decimal    { sortable: _, i, exp:_, default:_ }      => { i.into_type_idx() }
-            NP_Parsed_Schema::Boolean    { sortable: _, i, default:_ }             => { i.into_type_idx() }
-            NP_Parsed_Schema::Geo        { sortable: _, i, default:_, size:_ }     => { i.into_type_idx() }
-            NP_Parsed_Schema::Uuid       { sortable: _, i }                        => { i.into_type_idx() }
-            NP_Parsed_Schema::Ulid       { sortable: _, i }                        => { i.into_type_idx() }
-            NP_Parsed_Schema::Date       { sortable: _, i, default:_ }             => { i.into_type_idx() }
-            NP_Parsed_Schema::Enum       { sortable: _, i, default:_, choices: _ } => { i.into_type_idx() }
-            NP_Parsed_Schema::Table      { sortable: _, i, columns:_ }             => { i.into_type_idx() }
-            NP_Parsed_Schema::Map        { sortable: _, i, value:_ }               => { i.into_type_idx() }
-            NP_Parsed_Schema::List       { sortable: _, i, of:_ }                  => { i.into_type_idx() }
-            NP_Parsed_Schema::Tuple      { sortable: _, i, values:_ }              => { i.into_type_idx() }
+            NP_Parsed_Schema::Any        { i, .. }     => { i.into_type_idx() }
+            NP_Parsed_Schema::UTF8String { i, .. }     => { i.into_type_idx() }
+            NP_Parsed_Schema::Bytes      { i, .. }     => { i.into_type_idx() }
+            NP_Parsed_Schema::Int8       { i, .. }     => { i.into_type_idx() }
+            NP_Parsed_Schema::Int16      { i, .. }     => { i.into_type_idx() }
+            NP_Parsed_Schema::Int32      { i, .. }     => { i.into_type_idx() }
+            NP_Parsed_Schema::Int64      { i, .. }     => { i.into_type_idx() }
+            NP_Parsed_Schema::Uint8      { i, .. }     => { i.into_type_idx() }
+            NP_Parsed_Schema::Uint16     { i, .. }     => { i.into_type_idx() }
+            NP_Parsed_Schema::Uint32     { i, .. }     => { i.into_type_idx() }
+            NP_Parsed_Schema::Uint64     { i, .. }     => { i.into_type_idx() }
+            NP_Parsed_Schema::Float      { i, .. }     => { i.into_type_idx() }
+            NP_Parsed_Schema::Double     { i, .. }     => { i.into_type_idx() }
+            NP_Parsed_Schema::Decimal    { i, .. }     => { i.into_type_idx() }
+            NP_Parsed_Schema::Boolean    { i, .. }     => { i.into_type_idx() }
+            NP_Parsed_Schema::Geo        { i, .. }     => { i.into_type_idx() }
+            NP_Parsed_Schema::Uuid       { i, .. }     => { i.into_type_idx() }
+            NP_Parsed_Schema::Ulid       { i, .. }     => { i.into_type_idx() }
+            NP_Parsed_Schema::Date       { i, .. }     => { i.into_type_idx() }
+            NP_Parsed_Schema::Enum       { i, .. }     => { i.into_type_idx() }
+            NP_Parsed_Schema::Table      { i, .. }     => { i.into_type_idx() }
+            NP_Parsed_Schema::Map        { i, .. }     => { i.into_type_idx() }
+            NP_Parsed_Schema::List       { i, .. }     => { i.into_type_idx() }
+            NP_Parsed_Schema::Tuple      { i, .. }     => { i.into_type_idx() }
         }
     }
 
@@ -757,30 +757,30 @@ impl NP_Parsed_Schema {
     pub fn is_sortable(&self) -> bool {
         match self {
             NP_Parsed_Schema::None => false,
-            NP_Parsed_Schema::Any        { sortable, i: _ }                        => { *sortable }
-            NP_Parsed_Schema::UTF8String { sortable, i: _, size:_, default:_ }     => { *sortable }
-            NP_Parsed_Schema::Bytes      { sortable, i: _, size:_, default:_ }     => { *sortable }
-            NP_Parsed_Schema::Int8       { sortable, i: _, default: _ }            => { *sortable }
-            NP_Parsed_Schema::Int16      { sortable, i: _ , default: _ }           => { *sortable }
-            NP_Parsed_Schema::Int32      { sortable, i: _ , default: _ }           => { *sortable }
-            NP_Parsed_Schema::Int64      { sortable, i: _ , default: _ }           => { *sortable }
-            NP_Parsed_Schema::Uint8      { sortable, i: _ , default: _ }           => { *sortable }
-            NP_Parsed_Schema::Uint16     { sortable, i: _ , default: _ }           => { *sortable }
-            NP_Parsed_Schema::Uint32     { sortable, i: _ , default: _ }           => { *sortable }
-            NP_Parsed_Schema::Uint64     { sortable, i: _ , default: _ }           => { *sortable }
-            NP_Parsed_Schema::Float      { sortable, i: _ , default: _ }           => { *sortable }
-            NP_Parsed_Schema::Double     { sortable, i: _ , default: _ }           => { *sortable }
-            NP_Parsed_Schema::Decimal    { sortable, i: _, exp:_, default:_ }      => { *sortable }
-            NP_Parsed_Schema::Boolean    { sortable, i: _, default:_ }             => { *sortable }
-            NP_Parsed_Schema::Geo        { sortable, i: _, default:_, size:_ }     => { *sortable }
-            NP_Parsed_Schema::Uuid       { sortable, i: _ }                        => { *sortable }
-            NP_Parsed_Schema::Ulid       { sortable, i: _ }                        => { *sortable }
-            NP_Parsed_Schema::Date       { sortable, i: _, default:_ }             => { *sortable }
-            NP_Parsed_Schema::Enum       { sortable, i: _, default:_, choices: _ } => { *sortable }
-            NP_Parsed_Schema::Table      { sortable, i: _, columns:_ }             => { *sortable }
-            NP_Parsed_Schema::Map        { sortable, i: _, value:_ }               => { *sortable }
-            NP_Parsed_Schema::List       { sortable, i: _, of:_ }                  => { *sortable }
-            NP_Parsed_Schema::Tuple      { sortable, i: _, values:_ }              => { *sortable }
+            NP_Parsed_Schema::Any        { sortable, .. }     => { *sortable }
+            NP_Parsed_Schema::UTF8String { sortable, .. }     => { *sortable }
+            NP_Parsed_Schema::Bytes      { sortable, .. }     => { *sortable }
+            NP_Parsed_Schema::Int8       { sortable, .. }     => { *sortable }
+            NP_Parsed_Schema::Int16      { sortable, .. }     => { *sortable }
+            NP_Parsed_Schema::Int32      { sortable, .. }     => { *sortable }
+            NP_Parsed_Schema::Int64      { sortable, .. }     => { *sortable }
+            NP_Parsed_Schema::Uint8      { sortable, .. }     => { *sortable }
+            NP_Parsed_Schema::Uint16     { sortable, .. }     => { *sortable }
+            NP_Parsed_Schema::Uint32     { sortable, .. }     => { *sortable }
+            NP_Parsed_Schema::Uint64     { sortable, .. }     => { *sortable }
+            NP_Parsed_Schema::Float      { sortable, .. }     => { *sortable }
+            NP_Parsed_Schema::Double     { sortable, .. }     => { *sortable }
+            NP_Parsed_Schema::Decimal    { sortable, .. }     => { *sortable }
+            NP_Parsed_Schema::Boolean    { sortable, .. }     => { *sortable }
+            NP_Parsed_Schema::Geo        { sortable, .. }     => { *sortable }
+            NP_Parsed_Schema::Uuid       { sortable, .. }     => { *sortable }
+            NP_Parsed_Schema::Ulid       { sortable, .. }     => { *sortable }
+            NP_Parsed_Schema::Date       { sortable, .. }     => { *sortable }
+            NP_Parsed_Schema::Enum       { sortable, .. }     => { *sortable }
+            NP_Parsed_Schema::Table      { sortable, .. }     => { *sortable }
+            NP_Parsed_Schema::Map        { sortable, .. }     => { *sortable }
+            NP_Parsed_Schema::List       { sortable, .. }     => { *sortable }
+            NP_Parsed_Schema::Tuple      { sortable, .. }     => { *sortable }
         }
     }
 }
@@ -789,7 +789,7 @@ impl NP_Parsed_Schema {
 
 /// New NP Schema
 #[doc(hidden)]
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct NP_Schema {
     /// is this schema sortable?
     pub is_sortable: bool,
@@ -808,30 +808,30 @@ impl NP_Schema {
     #[doc(hidden)]
     pub fn _type_to_json(parsed_schema: &Vec<NP_Parsed_Schema>, address: usize) -> Result<NP_JSON, NP_Error> {
         match parsed_schema[address] {
-            NP_Parsed_Schema::Any        { sortable: _, i:_ }                         => {    NP_Any::schema_to_json(parsed_schema, address) }
-            NP_Parsed_Schema::UTF8String { sortable: _, i:_, size:_, default:_ }      => {       NP_String::schema_to_json(parsed_schema, address) }
-            NP_Parsed_Schema::Bytes      { sortable: _, i:_, size:_, default:_ }      => {  NP_Bytes::schema_to_json(parsed_schema, address) }
-            NP_Parsed_Schema::Int8       { sortable: _, i:_, default: _ }             => {        i8::schema_to_json(parsed_schema, address) }
-            NP_Parsed_Schema::Int16      { sortable: _, i:_ , default: _ }            => {       i16::schema_to_json(parsed_schema, address) }
-            NP_Parsed_Schema::Int32      { sortable: _, i:_ , default: _ }            => {       i32::schema_to_json(parsed_schema, address) }
-            NP_Parsed_Schema::Int64      { sortable: _, i:_ , default: _ }            => {       i64::schema_to_json(parsed_schema, address) }
-            NP_Parsed_Schema::Uint8      { sortable: _, i:_ , default: _ }            => {        u8::schema_to_json(parsed_schema, address) }
-            NP_Parsed_Schema::Uint16     { sortable: _, i:_ , default: _ }            => {       u16::schema_to_json(parsed_schema, address) }
-            NP_Parsed_Schema::Uint32     { sortable: _, i:_ , default: _ }            => {       u32::schema_to_json(parsed_schema, address) }
-            NP_Parsed_Schema::Uint64     { sortable: _, i:_ , default: _ }            => {       u64::schema_to_json(parsed_schema, address) }
-            NP_Parsed_Schema::Float      { sortable: _, i:_ , default: _ }            => {       f32::schema_to_json(parsed_schema, address) }
-            NP_Parsed_Schema::Double     { sortable: _, i:_ , default: _ }            => {       f64::schema_to_json(parsed_schema, address) }
-            NP_Parsed_Schema::Decimal    { sortable: _, i:_, exp:_, default:_ }       => {    NP_Dec::schema_to_json(parsed_schema, address) }
-            NP_Parsed_Schema::Boolean    { sortable: _, i:_, default:_ }              => {      bool::schema_to_json(parsed_schema, address) }
-            NP_Parsed_Schema::Geo        { sortable: _, i:_, default:_, size:_ }      => {    NP_Geo::schema_to_json(parsed_schema, address) }
-            NP_Parsed_Schema::Uuid       { sortable: _, i:_ }                         => {   _NP_UUID::schema_to_json(parsed_schema, address) }
-            NP_Parsed_Schema::Ulid       { sortable: _, i:_ }                         => {   _NP_ULID::schema_to_json(parsed_schema, address) }
-            NP_Parsed_Schema::Date       { sortable: _, i:_, default:_ }              => {   NP_Date::schema_to_json(parsed_schema, address) }
-            NP_Parsed_Schema::Enum       { sortable: _, i:_, default:_, choices: _ }  => { NP_Enum::schema_to_json(parsed_schema, address) }
-            NP_Parsed_Schema::Table      { sortable: _, i:_, columns:_ }              => {  NP_Table::schema_to_json(parsed_schema, address) }
-            NP_Parsed_Schema::Map        { sortable: _, i:_, value:_ }                => {    NP_Map::schema_to_json(parsed_schema, address) }
-            NP_Parsed_Schema::List       { sortable: _, i:_, of:_ }                   => {   NP_List::schema_to_json(parsed_schema, address) }
-            NP_Parsed_Schema::Tuple      { sortable: _, i:_, values:_ }               => {  NP_Tuple::schema_to_json(parsed_schema, address) }
+            NP_Parsed_Schema::Any        { .. }      => {    NP_Any::schema_to_json(parsed_schema, address) }
+            NP_Parsed_Schema::UTF8String { .. }      => { NP_String::schema_to_json(parsed_schema, address) }
+            NP_Parsed_Schema::Bytes      { .. }      => {  NP_Bytes::schema_to_json(parsed_schema, address) }
+            NP_Parsed_Schema::Int8       { .. }      => {        i8::schema_to_json(parsed_schema, address) }
+            NP_Parsed_Schema::Int16      { .. }      => {       i16::schema_to_json(parsed_schema, address) }
+            NP_Parsed_Schema::Int32      { .. }      => {       i32::schema_to_json(parsed_schema, address) }
+            NP_Parsed_Schema::Int64      { .. }      => {       i64::schema_to_json(parsed_schema, address) }
+            NP_Parsed_Schema::Uint8      { .. }      => {        u8::schema_to_json(parsed_schema, address) }
+            NP_Parsed_Schema::Uint16     { .. }      => {       u16::schema_to_json(parsed_schema, address) }
+            NP_Parsed_Schema::Uint32     { .. }      => {       u32::schema_to_json(parsed_schema, address) }
+            NP_Parsed_Schema::Uint64     { .. }      => {       u64::schema_to_json(parsed_schema, address) }
+            NP_Parsed_Schema::Float      { .. }      => {       f32::schema_to_json(parsed_schema, address) }
+            NP_Parsed_Schema::Double     { .. }      => {       f64::schema_to_json(parsed_schema, address) }
+            NP_Parsed_Schema::Decimal    { .. }      => {    NP_Dec::schema_to_json(parsed_schema, address) }
+            NP_Parsed_Schema::Boolean    { .. }      => {      bool::schema_to_json(parsed_schema, address) } 
+            NP_Parsed_Schema::Geo        { .. }      => {    NP_Geo::schema_to_json(parsed_schema, address) }
+            NP_Parsed_Schema::Uuid       { .. }      => {  _NP_UUID::schema_to_json(parsed_schema, address) }
+            NP_Parsed_Schema::Ulid       { .. }      => {  _NP_ULID::schema_to_json(parsed_schema, address) }
+            NP_Parsed_Schema::Date       { .. }      => {   NP_Date::schema_to_json(parsed_schema, address) }
+            NP_Parsed_Schema::Enum       { .. }      => {   NP_Enum::schema_to_json(parsed_schema, address) }
+            NP_Parsed_Schema::Table      { .. }      => {  NP_Table::schema_to_json(parsed_schema, address) }
+            NP_Parsed_Schema::Map        { .. }      => {    NP_Map::schema_to_json(parsed_schema, address) }
+            NP_Parsed_Schema::List       { .. }      => {   NP_List::schema_to_json(parsed_schema, address) }
+            NP_Parsed_Schema::Tuple      { .. }      => {  NP_Tuple::schema_to_json(parsed_schema, address) }
             _ => { panic!() }
         }
     }
@@ -855,7 +855,7 @@ impl NP_Schema {
         match this_type {
             NP_TypeKeys::None =>       { panic!() }
             NP_TypeKeys::Any =>        {    NP_Any::from_bytes_to_schema(cache, address, bytes) }
-            NP_TypeKeys::UTF8String => {       NP_String::from_bytes_to_schema(cache, address, bytes) }
+            NP_TypeKeys::UTF8String => { NP_String::from_bytes_to_schema(cache, address, bytes) }
             NP_TypeKeys::Bytes =>      {  NP_Bytes::from_bytes_to_schema(cache, address, bytes) }
             NP_TypeKeys::Int8 =>       {        i8::from_bytes_to_schema(cache, address, bytes) }
             NP_TypeKeys::Int16 =>      {       i16::from_bytes_to_schema(cache, address, bytes) }
@@ -870,8 +870,8 @@ impl NP_Schema {
             NP_TypeKeys::Decimal =>    {    NP_Dec::from_bytes_to_schema(cache, address, bytes) }
             NP_TypeKeys::Boolean =>    {      bool::from_bytes_to_schema(cache, address, bytes) }
             NP_TypeKeys::Geo =>        {    NP_Geo::from_bytes_to_schema(cache, address, bytes) }
-            NP_TypeKeys::Uuid =>       {   _NP_UUID::from_bytes_to_schema(cache, address, bytes) }
-            NP_TypeKeys::Ulid =>       {   _NP_ULID::from_bytes_to_schema(cache, address, bytes) }
+            NP_TypeKeys::Uuid =>       {  _NP_UUID::from_bytes_to_schema(cache, address, bytes) }
+            NP_TypeKeys::Ulid =>       {  _NP_ULID::from_bytes_to_schema(cache, address, bytes) }
             NP_TypeKeys::Date =>       {   NP_Date::from_bytes_to_schema(cache, address, bytes) }
             NP_TypeKeys::Enum =>       {   NP_Enum::from_bytes_to_schema(cache, address, bytes) }
             NP_TypeKeys::Table =>      {  NP_Table::from_bytes_to_schema(cache, address, bytes) }
