@@ -55,7 +55,7 @@ NoProto moves the cost of deserialization to the access methods instead of deser
 
 | Format           | Zero-Copy | Size Limit | Mutable | Schemas | Language Agnostic | No Compiling    | Byte-wise Sorting |
 |------------------|-----------|------------|---------|---------|-------------------|-----------------|-------------------|
-| **NoProto**      | ✓         | ~4GB       | ✓       | ✓       | ✓                 | ✓               | ✓                 |
+| **NoProto**      | ✓         | ~16KB      | ✓       | ✓       | ✓                 | ✓               | ✓                 |
 | JSON             | 𐄂         | Unlimited  | ✓       | 𐄂       | ✓                 | ✓               | 𐄂                 |
 | BSON             | 𐄂         | ~16KB      | ✓       | 𐄂       | ✓                 | ✓               | 𐄂                 |
 | MessagePack      | 𐄂         | Unlimited  | ✓       | 𐄂       | ✓                 | ✓               | 𐄂                 |

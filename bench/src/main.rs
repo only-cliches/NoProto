@@ -37,7 +37,6 @@ fn main() {
     FlatBufferBench::encode_bench();
     ProtocolBufferBench::encode_bench();
 
-/*
     println!("\n====== DECODE BENCHMARK ======");
     
     NoProtoBench::decode_bench().unwrap();
@@ -49,6 +48,6 @@ fn main() {
     NoProtoBench::update_bench().unwrap();
     FlatBufferBench::update_bench();
     ProtocolBufferBench::update_bench();
-    */
+    
 }
 

@@ -1,5 +1,7 @@
-# 0.5.2
-
+# 0.6.0
+- Large rework again.
+- There is now only one address size, `u16`, limits buffers to 16kb max size.
+- Lists & maps are now limited to 255 items
 
 # 0.5.1 November 30, 2020
 - Forgot to apply `no_std` after debugging in previous release.

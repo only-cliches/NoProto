@@ -19,6 +19,7 @@ pub fn to_signed(byte: u8) -> u8 {
 }
 
 
+
 pub struct Rand {
     x: u32, y: u32, z: u32, w: u32
 }

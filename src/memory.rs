@@ -1,35 +1,18 @@
 //! Internal buffer memory management
 
-use crate::{schema::NP_Parsed_Schema, pointer::{NP_Cursor, NP_Cursor_Value}};
+use crate::{pointer::{NP_Cursor, NP_Cursor_Addr, NP_Cursor_Value}, schema::NP_Parsed_Schema};
 use crate::{PROTOCOL_VERSION, error::NP_Error};
 use core::cell::UnsafeCell;
 use alloc::vec::Vec;
-
-
-/// The different address sizes availalbe for buffers
-/// 
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub enum NP_Size {
-    /// 32 bit address, 4 bytes in size
-    U32,
-    /// 16 bit address, 2 bytes in size
-    U16,
-    /// 8 bit address, 1 byte in size
-    U8
-}
 
 #[derive(Debug)]
 #[doc(hidden)]
 pub struct NP_Memory<'memory> {
     bytes: UnsafeCell<Vec<u8>>,
     cache: UnsafeCell<Vec<NP_Cursor>>,
-    pub schema: &'memory Vec<NP_Parsed_Schema>,
-    pub size: NP_Size
+    virtual_cursor: UnsafeCell<NP_Cursor>,
+    pub schema: &'memory Vec<NP_Parsed_Schema>
 }
-
-const MAX_SIZE_LARGE: usize = core::u32::MAX as usize;
-const MAX_SIZE_SMALL: usize = core::u16::MAX as usize;
-const MAX_SIZE_XSMALL: usize = core::u8::MAX as usize;
 
 
 
@@ -38,46 +21,16 @@ impl<'memory> NP_Memory<'memory> {
 
 
     pub fn existing(bytes: Vec<u8>, schema: &'memory Vec<NP_Parsed_Schema>) -> Self {
-
-        let size = bytes[1];
-
-        let addr_size = match size {
-            2 => 1usize,
-            1 => 2,
-            0 => 4,
-            _ => 2
-        };
         
         NP_Memory {
-            cache: UnsafeCell::new(Vec::with_capacity(bytes.len() / addr_size)),
+            cache: UnsafeCell::new(Vec::with_capacity(bytes.len() / 2)),
             bytes: UnsafeCell::new(bytes),
-            schema: schema,
-            size: match size {
-                0 => NP_Size::U32,
-                1 => NP_Size::U16,
-                2 => NP_Size::U8,
-                _ => NP_Size::U16
-            }
+            virtual_cursor: UnsafeCell::new(NP_Cursor::default()),
+            schema: schema
         }
     }
 
 
-    pub fn max_addr_size(&self) -> usize {
-        match &self.size {
-            NP_Size::U32 => MAX_SIZE_LARGE,
-            NP_Size::U16 => MAX_SIZE_SMALL,
-            NP_Size::U8 => MAX_SIZE_XSMALL
-        }
-    }
-
-    #[inline(always)]
-    pub fn addr_size_bytes(&self) -> usize {
-        match &self.size {
-            NP_Size::U32 => 4,
-            NP_Size::U16 => 2,
-            NP_Size::U8 => 1
-        }
-    }
 
     #[inline(always)]
     pub fn read_address(&self, addr: usize) -> usize {
@@ -103,7 +56,7 @@ impl<'memory> NP_Memory<'memory> {
         }
     }
 
-    pub fn new(capacity: Option<usize>, size: NP_Size, schema: &'memory Vec<NP_Parsed_Schema>) -> Self {
+    pub fn new(capacity: Option<usize>, schema: &'memory Vec<NP_Parsed_Schema>) -> Self {
         let use_size = match capacity {
             Some(x) => x,
             None => 1024
@@ -137,6 +90,7 @@ impl<'memory> NP_Memory<'memory> {
 
         NP_Memory {
             bytes: UnsafeCell::new(new_bytes),
+            virtual_cursor: UnsafeCell::new(NP_Cursor::default()),
             cache: UnsafeCell::new(Vec::with_capacity(use_size / addr_size)),
             schema: schema,
             size: size
@@ -180,10 +134,15 @@ impl<'memory> NP_Memory<'memory> {
     }
 
     #[inline(always)]
-    pub fn get_cache(&self, index: usize) -> &mut NP_Cursor {
-        let size = self.addr_size_bytes();
-        let self_cache = unsafe { &mut *self.cache.get() };
-        &mut self_cache[index / size]
+    pub fn get_cache(&self, index: &NP_Cursor_Addr) -> &mut NP_Cursor {
+        match index {
+            NP_Cursor_Addr::Virtual => { unsafe { &mut *self.virtual_cursor.get() } }
+            NP_Cursor_Addr::Real(addr) => {
+                let size = self.addr_size_bytes();
+                let self_cache = unsafe { &mut *self.cache.get() };
+                &mut self_cache[addr / size]
+            }
+        }
     }
 
     #[inline(always)]
@@ -193,6 +152,7 @@ impl<'memory> NP_Memory<'memory> {
         self_cache.insert(index / size, cursor);
     }
 
+/*
     pub fn malloc_cursor(&self, value: &NP_Cursor_Value) -> Result<usize, NP_Error> {
         // Get the size of this pointer based it's kind
         match self.size {
@@ -228,7 +188,7 @@ impl<'memory> NP_Memory<'memory> {
             }
         }
     }
-
+*/
     #[inline(always)]
     pub fn ptr_size(&self, cursor: &NP_Cursor) -> usize {
         // Get the size of this pointer based it's kind

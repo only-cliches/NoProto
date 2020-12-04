@@ -165,11 +165,10 @@
 //! - *update*: Deserialize, update a single property, then serialize an object 1,000,000 times.
 //! 
 //! #### Limitations
-//! - Buffers cannot be larger than 2^32 bytes (~4GB).
-//! - Lists cannot have more than 65,535 items.
-//! - Enum/Option types are limited to 255 choices and choices cannot be larger than 255 bytes.
+//! - Buffers cannot be larger than 2^16 bytes (~16kb).
+//! - Collections (Lists, Maps, Tuples & Tables) cannot have more than 255 immediate child items.
+//! - Enum/Option types are limited to 255 choices and choice strings cannot be larger than 255 bytes.
 //! - Tables are limited to 255 columns and column names cannot be larger than 255 bytes.
-//! - Tuple types are limited to 255 items.
 //! - Buffers are not validated or checked before deserializing.
 //! 
 //! #### Non Goals / Known Tradeoffs
@@ -209,6 +208,7 @@ pub mod error;
 pub mod json_flex;
 pub mod format;
 pub mod memory;
+mod hashmap;
 mod utils;
 
 extern crate alloc;
@@ -222,7 +222,6 @@ use buffer::{NP_Buffer};
 use alloc::vec::Vec;
 use alloc::{borrow::ToOwned};
 use schema::NP_Parsed_Schema;
-use crate::memory::NP_Size;
 
 const PROTOCOL_VERSION: u8 = 1;
 
@@ -363,11 +362,7 @@ impl NP_Factory {
     /// The second optional argument, ptr_size, controls how much address space you get in the buffer and how large the addresses are.  Every value in the buffer contains at least one address, sometimes more.  `NP_Size::U16` (the default) gives you an address space of just over 16KB but is more space efficeint since the address pointers are only 2 bytes each.  `NP_Size::U32` gives you an address space of just over 4GB, but the addresses take up twice as much space in the buffer compared to `NP_Size::U16`.
     /// You can change the address size through compaction after the buffer is created, so it's fine to start with a smaller address space and convert it to a larger one later as needed.  It's also possible to go the other way, you can convert larger address space down to a smaller one durring compaction.
     /// 
-    pub fn empty_buffer<'buffer>(&'buffer self, capacity: Option<usize>, ptr_size: Option<NP_Size>) -> Result<NP_Buffer<'buffer>, NP_Error> {
-        let use_size = match ptr_size {
-            Some(x) => x,
-            None => NP_Size::U16
-        };
-        NP_Buffer::_new(NP_Memory::new(capacity, use_size, &self.schema.parsed))
+    pub fn empty_buffer<'buffer>(&'buffer self, capacity: Option<usize>) -> Result<NP_Buffer<'buffer>, NP_Error> {
+        NP_Buffer::_new(NP_Memory::new(capacity, &self.schema.parsed))
     }
 }
