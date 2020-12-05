@@ -1,16 +1,16 @@
 //! Internal buffer memory management
 
 use crate::{pointer::{NP_Cursor, NP_Cursor_Addr}, schema::NP_Parsed_Schema};
-use crate::{PROTOCOL_VERSION, error::NP_Error};
+use crate::{error::NP_Error};
 use core::cell::UnsafeCell;
 use alloc::vec::Vec;
 
-#[derive(Debug)]
+
 #[doc(hidden)]
 pub struct NP_Memory<'memory> {
     bytes: UnsafeCell<Vec<u8>>,
-    parsed: UnsafeCell<Vec<NP_Cursor>>,
-    virtual_cursor: UnsafeCell<NP_Cursor>,
+    parsed: UnsafeCell<Vec<NP_Cursor<'memory>>>,
+    virtual_cursor: UnsafeCell<NP_Cursor<'memory>>,
     pub schema: &'memory Vec<NP_Parsed_Schema>
 }
 
@@ -78,7 +78,7 @@ impl<'memory> NP_Memory<'memory> {
     }
 
     #[inline(always)]
-    pub fn get_parsed(&self, index: &NP_Cursor_Addr) -> &mut NP_Cursor {
+    pub fn get_parsed(&self, index: &NP_Cursor_Addr) -> &mut NP_Cursor<'memory> {
         match index {
             NP_Cursor_Addr::Virtual => { unsafe { &mut *self.virtual_cursor.get() } }
             NP_Cursor_Addr::Real(addr) => {
@@ -103,7 +103,7 @@ impl<'memory> NP_Memory<'memory> {
     }
 
     #[inline(always)]
-    pub fn insert_parsed(&self, index: usize, cursor: NP_Cursor) {
+    pub fn insert_parsed(&self, index: usize, cursor: NP_Cursor<'memory>) {
         let self_cache = unsafe { &mut *self.parsed.get() };
         self_cache.insert(index / 2, cursor);
     }

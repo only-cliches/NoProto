@@ -27,7 +27,6 @@ pub const LIST_MAX_SIZE: usize = core::u16::MAX as usize;
 /// Buffers contain the bytes of each object and allow you to perform reads, updates, deletes and compaction.
 /// 
 /// 
-#[derive(Debug)]
 pub struct NP_Buffer<'buffer> {
     /// Schema data used by this buffer
     memory: NP_Memory<'buffer>,
@@ -702,7 +701,7 @@ impl<'buffer> NP_Buffer<'buffer> {
         match value_cursor {
             Some(x) => {
                 // clear value address in buffer
-                unsafe { (*self.memory.get_parsed(&x).value).set_addr_value(0) };
+                self.memory.get_parsed(&x).value.set_addr_value(0);
                 Ok(true)
             }
             None => Ok(false)
@@ -739,8 +738,8 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// # Ok::<(), NP_Error>(()) 
     /// ```
     /// 
-    pub fn get<'get, X: 'get>(&'get self, path: &'get [&str]) -> Result<Option<X>, NP_Error> where X: NP_Value<'get> + NP_Scalar {
-        let value_cursor = self.select(self.cursor.clone(), false, path, 0)?;
+    pub fn get<'get, X: 'get>(&'get self, path: &'get [&str]) -> Result<Option<X>, NP_Error> where X: NP_Value<'buffer> + NP_Scalar {
+        let value_cursor = self.select(&self.cursor_addr, false, path, 0)?;
 
         match value_cursor {
             Some(x) => {
@@ -749,14 +748,16 @@ impl<'buffer> NP_Buffer<'buffer> {
                         Ok(Some(x))
                     },
                     None => {
-                        match X::schema_default(&self.memory.schema[x.schema_addr]) {
+                        /*
+                        match X::schema_default(&self.memory.get_schema(&x)) {
                             Some(y) => {
                                 Ok(Some(y))
                             },
                             None => {
                                 Ok(None)
                             }
-                        }
+                        }*/
+                        Ok(None)
                     }
                 }
             }
@@ -817,12 +818,12 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// # Ok::<(), NP_Error>(()) 
     /// ```
     /// 
-    pub fn maybe_compact<F>(&mut self, new_capacity: Option<u32>, new_size: Option<NP_Size>, mut callback: F) -> Result<(), NP_Error> where F: FnMut(NP_Size_Data) -> bool {
+    pub fn maybe_compact<F>(&mut self, new_capacity: Option<u32>, mut callback: F) -> Result<(), NP_Error> where F: FnMut(NP_Size_Data) -> bool {
 
         let bytes_data = self.calc_bytes()?;
 
         if callback(bytes_data) {
-            self.compact(new_capacity, new_size)?;
+            self.compact(new_capacity)?;
         }
 
         return Ok(());
@@ -873,16 +874,11 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// # Ok::<(), NP_Error>(()) 
     /// ```
     /// 
-    pub fn compact(&mut self, new_capacity: Option<u32>, new_size: Option<NP_Size>) -> Result<(), NP_Error> {
+    pub fn compact(&mut self, new_capacity: Option<u32>) -> Result<(), NP_Error> {
 
         let capacity = match new_capacity {
             Some(x) => { x as usize },
             None => self.memory.read_bytes().len()
-        };
-
-        let size = match new_size {
-            None => self.memory.size,
-            Some(x) => { x }
         };
 
         let old_root = NP_Cursor::new(ROOT_PTR_ADDR, 0, &self.memory, NP_Cursor_Parent::None);

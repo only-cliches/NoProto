@@ -37,6 +37,10 @@ fn pop_cols(cols: &[bool; 256], index: usize, length: usize) -> Option<usize> {
 
 impl<'table> NP_Table<'table> {
 
+    pub fn parse<'parse>(buff_addr: usize, schema_addr: NP_Schema_Addr, parent_addr: usize, memory: &NP_Memory<'parse>) {
+
+    }
+
     /// Create new table iterator
     ///
     #[inline(always)]
