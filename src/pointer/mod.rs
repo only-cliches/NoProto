@@ -47,6 +47,12 @@ pub struct NP_Pointer_Scalar {
     pub addr_value: [u8; 2]
 }
 
+impl Default for NP_Pointer_Scalar {
+    fn default() -> Self {
+        Self { addr_value: [0; 2] }
+    }
+}
+
 #[doc(hidden)]
 #[derive(Debug)]
 #[repr(C)]
@@ -164,14 +170,16 @@ impl NP_Pointer_Bytes for [u8; 8] {
     }
 }
 
+const DEF_TABLE: NP_Vtable = NP_Vtable { next: [0; 2], values: [NP_Pointer_Scalar::default(); 4]};
+
 #[derive(Debug)]
 pub enum NP_Cursor_Data<'data> {
-    Virtual,
+    Empty,
     Scalar,
-    List { bytes: &'data mut NP_List_Bytes },
-    Map { value_map: NP_HashMap, bytes: &'data mut NP_Map_Bytes },
-    Tuple { bytes: [(bool, &'data mut NP_Vtable); 64] }, // (exists_in_buffer, VTable )
-    Table { bytes: [(bool, &'data mut NP_Vtable); 64] }  // (exists_in_buffer, VTable )
+    List { list_addrs: [u16; 255], bytes: &'data mut NP_List_Bytes },
+    Map { value_map: NP_HashMap },
+    Tuple { bytes: [(usize, &'data mut NP_Vtable); 64] }, // (buffer_addr, VTable )
+    Table { bytes: [(usize, &'data mut NP_Vtable); 64] }  // (buffer_addr, VTable )
 }
 
 #[repr(C)]
@@ -197,23 +205,6 @@ impl NP_List_Bytes {
     #[inline(always)]
     pub fn get_tail(&self) -> u16 {
         u16::from_be_bytes(self.tail)
-    }
-}
-
-#[repr(C)]
-#[derive(Debug)]
-pub struct NP_Map_Bytes {
-    head: [u8; 2],  
-}
-
-impl NP_Map_Bytes {
-    #[inline(always)]
-    pub fn set_head(&mut self, head: u16) {
-        self.head = head.to_be_bytes();
-    }
-    #[inline(always)]
-    pub fn get_head(&self) -> u16 {
-        u16::from_be_bytes(self.head)
     }
 }
 
@@ -243,7 +234,7 @@ impl NP_Vtable {
 
 impl<'data> Default for NP_Cursor_Data<'data> {
     fn default() -> Self {
-        NP_Cursor_Data::Virtual
+        NP_Cursor_Data::Empty
     }
 }
 
@@ -279,7 +270,7 @@ impl<'cursor> NP_Cursor<'cursor> {
         let bytes = [0u8; 8];
         Self {
             buff_addr: 0,
-            data: NP_Cursor_Data::Virtual,
+            data: NP_Cursor_Data::Empty,
             schema_addr: 0,
             temp_bytes: Some(bytes),
             value: unsafe { &mut *(&mut bytes as *mut dyn NP_Pointer_Bytes) },
@@ -288,22 +279,31 @@ impl<'cursor> NP_Cursor<'cursor> {
         }
     }
 
+    pub fn reset(&mut self) {
+        self.buff_addr = 0;
+        self.data = NP_Cursor_Data::Empty;
+        self.schema_addr = 0;
+        self.value.reset();
+        self.parent_addr = 0;
+        self.prev_cursor = None;
+    }
 
-    pub fn parse(buff_addr: usize, schema_addr: NP_Schema_Addr, parent_addr: usize, memory: &NP_Memory<'cursor>) -> Result<(), NP_Error> {
+
+    pub fn parse(buff_addr: usize, schema_addr: NP_Schema_Addr, parent_addr: usize, parent_schema_addr: usize, memory: &NP_Memory<'cursor>) -> Result<(), NP_Error> {
 
         if buff_addr > memory.read_bytes().len() {
             panic!()
         }
 
         match memory.schema[schema_addr] {
-            _ => {
+            _ => { // scalar items
                 
-                let mut new_cursor = NP_Cursor { 
+                let new_cursor = NP_Cursor { 
                     buff_addr: buff_addr, 
                     schema_addr: schema_addr, 
                     data: NP_Cursor_Data::Scalar,
                     temp_bytes: None,
-                    value: NP_Cursor::parse_cursor_value(buff_addr, parent_addr, &memory), 
+                    value: NP_Cursor::parse_cursor_value(buff_addr, parent_schema_addr, parent_addr, &memory), 
                     parent_addr: parent_addr,
                     prev_cursor: None,
                 };
@@ -311,231 +311,16 @@ impl<'cursor> NP_Cursor<'cursor> {
                 memory.insert_parsed(buff_addr, new_cursor);
             },
             NP_Parsed_Schema::Table { columns, .. } => {
-
-                let table_addr = memory.read_address(buff_addr);
-
-                // value has previously been cleared at this pointer
-                if table_addr == 0 { 
-                    new_cursor.data = NP_Cursor_Data::Table { values: [0usize; 255], length: columns.len() };
-                    memory.insert_cache(buff_addr, new_cursor);
-                    return Ok(())
-                }
-
-                // read vtables
-                let mut v_table_size = memory.read_bytes()[table_addr];
-                let mut offset = table_addr + 1;
-                let mut index = 0usize;
-                let mut table_column_addr = [0usize; 255];
-                let mut last_v_table: usize = 0;
-
-                loop {
-                    last_v_table = offset - 1;
-                    for x in 0..v_table_size {
-                        table_column_addr[index] = offset;
-                        index += 1;
-                        offset += addr_size;
-                    }
-
-                    // next vtable
-                    offset = memory.read_address(offset);
-                    if offset == 0 {
-                        break;
-                    } else {
-                        v_table_size = memory.read_bytes()[offset];
-                        offset += 1;
-                    }
-                }
-
-                // columns have been added to schema
-                // need to add another vtable
-                if index + 1 < columns.len() {
-
-                    offset = memory.read_bytes().len() + 1;
-
-                    let mut remaining_cols = columns.len() - index;
-                    let mut new_vtable_bytes: Vec<u8> = Vec::new();
-                    new_vtable_bytes.push(remaining_cols as u8);
-                    while remaining_cols > 0 {
-                        match memory.size {
-                            NP_Size::U8 => new_vtable_bytes.extend_from_slice(&[0u8; 1]),
-                            NP_Size::U16 => new_vtable_bytes.extend_from_slice(&[0u8; 2]),
-                            NP_Size::U32 => new_vtable_bytes.extend_from_slice(&[0u8; 4])
-                        }
-                        remaining_cols -= 1;
-
-                        table_column_addr[index] = offset;
-                        index += 1;
-                        offset += addr_size;
-                    }
-
-                    let new_vtable_addr = memory.malloc(new_vtable_bytes)?;
-
-                    let last_vtable_size = memory.read_bytes()[last_v_table] as usize;
-                    last_v_table = 1 + (last_vtable_size * addr_size);
-                    memory.write_address(last_v_table, new_vtable_addr);
-                }
-
-                // insert table data into cache
-                new_cursor.data = NP_Cursor_Data::Table { values: table_column_addr.clone(), length: columns.len() };
-
-                memory.insert_cache(buff_addr, new_cursor);
-
-                // parse columns
-                for idx in 0..columns.len() {
-                    NP_Cursor::parse(table_column_addr[idx], columns[index].2, buff_addr, memory)?;
-                }
-
+                NP_Table::parse(buff_addr, schema_addr, parent_addr, parent_schema_addr, &memory, &columns);
             },
             NP_Parsed_Schema::List  { of, .. } => {
-                let list_addr = memory.read_address(buff_addr);
-
-                // value has previously been cleared at this pointer
-                if list_addr == 0 { 
-                    new_cursor.data = NP_Cursor_Data::List { head: 0, tail: 0};
-                    memory.insert_cache(buff_addr, new_cursor);
-                    return Ok(())
-                }
-
-                let head = memory.read_address(list_addr);
-                let tail = memory.read_address(list_addr + addr_size);
-
-                new_cursor.data = NP_Cursor_Data::List { head: head, tail: tail };
-
-                memory.insert_cache(buff_addr, new_cursor);
-
-          
-                // parse list children
-                if head != 0 {
-                    let mut prev_addr = 0usize;
-                    let mut current_addr = head;
-                    
-                    while current_addr != 0 {
-                        NP_Cursor::parse(current_addr, of, buff_addr, memory)?;
-                        let this_cursor = memory.get_cache(&NP_Cursor_Addr::Real(current_addr));
-                        this_cursor.prev_cursor = if prev_addr == 0 { None } else { Some(prev_addr) };
-                        match this_cursor.value {
-                            NP_Cursor_Value::ListItem { next, .. } => {
-                                prev_addr = current_addr;
-                                current_addr = next;
-                            },
-                            _ => { unsafe { unreachable_unchecked() } }
-                        }
-                    }
-                }
-
+                NP_List::parse(buff_addr, schema_addr, parent_addr, parent_schema_addr, &memory, of);
             },
             NP_Parsed_Schema::Tuple { values, .. } => {
-                let tuple_addr = memory.read_address(buff_addr);
-
-                // value has previously been cleared at this pointer
-                if tuple_addr == 0 { 
-                    new_cursor.data = NP_Cursor_Data::Tuple { values: [0usize; 255], length: values.len() };
-                    memory.insert_cache(buff_addr, new_cursor);
-                    return Ok(())
-                }
-
-                // read vtables
-                let mut v_table_size = memory.read_bytes()[tuple_addr];
-                let mut offset = tuple_addr + 1;
-                let mut index = 0usize;
-                let mut table_column_addr = [0usize; 255];
-                let mut last_v_table: usize = 0;
-
-                loop {
-                    last_v_table = offset - 1;
-                    for x in 0..v_table_size {
-                        table_column_addr[index] = offset;
-                        index += 1;
-                        offset += addr_size;
-                    }
-
-                    // next vtable
-                    offset = memory.read_address(offset);
-                    if offset == 0 {
-                        break;
-                    } else {
-                        v_table_size = memory.read_bytes()[offset];
-                        offset += 1;
-                    }
-                }
-
-                // columns have been added to schema
-                // need to add another vtable
-                if index + 1 < values.len() {
-
-                    offset = memory.read_bytes().len() + 1;
-
-                    let mut remaining_cols = values.len() - index;
-                    let mut new_vtable_bytes: Vec<u8> = Vec::new();
-                    new_vtable_bytes.push(remaining_cols as u8);
-                    while remaining_cols > 0 {
-                        match memory.size {
-                            NP_Size::U8 => new_vtable_bytes.extend_from_slice(&[0u8; 1]),
-                            NP_Size::U16 => new_vtable_bytes.extend_from_slice(&[0u8; 2]),
-                            NP_Size::U32 => new_vtable_bytes.extend_from_slice(&[0u8; 4])
-                        }
-                        remaining_cols -= 1;
-
-                        table_column_addr[index] = offset;
-                        index += 1;
-                        offset += addr_size;
-                    }
-
-                    let new_vtable_addr = memory.malloc(new_vtable_bytes)?;
-
-                    let last_vtable_size = memory.read_bytes()[last_v_table] as usize;
-                    last_v_table = 1 + (last_vtable_size * addr_size);
-                    memory.write_address(last_v_table, new_vtable_addr);
-                }
-
-                // insert table data into cache
-                new_cursor.data = NP_Cursor_Data::Table { values: table_column_addr.clone(), length: values.len() };
-
-                memory.insert_cache(buff_addr, new_cursor);
-
-                // parse columns
-                for idx in 0..values.len() {
-                    NP_Cursor::parse(table_column_addr[idx], values[index], buff_addr, memory)?;
-                }
-
+                NP_Tuple::parse(buff_addr, schema_addr, parent_addr, parent_schema_addr, &memory, &values);
             },
             NP_Parsed_Schema::Map   { value, .. } => {
-                let map_addr = memory.read_address(buff_addr);
-
-                // value has previously been cleared at this pointer
-                if map_addr == 0 { 
-                    new_cursor.data = NP_Cursor_Data::Map { head: 0, length: 0};
-                    memory.insert_cache(buff_addr, new_cursor);
-                    return Ok(())
-                }
-
-                let head = memory.read_address(map_addr);
-                let tail = memory.read_address(map_addr + addr_size);
-
-                new_cursor.data = NP_Cursor_Data::List { head: head, tail: tail };
-
-                memory.insert_cache(buff_addr, new_cursor);
-
-          
-                // parse list children
-                if head != 0 {
-                    let mut prev_addr = 0usize;
-                    let mut current_addr = head;
-                    
-                    while current_addr != 0 {
-                        NP_Cursor::parse(current_addr, value, buff_addr, memory)?;
-                        let this_cursor = memory.get_cache(&NP_Cursor_Addr::Real(current_addr));
-                        this_cursor.prev_cursor = if prev_addr == 0 { None } else { Some(prev_addr) };
-                        match this_cursor.value {
-                            NP_Cursor_Value::MapItem { next, .. } => {
-                                prev_addr = current_addr;
-                                current_addr = next;
-                            },
-                            _ => { unsafe { unreachable_unchecked() } }
-                        }
-                    }
-                }
-
+                NP_List::parse(buff_addr, schema_addr, parent_addr, parent_schema_addr, &memory, value);
             }
         }
 
@@ -544,26 +329,19 @@ impl<'cursor> NP_Cursor<'cursor> {
 
     
     #[inline(always)]
-    pub fn parse_cursor_value(buff_addr: usize, parent_addr: usize, memory: &NP_Memory<'cursor>) -> &'cursor mut dyn NP_Pointer_Bytes {
-        if parent_addr == 0 {
+    pub fn parse_cursor_value(buff_addr: usize, parent_addr: usize, parent_schema_addr: usize, memory: &NP_Memory<'cursor>) -> &'cursor mut dyn NP_Pointer_Bytes {
+        if parent_addr == 0 { // parent is root, no possible colleciton above
             unsafe { &mut *(memory.write_bytes().as_ptr().add(buff_addr) as *mut NP_Pointer_Scalar) }
         } else {
-            let parent_cursor = memory.get_parsed(&NP_Cursor_Addr::Real(parent_addr));
 
-            match memory.schema[parent_cursor.schema_addr] {
-                NP_Parsed_Schema::Table { .. } => {
-                    unsafe { &mut *(memory.write_bytes().as_ptr().add(buff_addr) as *mut NP_Pointer_Scalar) }
-                },
+            match memory.schema[parent_schema_addr] {
                 NP_Parsed_Schema::List { .. } => {
                     unsafe { &mut *(memory.write_bytes().as_ptr().add(buff_addr) as *mut NP_Pointer_List_Item) }
-                },
-                NP_Parsed_Schema::Tuple { .. } => {
-                    unsafe { &mut *(memory.write_bytes().as_ptr().add(buff_addr) as *mut NP_Pointer_Scalar) }
                 },
                 NP_Parsed_Schema::Map { .. } => {
                     unsafe { &mut *(memory.write_bytes().as_ptr().add(buff_addr) as *mut NP_Pointer_Map_Item) }
                 },
-                _ => {
+                _ => { // parent is scalar, table or tuple
                     unsafe { &mut *(memory.write_bytes().as_ptr().add(buff_addr) as *mut NP_Pointer_Scalar) }
                 }
             }
@@ -776,7 +554,7 @@ pub trait NP_Value<'value> {
 
     /// Convert this type into a JSON value (recursive for collections)
     /// 
-    fn to_json(_cursor: NP_Cursor_Addr, _memory: &'value NP_Memory<'value>) -> NP_JSON;
+    fn to_json(_cursor: NP_Cursor_Addr, _memory: &NP_Memory<'value>) -> NP_JSON;
 
     /// Calculate the size of this pointer and it's children (recursive for collections)
     /// 
@@ -784,7 +562,7 @@ pub trait NP_Value<'value> {
     
     /// Handle copying from old pointer/buffer to new pointer/buffer (recursive for collections)
     /// 
-    fn do_compact(from_cursor: NP_Cursor_Addr, from_memory: &'value NP_Memory<'value>, to_cursor: NP_Cursor_Addr, to_memory: &'value NP_Memory<'value>) -> Result<NP_Cursor_Addr, NP_Error> where Self: 'value + Sized {
+    fn do_compact(from_cursor: NP_Cursor_Addr, from_memory: &NP_Memory<'value>, to_cursor: NP_Cursor_Addr, to_memory: &NP_Memory<'value>) -> Result<NP_Cursor_Addr, NP_Error> where Self: 'value + Sized {
 
         match Self::into_value(from_cursor.clone(), from_memory)? {
             Some(x) => {

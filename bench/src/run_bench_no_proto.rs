@@ -132,28 +132,28 @@ impl NoProtoBench {
     pub fn encode_single(factory: &NP_Factory) ->Result<Vec<u8>, NP_Error> {
         let mut new_buffer = factory.empty_buffer(None, Some(NP_Size::U16));
 
-        new_buffer.fast_insert("initialized", true)?;
-        new_buffer.fast_insert("location", "https://arstechnica.com")?;
-        new_buffer.fast_insert("fruit", 2u8)?;
+        new_buffer.insert(&["initialized"], true)?;
+        new_buffer.insert(&["location"], "https://arstechnica.com")?;
+        new_buffer.insert(&["fruit"], 2u8)?;
     
         for x in 0..3 {
     
             new_buffer.cursor_to_root();
-            new_buffer.move_cursor(&["list", x.to_string().as_str()])?;
-            new_buffer.fast_insert("name", "Hello, world!")?;
-            new_buffer.fast_insert("rating", 3.1415432432445543543 + (x as f32))?;
-            new_buffer.fast_insert("postfix", "!")?;
+            new_buffer.move_cursor(&["list"], x.to_string().as_str())?;
+            new_buffer.insert(&["name"], "Hello, world!")?;
+            new_buffer.insert(&["rating"], 3.1415432432445543543 + (x as f32))?;
+            new_buffer.insert(&["postfix"], "!")?;
     
             new_buffer.move_cursor(&["sibling"])?;
-            new_buffer.fast_insert("time", 123456 + (x as u32))?;
-            new_buffer.fast_insert("ratio", 3.14159 + (x as f32))?;
-            new_buffer.fast_insert("size", 10000 + (x as u16))?;
+            new_buffer.insert(&["time"], 123456 + (x as u32))?;
+            new_buffer.insert(&["ratio"], 3.14159 + (x as f32))?;
+            new_buffer.insert(&["size"], 10000 + (x as u16))?;
     
             new_buffer.move_cursor(&["parent"])?;
-            new_buffer.fast_insert("id", 0xABADCAFEABADCAFE + (x as u64))?;
-            new_buffer.fast_insert("count", 10000 + (x as u16))?;
-            new_buffer.fast_insert("prefix", "@")?;
-            new_buffer.fast_insert("length", 1000000 + (x as u32))?;
+            new_buffer.insert(&["id"], 0xABADCAFEABADCAFE + (x as u64))?;
+            new_buffer.insert(&["count"], 10000 + (x as u16))?;
+            new_buffer.insert(&["prefix"], "@")?;
+            new_buffer.insert(&["length"], 1000000 + (x as u32))?;
             
         }
     

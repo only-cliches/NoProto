@@ -3,7 +3,7 @@ use alloc::vec::Vec;
 use crate::error::NP_Error;
 
 
-static SEED: u32 = 2181155409;
+pub static SEED: u32 = 2181155409;
 
 #[derive(Debug)]
 pub struct NP_HashMap {

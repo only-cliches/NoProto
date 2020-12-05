@@ -1,3 +1,6 @@
+use crate::pointer::NP_Cursor_Addr;
+use crate::pointer::DEF_TABLE;
+use crate::{pointer::NP_Cursor_Data, schema::NP_Schema_Addr, pointer::NP_Vtable};
 use crate::pointer::{NP_Cursor_Parent};
 use core::hint::unreachable_unchecked;
 
@@ -22,6 +25,100 @@ pub struct NP_Tuple<'tuple> {
 }
 
 impl<'tuple> NP_Tuple<'tuple> {
+
+    pub fn extend_vtables<'extend>(cursor: &NP_Cursor_Addr, memory: &'extend NP_Memory, col_index: usize) -> Result<&'extend [(usize, &'extend mut NP_Vtable); 64], NP_Error> {
+        let cursor = memory.get_parsed(cursor);
+
+        let desired_v_table =  col_index / 4;
+
+        match &mut cursor.data {
+            NP_Cursor_Data::Tuple { bytes } => {
+
+                let mut index = 0usize;
+
+                // find the last virtual table that has been saved in the buffer
+                loop {
+                    if bytes[index].0 == 0 {
+                        index += 1;
+                    } else {
+                        break;
+                    }
+                }
+
+                // extend it
+                while index <= desired_v_table {
+                    let new_vtable_addr = memory.malloc_borrow(&[0u8; 10])?;
+                    bytes[index].1.set_next(new_vtable_addr as u16);
+                    index +=1;
+                    bytes[index] = (new_vtable_addr, unsafe { &mut *(memory.write_bytes().as_ptr().add(new_vtable_addr) as *mut NP_Vtable) })
+                }
+
+                Ok(bytes)
+            },
+            _ => unsafe { unreachable_unchecked() }
+        }
+    }
+
+    pub fn parse<'parse>(buff_addr: usize, schema_addr: NP_Schema_Addr, parent_addr: usize, parent_schema_addr: usize, memory: &NP_Memory<'parse>, values: &Vec<usize>) {
+
+        let tuple_value = NP_Cursor::parse_cursor_value(buff_addr, parent_addr, parent_schema_addr, &memory);
+
+        let mut new_cursor = NP_Cursor { 
+            buff_addr: buff_addr, 
+            schema_addr: schema_addr, 
+            data: NP_Cursor_Data::Empty,
+            temp_bytes: None,
+            value: tuple_value, 
+            parent_addr: parent_addr,
+            prev_cursor: None,
+        };
+
+        let table_addr = new_cursor.value.get_addr_value();
+
+        if table_addr == 0 { // no table here
+            memory.insert_parsed(buff_addr, new_cursor);
+        } else { // table exists, parse it
+
+            // parse vtables 
+            let mut vtables: [(usize, &mut NP_Vtable); 64] = [(0, &mut DEF_TABLE); 64];
+
+            vtables[0] = (table_addr as usize, unsafe { &mut *(memory.write_bytes().as_ptr().add(table_addr as usize) as *mut NP_Vtable) });
+
+            let mut next_vtable = vtables[0].1.get_next();
+            let mut index = 1;
+            while next_vtable != 0 {
+                vtables[index] = (next_vtable as usize, unsafe { &mut *(memory.write_bytes().as_ptr().add(next_vtable as usize) as *mut NP_Vtable) });
+                next_vtable = vtables[index].1.get_next();
+                index += 1;
+            }
+
+            // parse children
+            match new_cursor.data {
+                NP_Cursor_Data::Tuple { bytes} => {
+                    let mut column_index = 0usize;
+                    for vtable in &bytes { // each vtable holds 4 columns
+                        if vtable.0 != 0 {
+                            for (i, pointer) in vtable.1.values.iter().enumerate() {
+                                let item_buff_addr = vtable.0 + (i * 2);
+                                let schema_addr = values[column_index];
+                                NP_Cursor::parse(item_buff_addr, schema_addr, buff_addr, schema_addr, &memory);
+                                column_index += 1;
+                            }
+                        } else {
+                            column_index += 4;
+                        }
+                    }
+                },
+                _ => { unsafe { unreachable_unchecked() }}
+            }
+
+            // set table data 
+            new_cursor.data = NP_Cursor_Data::Tuple { bytes: vtables };
+            memory.insert_parsed(buff_addr, new_cursor);
+
+        }
+    }
+
 
     /// Generate a new tuple iterator
     #[inline(always)]

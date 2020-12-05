@@ -1,6 +1,5 @@
 use alloc::string::String;
-use crate::schema::NP_Schema_Addr;
-use crate::pointer::NP_Cursor_Parent;
+use crate::{hashmap::NP_HashMap, pointer::{NP_Cursor_Addr, NP_Cursor_Data}, schema::NP_Schema_Addr};
 use crate::pointer::NP_Cursor;
 use crate::{json_flex::JSMAP, pointer::{NP_Cursor_Value}};
 use crate::pointer::{NP_Value};
@@ -26,6 +25,38 @@ pub struct NP_Map<'map> {
 
 
 impl<'map> NP_Map<'map> {
+
+
+    pub fn parse<'parse>(buff_addr: usize, schema_addr: NP_Schema_Addr, parent_addr: usize, parent_schema_addr: usize, memory: &NP_Memory<'parse>, of_schema: usize) {
+
+        let list_value = NP_Cursor::parse_cursor_value(buff_addr, parent_addr, parent_schema_addr, &memory);
+
+        let mut new_cursor = NP_Cursor { 
+            buff_addr: buff_addr, 
+            schema_addr: schema_addr, 
+            data: NP_Cursor_Data::Empty,
+            temp_bytes: None,
+            value: list_value, 
+            parent_addr: parent_addr,
+            prev_cursor: None,
+        };
+
+        let map_head = new_cursor.value.get_addr_value();
+
+        let mut next_item = map_head;
+
+        let mut map_addrs: NP_HashMap = NP_HashMap::new();
+
+        while next_item != 0 {
+            NP_Cursor::parse(next_item as usize, of_schema, buff_addr, schema_addr, &memory);
+            let map_item = memory.get_parsed(&NP_Cursor_Addr::Real(next_item as usize));
+            map_addrs.insert_hash(map_item.value.get_key_hash(), next_item as usize);
+            next_item = map_item.value.get_next_addr();
+        }
+        
+        new_cursor.data = NP_Cursor_Data::Map { value_map: map_addrs };
+        memory.insert_parsed(buff_addr, new_cursor);
+    }
 
     /// Create new map iterator
     #[inline(always)]
