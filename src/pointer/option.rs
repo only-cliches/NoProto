@@ -113,7 +113,7 @@ impl<'value> NP_Value<'value> for NP_Enum {
         Ok(NP_JSON::Dictionary(schema_json))
     }
 
-    fn schema_default(schema: &'value NP_Parsed_Schema) -> Option<Self> {
+    fn schema_default(schema: &NP_Parsed_Schema) -> Option<Self> {
 
         match schema {
             NP_Parsed_Schema::Enum { i: _, choices: _, default, sortable: _} => {
@@ -127,11 +127,13 @@ impl<'value> NP_Value<'value> for NP_Enum {
         }
     }
 
-    fn set_value(mut cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>, value: Self) -> Result<NP_Cursor_Addr, NP_Error> {
+    fn set_value<'set>(mut cursor: NP_Cursor_Addr, memory: &'set NP_Memory, value: Self) -> Result<NP_Cursor_Addr, NP_Error> where Self: 'set + Sized {
 
-        assert_ne!(cursor.buff_addr, 0);
+        let c = memory.get_parsed(&cursor);
 
-        match &memory.schema[cursor.schema_addr] {
+        assert_ne!(c.buff_addr, 0);
+
+        match &memory.schema[c.schema_addr] {
             NP_Parsed_Schema::Enum { i: _, choices, default: _, sortable: _} => {
 
                 let mut value_num: i32 = -1;
@@ -153,7 +155,7 @@ impl<'value> NP_Value<'value> for NP_Enum {
         
                 let bytes = value_num as u8;
 
-                let mut addr_value = cursor.value.get_addr_value()
+                let mut addr_value = c.value.get_addr_value() as usize;
         
                 if addr_value != 0 { // existing value, replace
         
@@ -165,8 +167,7 @@ impl<'value> NP_Value<'value> for NP_Enum {
                 } else { // new value
         
                     addr_value = memory.malloc_borrow(&[bytes])?;
-                    memory.write_address(cursor.buff_addr, addr_value);
-                    cursor.value = cursor.value.update_value_address(addr_value);
+                    c.value.set_addr_value(addr_value as u16);
 
                     return Ok(cursor);
                 }     
@@ -175,16 +176,18 @@ impl<'value> NP_Value<'value> for NP_Enum {
         }               
     }
 
-    fn into_value(cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>) -> Result<Option<Self>, NP_Error> {
+    fn into_value(cursor: NP_Cursor_Addr, memory: &'value NP_Memory) -> Result<Option<Self>, NP_Error> {
 
-        let value_addr = cursor.value.get_addr_value()
+        let c = memory.get_parsed(&cursor);
+
+        let mut value_addr = c.value.get_addr_value() as usize;
 
         // empty value
         if value_addr == 0 {
             return Ok(None);
         }
   
-        match &memory.schema[cursor.schema_addr] {
+        match &memory.schema[c.schema_addr] {
             NP_Parsed_Schema::Enum { i: _, choices, default: _, sortable: _} => {
                 Ok(match memory.get_1_byte(value_addr) {
                     Some(x) => {
@@ -203,7 +206,7 @@ impl<'value> NP_Value<'value> for NP_Enum {
         }
     }
 
-    fn to_json(cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>) -> NP_JSON {
+    fn to_json(cursor: NP_Cursor_Addr, memory: &'value NP_Memory) -> NP_JSON {
 
         match Self::into_value(cursor.clone(), memory) {
             Ok(x) => {
@@ -214,7 +217,8 @@ impl<'value> NP_Value<'value> for NP_Enum {
                                 NP_JSON::String(str_value.to_string())
                             },
                             NP_Enum::None => {
-                                match &memory.schema[cursor.schema_addr] {
+                                let c = memory.get_parsed(&cursor);
+                                match &memory.schema[c.schema_addr] {
                                     NP_Parsed_Schema::Enum { i: _, choices: _, default, sortable: _} => {
                                         if let Some(d) = default {
                                             match d {
@@ -235,8 +239,8 @@ impl<'value> NP_Value<'value> for NP_Enum {
                         }
                     },
                     None => {
-
-                        match &memory.schema[cursor.schema_addr] {
+                        let c = memory.get_parsed(&cursor);
+                        match &memory.schema[c.schema_addr] {
                             NP_Parsed_Schema::Enum { i: _, choices: _, default, sortable: _} => {
                                 if let Some(d) = default {
                                     match d {
@@ -259,8 +263,11 @@ impl<'value> NP_Value<'value> for NP_Enum {
     }
 
     fn get_size(cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>) -> Result<usize, NP_Error> {
+        let c = memory.get_parsed(&cursor);
 
-        if cursor.value.get_value_address() == 0 {
+        let value_address = c.value.get_addr_value() as usize;
+
+        if value_address == 0 {
             return Ok(0) 
         } else {
             Ok(core::mem::size_of::<u8>())

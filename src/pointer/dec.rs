@@ -691,7 +691,7 @@ impl<'value> NP_Value<'value> for NP_Dec {
         }
     }
 
-    fn schema_default(schema: &'value NP_Parsed_Schema) -> Option<Self> {
+    fn schema_default(schema: &NP_Parsed_Schema) -> Option<Self> {
 
         match schema {
             NP_Parsed_Schema::Decimal { i: _, sortable: _, default, exp: _} => {
@@ -705,12 +705,14 @@ impl<'value> NP_Value<'value> for NP_Dec {
         }
     }
 
-    fn set_value(mut cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>, value: Self) -> Result<NP_Cursor_Addr, NP_Error> {
-
-        let mut value_address = cursor.value.get_addr_value()
+    fn set_value<'set>(mut cursor: NP_Cursor_Addr, memory: &'set NP_Memory, value: Self) -> Result<NP_Cursor_Addr, NP_Error> where Self: 'set + Sized {
 
 
-        let exp = match memory.schema[cursor.schema_addr] {
+        let c = memory.get_parsed(&cursor);
+
+        let mut value_address = c.value.get_addr_value() as usize;
+
+        let exp = match memory.schema[c.schema_addr] {
             NP_Parsed_Schema::Decimal { i: _, sortable: _, default: _, exp} => {
                 exp
             },
@@ -744,24 +746,25 @@ impl<'value> NP_Value<'value> for NP_Dec {
             be_bytes[0] = to_unsigned(be_bytes[0]);
 
             value_address = memory.malloc_borrow(&be_bytes)?;
-            cursor.value = cursor.value.update_value_address(value_address);
-            memory.write_address(cursor.buff_addr, value_address);
+            c.value.set_addr_value(value_address as u16);
 
         }
 
         Ok(cursor)
     }
 
-    fn into_value(cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>) -> Result<Option<Self>, NP_Error> {
+    fn into_value(cursor: NP_Cursor_Addr, memory: &'value NP_Memory) -> Result<Option<Self>, NP_Error> {
 
-        let value_addr = cursor.value.get_addr_value()
+        let c = memory.get_parsed(&cursor);
+
+        let value_addr = c.value.get_addr_value() as usize;
 
         // empty value
         if value_addr == 0 {
             return Ok(None);
         }
 
-        let exp = match memory.schema[cursor.schema_addr] {
+        let exp = match memory.schema[c.schema_addr] {
             NP_Parsed_Schema::Decimal { i: _, sortable: _, default: _, exp} => {
                 exp
             },
@@ -779,10 +782,10 @@ impl<'value> NP_Value<'value> for NP_Dec {
         })
     }
 
-    fn to_json(cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>) -> NP_JSON {
+    fn to_json(cursor: NP_Cursor_Addr, memory: &'value NP_Memory) -> NP_JSON {
 
-
-        let exp = match memory.schema[cursor.schema_addr] {
+        let c = memory.get_parsed(&cursor);
+        let exp = match memory.schema[c.schema_addr] {
             NP_Parsed_Schema::Decimal { exp, .. } => {
                 exp
             },
@@ -802,7 +805,7 @@ impl<'value> NP_Value<'value> for NP_Dec {
                         NP_JSON::Dictionary(object)
                     },
                     None => {
-                        match memory.schema[cursor.schema_addr] {
+                        match memory.schema[c.schema_addr] {
                             NP_Parsed_Schema::Decimal { i: _, sortable: _, default, exp} => {
                                 if let Some(d) = default {
                                     let mut object = JSMAP::new();
@@ -827,8 +830,10 @@ impl<'value> NP_Value<'value> for NP_Dec {
     }
 
     fn get_size(cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>) -> Result<usize, NP_Error> {
+        
+        let c = memory.get_parsed(&cursor);
 
-        if cursor.value.get_value_address() == 0 {
+        if c.value.get_addr_value() == 0 {
             Ok(0) 
         } else {
             Ok(core::mem::size_of::<i64>())

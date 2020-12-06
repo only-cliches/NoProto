@@ -778,8 +778,8 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// # Ok::<(), NP_Error>(()) 
     /// ```
     /// 
-    pub fn get<X>(&self, path: &[&str]) -> Result<Option<X>, NP_Error> where X: NP_Value<'buffer> + NP_Scalar {
-        let value_cursor = self.select(self.cursor_addr, false, path, 0)?;
+    pub fn get<'get, X: 'get>(&'get self, path: &[&str]) -> Result<Option<X>, NP_Error> where X: NP_Value<'get> + NP_Scalar {
+        let value_cursor = self.select(self.cursor_addr.clone(), false, path, 0)?;
 
         match value_cursor {
             Some(x) => {
@@ -788,7 +788,6 @@ impl<'buffer> NP_Buffer<'buffer> {
                         Ok(Some(x))
                     },
                     None => {
-                        /*
                         match X::schema_default(&self.memory.get_schema(&x)) {
                             Some(y) => {
                                 Ok(Some(y))
@@ -796,8 +795,7 @@ impl<'buffer> NP_Buffer<'buffer> {
                             None => {
                                 Ok(None)
                             }
-                        }*/
-                        Ok(None)
+                        }
                     }
                 }
             }
@@ -914,7 +912,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// # Ok::<(), NP_Error>(()) 
     /// ```
     /// 
-    pub fn compact(&mut self, new_capacity: Option<u32>) -> Result<(), NP_Error> {
+    pub fn compact<'compact>(&mut self, new_capacity: Option<u32>) -> Result<(), NP_Error> {
 
         let capacity = match new_capacity {
             Some(x) => { x as usize },
@@ -958,7 +956,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// # Ok::<(), NP_Error>(()) 
     /// ```
     /// 
-    pub fn calc_bytes(&self) -> Result<NP_Size_Data, NP_Error> {
+    pub fn calc_bytes<'bytes>(&self) -> Result<NP_Size_Data, NP_Error> {
 
         let root = NP_Cursor_Addr::Real(ROOT_PTR_ADDR);
         let real_bytes = NP_Cursor::calc_size(root, &self.memory)? + ROOT_PTR_ADDR;

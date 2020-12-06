@@ -105,7 +105,8 @@ impl<'value> NP_Value<'value> for &'value str {
         (fixed_size > 0, schema)
     }
 
-    fn into_value(cursor: NP_Cursor_Addr, memory: &'value NP_Memory<'value>) -> Result<Option<Self>, NP_Error> {
+    fn into_value(cursor: NP_Cursor_Addr, memory: &'value NP_Memory) -> Result<Option<Self>, NP_Error> where Self: Sized {
+
         let c = memory.get_parsed(&cursor);
 
         let value_addr = c.value.get_addr_value() as usize;
@@ -152,12 +153,15 @@ impl<'value> NP_Value<'value> for &'value str {
     }
     fn get_size(cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>) -> Result<usize, NP_Error> {
 
+        let c = memory.get_parsed(&cursor);
+        let value_addr = c.value.get_addr_value() as usize;
+
         // empty value
-        if cursor.value.get_value_address() == 0 {
+        if value_addr == 0 {
             return Ok(0);
         }
 
-        match memory.schema[cursor.schema_addr] {
+        match memory.schema[c.schema_addr] {
             NP_Parsed_Schema::UTF8String {
                 i: _,
                 size,
@@ -170,8 +174,7 @@ impl<'value> NP_Value<'value> for &'value str {
                 }
 
                 // dynamic size
-                let bytes_size =
-                    memory.read_address(cursor.value.get_value_address()) + memory.addr_size_bytes();
+                let bytes_size: usize = u16::from_be_bytes(*memory.get_2_bytes(value_addr).unwrap_or(&[0; 2])) as usize;
 
                 // return total size of this string
                 return Ok(bytes_size);
@@ -253,18 +256,15 @@ impl<'value> NP_Value<'value> for &'value str {
         return Ok((has_fixed_size, schema_data, schema));
     }
 
-    fn to_json(cursor: &NP_Cursor, memory: &'value NP_Memory<'value>) -> NP_JSON {
+    fn to_json(cursor: NP_Cursor_Addr, memory: &'value NP_Memory) -> NP_JSON {
+
         match Self::into_value(cursor.clone(), memory) {
             Ok(x) => match x {
                 Some(y) => NP_JSON::String(y.to_string()),
                 None => {
-                    match &memory.schema[cursor.schema_addr] {
-                        NP_Parsed_Schema::UTF8String {
-                            i: _,
-                            size: _,
-                            default,
-                            sortable: _,
-                        } => match default {
+                    let c = memory.get_parsed(&cursor);
+                    match &memory.schema[c.schema_addr] {
+                        NP_Parsed_Schema::UTF8String { default, .. } => match default {
                             Some(x) => NP_JSON::String(x.to_string()),
                             None => NP_JSON::Null,
                         },
@@ -276,9 +276,11 @@ impl<'value> NP_Value<'value> for &'value str {
         }
     }
 
-    fn set_value(mut cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>, value: Self) -> Result<NP_Cursor_Addr, NP_Error> {
+    fn set_value<'set>(mut cursor: NP_Cursor_Addr, memory: &'set NP_Memory, value: Self) -> Result<NP_Cursor_Addr, NP_Error> where Self: 'set + Sized {
 
-        assert_ne!(cursor.buff_addr, 0);
+        let c = memory.get_parsed(&cursor);
+
+        assert_ne!(c.buff_addr, 0);
     
         let bytes = value.as_bytes();
     
@@ -286,13 +288,8 @@ impl<'value> NP_Value<'value> for &'value str {
     
         let write_bytes = memory.write_bytes();
     
-        let size = match memory.schema[cursor.schema_addr] {
-            NP_Parsed_Schema::UTF8String {
-                i: _,
-                sortable: _,
-                default: _,
-                size,
-            } => size,
+        let size = match memory.schema[c.schema_addr] {
+            NP_Parsed_Schema::UTF8String { size, .. } => size,
             _ => {
                 unsafe { unreachable_unchecked() }
             }
@@ -301,7 +298,7 @@ impl<'value> NP_Value<'value> for &'value str {
         if size > 0 {
             // fixed size bytes
     
-            if cursor.value.get_value_address() == 0 {
+            if c.value.get_addr_value() == 0 {
                 // malloc new bytes
     
                 let mut empty_bytes: Vec<u8> = Vec::with_capacity(size as usize);
@@ -310,11 +307,10 @@ impl<'value> NP_Value<'value> for &'value str {
                 }
     
                 let new_addr = memory.malloc(empty_bytes)? as usize;
-                memory.write_address(cursor.buff_addr, new_addr);
-                cursor.value = cursor.value.update_value_address(new_addr);
+                c.value.set_addr_value(new_addr as u16);
             }
 
-            let addr = cursor.value.get_addr_value()
+            let addr = c.value.get_addr_value() as usize;
     
             for x in 0..(size as usize) {
                 if x < bytes.len() {
@@ -330,23 +326,11 @@ impl<'value> NP_Value<'value> for &'value str {
         }
     
         // flexible size
-        let addr_value = cursor.value.get_addr_value()
+        let addr_value = c.value.get_addr_value() as usize;
     
         let prev_size: usize = if addr_value != 0 {
-            match memory.size {
-                NP_Size::U8 => {
-                    let size_bytes: u8 = memory.get_1_byte(addr_value).unwrap_or(0);
-                    u8::from_be_bytes([size_bytes]) as usize
-                }
-                NP_Size::U16 => {
-                    let size_bytes: &[u8; 2] = memory.get_2_bytes(addr_value).unwrap_or(&[0; 2]);
-                    u16::from_be_bytes(*size_bytes) as usize
-                }
-                NP_Size::U32 => {
-                    let size_bytes: &[u8; 4] = memory.get_4_bytes(addr_value).unwrap_or(&[0; 4]);
-                    u32::from_be_bytes(*size_bytes) as usize
-                }
-            }
+            let size_bytes: &[u8; 2] = memory.get_2_bytes(addr_value).unwrap_or(&[0; 2]);
+            u16::from_be_bytes(*size_bytes) as usize
         } else {
             0 as usize
         };
@@ -355,38 +339,16 @@ impl<'value> NP_Value<'value> for &'value str {
             // previous string is larger than this one, use existing memory
     
             // update string length in buffer
-            match memory.size {
-                NP_Size::U8 => {
-                    if str_size > core::u8::MAX as usize {
-                        return Err(NP_Error::new("String too large!"));
-                    }
-                    let size_bytes = (str_size as u8).to_be_bytes();
-                    // set string size
-                    write_bytes[addr_value] = size_bytes[0];
-                }
-                NP_Size::U16 => {
-                    if str_size > core::u16::MAX as usize {
-                        return Err(NP_Error::new("String too large!"));
-                    }
-                    let size_bytes = (str_size as u16).to_be_bytes();
-                    // set string size
-                    for x in 0..size_bytes.len() {
-                        write_bytes[(addr_value + x)] = size_bytes[x];
-                    }
-                }
-                NP_Size::U32 => {
-                    if str_size > core::u32::MAX as usize {
-                        return Err(NP_Error::new("String too large!"));
-                    }
-                    let size_bytes = (str_size as u32).to_be_bytes();
-                    // set string size
-                    for x in 0..size_bytes.len() {
-                        write_bytes[(addr_value + x)] = size_bytes[x];
-                    }
-                }
-            };
-    
-            let offset = memory.addr_size_bytes();
+            if str_size > core::u16::MAX as usize {
+                return Err(NP_Error::new("String too large!"));
+            }
+            let size_bytes = (str_size as u16).to_be_bytes();
+            // set string size
+            for x in 0..size_bytes.len() {
+                write_bytes[(addr_value + x)] = size_bytes[x];
+            }
+
+            let offset = 2;
     
             // set bytes
             for x in 0..bytes.len() {
@@ -398,35 +360,17 @@ impl<'value> NP_Value<'value> for &'value str {
             // not enough space or space has not been allocted yet
     
             // first bytes are string length
-            let new_addr = match memory.size {
-                NP_Size::U8 => {
-                    if str_size > core::u8::MAX as usize {
-                        return Err(NP_Error::new("String too large!"));
-                    }
-                    let size_bytes = (str_size as u8).to_be_bytes();
-                    memory.malloc_borrow(&size_bytes)?
+            let new_addr = {
+                if str_size > core::u16::MAX as usize {
+                    return Err(NP_Error::new("String too large!"));
                 }
-                NP_Size::U16 => {
-                    if str_size > core::u16::MAX as usize {
-                        return Err(NP_Error::new("String too large!"));
-                    }
-                    let size_bytes = (str_size as u16).to_be_bytes();
-                    memory.malloc_borrow(&size_bytes)?
-                }
-                NP_Size::U32 => {
-                    if str_size > core::u32::MAX as usize {
-                        return Err(NP_Error::new("String too large!"));
-                    }
-                    let size_bytes = (str_size as u32).to_be_bytes();
-                    memory.malloc_borrow(&size_bytes)?
-                }
+                let size_bytes = (str_size as u16).to_be_bytes();
+                memory.malloc_borrow(&size_bytes)?
             };
     
-            memory.write_address(cursor.buff_addr, new_addr);
+            c.value.set_addr_value(new_addr as u16);
     
             memory.malloc_borrow(bytes)?;
-
-            cursor.value = cursor.value.update_value_address(new_addr);
     
             return Ok(cursor);
         }

@@ -12,7 +12,76 @@ use alloc::string::ToString;
 #[doc(hidden)]
 pub struct NP_List {}
 
+
 impl NP_List {
+
+    pub fn for_each<F>(cursor_addr: &NP_Cursor_Addr, memory: &NP_Memory, only_real: bool, callback: F) where F: Fn((usize, NP_Cursor_Addr)) {
+
+        let list_cursor = memory.get_parsed(cursor_addr);
+
+        let list_addr = list_cursor.value.get_addr_value();
+
+        let schema_of = match memory.schema[list_cursor.schema_addr] {
+            NP_Parsed_Schema::List { of, .. } => of,
+            _ => unsafe { unreachable_unchecked() }
+        };
+
+        let list_cursor = memory.get_parsed(cursor_addr);
+        let index = 0usize;
+        let mut tail_index = 0usize;
+
+        match list_cursor.data {
+            NP_Cursor_Data::List { bytes, .. } => {
+
+                let tail_addr = bytes.get_tail();
+
+                if tail_addr != 0 { 
+                
+                    let tail_cursor = memory.get_parsed(&NP_Cursor_Addr::Real(tail_addr as usize));
+
+                    tail_index = tail_cursor.value.get_index() as usize;
+                    
+                }
+            },
+            _ => unsafe { unreachable_unchecked() }
+        }
+    
+        
+        
+        match list_cursor.data {
+            NP_Cursor_Data::List { list_addrs, .. } => {
+
+                while index <= tail_index {
+
+                    let this_cursor = if only_real {
+                        while list_addrs[index] == 0 {
+                            index += 1;
+                        }
+                        NP_Cursor_Addr::Real(list_addrs[index])
+                    } else {
+                        if list_addrs[index] == 0 {
+                            let virt = memory.get_parsed(&NP_Cursor_Addr::Virtual);
+                            virt.reset();
+                            virt.schema_addr = schema_of;
+                            virt.parent_addr = list_cursor.buff_addr;
+                            virt.value.set_index(index as u8);
+                            NP_Cursor_Addr::Virtual
+                        } else {
+                            NP_Cursor_Addr::Real(list_addrs[index])
+                        }
+                    };
+
+                    callback((index, this_cursor));
+                    
+                    index += 1;
+                }
+
+
+            },
+            _ => unsafe { unreachable_unchecked() }
+        }
+
+    }
 
     pub fn parse<'parse>(buff_addr: usize, schema_addr: NP_Schema_Addr, parent_addr: usize, parent_schema_addr: usize, memory: &NP_Memory<'parse>, of_schema: usize) {
 
@@ -173,52 +242,56 @@ impl<'value> NP_Value<'value> for NP_List {
 
     fn get_size(cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>) -> Result<usize, NP_Error> {
 
-        if cursor.value.get_value_address() == 0 {
+        let c = memory.get_parsed(&cursor);
+
+        if c.value.get_addr_value() == 0 {
             return Ok(0) 
         }
 
         // head + tail;,
-        let base_size = match memory.size {
-            NP_Size::U32 => 8usize,
-            NP_Size::U16 => 4usize,
-            NP_Size::U8 => 2usize
-        };
+        let base_size = 4usize;
 
         let mut acc_size = 0usize;
- 
-        for (_i, item) in NP_List::new(cursor.clone_lite(), memory, true) {
-            acc_size += NP_Cursor::calc_size(item.clone(), memory).unwrap();
-        }
 
+        NP_List::for_each(&cursor, memory, true, |(_i, item)| {
+            acc_size += NP_Cursor::calc_size(item.clone(), memory).unwrap();
+        });
+ 
 
         Ok(acc_size + base_size)
     }
     
-    fn to_json(cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>) -> NP_JSON {
+    fn to_json(cursor: NP_Cursor_Addr, memory: &'value NP_Memory) -> NP_JSON {
 
-        if cursor.buff_addr == 0 { return NP_JSON::Null };
+        let c = memory.get_parsed(&cursor);
+
+        if c.buff_addr == 0 { return NP_JSON::Null };
 
         let mut json_list = Vec::new();
 
-        for (_i, item) in NP_List::new(cursor.clone_lite(), memory, false) {
-            json_list.push(NP_Cursor::json_encode(&item, memory));      
-        }
+        NP_List::for_each(&cursor, memory, true, |(_i, item)| {
+            json_list.push(NP_Cursor::json_encode(item.clone(), memory));     
+        });
 
         NP_JSON::Array(json_list)
     }
 
-    fn do_compact(from_cursor: NP_Cursor_Addr, from_memory: &NP_Memory<'value>, to_cursor: NP_Cursor_Addr, to_memory: &NP_Memory<'value>) -> Result<NP_Cursor_Addr, NP_Error> where Self: 'value + Sized {
+    fn do_compact(from_cursor: &NP_Cursor_Addr, from_memory: &'value NP_Memory, to_cursor: NP_Cursor_Addr, to_memory: &NP_Memory) -> Result<NP_Cursor_Addr, NP_Error> where Self: Sized {
 
-        if from_cursor.buff_addr == 0 || from_cursor.value.get_value_address() == 0 {
+        let from_c = from_memory.get_parsed(from_cursor);
+        let to_c = to_memory.get_parsed(&to_cursor);
+
+        if from_c.buff_addr == 0 || from_c.value.get_addr_value() == 0 {
             return Ok(to_cursor);
         }
 
-        for (index, old_item) in NP_List::new(from_cursor.clone(), from_memory, true) {
-            if old_item.buff_addr != 0 && old_item.value.get_value_address() != 0 { // pointer has value
-                let (_new_index, new_item) = NP_List::push(to_cursor.clone(), to_memory, Some(index as u16))?;
+        NP_List::for_each(from_cursor, from_memory, true, |(index, item)| {
+            let old_item = from_memory.get_parsed(&item);
+            if old_item.buff_addr != 0 && old_item.value.get_addr_value() != 0 { // pointer has value
+                let (_new_index, new_item) = NP_List::push(to_cursor.clone(), to_memory, Some(index as u16)).unwrap();
                 NP_Cursor::compact(&old_item, from_memory, new_item, to_memory)?;
-            } 
-        }
+            }    
+        });
 
         Ok(to_cursor)
     }

@@ -285,7 +285,7 @@ impl<'cursor> NP_Cursor<'cursor> {
     }
 
 
-    pub fn parse(buff_addr: usize, schema_addr: NP_Schema_Addr, parent_addr: usize, parent_schema_addr: usize, memory: &NP_Memory<'cursor>) -> Result<(), NP_Error> {
+    pub fn parse<'parse>(buff_addr: usize, schema_addr: NP_Schema_Addr, parent_addr: usize, parent_schema_addr: usize, memory: &NP_Memory) -> Result<(), NP_Error> {
 
         if buff_addr > memory.read_bytes().len() {
             panic!()
@@ -324,7 +324,7 @@ impl<'cursor> NP_Cursor<'cursor> {
 
     
     #[inline(always)]
-    pub fn parse_cursor_value(buff_addr: usize, parent_addr: usize, parent_schema_addr: usize, memory: &NP_Memory<'cursor>) -> &'cursor mut dyn NP_Pointer_Bytes {
+    pub fn parse_cursor_value<'parse>(buff_addr: usize, parent_addr: usize, parent_schema_addr: usize, memory: &NP_Memory) -> &'parse mut dyn NP_Pointer_Bytes {
         if parent_addr == 0 { // parent is root, no possible colleciton above
             unsafe { &mut *(memory.write_bytes().as_ptr().add(buff_addr) as *mut NP_Pointer_Scalar) }
         } else {
@@ -346,7 +346,7 @@ impl<'cursor> NP_Cursor<'cursor> {
     /// Exports this pointer and all it's descendants into a JSON object.
     /// This will create a copy of the underlying data and return default values where there isn't data.
     /// 
-    pub fn json_encode(cursor: NP_Cursor_Addr, memory: &NP_Memory<'cursor>) -> NP_JSON {
+    pub fn json_encode(cursor: NP_Cursor_Addr, memory: &'cursor NP_Memory) -> NP_JSON {
 
         match memory.schema[memory.get_parsed(&cursor).schema_addr].get_type_key() {
             NP_TypeKeys::None           => { NP_JSON::Null },
@@ -380,7 +380,7 @@ impl<'cursor> NP_Cursor<'cursor> {
 
     /// Compact from old cursor and memory into new cursor and memory
     /// 
-    pub fn compact(from_cursor: &NP_Cursor_Addr, from_memory: &NP_Memory<'cursor>, to_cursor: NP_Cursor_Addr, to_memory: &'cursor NP_Memory<'cursor>) -> Result<NP_Cursor_Addr, NP_Error> {
+    pub fn compact(from_cursor: &NP_Cursor_Addr, from_memory: &NP_Memory, to_cursor: NP_Cursor_Addr, to_memory: &NP_Memory) -> Result<NP_Cursor_Addr, NP_Error> {
 
         match from_memory.schema[from_memory.get_parsed(&from_cursor).schema_addr].get_type_key() {
             NP_TypeKeys::Any           => { Ok(to_cursor) }
@@ -523,7 +523,7 @@ pub trait NP_Value<'value> {
 
     /// Get the default schema value for this type
     /// 
-    fn schema_default(_schema: &NP_Parsed_Schema) -> Option<Self> where Self: Sized;
+    fn schema_default(_schema: &'value NP_Parsed_Schema) -> Option<Self> where Self: Sized;
 
     /// Parse JSON schema into schema
     ///
@@ -535,21 +535,21 @@ pub trait NP_Value<'value> {
 
     /// Set the value of this scalar into the buffer
     /// 
-    fn set_value(_cursor: NP_Cursor_Addr, _memory: &NP_Memory<'value>, _value: Self) -> Result<NP_Cursor_Addr, NP_Error> where Self: Sized {
+    fn set_value<'set>(_cursor: NP_Cursor_Addr, _memory: &'set NP_Memory, _value: Self) -> Result<NP_Cursor_Addr, NP_Error> where Self: 'set + Sized {
         let message = "This type doesn't support set_value!".to_owned();
         Err(NP_Error::new(message.as_str()))
     }
 
     /// Pull the data from the buffer and convert into type
     /// 
-    fn into_value(_cursor: NP_Cursor_Addr, _memory: &'value NP_Memory<'value>) -> Result<Option<Self>, NP_Error> where Self: 'value + Sized {
+    fn into_value(_cursor: NP_Cursor_Addr, _memory: &'value NP_Memory) -> Result<Option<Self>, NP_Error> where Self: Sized {
         let message = "This type doesn't support into!".to_owned();
         Err(NP_Error::new(message.as_str()))
     }
 
     /// Convert this type into a JSON value (recursive for collections)
     /// 
-    fn to_json(_cursor: NP_Cursor_Addr, _memory: &NP_Memory<'value>) -> NP_JSON;
+    fn to_json(_cursor: NP_Cursor_Addr, _memory: &'value NP_Memory) -> NP_JSON;
 
     /// Calculate the size of this pointer and it's children (recursive for collections)
     /// 
@@ -557,7 +557,7 @@ pub trait NP_Value<'value> {
     
     /// Handle copying from old pointer/buffer to new pointer/buffer (recursive for collections)
     /// 
-    fn do_compact(from_cursor: &NP_Cursor_Addr, from_memory: &NP_Memory<'value>, to_cursor: NP_Cursor_Addr, to_memory: &'value NP_Memory<'value>) -> Result<NP_Cursor_Addr, NP_Error> where Self:'value + Sized {
+    fn do_compact(from_cursor: &NP_Cursor_Addr, from_memory: &'value NP_Memory, to_cursor: NP_Cursor_Addr, to_memory: &NP_Memory) -> Result<NP_Cursor_Addr, NP_Error> where Self: Sized {
 
         match Self::into_value(from_cursor.clone(), from_memory)? {
             Some(x) => {

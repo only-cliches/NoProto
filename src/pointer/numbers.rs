@@ -95,9 +95,11 @@ macro_rules! noproto_number {
                 <$t>::np_get_default(&schema)
             }
     
-            fn set_value(mut cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>, value: Self) -> Result<NP_Cursor_Addr, NP_Error> {
+            fn set_value<'set>(cursor: NP_Cursor_Addr, memory: &'set NP_Memory, value: Self) -> Result<NP_Cursor_Addr, NP_Error> where Self: 'set + Sized {
 
-                let mut value_address = cursor.value.get_addr_value()
+                let c = memory.get_parsed(&cursor);
+
+                let mut value_address = c.value.get_addr_value() as usize;
 
                 if value_address != 0 { // existing value, replace
                     let mut bytes = value.to_be_bytes();
@@ -128,17 +130,18 @@ macro_rules! noproto_number {
                     };
         
                     value_address = memory.malloc_borrow(&bytes)?;
-                    cursor.value = cursor.value.update_value_address(value_address);
-                    memory.write_address(cursor.buff_addr, value_address);
+                    c.value.set_addr_value(value_address as u16);
 
                     return Ok(cursor);
                 }
                 
             }
         
-            fn into_value(cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>) -> Result<Option<Self>, NP_Error> {
+            fn into_value(cursor: NP_Cursor_Addr, memory: &'value NP_Memory) -> Result<Option<Self>, NP_Error> {
 
-                let value_addr = cursor.value.get_addr_value()
+                let c = memory.get_parsed(&cursor);
+
+                let value_addr = c.value.get_addr_value() as usize;
         
                 // empty value
                 if value_addr == 0 {
@@ -161,7 +164,7 @@ macro_rules! noproto_number {
                 Ok(Some(<$t>::from_be_bytes(be_bytes)))
             }
 
-            fn to_json(cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>) -> NP_JSON {
+            fn to_json(cursor: NP_Cursor_Addr, memory: &'value NP_Memory) -> NP_JSON {
 
                 match Self::into_value(cursor.clone(), memory) {
                     Ok(x) => {
@@ -173,8 +176,8 @@ macro_rules! noproto_number {
                                 }
                             },
                             None => {
-
-                                let schema = &memory.schema[cursor.schema_addr];
+                                let c = memory.get_parsed(&cursor);
+                                let schema = &memory.schema[c.schema_addr];
                                 match <$t>::schema_default(&schema) {
                                     Some(v) => {
                                         match $numType {
@@ -195,7 +198,9 @@ macro_rules! noproto_number {
 
             fn get_size(cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>) -> Result<usize, NP_Error> {
 
-                if cursor.value.get_value_address() == 0 {
+                let c = memory.get_parsed(&cursor);
+
+                if c.value.get_addr_value() == 0 {
                     Ok(0) 
                 } else {
                     Ok(core::mem::size_of::<Self>())

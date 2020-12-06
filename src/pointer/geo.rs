@@ -121,19 +121,21 @@ impl<'value> NP_Value<'value> for NP_Geo_Bytes {
 
     fn schema_to_json(schema: &Vec<NP_Parsed_Schema>, address: usize)-> Result<NP_JSON, NP_Error> { NP_Geo::schema_to_json(schema, address)}
 
-    fn set_value(mut cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>, value: Self) -> Result<NP_Cursor_Addr, NP_Error> {
+    fn set_value<'set>(mut cursor: NP_Cursor_Addr, memory: &'set NP_Memory, value: Self) -> Result<NP_Cursor_Addr, NP_Error> where Self: 'set + Sized {
         Err(NP_Error::new("Can't set value with NP_Geo_Bytes, use NP_Geo instead!"))
     }
-    fn to_json(cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>) -> NP_JSON {
+    fn to_json(cursor: NP_Cursor_Addr, memory: &'value NP_Memory) -> NP_JSON {
         NP_Geo::to_json(cursor, memory)
     }
     fn get_size(cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>) -> Result<usize, NP_Error> {
 
-        if cursor.value.get_value_address() == 0 {
+        let c = memory.get_parsed(&cursor);
+
+        if c.value.get_addr_value() == 0 {
             return Ok(0) 
         } else {
-            let size = match memory.schema[cursor.schema_addr] {
-                NP_Parsed_Schema::Geo { i: _, sortable: _, default: _, size} => {
+            let size = match memory.schema[c.schema_addr] {
+                NP_Parsed_Schema::Geo { size, ..} => {
                     size
                 },
                 _ => { unsafe { unreachable_unchecked() } }
@@ -142,16 +144,18 @@ impl<'value> NP_Value<'value> for NP_Geo_Bytes {
         }
     }
 
-    fn into_value(cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>) -> Result<Option<Self>, NP_Error> {
+    fn into_value(cursor: NP_Cursor_Addr, memory: &'value NP_Memory) -> Result<Option<Self>, NP_Error> {
 
-        let value_addr = cursor.value.get_addr_value()
+        let c = memory.get_parsed(&cursor);
+
+        let value_addr = c.value.get_addr_value() as usize;
 
         // empty value
         if value_addr == 0 {
             return Ok(None);
         }
 
-        let size = match memory.schema[cursor.schema_addr] {
+        let size = match memory.schema[c.schema_addr] {
             NP_Parsed_Schema::Geo { size, .. } => {
                 size
             },
@@ -340,7 +344,7 @@ fn geo_default_value(size: u8, json: &NP_JSON) -> Result<Option<NP_Geo_Bytes>, N
 
 impl<'value> NP_Value<'value> for NP_Geo {
 
-    fn schema_default(schema: &'value NP_Parsed_Schema) -> Option<Self> {
+    fn schema_default(schema: &NP_Parsed_Schema) -> Option<Self> {
         match schema {
             NP_Parsed_Schema::Geo { i: _, sortable: _, default, size: _} => {
                 if let Some(d) = default {
@@ -380,10 +384,13 @@ impl<'value> NP_Value<'value> for NP_Geo {
 
     }
 
-    fn set_value(mut cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>, value: Self) -> Result<NP_Cursor_Addr, NP_Error> {
+    fn set_value<'set>(mut cursor: NP_Cursor_Addr, memory: &'set NP_Memory, value: Self) -> Result<NP_Cursor_Addr, NP_Error> where Self: 'set + Sized {
 
+        let c = memory.get_parsed(&cursor);
 
-        let size = match memory.schema[cursor.schema_addr] {
+        let mut value_address = c.value.get_addr_value() as usize;
+
+        let size = match memory.schema[c.schema_addr] {
             NP_Parsed_Schema::Geo { size, .. } => {
                 size
             },
@@ -467,7 +474,7 @@ impl<'value> NP_Value<'value> for NP_Geo {
             }
         };
 
-        let mut value_address = cursor.value.get_addr_value()
+        let mut value_address = c.value.get_addr_value() as usize;
 
         if value_address != 0 { // existing value, replace
 
@@ -495,24 +502,25 @@ impl<'value> NP_Value<'value> for NP_Geo {
                 }
             }
 
-            cursor.value = cursor.value.update_value_address(value_address);
-            memory.write_address(cursor.buff_addr, value_address);
+            c.value.set_addr_value(value_address as u16);
 
         }
 
         Ok(cursor)
     }
 
-    fn into_value(cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>) -> Result<Option<Self>, NP_Error> {
+    fn into_value(cursor: NP_Cursor_Addr, memory: &'value NP_Memory) -> Result<Option<Self>, NP_Error> {
 
-        let value_addr = cursor.value.get_addr_value()
+        let c = memory.get_parsed(&cursor);
+
+        let value_addr = c.value.get_addr_value() as  usize;
 
         // empty value
         if value_addr == 0 {
             return Ok(None);
         }
     
-        let size = match memory.schema[cursor.schema_addr] {
+        let size = match memory.schema[c.schema_addr] {
             NP_Parsed_Schema::Geo { size, .. } => {
                 size
             },
@@ -572,7 +580,7 @@ impl<'value> NP_Value<'value> for NP_Geo {
         }))
     }
 
-    fn to_json(cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>) -> NP_JSON {
+    fn to_json(cursor: NP_Cursor_Addr, memory: &'value NP_Memory) -> NP_JSON {
 
         match Self::into_value(cursor.clone(), memory) {
             Ok(x) => {
@@ -587,7 +595,8 @@ impl<'value> NP_Value<'value> for NP_Geo {
                     },
                     None => {
 
-                        match &memory.schema[cursor.schema_addr] {
+                        let c = memory.get_parsed(&cursor);
+                        match &memory.schema[c.schema_addr] {
                             NP_Parsed_Schema::Geo { i: _, sortable: _, default, size: _} => {
                                 if let Some(d) = default {
                                     let mut object = JSMAP::new();
@@ -613,10 +622,14 @@ impl<'value> NP_Value<'value> for NP_Geo {
 
     fn get_size(cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>) -> Result<usize, NP_Error> {
 
-        if cursor.value.get_value_address() == 0 {
+        let c = memory.get_parsed(&cursor);
+
+        let value_addr = c.value.get_addr_value();
+
+        if value_addr == 0 {
             return Ok(0) 
         } else {
-            let size = match memory.schema[cursor.schema_addr] {
+            let size = match memory.schema[c.schema_addr] {
                 NP_Parsed_Schema::Geo { i: _, sortable: _, default: _, size} => {
                     size
                 },

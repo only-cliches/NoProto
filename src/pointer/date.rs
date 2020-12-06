@@ -20,6 +20,7 @@
 //! ```
 //! 
 
+use crate::pointer::NP_Cursor_Addr;
 use crate::schema::{NP_Parsed_Schema};
 use alloc::vec::Vec;
 use crate::json_flex::{JSMAP, NP_JSON};
@@ -87,7 +88,7 @@ impl<'value> NP_Value<'value> for NP_Date {
         Ok(NP_JSON::Dictionary(schema_json))
     }
 
-    fn schema_default(schema: &'value NP_Parsed_Schema) -> Option<Self> {
+    fn schema_default(schema: &NP_Parsed_Schema) -> Option<Self> {
         match schema {
             NP_Parsed_Schema::Date { default, .. } => {
                 if let Some(d) = default {
@@ -100,9 +101,11 @@ impl<'value> NP_Value<'value> for NP_Date {
         }
     }
 
-    fn set_value(mut cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>, value: Self) -> Result<NP_Cursor_Addr, NP_Error> {
+    fn set_value<'set>(mut cursor: NP_Cursor_Addr, memory: &'set NP_Memory, value: Self) -> Result<NP_Cursor_Addr, NP_Error> where Self: 'set + Sized {
 
-        let mut value_address = cursor.value.get_addr_value()
+        let c = memory.get_parsed(&cursor);
+
+        let mut value_address = c.value.get_addr_value() as usize;
 
         if value_address != 0 { // existing value, replace
             let bytes = value.value.to_be_bytes();
@@ -118,16 +121,17 @@ impl<'value> NP_Value<'value> for NP_Date {
 
             let bytes = value.value.to_be_bytes();
             value_address = memory.malloc_borrow(&bytes)?;
-            cursor.value = cursor.value.update_value_address(value_address);
-            memory.write_address(cursor.buff_addr, value_address);
+            c.value.set_addr_value(value_address as u16);
         }                    
 
         Ok(cursor)
     }
 
-    fn into_value(cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>) -> Result<Option<Self>, NP_Error> {
+    fn into_value(cursor: NP_Cursor_Addr, memory: &'value NP_Memory) -> Result<Option<Self>, NP_Error> {
 
-        let value_addr = cursor.value.get_addr_value()
+        let c = memory.get_parsed(&cursor);
+
+        let value_addr = c.value.get_addr_value() as usize;
 
         // empty value
         if value_addr == 0 {
@@ -142,7 +146,7 @@ impl<'value> NP_Value<'value> for NP_Date {
         })
     }
 
-    fn to_json(cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>) -> NP_JSON {
+    fn to_json(cursor: NP_Cursor_Addr, memory: &'value NP_Memory) -> NP_JSON {
 
         match Self::into_value(cursor.clone(), memory) {
             Ok(x) => {
@@ -151,8 +155,8 @@ impl<'value> NP_Value<'value> for NP_Date {
                         NP_JSON::Integer(y.value as i64)
                     },
                     None => {
-
-                        match memory.schema[cursor.schema_addr] {
+                        let c = memory.get_parsed(&cursor);
+                        match memory.schema[c.schema_addr] {
                             NP_Parsed_Schema::Date { i: _, default, sortable: _} => {
                                 if let Some(d) = default {
                                     NP_JSON::Integer(d.value.clone() as i64)
@@ -171,9 +175,11 @@ impl<'value> NP_Value<'value> for NP_Date {
         }
     }
 
-    fn get_size(cursor: NP_Cursor_Addr, _memory: &NP_Memory<'value>) -> Result<usize, NP_Error> {
+    fn get_size(cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>) -> Result<usize, NP_Error> {
 
-        if cursor.value.get_value_address() == 0 {
+        let c = memory.get_parsed(&cursor);
+
+        if c.value.get_addr_value() == 0 {
             Ok(0) 
         } else {
             Ok(core::mem::size_of::<u64>())

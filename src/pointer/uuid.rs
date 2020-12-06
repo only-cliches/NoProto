@@ -137,7 +137,7 @@ impl<'value> NP_Value<'value> for &NP_UUID {
         Ok(NP_JSON::Dictionary(schema_json))
     }
 
-    fn set_value(mut cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>, value: Self) -> Result<NP_Cursor_Addr, NP_Error> {
+    fn set_value<'set>(mut cursor: NP_Cursor_Addr, memory: &'set NP_Memory, value: Self) -> Result<NP_Cursor_Addr, NP_Error> where Self: 'set + Sized {
 
         let c = memory.get_parsed(&cursor);
 
@@ -161,7 +161,7 @@ impl<'value> NP_Value<'value> for &NP_UUID {
         Ok(cursor)
     }
 
-    fn into_value(cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>) -> Result<Option<Self>, NP_Error> {
+    fn into_value(cursor: NP_Cursor_Addr, memory: &'value NP_Memory) -> Result<Option<Self>, NP_Error> {
 
         let c = memory.get_parsed(&cursor);
 
@@ -180,7 +180,7 @@ impl<'value> NP_Value<'value> for &NP_UUID {
         })
     }
 
-    fn to_json(cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>) -> NP_JSON {
+    fn to_json(cursor: NP_Cursor_Addr, memory: &'value NP_Memory) -> NP_JSON {
 
         match Self::into_value(cursor.clone(), memory) {
             Ok(x) => {

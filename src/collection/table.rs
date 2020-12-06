@@ -204,7 +204,7 @@ impl<'value> NP_Value<'value> for NP_Table {
         Ok(base_size + acc_size)
     }
 
-    fn to_json(cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>) -> NP_JSON {
+    fn to_json(cursor: NP_Cursor_Addr, memory: &'value NP_Memory) -> NP_JSON {
 
         if cursor.buff_addr == 0 { return NP_JSON::Null };
 
