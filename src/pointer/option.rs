@@ -10,7 +10,7 @@
 //!    "choices": ["red", "green", "blue"]
 //! }"#)?;
 //!
-//! let mut new_buffer = factory.empty_buffer(None, None)?;
+//! let mut new_buffer = factory.empty_buffer(None)?;
 //! new_buffer.set(&[], NP_Enum::new("green"))?;
 //! 
 //! assert_eq!(NP_Enum::new("green"), new_buffer.get::<NP_Enum>(&[])?.unwrap());
@@ -30,7 +30,7 @@ use alloc::string::String;
 use alloc::boxed::Box;
 use alloc::borrow::ToOwned;
 use alloc::{string::ToString};
-use super::{NP_Cursor};
+use super::{NP_Cursor, NP_Cursor_Addr};
 
 /// Holds Enum / Option type data.
 /// 
@@ -127,7 +127,7 @@ impl<'value> NP_Value<'value> for NP_Enum {
         }
     }
 
-    fn set_value(mut cursor: NP_Cursor, memory: &NP_Memory, value: Self) -> Result<NP_Cursor, NP_Error> {
+    fn set_value(mut cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>, value: Self) -> Result<NP_Cursor_Addr, NP_Error> {
 
         assert_ne!(cursor.buff_addr, 0);
 
@@ -153,7 +153,7 @@ impl<'value> NP_Value<'value> for NP_Enum {
         
                 let bytes = value_num as u8;
 
-                let mut addr_value = cursor.value.get_value_address();
+                let mut addr_value = cursor.value.get_addr_value()
         
                 if addr_value != 0 { // existing value, replace
         
@@ -175,9 +175,9 @@ impl<'value> NP_Value<'value> for NP_Enum {
         }               
     }
 
-    fn into_value(cursor: NP_Cursor, memory: &NP_Memory) -> Result<Option<Self>, NP_Error> {
+    fn into_value(cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>) -> Result<Option<Self>, NP_Error> {
 
-        let value_addr = cursor.value.get_value_address();
+        let value_addr = cursor.value.get_addr_value()
 
         // empty value
         if value_addr == 0 {
@@ -203,7 +203,7 @@ impl<'value> NP_Value<'value> for NP_Enum {
         }
     }
 
-    fn to_json(cursor: &NP_Cursor, memory: &NP_Memory<'value>) -> NP_JSON {
+    fn to_json(cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>) -> NP_JSON {
 
         match Self::into_value(cursor.clone(), memory) {
             Ok(x) => {
@@ -258,7 +258,7 @@ impl<'value> NP_Value<'value> for NP_Enum {
         }
     }
 
-    fn get_size(cursor: NP_Cursor, _memory: &NP_Memory) -> Result<usize, NP_Error> {
+    fn get_size(cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>) -> Result<usize, NP_Error> {
 
         if cursor.value.get_value_address() == 0 {
             return Ok(0) 
@@ -396,7 +396,7 @@ fn schema_parsing_works() -> Result<(), NP_Error> {
 fn default_value_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"option\",\"default\":\"hello\",\"choices\":[\"hello\",\"world\"]}";
     let factory = crate::NP_Factory::new(schema)?;
-    let buffer = factory.empty_buffer(None, None)?;
+    let buffer = factory.empty_buffer(None)?;
     assert_eq!(buffer.get::<NP_Enum>(&[])?.unwrap(), NP_Enum::new("hello"));
 
     Ok(())
@@ -406,13 +406,13 @@ fn default_value_works() -> Result<(), NP_Error> {
 fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"option\",\"choices\":[\"hello\",\"world\"]}";
     let factory = crate::NP_Factory::new(schema)?;
-    let mut buffer = factory.empty_buffer(None, None)?;
+    let mut buffer = factory.empty_buffer(None)?;
     buffer.set(&[], NP_Enum::new("hello"))?;
     assert_eq!(buffer.get::<NP_Enum>(&[])?, Some(NP_Enum::new("hello")));
     buffer.del(&[])?;
     assert_eq!(buffer.get::<NP_Enum>(&[])?, None);
 
-    buffer.compact(None, None)?;
+    buffer.compact(None)?;
     assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);
 
     Ok(())

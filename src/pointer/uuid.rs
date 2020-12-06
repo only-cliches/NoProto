@@ -11,7 +11,7 @@
 //!    "type": "uuid"
 //! }"#)?;
 //!
-//! let mut new_buffer = factory.empty_buffer(None, None)?;
+//! let mut new_buffer = factory.empty_buffer(None)?;
 //! new_buffer.set(&[], &NP_UUID::generate(50))?;
 //! 
 //! assert_eq!("48E6AAB0-7DF5-409F-4D57-4D969FA065EE", new_buffer.get::<&NP_UUID>(&[])?.unwrap().to_string());
@@ -22,7 +22,6 @@
 
 use alloc::prelude::v1::Box;
 use crate::pointer::NP_Scalar;
-use crate::pointer::NP_Cursor;
 use crate::{memory::NP_Memory, schema::{NP_Parsed_Schema}};
 use alloc::vec::Vec;
 use crate::json_flex::{JSMAP, NP_JSON};
@@ -33,6 +32,8 @@ use core::{fmt::{Debug, Formatter, Write}};
 use alloc::string::String;
 use alloc::borrow::ToOwned;
 use alloc::string::ToString;
+
+use super::NP_Cursor_Addr;
 
 
 /// Holds UUID which is good for random keys.
@@ -136,9 +137,11 @@ impl<'value> NP_Value<'value> for &NP_UUID {
         Ok(NP_JSON::Dictionary(schema_json))
     }
 
-    fn set_value(mut cursor: NP_Cursor, memory: &NP_Memory, value: Self) -> Result<NP_Cursor, NP_Error> {
+    fn set_value(mut cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>, value: Self) -> Result<NP_Cursor_Addr, NP_Error> {
 
-        let mut value_address = cursor.value.get_value_address();
+        let c = memory.get_parsed(&cursor);
+
+        let mut value_address = c.value.get_addr_value() as usize;
 
         if value_address != 0 { // existing value, replace
             let bytes = value.value;
@@ -152,23 +155,24 @@ impl<'value> NP_Value<'value> for &NP_UUID {
         } else { // new value
 
             value_address = memory.malloc_borrow(&value.value)?;
-            cursor.value = cursor.value.update_value_address(value_address);
-            memory.write_address(cursor.buff_addr, value_address);
+            c.value.set_addr_value(value_address as u16);
         }                    
         
         Ok(cursor)
     }
 
-    fn into_value(cursor: NP_Cursor, memory: &NP_Memory<'value>) -> Result<Option<Self>, NP_Error> {
+    fn into_value(cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>) -> Result<Option<Self>, NP_Error> {
 
-        let value_addr = cursor.value.get_value_address();
+        let c = memory.get_parsed(&cursor);
+
+        let value_addr = c.value.get_addr_value();
 
         // empty value
         if value_addr == 0 {
             return Ok(None);
         }
 
-        Ok(match memory.get_16_bytes(value_addr) {
+        Ok(match memory.get_16_bytes(value_addr as usize) {
             Some(x) => {
                 Some(unsafe { &*(x.as_ptr() as *const NP_UUID) })
             },
@@ -176,7 +180,7 @@ impl<'value> NP_Value<'value> for &NP_UUID {
         })
     }
 
-    fn to_json(cursor: &NP_Cursor, memory: &NP_Memory) -> NP_JSON {
+    fn to_json(cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>) -> NP_JSON {
 
         match Self::into_value(cursor.clone(), memory) {
             Ok(x) => {
@@ -195,9 +199,11 @@ impl<'value> NP_Value<'value> for &NP_UUID {
         }
     }
 
-    fn get_size(cursor: NP_Cursor, _memory: &NP_Memory) -> Result<usize, NP_Error> {
+    fn get_size(cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>) -> Result<usize, NP_Error> {
 
-        if cursor.value.get_value_address() == 0 {
+        let c = memory.get_parsed(&cursor);
+
+        if c.value.get_addr_value() == 0 {
             Ok(0) 
         } else {
             Ok(16)
@@ -245,14 +251,14 @@ fn schema_parsing_works() -> Result<(), NP_Error> {
 fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"uuid\"}";
     let factory = crate::NP_Factory::new(schema)?;
-    let mut buffer = factory.empty_buffer(None, None)?;
+    let mut buffer = factory.empty_buffer(None)?;
     buffer.set(&[], &NP_UUID::generate(212))?;
     assert_eq!(buffer.get::<&NP_UUID>(&[])?, Some(&NP_UUID::generate(212)));
     assert_eq!(buffer.get::<&NP_UUID>(&[])?.unwrap().to_string(), "9EE6AAB0-2C94-41FE-FB88-42F73253F217");
     buffer.del(&[])?;
     assert_eq!(buffer.get::<&NP_UUID>(&[])?, None);
 
-    buffer.compact(None, None)?;
+    buffer.compact(None)?;
     assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);
 
     Ok(())

@@ -9,7 +9,7 @@
 //!    "type": "bytes"
 //! }"#)?;
 //!
-//! let mut new_buffer = factory.empty_buffer(None, None)?;
+//! let mut new_buffer = factory.empty_buffer(None)?;
 //! new_buffer.set(&[], &[0u8, 1, 2, 3, 4] as NP_Bytes)?;
 //! 
 //! assert_eq!(&[0u8, 1, 2, 3, 4] as NP_Bytes, new_buffer.get::<NP_Bytes>(&[])?.unwrap());
@@ -20,14 +20,13 @@
 
 use crate::{json_flex::JSMAP, schema::{NP_Parsed_Schema}};
 use crate::error::NP_Error;
-use crate::memory::{NP_Size};
 use crate::{schema::{NP_TypeKeys}, pointer::NP_Value, json_flex::NP_JSON};
 use core::hint::unreachable_unchecked;
 
 use alloc::vec::Vec;
 use alloc::boxed::Box;
 use alloc::{borrow::ToOwned};
-use super::{NP_Cursor};
+use super::{NP_Cursor, NP_Cursor_Addr};
 use crate::NP_Memory;
 use alloc::string::ToString;
 
@@ -82,7 +81,7 @@ impl<'value> NP_Value<'value> for &'value [u8] {
     }
 
  
-    fn set_value(mut cursor: NP_Cursor, memory: &NP_Memory<'value>, value: Self) -> Result<NP_Cursor, NP_Error> {
+    fn set_value(mut cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>, value: Self) -> Result<NP_Cursor_Addr, NP_Error> {
 
         assert_ne!(cursor.buff_addr, 0);
     
@@ -115,7 +114,7 @@ impl<'value> NP_Value<'value> for &'value [u8] {
                 cursor.value = cursor.value.update_value_address(new_addr);
             }
 
-            let addr = cursor.value.get_value_address();
+            let addr = cursor.value.get_addr_value()
     
             for x in 0..(size as usize) {
                 if x < bytes.len() {
@@ -131,7 +130,7 @@ impl<'value> NP_Value<'value> for &'value [u8] {
         }
     
         // flexible size
-        let addr_value = cursor.value.get_value_address();
+        let addr_value = cursor.value.get_addr_value()
     
         let prev_size: usize = if addr_value != 0 {
             match memory.size {
@@ -235,8 +234,8 @@ impl<'value> NP_Value<'value> for &'value [u8] {
     }
     
 
-    fn into_value(cursor: NP_Cursor, memory: &'value NP_Memory<'value>, ) -> Result<Option<Self>, NP_Error> {
-        let value_addr = cursor.value.get_value_address();
+    fn into_value(cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>) -> Result<Option<Self>, NP_Error> {
+        let value_addr = cursor.value.get_addr_value()
         // empty value
         if value_addr == 0 {
             return Ok(None);
@@ -276,7 +275,7 @@ impl<'value> NP_Value<'value> for &'value [u8] {
         }
     }
 
-    fn to_json(cursor: &NP_Cursor, memory: &'value NP_Memory<'value>) -> NP_JSON {
+    fn to_json(cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>) -> NP_JSON {
 
 
         match Self::into_value(cursor.clone(), memory) {
@@ -313,7 +312,7 @@ impl<'value> NP_Value<'value> for &'value [u8] {
             }
         }
     }
-    fn get_size(cursor: NP_Cursor, memory: &NP_Memory) -> Result<usize, NP_Error> {
+    fn get_size(cursor: NP_Cursor_Addr, _memory: &NP_Memory<'value>) -> Result<usize, NP_Error> {
 
         // empty value
         if cursor.value.get_value_address() == 0 {
@@ -463,7 +462,7 @@ fn schema_parsing_works() -> Result<(), NP_Error> {
 fn default_value_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"bytes\",\"default\":[1,2,3,4]}";
     let factory = crate::NP_Factory::new(schema)?;
-    let buffer = factory.empty_buffer(None, None)?;
+    let buffer = factory.empty_buffer(None)?;
     assert_eq!(buffer.get::<&[u8]>(&[])?.unwrap(), &[1,2,3,4]);
 
     Ok(())
@@ -473,7 +472,7 @@ fn default_value_works() -> Result<(), NP_Error> {
 fn fixed_size_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"bytes\",\"size\": 20}";
     let factory = crate::NP_Factory::new(schema)?;
-    let mut buffer = factory.empty_buffer(None, None)?;
+    let mut buffer = factory.empty_buffer(None)?;
     buffer.set(&[], &[1u8,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22] as &[u8])?;
     assert_eq!(buffer.get::<&[u8]>(&[])?.unwrap(), &[1u8,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20] as &[u8]);
 
@@ -484,13 +483,13 @@ fn fixed_size_works() -> Result<(), NP_Error> {
 fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"bytes\"}";
     let factory = crate::NP_Factory::new(schema)?;
-    let mut buffer = factory.empty_buffer(None, None)?;
+    let mut buffer = factory.empty_buffer(None)?;
     buffer.set(&[], &[1u8,2,3,4,5,6,7,8,9,10,11,12,13] as &[u8])?;
     assert_eq!(buffer.get::<&[u8]>(&[])?.unwrap(), &[1u8,2,3,4,5,6,7,8,9,10,11,12,13] as &[u8]);
     buffer.del(&[])?;
     assert_eq!(buffer.get::<&[u8]>(&[])?, None);
 
-    buffer.compact(None, None)?;
+    buffer.compact(None)?;
     assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);
 
     Ok(())

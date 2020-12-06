@@ -92,7 +92,7 @@
 //! 
 //! 
 //! // create a new empty buffer
-//! let mut user_buffer = user_factory.empty_buffer(None, None)?; // optional capacity, optional address size (u16 by default)
+//! let mut user_buffer = user_factory.empty_buffer(None)?; // optional capacity, optional address size (u16 by default)
 //! 
 //! // set an internal value of the buffer, set the  "name" column
 //! user_buffer.set(&["name"], "Billy Joel")?;
@@ -249,7 +249,7 @@ const PROTOCOL_VERSION: u8 = 1;
 /// // user_factory can now be used to make or open buffers that contain the data in the schema.
 /// 
 /// // create new buffer
-/// let mut user_buffer = user_factory.empty_buffer(None, None)?; // optional capacity, optional address size
+/// let mut user_buffer = user_factory.empty_buffer(None)?; // optional capacity, optional address size
 ///    
 /// // set the "name" column of the table
 /// user_buffer.set(&["name"], "Billy Joel")?;

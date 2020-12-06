@@ -9,7 +9,7 @@
 //!    "type": "bool"
 //! }"#)?;
 //!
-//! let mut new_buffer = factory.empty_buffer(None, None)?;
+//! let mut new_buffer = factory.empty_buffer(None)?;
 //! new_buffer.set(&[], true)?;
 //! 
 //! assert_eq!(true, new_buffer.get::<bool>(&[])?.unwrap());
@@ -17,6 +17,7 @@
 //! # Ok::<(), NP_Error>(()) 
 //! ```
 
+use crate::pointer::NP_Cursor_Addr;
 use core::hint::unreachable_unchecked;
 
 use crate::{json_flex::JSMAP, schema::{NP_Parsed_Schema}};
@@ -69,9 +70,9 @@ impl<'value> NP_Value<'value> for bool {
         }
     }
 
-    fn set_value(mut cursor: NP_Cursor, memory: &NP_Memory, value: Self) -> Result<NP_Cursor, NP_Error> {
+    fn set_value(mut cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>, value: Self) -> Result<NP_Cursor_Addr, NP_Error> {
 
-        let mut value_address = cursor.value.get_value_address();
+        let mut value_address = cursor.value.get_addr_value()
 
         if value_address != 0 { // existing value, replace
 
@@ -102,9 +103,9 @@ impl<'value> NP_Value<'value> for bool {
         
     }
 
-    fn into_value(cursor: NP_Cursor, memory: &NP_Memory) -> Result<Option<Self>, NP_Error> {
+    fn into_value(cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>) -> Result<Option<Self>, NP_Error> {
 
-        let value_addr = cursor.value.get_value_address();
+        let value_addr = cursor.value.get_addr_value()
 
         // empty value
         if value_addr == 0 {
@@ -119,7 +120,7 @@ impl<'value> NP_Value<'value> for bool {
         })
     }
 
-    fn to_json(cursor: &NP_Cursor, memory: &NP_Memory) -> NP_JSON {
+    fn to_json(cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>) -> NP_JSON {
 
         match Self::into_value(cursor.clone(), memory) {
             Ok(x) => {
@@ -155,7 +156,7 @@ impl<'value> NP_Value<'value> for bool {
         }
     }
 
-    fn get_size(cursor: NP_Cursor, _memory: &NP_Memory) -> Result<usize, NP_Error> {
+    fn get_size(cursor: NP_Cursor_Addr, _memory: &NP_Memory<'value>) -> Result<usize, NP_Error> {
 
         if cursor.value.get_value_address() == 0 {
             Ok(0) 
@@ -225,7 +226,7 @@ fn schema_parsing_works() -> Result<(), NP_Error> {
 fn default_value_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"bool\",\"default\":false}";
     let factory = crate::NP_Factory::new(schema)?;
-    let buffer = factory.empty_buffer(None, None)?;
+    let buffer = factory.empty_buffer(None)?;
     assert_eq!(buffer.get::<bool>(&[])?.unwrap(), false);
 
     Ok(())
@@ -236,13 +237,13 @@ fn default_value_works() -> Result<(), NP_Error> {
 fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"bool\"}";
     let factory = crate::NP_Factory::new(schema)?;
-    let mut buffer = factory.empty_buffer(None, None)?;
+    let mut buffer = factory.empty_buffer(None)?;
     buffer.set(&[], false)?;
     assert_eq!(buffer.get::<bool>(&[])?.unwrap(), false);
     buffer.del(&[])?;
     assert_eq!(buffer.get::<bool>(&[])?, None);
 
-    buffer.compact(None, None)?;
+    buffer.compact(None)?;
     assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);
 
     Ok(())

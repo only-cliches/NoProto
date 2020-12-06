@@ -21,7 +21,7 @@ fn main() -> Result<(), NP_Error> {
     // create a new empty buffer
     let user_buffer = user_factory
         // optional capacity, optional address size (u16 by default)
-        .empty_buffer(None, None)?;
+        .empty_buffer(None)?;
 
 
     // close buffer and get internal bytes
@@ -45,7 +45,7 @@ fn main() -> Result<(), NP_Error> {
     println!("bytes: {:?}", user_bytes);
     let mut user_buffer = user_factory.open_buffer(user_bytes);
 
-    user_buffer.compact(None, None)?;
+    user_buffer.compact(None)?;
 
 
     // assign nested internal values, sets the first tag element

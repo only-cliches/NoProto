@@ -54,7 +54,7 @@
 //!    "exp": 2
 //! }"#)?;
 //!
-//! let mut new_buffer = factory.empty_buffer(None, None)?;
+//! let mut new_buffer = factory.empty_buffer(None)?;
 //! new_buffer.set(&[], NP_Dec::new(50283, 2))?;
 //! 
 //! assert_eq!(502.83f64, new_buffer.get::<NP_Dec>(&[])?.unwrap().to_float());
@@ -74,7 +74,7 @@ use crate::{pointer::NP_Value, error::NP_Error};
 use core::{fmt::{Debug}, hint::unreachable_unchecked};
 
 use alloc::borrow::ToOwned;
-use super::{NP_Cursor};
+use super::{NP_Cursor, NP_Cursor_Addr};
 use crate::NP_Memory;
 use alloc::string::ToString;
 
@@ -705,9 +705,9 @@ impl<'value> NP_Value<'value> for NP_Dec {
         }
     }
 
-    fn set_value(mut cursor: NP_Cursor, memory: &NP_Memory, value: Self) -> Result<NP_Cursor, NP_Error> {
+    fn set_value(mut cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>, value: Self) -> Result<NP_Cursor_Addr, NP_Error> {
 
-        let mut value_address = cursor.value.get_value_address();
+        let mut value_address = cursor.value.get_addr_value()
 
 
         let exp = match memory.schema[cursor.schema_addr] {
@@ -752,9 +752,9 @@ impl<'value> NP_Value<'value> for NP_Dec {
         Ok(cursor)
     }
 
-    fn into_value(cursor: NP_Cursor, memory: &NP_Memory) -> Result<Option<Self>, NP_Error> {
+    fn into_value(cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>) -> Result<Option<Self>, NP_Error> {
 
-        let value_addr = cursor.value.get_value_address();
+        let value_addr = cursor.value.get_addr_value()
 
         // empty value
         if value_addr == 0 {
@@ -779,7 +779,7 @@ impl<'value> NP_Value<'value> for NP_Dec {
         })
     }
 
-    fn to_json(cursor: &NP_Cursor, memory: &NP_Memory) -> NP_JSON {
+    fn to_json(cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>) -> NP_JSON {
 
 
         let exp = match memory.schema[cursor.schema_addr] {
@@ -826,7 +826,7 @@ impl<'value> NP_Value<'value> for NP_Dec {
         }
     }
 
-    fn get_size(cursor: NP_Cursor, _memory: &NP_Memory) -> Result<usize, NP_Error> {
+    fn get_size(cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>) -> Result<usize, NP_Error> {
 
         if cursor.value.get_value_address() == 0 {
             Ok(0) 
@@ -928,7 +928,7 @@ fn schema_parsing_works() -> Result<(), NP_Error> {
 fn default_value_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"decimal\",\"exp\":3,\"default\":203.293}";
     let factory = crate::NP_Factory::new(schema)?;
-    let buffer = factory.empty_buffer(None, None)?;
+    let buffer = factory.empty_buffer(None)?;
     assert_eq!(buffer.get::<NP_Dec>(&[])?.unwrap(), NP_Dec::new(203293, 3));
 
     Ok(())
@@ -939,13 +939,13 @@ fn default_value_works() -> Result<(), NP_Error> {
 fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"decimal\",\"exp\": 3}";
     let factory = crate::NP_Factory::new(schema)?;
-    let mut buffer = factory.empty_buffer(None, None)?;
+    let mut buffer = factory.empty_buffer(None)?;
     buffer.set(&[], NP_Dec::new(203293, 3))?;
     assert_eq!(buffer.get::<NP_Dec>(&[])?.unwrap(), NP_Dec::new(203293, 3));
     buffer.del(&[])?;
     assert_eq!(buffer.get::<NP_Dec>(&[])?, None);
 
-    buffer.compact(None, None)?;
+    buffer.compact(None)?;
     assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);
 
     Ok(())

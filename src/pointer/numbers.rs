@@ -20,7 +20,7 @@
 //!    "type": "u32"
 //! }"#)?;
 //!
-//! let mut new_buffer = factory.empty_buffer(None, None)?;
+//! let mut new_buffer = factory.empty_buffer(None)?;
 //! new_buffer.set(&[], 20380u32)?;
 //! 
 //! assert_eq!(20380u32, new_buffer.get::<u32>(&[])?.unwrap());
@@ -31,6 +31,7 @@
 //! 
 
 
+use crate::pointer::NP_Cursor_Addr;
 use alloc::prelude::v1::Box;
 use crate::schema::NP_Parsed_Schema;
 use alloc::vec::Vec;
@@ -94,9 +95,9 @@ macro_rules! noproto_number {
                 <$t>::np_get_default(&schema)
             }
     
-            fn set_value(mut cursor: NP_Cursor, memory: &NP_Memory, value: Self) -> Result<NP_Cursor, NP_Error> {
+            fn set_value(mut cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>, value: Self) -> Result<NP_Cursor_Addr, NP_Error> {
 
-                let mut value_address = cursor.value.get_value_address();
+                let mut value_address = cursor.value.get_addr_value()
 
                 if value_address != 0 { // existing value, replace
                     let mut bytes = value.to_be_bytes();
@@ -135,9 +136,9 @@ macro_rules! noproto_number {
                 
             }
         
-            fn into_value(cursor: NP_Cursor, memory: &NP_Memory) -> Result<Option<Self>, NP_Error> {
+            fn into_value(cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>) -> Result<Option<Self>, NP_Error> {
 
-                let value_addr = cursor.value.get_value_address();
+                let value_addr = cursor.value.get_addr_value()
         
                 // empty value
                 if value_addr == 0 {
@@ -160,7 +161,7 @@ macro_rules! noproto_number {
                 Ok(Some(<$t>::from_be_bytes(be_bytes)))
             }
 
-            fn to_json(cursor: &NP_Cursor, memory: &NP_Memory) -> NP_JSON {
+            fn to_json(cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>) -> NP_JSON {
 
                 match Self::into_value(cursor.clone(), memory) {
                     Ok(x) => {
@@ -192,7 +193,7 @@ macro_rules! noproto_number {
                 }
             }
 
-            fn get_size(cursor: NP_Cursor, _memory: &NP_Memory) -> Result<usize, NP_Error> {
+            fn get_size(cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>) -> Result<usize, NP_Error> {
 
                 if cursor.value.get_value_address() == 0 {
                     Ok(0) 
@@ -384,7 +385,7 @@ fn i8_schema_parsing_works() -> Result<(), NP_Error> {
 fn i8_default_value_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"i8\",\"default\":56}";
     let factory = crate::NP_Factory::new(schema)?;
-    let buffer = factory.empty_buffer(None, None)?;
+    let buffer = factory.empty_buffer(None)?;
     assert_eq!(buffer.get::<i8>(&[])?.unwrap(), 56i8);
 
     Ok(())
@@ -394,13 +395,13 @@ fn i8_default_value_works() -> Result<(), NP_Error> {
 fn i8_set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"i8\"}";
     let factory = crate::NP_Factory::new(schema)?;
-    let mut buffer = factory.empty_buffer(None, None)?;
+    let mut buffer = factory.empty_buffer(None)?;
     buffer.set(&[], 56i8)?;
     assert_eq!(buffer.get::<i8>(&[])?.unwrap(), 56i8);
     buffer.del(&[])?;
     assert_eq!(buffer.get::<i8>(&[])?, None);
 
-    buffer.compact(None, None)?;
+    buffer.compact(None)?;
     assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);
 
     Ok(())
@@ -456,7 +457,7 @@ fn i16_schema_parsing_works() -> Result<(), NP_Error> {
 fn i16_default_value_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"i16\",\"default\":293}";
     let factory = crate::NP_Factory::new(schema)?;
-    let buffer = factory.empty_buffer(None, None)?;
+    let buffer = factory.empty_buffer(None)?;
     assert_eq!(buffer.get::<i16>(&[])?.unwrap(), 293i16);
 
     Ok(())
@@ -466,13 +467,13 @@ fn i16_default_value_works() -> Result<(), NP_Error> {
 fn i16_set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"i16\"}";
     let factory = crate::NP_Factory::new(schema)?;
-    let mut buffer = factory.empty_buffer(None, None)?;
+    let mut buffer = factory.empty_buffer(None)?;
     buffer.set(&[], 293i16)?;
     assert_eq!(buffer.get::<i16>(&[])?.unwrap(), 293i16);
     buffer.del(&[])?;
     assert_eq!(buffer.get::<i16>(&[])?, None);
 
-    buffer.compact(None, None)?;
+    buffer.compact(None)?;
     assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);
 
     Ok(())
@@ -529,7 +530,7 @@ fn i32_schema_parsing_works() -> Result<(), NP_Error> {
 fn i32_default_value_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"i32\",\"default\":293}";
     let factory = crate::NP_Factory::new(schema)?;
-    let buffer = factory.empty_buffer(None, None)?;
+    let buffer = factory.empty_buffer(None)?;
     assert_eq!(buffer.get::<i32>(&[])?.unwrap(), 293i32);
 
     Ok(())
@@ -539,13 +540,13 @@ fn i32_default_value_works() -> Result<(), NP_Error> {
 fn i32_set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"i32\"}";
     let factory = crate::NP_Factory::new(schema)?;
-    let mut buffer = factory.empty_buffer(None, None)?;
+    let mut buffer = factory.empty_buffer(None)?;
     buffer.set(&[], 293i32)?;
     assert_eq!(buffer.get::<i32>(&[])?.unwrap(), 293i32);
     buffer.del(&[])?;
     assert_eq!(buffer.get::<i32>(&[])?, None);
 
-    buffer.compact(None, None)?;
+    buffer.compact(None)?;
     assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);
 
     Ok(())
@@ -603,7 +604,7 @@ fn i64_schema_parsing_works() -> Result<(), NP_Error> {
 fn i64_default_value_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"i64\",\"default\":293}";
     let factory = crate::NP_Factory::new(schema)?;
-    let buffer = factory.empty_buffer(None, None)?;
+    let buffer = factory.empty_buffer(None)?;
     assert_eq!(buffer.get::<i64>(&[])?.unwrap(), 293i64);
 
     Ok(())
@@ -613,13 +614,13 @@ fn i64_default_value_works() -> Result<(), NP_Error> {
 fn i64_set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"i64\"}";
     let factory = crate::NP_Factory::new(schema)?;
-    let mut buffer = factory.empty_buffer(None, None)?;
+    let mut buffer = factory.empty_buffer(None)?;
     buffer.set(&[], 293i64)?;
     assert_eq!(buffer.get::<i64>(&[])?.unwrap(), 293i64);
     buffer.del(&[])?;
     assert_eq!(buffer.get::<i64>(&[])?, None);
 
-    buffer.compact(None, None)?;
+    buffer.compact(None)?;
     assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);
 
     Ok(())
@@ -677,7 +678,7 @@ fn u8_schema_parsing_works() -> Result<(), NP_Error> {
 fn u8_default_value_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"u8\",\"default\":198}";
     let factory = crate::NP_Factory::new(schema)?;
-    let buffer = factory.empty_buffer(None, None)?;
+    let buffer = factory.empty_buffer(None)?;
     assert_eq!(buffer.get::<u8>(&[])?.unwrap(), 198u8);
 
     Ok(())
@@ -687,13 +688,13 @@ fn u8_default_value_works() -> Result<(), NP_Error> {
 fn u8_set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"u8\"}";
     let factory = crate::NP_Factory::new(schema)?;
-    let mut buffer = factory.empty_buffer(None, None)?;
+    let mut buffer = factory.empty_buffer(None)?;
     buffer.set(&[], 198u8)?;
     assert_eq!(buffer.get::<u8>(&[])?.unwrap(), 198u8);
     buffer.del(&[])?;
     assert_eq!(buffer.get::<u8>(&[])?, None);
 
-    buffer.compact(None, None)?;
+    buffer.compact(None)?;
     assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);
 
     Ok(())
@@ -751,7 +752,7 @@ fn u16_schema_parsing_works() -> Result<(), NP_Error> {
 fn u16_default_value_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"u16\",\"default\":293}";
     let factory = crate::NP_Factory::new(schema)?;
-    let buffer = factory.empty_buffer(None, None)?;
+    let buffer = factory.empty_buffer(None)?;
     assert_eq!(buffer.get::<u16>(&[])?.unwrap(), 293u16);
 
     Ok(())
@@ -761,13 +762,13 @@ fn u16_default_value_works() -> Result<(), NP_Error> {
 fn u16_set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"u16\"}";
     let factory = crate::NP_Factory::new(schema)?;
-    let mut buffer = factory.empty_buffer(None, None)?;
+    let mut buffer = factory.empty_buffer(None)?;
     buffer.set(&[], 293u16)?;
     assert_eq!(buffer.get::<u16>(&[])?.unwrap(), 293u16);
     buffer.del(&[])?;
     assert_eq!(buffer.get::<u16>(&[])?, None);
 
-    buffer.compact(None, None)?;
+    buffer.compact(None)?;
     assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);
 
     Ok(())
@@ -825,7 +826,7 @@ fn u32_schema_parsing_works() -> Result<(), NP_Error> {
 fn u32_default_value_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"u32\",\"default\":293}";
     let factory = crate::NP_Factory::new(schema)?;
-    let buffer = factory.empty_buffer(None, None)?;
+    let buffer = factory.empty_buffer(None)?;
     assert_eq!(buffer.get::<u32>(&[])?.unwrap(), 293u32);
 
     Ok(())
@@ -835,13 +836,13 @@ fn u32_default_value_works() -> Result<(), NP_Error> {
 fn u32_set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"u32\"}";
     let factory = crate::NP_Factory::new(schema)?;
-    let mut buffer = factory.empty_buffer(None, None)?;
+    let mut buffer = factory.empty_buffer(None)?;
     buffer.set(&[], 293u32)?;
     assert_eq!(buffer.get::<u32>(&[])?.unwrap(), 293u32);
     buffer.del(&[])?;
     assert_eq!(buffer.get::<u32>(&[])?, None);
 
-    buffer.compact(None, None)?;
+    buffer.compact(None)?;
     assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);
 
     Ok(())
@@ -897,7 +898,7 @@ fn u64_schema_parsing_works() -> Result<(), NP_Error> {
 fn u64_default_value_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"u64\",\"default\":293}";
     let factory = crate::NP_Factory::new(schema)?;
-    let buffer = factory.empty_buffer(None, None)?;
+    let buffer = factory.empty_buffer(None)?;
     assert_eq!(buffer.get::<u64>(&[])?.unwrap(), 293u64);
 
     Ok(())
@@ -907,13 +908,13 @@ fn u64_default_value_works() -> Result<(), NP_Error> {
 fn u64_set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"u64\"}";
     let factory = crate::NP_Factory::new(schema)?;
-    let mut buffer = factory.empty_buffer(None, None)?;
+    let mut buffer = factory.empty_buffer(None)?;
     buffer.set(&[], 293u64)?;
     assert_eq!(buffer.get::<u64>(&[])?.unwrap(), 293u64);
     buffer.del(&[])?;
     assert_eq!(buffer.get::<u64>(&[])?, None);
 
-    buffer.compact(None, None)?;
+    buffer.compact(None)?;
     assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);
 
     Ok(())
@@ -969,7 +970,7 @@ fn float_schema_parsing_works() -> Result<(), NP_Error> {
 fn float_default_value_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"float\",\"default\":2983.2938}";
     let factory = crate::NP_Factory::new(schema)?;
-    let buffer = factory.empty_buffer(None, None)?;
+    let buffer = factory.empty_buffer(None)?;
     assert_eq!(buffer.get::<f32>(&[])?.unwrap(), 2983.2938f32);
 
     Ok(())
@@ -979,13 +980,13 @@ fn float_default_value_works() -> Result<(), NP_Error> {
 fn float_set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"float\"}";
     let factory = crate::NP_Factory::new(schema)?;
-    let mut buffer = factory.empty_buffer(None, None)?;
+    let mut buffer = factory.empty_buffer(None)?;
     buffer.set(&[], 2983.2938f32)?;
     assert_eq!(buffer.get::<f32>(&[])?.unwrap(), 2983.2938f32);
     buffer.del(&[])?;
     assert_eq!(buffer.get::<f32>(&[])?, None);
 
-    buffer.compact(None, None)?;
+    buffer.compact(None)?;
     assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);
 
     Ok(())
@@ -1041,7 +1042,7 @@ fn double_schema_parsing_works() -> Result<(), NP_Error> {
 fn double_default_value_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"double\",\"default\":2983.2938}";
     let factory = crate::NP_Factory::new(schema)?;
-    let buffer = factory.empty_buffer(None, None)?;
+    let buffer = factory.empty_buffer(None)?;
     assert_eq!(buffer.get::<f64>(&[])?.unwrap(), 2983.2938f64);
 
     Ok(())
@@ -1051,13 +1052,13 @@ fn double_default_value_works() -> Result<(), NP_Error> {
 fn double_set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"double\"}";
     let factory = crate::NP_Factory::new(schema)?;
-    let mut buffer = factory.empty_buffer(None, None)?;
+    let mut buffer = factory.empty_buffer(None)?;
     buffer.set(&[], 2983.2938f64)?;
     assert_eq!(buffer.get::<f64>(&[])?.unwrap(), 2983.2938f64);
     buffer.del(&[])?;
     assert_eq!(buffer.get::<f64>(&[])?, None);
 
-    buffer.compact(None, None)?;
+    buffer.compact(None)?;
     assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);
 
     Ok(())

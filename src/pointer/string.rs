@@ -8,7 +8,7 @@
 //!    "type": "string"
 //! }"#)?;
 //!
-//! let mut new_buffer = factory.empty_buffer(None, None)?;
+//! let mut new_buffer = factory.empty_buffer(None)?;
 //! new_buffer.set(&[], "I want to play a game")?;
 //!
 //! assert_eq!("I want to play a game", new_buffer.get::<&str>(&[])?.unwrap());
@@ -23,13 +23,12 @@ use crate::error::NP_Error;
 use crate::{
     json_flex::JSMAP,
     memory::NP_Memory,
-    memory::NP_Size,
     schema::{NP_Parsed_Schema},
 };
 use crate::{json_flex::NP_JSON, pointer::NP_Value, schema::NP_TypeKeys};
 use alloc::vec::Vec;
 
-use super::{NP_Cursor, NP_Scalar};
+use super::{NP_Cursor, NP_Cursor_Addr, NP_Scalar};
 use alloc::borrow::ToOwned;
 use core::str;
 use alloc::string::ToString;
@@ -106,20 +105,17 @@ impl<'value> NP_Value<'value> for &'value str {
         (fixed_size > 0, schema)
     }
 
-    fn into_value(cursor: NP_Cursor, memory: &'value NP_Memory<'value> ) -> Result<Option<Self>, NP_Error> {
-        let value_addr = cursor.value.get_value_address();
+    fn into_value(cursor: NP_Cursor_Addr, memory: &'value NP_Memory<'value>) -> Result<Option<Self>, NP_Error> {
+        let c = memory.get_parsed(&cursor);
+
+        let value_addr = c.value.get_addr_value() as usize;
         // empty value
         if value_addr == 0 {
             return Ok(None);
         }
 
-        match memory.schema[cursor.schema_addr] {
-            NP_Parsed_Schema::UTF8String {
-                i: _,
-                sortable: _,
-                default: _,
-                size,
-            } => {
+        match memory.schema[c.schema_addr] {
+            NP_Parsed_Schema::UTF8String { size, .. } => {
                 if size > 0 {
                     // fixed size
 
@@ -131,20 +127,12 @@ impl<'value> NP_Value<'value> for &'value str {
                     // dynamic size
                     // get size of bytes
 
-                    let bytes_size: usize = memory.read_address(value_addr);
+                    let bytes_size: usize = u16::from_be_bytes(*memory.get_2_bytes(value_addr).unwrap_or(&[0u8; 2])) as usize;
 
                     // get bytes
-                    let bytes =
-                        match memory.size {
-                            NP_Size::U8 => &memory.read_bytes()
-                                [(value_addr + 1)..(value_addr + 1 + bytes_size)],
-                            NP_Size::U16 => &memory.read_bytes()
-                                [(value_addr + 2)..(value_addr + 2 + bytes_size)],
-                            NP_Size::U32 => &memory.read_bytes()
-                                [(value_addr + 4)..(value_addr + 4 + bytes_size)],
-                        };
+                    let bytes = &memory.read_bytes()[(value_addr + 2)..(value_addr + 2 + bytes_size)];
 
-                        return Ok(Some(unsafe { str::from_utf8_unchecked(bytes) }));
+                    return Ok(Some(unsafe { str::from_utf8_unchecked(bytes) }));
                 }
             }
             _ => unsafe { unreachable_unchecked() },
@@ -162,7 +150,7 @@ impl<'value> NP_Value<'value> for &'value str {
             }
         }
     }
-    fn get_size(cursor: NP_Cursor, memory: &NP_Memory) -> Result<usize, NP_Error> {
+    fn get_size(cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>) -> Result<usize, NP_Error> {
 
         // empty value
         if cursor.value.get_value_address() == 0 {
@@ -288,7 +276,7 @@ impl<'value> NP_Value<'value> for &'value str {
         }
     }
 
-    fn set_value(mut cursor: NP_Cursor, memory: &NP_Memory<'value>, value: Self) -> Result<NP_Cursor, NP_Error> {
+    fn set_value(mut cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>, value: Self) -> Result<NP_Cursor_Addr, NP_Error> {
 
         assert_ne!(cursor.buff_addr, 0);
     
@@ -326,7 +314,7 @@ impl<'value> NP_Value<'value> for &'value str {
                 cursor.value = cursor.value.update_value_address(new_addr);
             }
 
-            let addr = cursor.value.get_value_address();
+            let addr = cursor.value.get_addr_value()
     
             for x in 0..(size as usize) {
                 if x < bytes.len() {
@@ -342,7 +330,7 @@ impl<'value> NP_Value<'value> for &'value str {
         }
     
         // flexible size
-        let addr_value = cursor.value.get_value_address();
+        let addr_value = cursor.value.get_addr_value()
     
         let prev_size: usize = if addr_value != 0 {
             match memory.size {
@@ -466,7 +454,7 @@ fn schema_parsing_works() -> Result<(), NP_Error> {
 fn default_value_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"string\",\"default\":\"hello\"}";
     let factory = crate::NP_Factory::new(schema)?;
-    let buffer = factory.empty_buffer(None, None)?;
+    let buffer = factory.empty_buffer(None)?;
     assert_eq!(buffer.get::<&str>(&[])?.unwrap(), "hello");
 
     Ok(())
@@ -476,7 +464,7 @@ fn default_value_works() -> Result<(), NP_Error> {
 fn fixed_size_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"string\",\"size\": 20}";
     let factory = crate::NP_Factory::new(schema)?;
-    let mut buffer = factory.empty_buffer(None, None)?;
+    let mut buffer = factory.empty_buffer(None)?;
     buffer.set(&[], "hello there this sentence is long")?;
     assert_eq!(buffer.get::<&str>(&[])?.unwrap(), "hello there this sen");
 
@@ -487,7 +475,7 @@ fn fixed_size_works() -> Result<(), NP_Error> {
 fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"string\"}";
     let factory = crate::NP_Factory::new(schema)?;
-    let mut buffer = factory.empty_buffer(None, None)?;
+    let mut buffer = factory.empty_buffer(None)?;
     buffer.set(&[], "hello there this sentence is long")?;
     assert_eq!(
         buffer.get::<&str>(&[])?.unwrap(),
@@ -496,7 +484,7 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     buffer.del(&[])?;
     assert_eq!(buffer.get::<&str>(&[])?, None);
 
-    buffer.compact(None, None)?;
+    buffer.compact(None)?;
     assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);
 
     Ok(())

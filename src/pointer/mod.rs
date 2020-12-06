@@ -24,7 +24,7 @@ pub mod option;
 pub mod date;
 
 use crate::hashmap::NP_HashMap;
-use core::{fmt::{Debug, Formatter}, hint::unreachable_unchecked};
+use core::{fmt::{Debug}};
 
 use alloc::prelude::v1::Box;
 use crate::{pointer::dec::NP_Dec, schema::NP_Schema_Addr};
@@ -170,13 +170,13 @@ impl NP_Pointer_Bytes for [u8; 8] {
     }
 }
 
-const DEF_TABLE: NP_Vtable = NP_Vtable { next: [0; 2], values: [NP_Pointer_Scalar::default(); 4]};
+pub const DEF_TABLE: NP_Vtable = NP_Vtable { next: [0; 2], values: [NP_Pointer_Scalar::default(); 4]};
 
 #[derive(Debug)]
 pub enum NP_Cursor_Data<'data> {
     Empty,
     Scalar,
-    List { list_addrs: [u16; 255], bytes: &'data mut NP_List_Bytes },
+    List { list_addrs: [usize; 255], bytes: &'data mut NP_List_Bytes },
     Map { value_map: NP_HashMap },
     Tuple { bytes: [(usize, &'data mut NP_Vtable); 64] }, // (buffer_addr, VTable )
     Table { bytes: [(usize, &'data mut NP_Vtable); 64] }  // (buffer_addr, VTable )
@@ -252,9 +252,7 @@ pub struct NP_Cursor<'cursor> {
     /// the values of the buffer pointer
     pub value: &'cursor mut dyn NP_Pointer_Bytes,
     /// Information about the parent cursor
-    pub parent_addr: usize,
-    /// The previous cursor
-    pub prev_cursor: Option<usize>
+    pub parent_addr: usize
 }
 
 /// Represents a cursor address in the memory
@@ -274,8 +272,7 @@ impl<'cursor> NP_Cursor<'cursor> {
             schema_addr: 0,
             temp_bytes: Some(bytes),
             value: unsafe { &mut *(&mut bytes as *mut dyn NP_Pointer_Bytes) },
-            parent_addr: 0,
-            prev_cursor: None
+            parent_addr: 0
         }
     }
 
@@ -285,7 +282,6 @@ impl<'cursor> NP_Cursor<'cursor> {
         self.schema_addr = 0;
         self.value.reset();
         self.parent_addr = 0;
-        self.prev_cursor = None;
     }
 
 
@@ -304,8 +300,7 @@ impl<'cursor> NP_Cursor<'cursor> {
                     data: NP_Cursor_Data::Scalar,
                     temp_bytes: None,
                     value: NP_Cursor::parse_cursor_value(buff_addr, parent_schema_addr, parent_addr, &memory), 
-                    parent_addr: parent_addr,
-                    prev_cursor: None,
+                    parent_addr: parent_addr
                 };
 
                 memory.insert_parsed(buff_addr, new_cursor);
@@ -385,7 +380,7 @@ impl<'cursor> NP_Cursor<'cursor> {
 
     /// Compact from old cursor and memory into new cursor and memory
     /// 
-    pub fn compact(from_cursor: NP_Cursor_Addr, from_memory: &NP_Memory<'cursor>, to_cursor: NP_Cursor_Addr, to_memory: &NP_Memory<'cursor>) -> Result<NP_Cursor_Addr, NP_Error> {
+    pub fn compact(from_cursor: &NP_Cursor_Addr, from_memory: &NP_Memory<'cursor>, to_cursor: NP_Cursor_Addr, to_memory: &'cursor NP_Memory<'cursor>) -> Result<NP_Cursor_Addr, NP_Error> {
 
         match from_memory.schema[from_memory.get_parsed(&from_cursor).schema_addr].get_type_key() {
             NP_TypeKeys::Any           => { Ok(to_cursor) }
@@ -418,7 +413,7 @@ impl<'cursor> NP_Cursor<'cursor> {
 
     /// Set default for this value.  Not related to the schema default, this is the default value for this data type
     /// 
-    pub fn set_default(cursor: NP_Cursor_Addr, memory: &NP_Memory<'cursor>) -> Result<(), NP_Error> {
+    pub fn set_default(cursor: NP_Cursor_Addr, memory: &'cursor NP_Memory<'cursor>) -> Result<(), NP_Error> {
 
         match memory.schema[memory.get_parsed(&cursor).schema_addr].get_type_key() {
             NP_TypeKeys::None        => { panic!() },
@@ -528,7 +523,7 @@ pub trait NP_Value<'value> {
 
     /// Get the default schema value for this type
     /// 
-    fn schema_default(_schema: &'value NP_Parsed_Schema) -> Option<Self> where Self: Sized;
+    fn schema_default(_schema: &NP_Parsed_Schema) -> Option<Self> where Self: Sized;
 
     /// Parse JSON schema into schema
     ///
@@ -547,7 +542,7 @@ pub trait NP_Value<'value> {
 
     /// Pull the data from the buffer and convert into type
     /// 
-    fn into_value(_cursor: NP_Cursor_Addr, _memory: &NP_Memory<'value>) -> Result<Option<Self>, NP_Error> where Self: Sized {
+    fn into_value(_cursor: NP_Cursor_Addr, _memory: &'value NP_Memory<'value>) -> Result<Option<Self>, NP_Error> where Self: 'value + Sized {
         let message = "This type doesn't support into!".to_owned();
         Err(NP_Error::new(message.as_str()))
     }
@@ -562,7 +557,7 @@ pub trait NP_Value<'value> {
     
     /// Handle copying from old pointer/buffer to new pointer/buffer (recursive for collections)
     /// 
-    fn do_compact(from_cursor: NP_Cursor_Addr, from_memory: &NP_Memory<'value>, to_cursor: NP_Cursor_Addr, to_memory: &NP_Memory<'value>) -> Result<NP_Cursor_Addr, NP_Error> where Self: 'value + Sized {
+    fn do_compact(from_cursor: &NP_Cursor_Addr, from_memory: &NP_Memory<'value>, to_cursor: NP_Cursor_Addr, to_memory: &'value NP_Memory<'value>) -> Result<NP_Cursor_Addr, NP_Error> where Self:'value + Sized {
 
         match Self::into_value(from_cursor.clone(), from_memory)? {
             Some(x) => {

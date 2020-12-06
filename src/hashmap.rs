@@ -47,6 +47,10 @@ impl NP_HashMap {
         Ok(hash)
     }
 
+    pub fn get_hash(&self, key: u32) -> Option<&usize> {
+        self.data.get(key as usize)
+    }
+
     pub fn get(&self, key: &str) -> Option<&usize> {
         let hash = murmurhash3_x86_32(key.as_bytes(), SEED) as usize;
         self.data.get(hash)

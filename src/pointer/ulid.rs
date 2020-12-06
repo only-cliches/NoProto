@@ -11,7 +11,7 @@
 //!    "type": "ulid"
 //! }"#)?;
 //!
-//! let mut new_buffer = factory.empty_buffer(None, None)?;
+//! let mut new_buffer = factory.empty_buffer(None)?;
 //! new_buffer.set(&[], &NP_ULID::generate(1604965249484, 50))?;
 //! 
 //! assert_eq!("1EPQP4CEC3KANC3XYNG9YKAQ", new_buffer.get::<&NP_ULID>(&[])?.unwrap().to_string());
@@ -33,7 +33,7 @@ use alloc::boxed::Box;
 use alloc::string::ToString;
 use alloc::borrow::ToOwned;
 
-use super::{NP_Cursor};
+use super::{NP_Cursor_Addr};
 
 
 /// Holds ULIDs which are good for time series keys.
@@ -158,9 +158,11 @@ impl<'value> NP_Value<'value> for &NP_ULID {
     }
 
  
-    fn set_value(mut cursor: NP_Cursor, memory: &NP_Memory, value: Self) -> Result<NP_Cursor, NP_Error> {
+    fn set_value(mut cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>, value: Self) -> Result<NP_Cursor_Addr, NP_Error> {
 
-        let value_address = cursor.value.get_value_address();
+        let c = memory.get_parsed(&cursor);
+
+        let mut value_address = c.value.get_addr_value() as usize;
 
         if value_address != 0 { // existing value, replace
             let bytes = value.value;
@@ -173,24 +175,25 @@ impl<'value> NP_Value<'value> for &NP_ULID {
 
         } else { // new value
 
-            let new_addr = memory.malloc_borrow(&value.value)?;
-            cursor.value = cursor.value.update_value_address(new_addr);
-            memory.write_address(cursor.buff_addr, new_addr);
+            value_address = memory.malloc_borrow(&value.value)?;
+            c.value.set_addr_value(value_address as u16);
         }                    
         
         Ok(cursor)
     }
 
-    fn into_value(cursor: NP_Cursor, memory: &NP_Memory) -> Result<Option<Self>, NP_Error> {
+    fn into_value(cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>) -> Result<Option<Self>, NP_Error> {
 
-        let value_addr = cursor.value.get_value_address();
+        let c = memory.get_parsed(&cursor);
+
+        let value_addr = c.value.get_addr_value();
 
         // empty value
         if value_addr == 0 {
             return Ok(None);
         }
 
-        Ok(match memory.get_16_bytes(value_addr) {
+        Ok(match memory.get_16_bytes(value_addr as usize) {
             Some(x) => {
                 Some(unsafe { &*(x.as_ptr() as *const NP_ULID) })
             },
@@ -198,7 +201,7 @@ impl<'value> NP_Value<'value> for &NP_ULID {
         })
     }
 
-    fn to_json(cursor: &NP_Cursor, memory: &NP_Memory) -> NP_JSON {
+    fn to_json(cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>) -> NP_JSON {
 
         match Self::into_value(cursor.clone(), memory) {
             Ok(x) => {
@@ -217,9 +220,11 @@ impl<'value> NP_Value<'value> for &NP_ULID {
         }
     }
 
-    fn get_size(cursor: NP_Cursor, _memory: &NP_Memory) -> Result<usize, NP_Error> {
+    fn get_size(cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>) -> Result<usize, NP_Error> {
 
-        if cursor.value.get_value_address() == 0 {
+        let c = memory.get_parsed(&cursor);
+
+        if c.value.get_addr_value() == 0 {
             Ok(0) 
         } else {
             Ok(16)
@@ -265,14 +270,14 @@ fn schema_parsing_works() -> Result<(), NP_Error> {
 fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"ulid\"}";
     let factory = crate::NP_Factory::new(schema)?;
-    let mut buffer = factory.empty_buffer(None, None)?;
+    let mut buffer = factory.empty_buffer(None)?;
     buffer.set(&[], &NP_ULID::generate(1606680515909, 212))?;
     assert_eq!(buffer.get::<&NP_ULID>(&[])?, Some(&(NP_ULID::generate(1606680515909, 212))));
     assert_eq!(buffer.get::<&NP_ULID>(&[])?.unwrap().to_string(), "1ERASY5A5VKANC1CJGRZXYW8");
     buffer.del(&[])?;
     assert_eq!(buffer.get::<&NP_ULID>(&[])?, None);
 
-    buffer.compact(None, None)?;
+    buffer.compact(None)?;
     assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);
 
     Ok(())

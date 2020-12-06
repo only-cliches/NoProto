@@ -1,12 +1,11 @@
-use crate::pointer::NP_Cursor_Addr;
 use crate::pointer::DEF_TABLE;
+use crate::pointer::NP_Cursor_Addr;
 use crate::{pointer::NP_Cursor_Data, schema::NP_Schema_Addr, pointer::NP_Vtable};
-use crate::pointer::{NP_Cursor_Parent};
 use core::hint::unreachable_unchecked;
 
 use crate::{json_flex::JSMAP, pointer::{NP_Cursor}};
 use crate::pointer::{NP_Value};
-use crate::{memory::{NP_Size, NP_Memory}, schema::{NP_Schema, NP_TypeKeys, NP_Parsed_Schema}, error::NP_Error, json_flex::NP_JSON};
+use crate::{memory::{NP_Memory}, schema::{NP_Schema, NP_TypeKeys, NP_Parsed_Schema}, error::NP_Error, json_flex::NP_JSON};
 
 use alloc::vec::Vec;
 use alloc::borrow::ToOwned;
@@ -16,15 +15,9 @@ use alloc::string::ToString;
 /// Tuple data type.
 /// 
 #[doc(hidden)]
-#[derive(Debug, Clone)]
-pub struct NP_Tuple<'tuple> {
-    cursor: NP_Cursor,
-    tuple: NP_Cursor_Parent,
-    current: Option<(usize, NP_Cursor)>,
-    pub memory: &'tuple NP_Memory<'tuple>
-}
+pub struct NP_Tuple {}
 
-impl<'tuple> NP_Tuple<'tuple> {
+impl NP_Tuple {
 
     pub fn extend_vtables<'extend>(cursor: &NP_Cursor_Addr, memory: &'extend NP_Memory, col_index: usize) -> Result<&'extend [(usize, &'extend mut NP_Vtable); 64], NP_Error> {
         let cursor = memory.get_parsed(cursor);
@@ -69,8 +62,7 @@ impl<'tuple> NP_Tuple<'tuple> {
             data: NP_Cursor_Data::Empty,
             temp_bytes: None,
             value: tuple_value, 
-            parent_addr: parent_addr,
-            prev_cursor: None,
+            parent_addr: parent_addr
         };
 
         let table_addr = new_cursor.value.get_addr_value();
@@ -119,93 +111,9 @@ impl<'tuple> NP_Tuple<'tuple> {
         }
     }
 
-
-    /// Generate a new tuple iterator
-    #[inline(always)]
-    pub fn new(mut cursor: NP_Cursor, memory: &'tuple NP_Memory<'tuple>) -> Self {
-        let value_addr = if cursor.buff_addr != 0 { memory.read_address(cursor.buff_addr) } else { 0 };
-        cursor.value = cursor.value.update_value_address(value_addr);
-        Self {
-            cursor: cursor,
-            tuple: NP_Cursor_Parent::Tuple {
-                addr: value_addr,
-                schema_addr: cursor.schema_addr
-            },
-            current: None,
-            memory: memory
-        }
-    }
-
-    /// Read or save a list into the buffer
-    /// 
-    #[inline(always)]
-    pub fn read_tuple(buff_addr: usize, schema_addr: usize, memory: &NP_Memory<'tuple>, create: bool) -> Result<NP_Cursor, NP_Error> {
-
-        let mut cursor = NP_Cursor::new(buff_addr, schema_addr, &memory, NP_Cursor_Parent::None);
-        let mut value_addr = cursor.value.get_value_address();
-        let addr_size = memory.addr_size_bytes();
-
-        let tuple_size = match &memory.schema[schema_addr] {
-            NP_Parsed_Schema::Tuple { values, .. } => values.len(),
-            _ => unsafe { unreachable_unchecked() }
-        };
-        
-        if value_addr == 0 { // no tuple here
-            if create { // please make one
-                assert_ne!(cursor.buff_addr, 0); 
-
-                let tuple_size = addr_size * tuple_size;
-
-                let mut empty_bytes = Vec::with_capacity(tuple_size);
-                for _x in 0..tuple_size {
-                    empty_bytes.push(0);
-                }
-
-                value_addr = memory.malloc_borrow(&empty_bytes)?;
-                // update buffer
-                memory.write_address(cursor.buff_addr, value_addr);
-                // update cursor
-                cursor.value = cursor.value.update_value_address(value_addr);
-                Ok(cursor)
-            } else { // no tuple and no need to make one, just pass empty data
-                Ok(cursor)       
-            }
-        } else { // tuple found, read info from buffer
-            Ok(cursor)
-        }
-    }
-
-    /// Select into pointer
-    #[inline(always)]
-    pub fn select_into(cursor: NP_Cursor, memory: &'tuple NP_Memory<'tuple>, col: usize, create_path: bool) -> Result<Option<NP_Cursor>, NP_Error> {
-
-        let addr_size = memory.addr_size_bytes();
-
-        let tuple_cursor = Self::read_tuple(cursor.buff_addr, cursor.schema_addr, memory, create_path)?;
-
-        let value_schema_addr = match &memory.schema[cursor.schema_addr] {
-            NP_Parsed_Schema::Tuple { values, .. } => {
-                if values.len() <= col {
-                    return Ok(None)
-                }
-                values[col]
-            },
-            _ => unsafe { unreachable_unchecked() }
-        };
-
-        let value_buff_addr = if tuple_cursor.value.get_value_address() > 0 {
-            tuple_cursor.value.get_value_address() + (addr_size * col)
-        } else {
-            0
-        };
-
-        let virtual_cursor = NP_Cursor::new(value_buff_addr, value_schema_addr, memory, NP_Cursor_Parent::Tuple { addr: tuple_cursor.value.get_value_address(), schema_addr: cursor.schema_addr });
-
-        Ok(Some(virtual_cursor))
-    }
 }
 
-impl<'value> NP_Value<'value> for NP_Tuple<'value> {
+impl<'value> NP_Value<'value> for NP_Tuple {
 
     fn type_idx() -> (&'value str, NP_TypeKeys) { ("tuple", NP_TypeKeys::Tuple) }
     fn self_type_idx(&self) -> (&'value str, NP_TypeKeys) { ("tuple", NP_TypeKeys::Tuple) }
@@ -262,7 +170,7 @@ impl<'value> NP_Value<'value> for NP_Tuple<'value> {
         return Ok(base_size + acc_size);
     }
 
-    fn to_json(cursor: &NP_Cursor, memory: &NP_Memory) -> NP_JSON {
+    fn to_json(cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>) -> NP_JSON {
 
         if cursor.buff_addr == 0 { return NP_JSON::Null };
 
@@ -414,41 +322,6 @@ impl<'value> NP_Value<'value> for NP_Tuple<'value> {
 }
 
 
-impl<'it> Iterator for NP_Tuple<'it> {
-    type Item = (usize, NP_Cursor);
-
-    fn next(&mut self) -> Option<Self::Item> {
-
-        if let Some((index, _current)) = self.current { // go to next one
-            let values_len = match &self.memory.schema[self.cursor.schema_addr] {
-                NP_Parsed_Schema::Tuple { values, ..} => {
-                    values.len()
-                },
-                _ => { unsafe { unreachable_unchecked() }}
-            };
-
-            if values_len >= index + 1 {
-                self.current = None;
-            } else {
-                self.current = Some((index + 1, NP_Tuple::select_into(self.cursor.clone(), self.memory, index + 1, true).unwrap().unwrap()))
-            }
-        } else { // nothing in loop yet, make first loop item
-            self.current = Some((0, NP_Tuple::select_into(self.cursor.clone(), self.memory, 0, true).unwrap().unwrap()))
-        }
-
-        self.current
-    }
-
-    fn count(self) -> usize where Self: Sized {
-        match &self.memory.schema[self.cursor.schema_addr] {
-            NP_Parsed_Schema::Tuple { values, ..} => {
-                values.len()
-            },
-            _ => { unsafe { unreachable_unchecked() }}
-        }
-    }
-}
-
 
 
 #[test]
@@ -469,12 +342,12 @@ fn schema_parsing_works() -> Result<(), NP_Error> {
 fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"tuple\",\"values\":[{\"type\":\"string\"},{\"type\":\"uuid\"},{\"type\":\"uint8\"}]}";
     let factory = crate::NP_Factory::new(schema)?;
-    let mut buffer = factory.empty_buffer(None, None)?;
+    let mut buffer = factory.empty_buffer(None)?;
     buffer.set(&["0"], "hello")?;
     assert_eq!(buffer.get::<&str>(&["0"])?, Some("hello"));
     assert_eq!(buffer.calc_bytes()?.current_buffer, 17usize);
     buffer.del(&[])?;
-    buffer.compact(None, None)?;
+    buffer.compact(None)?;
     assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);
 
     Ok(())
