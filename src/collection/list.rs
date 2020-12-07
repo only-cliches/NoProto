@@ -130,9 +130,9 @@ impl NP_List {
 
         let list_addr = new_cursor.value.get_addr_value();
 
-        if list_addr == 0 { // no table here
+        if list_addr == 0 { // no list here
             memory.insert_parsed(buff_addr, new_cursor);
-        } else { // table exists, parse it
+        } else { // list exists, parse it
 
             let list_data = unsafe { &mut *(memory.write_bytes().as_ptr().add(list_addr as usize) as *mut NP_List_Bytes) };
 

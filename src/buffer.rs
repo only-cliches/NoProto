@@ -1,5 +1,6 @@
 //! Top level abstraction for buffer objects
 
+use crate::pointer::NP_Vtable;
 use core::hint::unreachable_unchecked;
 
 use crate::{hashmap::{SEED, murmurhash3_x86_32}, pointer::{NP_Cursor_Addr, NP_Cursor_Data, NP_Scalar}};
@@ -955,6 +956,7 @@ impl<'buffer> NP_Buffer<'buffer> {
             let cursor = self.memory.get_parsed(&loop_cursor);
 
             // now select into collections
+            println!("SELECT {:?} {:?}", self.memory.schema[cursor.schema_addr], self.memory.get_parsed(&NP_Cursor_Addr::Real(cursor.buff_addr)));
 
             match &self.memory.schema[cursor.schema_addr] {
                 NP_Parsed_Schema::Table { columns: column_schemas, columns_mapped,  .. } => {
@@ -988,6 +990,34 @@ impl<'buffer> NP_Buffer<'buffer> {
                                             let item_addr = sel_v_table.0 + (v_table_idx * 2);
                                             loop_cursor = NP_Cursor_Addr::Real(item_addr);
                                             path_index += 1;                                            
+                                        }
+                                    },
+                                    NP_Cursor_Data::Empty => {
+                                        if create_path { // create table in buffer
+                                            let first_vtable_addr = self.memory.malloc_borrow(&[0u8; 10])?;
+                                            cursor.value.set_addr_value(first_vtable_addr as u16);
+                                            let mut vtables: [(usize, Option<&mut NP_Vtable>); 64] = NP_Vtable::new_empty();
+                                            vtables[0] = (table_addr as usize, Some(unsafe { &mut *(self.memory.write_bytes().as_ptr().add(first_vtable_addr as usize) as *mut NP_Vtable) }));
+                                           
+
+                                            let mut sel_v_table = &vtables[v_table];
+
+                                            if sel_v_table.0 == 0 { // no vtable here, need to make one
+                                                sel_v_table = &NP_Table::extend_vtables(&loop_cursor, &self.memory, *col_index)?[v_table];
+                                            }
+
+                                            let item_addr = sel_v_table.0 + (v_table_idx * 2);
+
+                                            cursor.data = NP_Cursor_Data::Table { bytes: vtables};
+                                            loop_cursor = NP_Cursor_Addr::Real(item_addr);
+                                            path_index += 1;    
+
+                                        } else {
+                                            let virtual_cursor = self.memory.get_parsed(&loop_cursor);
+                                            virtual_cursor.reset();
+                                            virtual_cursor.parent_addr = cursor.buff_addr;
+                                            virtual_cursor.schema_addr = column_schemas[*col_index].2;
+                                            path_index += 1;
                                         }
                                     },
                                     _ => unsafe { unreachable_unchecked() }
@@ -1039,6 +1069,9 @@ impl<'buffer> NP_Buffer<'buffer> {
                                         loop_cursor = NP_Cursor_Addr::Real(item_addr);
                                         path_index += 1;                                            
                                     }
+                                },
+                                NP_Cursor_Data::Empty => {
+
                                 },
                                 _ => unsafe { unreachable_unchecked() }
                             };

@@ -307,7 +307,6 @@ impl NP_Factory {
 
         let parsed_value = json_decode(json_schema.to_owned())?;
 
-    
         let (is_sortable, schema_bytes, schema) = NP_Schema::from_json(Vec::new(), &parsed_value)?;
 
         Ok(Self {

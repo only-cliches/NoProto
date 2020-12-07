@@ -284,6 +284,17 @@ pub struct NP_Cursor<'cursor> {
     pub index: usize
 }
 
+impl<'cursor> Debug for NP_Cursor<'cursor> {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(self.buff_addr.to_string().as_str())?;
+        formatter.write_str(format!("Data:   {:?}", self.data).as_str())?;
+        formatter.write_str(format!("Schema: {:?}", self.schema_addr).as_str())?;
+        formatter.write_str(format!("Temp:   {:?}", self.temp_bytes).as_str())?;
+        formatter.write_str(format!("Value:  {:?}", self.value.get_addr_value()).as_str())?;
+        Ok(())
+    }
+}
+
 /// Represents a cursor address in the memory
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum NP_Cursor_Addr {
@@ -321,7 +332,21 @@ impl<'cursor> NP_Cursor<'cursor> {
             panic!()
         }
 
+        println!("PARSE {:?}", &memory.schema[schema_addr]);
+
         match &memory.schema[schema_addr] {
+            NP_Parsed_Schema::Table { columns, .. } => {
+                NP_Table::parse(buff_addr, schema_addr, parent_addr, parent_schema_addr, &memory, &columns, index);
+            },
+            NP_Parsed_Schema::List  { of, .. } => {
+                NP_List::parse(buff_addr, schema_addr, parent_addr, parent_schema_addr, &memory, *of, index);
+            },
+            NP_Parsed_Schema::Tuple { values, .. } => {
+                NP_Tuple::parse(buff_addr, schema_addr, parent_addr, parent_schema_addr, &memory, &values, index);
+            },
+            NP_Parsed_Schema::Map   { value, .. } => {
+                NP_Map::parse(buff_addr, schema_addr, parent_addr, parent_schema_addr, &memory, *value, index);
+            },
             _ => { // scalar items
                 
                 let new_cursor = NP_Cursor { 
@@ -335,18 +360,6 @@ impl<'cursor> NP_Cursor<'cursor> {
                 };
 
                 memory.insert_parsed(buff_addr, new_cursor);
-            },
-            NP_Parsed_Schema::Table { columns, .. } => {
-                NP_Table::parse(buff_addr, schema_addr, parent_addr, parent_schema_addr, &memory, &columns, index);
-            },
-            NP_Parsed_Schema::List  { of, .. } => {
-                NP_List::parse(buff_addr, schema_addr, parent_addr, parent_schema_addr, &memory, *of, index);
-            },
-            NP_Parsed_Schema::Tuple { values, .. } => {
-                NP_Tuple::parse(buff_addr, schema_addr, parent_addr, parent_schema_addr, &memory, &values, index);
-            },
-            NP_Parsed_Schema::Map   { value, .. } => {
-                NP_Map::parse(buff_addr, schema_addr, parent_addr, parent_schema_addr, &memory, *value, index);
             }
         }
 

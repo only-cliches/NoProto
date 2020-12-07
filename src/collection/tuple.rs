@@ -129,7 +129,7 @@ impl NP_Tuple {
 
         let table_addr = new_cursor.value.get_addr_value();
 
-        if table_addr == 0 { // no table here
+        if table_addr == 0 { // no tuple here
             memory.insert_parsed(buff_addr, new_cursor);
         } else { // table exists, parse it
 
@@ -167,7 +167,7 @@ impl NP_Tuple {
             }
 
             // set table data 
-            new_cursor.data = NP_Cursor_Data::Table { bytes: vtables };
+            new_cursor.data = NP_Cursor_Data::Tuple { bytes: vtables };
             memory.insert_parsed(buff_addr, new_cursor);
 
         }

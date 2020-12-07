@@ -9,7 +9,7 @@ use alloc::vec::Vec;
 #[doc(hidden)]
 pub struct NP_Memory<'memory> {
     bytes: UnsafeCell<Vec<u8>>,
-    parsed: UnsafeCell<Vec<NP_Cursor<'memory>>>,
+    pub parsed: UnsafeCell<Vec<NP_Cursor<'memory>>>,
     virtual_cursor: UnsafeCell<NP_Cursor<'memory>>,
     pub schema: &'memory Vec<NP_Parsed_Schema>
 }

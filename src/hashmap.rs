@@ -14,7 +14,9 @@ pub struct NP_HashMap {
 impl NP_HashMap {
 
     pub fn new() -> Self {
-        Self { data: Vec::with_capacity(255), size: 0 }
+        let mut vector = Vec::with_capacity(4096);
+        vector.extend((0..4096).map(|_| 0usize));
+        Self { data: vector, size: 0 }
     }
 
     pub fn do_hash(key: &str) -> u32 {
@@ -28,7 +30,7 @@ impl NP_HashMap {
 
         self.size += 1;
 
-        self.data[hash as usize] = value;
+        self.data[hash as usize % 4096] = value;
 
         Ok(())
     }
@@ -42,24 +44,24 @@ impl NP_HashMap {
         self.size += 1;
 
         let hash = murmurhash3_x86_32(key.as_bytes(), SEED);
-        self.data[hash as usize] = value;
+        self.data[hash as usize % 4096] = value;
 
         Ok(hash)
     }
 
     pub fn get_hash(&self, key: u32) -> Option<&usize> {
-        self.data.get(key as usize)
+        self.data.get(key as usize % 4096)
     }
 
     pub fn get(&self, key: &str) -> Option<&usize> {
         let hash = murmurhash3_x86_32(key.as_bytes(), SEED) as usize;
-        self.data.get(hash)
+        self.data.get(hash % 4096)
     }
 
     pub fn delete(&mut self, key: &str) {
         self.size -= 1;
         let hash = murmurhash3_x86_32(key.as_bytes(), SEED) as usize;
-        self.data.remove(hash);
+        self.data.remove(hash % 4096);
     }
 }
 
