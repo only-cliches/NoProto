@@ -1,6 +1,6 @@
 #![warn(missing_docs)]
 #![allow(non_camel_case_types)]
-#![no_std]
+// #![no_std]
 
 //! ## Simple & Performant Zero-Copy Serialization
 //! Performance of Flatbuffers / Cap'N Proto with flexibility of JSON
@@ -92,7 +92,7 @@
 //! 
 //! 
 //! // create a new empty buffer
-//! let mut user_buffer = user_factory.empty_buffer(None)?; // optional capacity, optional address size (u16 by default)
+//! let mut user_buffer = user_factory.empty_buffer(None); // optional capacity, optional address size (u16 by default)
 //! 
 //! // set an internal value of the buffer, set the  "name" column
 //! user_buffer.set(&["name"], "Billy Joel")?;
@@ -108,7 +108,7 @@
 //! let user_bytes: Vec<u8> = user_buffer.close();
 //! 
 //! // open the buffer again
-//! let user_buffer = user_factory.open_buffer(user_bytes);
+//! let user_buffer = user_factory.open_buffer(user_bytes)?;
 //! 
 //! // get nested internal value, first tag from the tag list
 //! let tag = user_buffer.get::<&str>(&["tags", "0"])?;
@@ -133,7 +133,7 @@
 //! let user_factory2 = NP_Factory::new_compiled(byte_schema);
 //! 
 //! // confirm the new byte schema works with existing buffers
-//! let user_buffer = user_factory2.open_buffer(user_bytes);
+//! let user_buffer = user_factory2.open_buffer(user_bytes)?;
 //! let tag = user_buffer.get::<&str>(&["tags", "0"])?;
 //! assert_eq!(tag, Some("first tag"));
 //! 
@@ -249,7 +249,7 @@ const PROTOCOL_VERSION: u8 = 1;
 /// // user_factory can now be used to make or open buffers that contain the data in the schema.
 /// 
 /// // create new buffer
-/// let mut user_buffer = user_factory.empty_buffer(None)?; // optional capacity, optional address size
+/// let mut user_buffer = user_factory.empty_buffer(None); // optional capacity, optional address size
 ///    
 /// // set the "name" column of the table
 /// user_buffer.set(&["name"], "Billy Joel")?;
@@ -261,7 +261,7 @@ const PROTOCOL_VERSION: u8 = 1;
 /// let user_vec:Vec<u8> = user_buffer.close();
 /// 
 /// // open existing buffer for reading
-/// let user_buffer_2 = user_factory.open_buffer(user_vec);
+/// let user_buffer_2 = user_factory.open_buffer(user_vec)?;
 /// 
 /// // read column value
 /// let name_column = user_buffer_2.get::<&str>(&["name"])?;
@@ -362,7 +362,7 @@ impl NP_Factory {
     /// The second optional argument, ptr_size, controls how much address space you get in the buffer and how large the addresses are.  Every value in the buffer contains at least one address, sometimes more.  `NP_Size::U16` (the default) gives you an address space of just over 16KB but is more space efficeint since the address pointers are only 2 bytes each.  `NP_Size::U32` gives you an address space of just over 4GB, but the addresses take up twice as much space in the buffer compared to `NP_Size::U16`.
     /// You can change the address size through compaction after the buffer is created, so it's fine to start with a smaller address space and convert it to a larger one later as needed.  It's also possible to go the other way, you can convert larger address space down to a smaller one durring compaction.
     /// 
-    pub fn empty_buffer<'buffer>(&'buffer self, capacity: Option<usize>) -> Result<NP_Buffer<'buffer>, NP_Error> {
-        NP_Buffer::_new(NP_Memory::new(capacity, &self.schema.parsed))
+    pub fn empty_buffer<'buffer>(&'buffer self, capacity: Option<usize>) -> NP_Buffer<'buffer> {
+        NP_Buffer::_new(NP_Memory::new(capacity, &self.schema.parsed)).unwrap()
     }
 }

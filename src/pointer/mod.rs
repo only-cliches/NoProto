@@ -39,9 +39,8 @@ use bytes::NP_Bytes;
 
 use self::{date::NP_Date, geo::NP_Geo, option::NP_Enum, string::NP_String, ulid::{NP_ULID, _NP_ULID}, uuid::{NP_UUID, _NP_UUID}};
 
-
 #[doc(hidden)]
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 #[repr(C)]
 pub struct NP_Pointer_Scalar {
     pub addr_value: [u8; 2]
@@ -68,20 +67,21 @@ pub struct NP_Pointer_List_Item {
 pub struct NP_Pointer_Map_Item {
     pub addr_value: [u8; 2],
     pub next_value: [u8; 2],
-    pub key_hash: [u8; 4]
+    pub key_addr: [u8; 2]
 }
 
 pub trait NP_Pointer_Bytes {
     fn get_addr_value(&self) -> u16         { panic!() }
     fn set_addr_value(&mut self, addr: u16) { panic!() }
     fn get_next_addr(&self) -> u16          { panic!() }
-    fn set_next_addr(&self, addr: u16)      { panic!() }
-    fn set_index(&self, index: u8)          { panic!() }
+    fn set_next_addr(&mut self, addr: u16)      { panic!() }
+    fn set_index(&mut self, index: u8)          { panic!() }
     fn get_index(&self) -> u8               { panic!() }
-    fn set_key_hash(&self, hash: u32)       { panic!() }
-    fn get_key_hash(&self) -> u32           { panic!() }
-    fn reset(&mut self)                     { panic!() }
+    fn set_key_addr(&mut self, hash: u16)       { panic!() }
+    fn get_key_addr(&self) -> u16           { panic!() }
+    fn reset(&mut self)   { panic!() }
     fn get_size(&self) -> usize             { panic!() }
+    fn get_key<'key>(&self, memory: &'key NP_Memory) -> &'key str  { panic!() }
 }
 
 impl NP_Pointer_Bytes for NP_Pointer_Scalar {
@@ -90,7 +90,7 @@ impl NP_Pointer_Bytes for NP_Pointer_Scalar {
     #[inline(always)]
     fn set_addr_value(&mut self, addr: u16) { self.addr_value = addr.to_be_bytes() }
     #[inline(always)]
-    fn reset(&mut self) { self.addr_value = [0; 2] }
+    fn reset(&mut self) { self.addr_value = [0; 2]; }
     #[inline(always)]
     fn get_size(&self) -> usize { 2 }
 }
@@ -102,13 +102,13 @@ impl NP_Pointer_Bytes for NP_Pointer_List_Item {
     #[inline(always)]
     fn get_next_addr(&self) -> u16 { u16::from_be_bytes(self.next_value) }
     #[inline(always)]
-    fn set_next_addr(&self, addr: u16) { self.next_value = addr.to_be_bytes() }
+    fn set_next_addr(&mut self, addr: u16) { self.next_value = addr.to_be_bytes() }
     #[inline(always)]
-    fn set_index(&self, index: u8)  { self.index = index }
+    fn set_index(&mut self, index: u8)  { self.index = index }
     #[inline(always)]
     fn get_index(&self) -> u8  { self.index }
     #[inline(always)]
-    fn reset(&mut self) { self.addr_value = [0; 2]; self.index = 0; self.next_value = [0; 2]; }
+    fn reset(&mut self) { self.addr_value = [0; 2]; self.next_value = [0; 2]; self.index = 0; }
     #[inline(always)]
     fn get_size(&self) -> usize { 5 }
 }
@@ -120,15 +120,26 @@ impl NP_Pointer_Bytes for NP_Pointer_Map_Item {
     #[inline(always)]
     fn get_next_addr(&self) -> u16 { u16::from_be_bytes(self.next_value) }
     #[inline(always)]
-    fn set_next_addr(&self, addr: u16) { self.next_value = addr.to_be_bytes() }
+    fn set_next_addr(&mut self, addr: u16) { self.next_value = addr.to_be_bytes() }
     #[inline(always)]
-    fn set_key_hash(&self, hash: u32)  { self.key_hash = hash.to_be_bytes(); }
+    fn set_key_addr(&mut self, addr: u16)  { self.key_addr = addr.to_be_bytes(); }
     #[inline(always)]
-    fn get_key_hash(&self) -> u32  { u32::from_be_bytes(self.key_hash) }
+    fn get_key_addr(&self) -> u16  { u16::from_be_bytes(self.key_addr) }
     #[inline(always)]
-    fn reset(&mut self) { self.addr_value = [0; 2]; self.key_hash = [0; 4]; self.next_value = [0; 2]; }
+    fn reset(&mut self) { self.addr_value = [0; 2]; self.next_value = [0; 2]; self.key_addr = [0;2 ]; }
     #[inline(always)]
-    fn get_size(&self) -> usize { 8 }
+    fn get_size(&self) -> usize { 6 }
+    #[inline(always)]
+    fn get_key<'key>(&self, memory: &'key NP_Memory) -> &'key str {
+        let key_addr = self.get_key_addr() as usize;
+        if key_addr == 0 {
+            return "";
+        } else {
+            let key_length = memory.read_bytes()[key_addr] as usize;
+            let key_bytes = &memory.read_bytes()[(key_addr + 1)..(key_addr + 1 + key_length)];
+            unsafe { core::str::from_utf8_unchecked(key_bytes) }
+        }
+    }
 }
 
 impl NP_Pointer_Bytes for [u8; 8] {
@@ -143,34 +154,37 @@ impl NP_Pointer_Bytes for [u8; 8] {
     #[inline(always)]
     fn get_next_addr(&self) -> u16 { u16::from_be_bytes(unsafe { *(&self[2..4] as *const [u8] as *const [u8; 2]) }) }
     #[inline(always)]
-    fn set_next_addr(&self, addr: u16) { 
+    fn set_next_addr(&mut self, addr: u16) { 
         let b = addr.to_be_bytes();
         self[2] = b[0];
         self[3] = b[1];
     }
     #[inline(always)]
-    fn set_index(&self, index: u8)  { self[4] = index }
+    fn set_index(&mut self, index: u8)  { self[4] = index }
     #[inline(always)]
     fn get_index(&self) -> u8  { self[4] }
     #[inline(always)]
-    fn set_key_hash(&self, hash: u32)  { 
-        let b = hash.to_be_bytes();
+    fn set_key_addr(&mut self, key_addr: u16)  { 
+        let b = key_addr.to_be_bytes();
         self[4] = b[0];
         self[5] = b[1];
-        self[6] = b[2];
-        self[7] = b[3];
     }
     #[inline(always)]
-    fn get_key_hash(&self) -> u32 { u32::from_be_bytes(unsafe { *(&self[4..8] as *const [u8] as *const [u8; 4]) }) }
+    fn get_key_addr(&self) -> u16 { u16::from_be_bytes(unsafe { *(&self[4..6] as *const [u8] as *const [u8; 2]) }) }
     #[inline(always)]
-    fn reset(&mut self) {
-        for (i, x) in self.iter().enumerate() {
-            self[i] = 0;
+    fn reset(&mut self) { }
+    #[inline(always)]
+    fn get_key<'key>(&self, memory: &'key NP_Memory) -> &'key str {
+        let key_addr = self.get_key_addr() as usize;
+        if key_addr == 0 {
+            return "";
+        } else {
+            let key_length = memory.read_bytes()[key_addr] as usize;
+            let key_bytes = &memory.read_bytes()[(key_addr + 1)..(key_addr + 1 + key_length)];
+            unsafe { core::str::from_utf8_unchecked(key_bytes) }
         }
     }
 }
-
-pub const DEF_TABLE: NP_Vtable = NP_Vtable { next: [0; 2], values: [NP_Pointer_Scalar::default(); 4]};
 
 #[derive(Debug)]
 pub enum NP_Cursor_Data<'data> {
@@ -178,8 +192,8 @@ pub enum NP_Cursor_Data<'data> {
     Scalar,
     List { list_addrs: [usize; 255], bytes: &'data mut NP_List_Bytes },
     Map { value_map: NP_HashMap },
-    Tuple { bytes: [(usize, &'data mut NP_Vtable); 64] }, // (buffer_addr, VTable )
-    Table { bytes: [(usize, &'data mut NP_Vtable); 64] }  // (buffer_addr, VTable )
+    Tuple { bytes: [(usize, Option<&'data mut NP_Vtable>); 64] }, // (buffer_addr, VTable )
+    Table { bytes: [(usize, Option<&'data mut NP_Vtable>); 64] }  // (buffer_addr, VTable )
 }
 
 #[repr(C)]
@@ -210,13 +224,27 @@ impl NP_List_Bytes {
 
 // holds 4 u16 addresses and a next value (10 bytes)
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub struct NP_Vtable {
     pub values: [NP_Pointer_Scalar; 4],
     next: [u8; 2]
 }
 
+
 impl NP_Vtable {
+
+    pub fn new_empty<'empty>() -> [(usize, Option<&'empty mut NP_Vtable>); 64] {
+        [
+            (0, None), (0, None), (0, None), (0, None), (0, None), (0, None), (0, None), (0, None),
+            (0, None), (0, None), (0, None), (0, None), (0, None), (0, None), (0, None), (0, None),
+            (0, None), (0, None), (0, None), (0, None), (0, None), (0, None), (0, None), (0, None),
+            (0, None), (0, None), (0, None), (0, None), (0, None), (0, None), (0, None), (0, None),
+            (0, None), (0, None), (0, None), (0, None), (0, None), (0, None), (0, None), (0, None),
+            (0, None), (0, None), (0, None), (0, None), (0, None), (0, None), (0, None), (0, None),
+            (0, None), (0, None), (0, None), (0, None), (0, None), (0, None), (0, None), (0, None),
+            (0, None), (0, None), (0, None), (0, None), (0, None), (0, None), (0, None), (0, None)
+        ]
+    }
 
     #[inline(always)]
     pub fn get_next(&self) -> u16 {
@@ -252,7 +280,8 @@ pub struct NP_Cursor<'cursor> {
     /// the values of the buffer pointer
     pub value: &'cursor mut dyn NP_Pointer_Bytes,
     /// Information about the parent cursor
-    pub parent_addr: usize
+    pub parent_addr: usize,
+    pub index: usize
 }
 
 /// Represents a cursor address in the memory
@@ -265,14 +294,15 @@ pub enum NP_Cursor_Addr {
 impl<'cursor> NP_Cursor<'cursor> {
 
     pub fn new_virtual() -> Self {
-        let bytes = [0u8; 8];
+        let mut bytes = [0u8; 8];
         Self {
             buff_addr: 0,
             data: NP_Cursor_Data::Empty,
             schema_addr: 0,
             temp_bytes: Some(bytes),
             value: unsafe { &mut *(&mut bytes as *mut dyn NP_Pointer_Bytes) },
-            parent_addr: 0
+            parent_addr: 0,
+            index: 0
         }
     }
 
@@ -285,13 +315,13 @@ impl<'cursor> NP_Cursor<'cursor> {
     }
 
 
-    pub fn parse<'parse>(buff_addr: usize, schema_addr: NP_Schema_Addr, parent_addr: usize, parent_schema_addr: usize, memory: &NP_Memory) -> Result<(), NP_Error> {
+    pub fn parse<'parse>(buff_addr: usize, schema_addr: NP_Schema_Addr, parent_addr: usize, parent_schema_addr: usize, memory: &NP_Memory, index: usize) -> Result<(), NP_Error> {
 
         if buff_addr > memory.read_bytes().len() {
             panic!()
         }
 
-        match memory.schema[schema_addr] {
+        match &memory.schema[schema_addr] {
             _ => { // scalar items
                 
                 let new_cursor = NP_Cursor { 
@@ -300,22 +330,23 @@ impl<'cursor> NP_Cursor<'cursor> {
                     data: NP_Cursor_Data::Scalar,
                     temp_bytes: None,
                     value: NP_Cursor::parse_cursor_value(buff_addr, parent_schema_addr, parent_addr, &memory), 
-                    parent_addr: parent_addr
+                    parent_addr: parent_addr,
+                    index
                 };
 
                 memory.insert_parsed(buff_addr, new_cursor);
             },
             NP_Parsed_Schema::Table { columns, .. } => {
-                NP_Table::parse(buff_addr, schema_addr, parent_addr, parent_schema_addr, &memory, &columns);
+                NP_Table::parse(buff_addr, schema_addr, parent_addr, parent_schema_addr, &memory, &columns, index);
             },
             NP_Parsed_Schema::List  { of, .. } => {
-                NP_List::parse(buff_addr, schema_addr, parent_addr, parent_schema_addr, &memory, of);
+                NP_List::parse(buff_addr, schema_addr, parent_addr, parent_schema_addr, &memory, *of, index);
             },
             NP_Parsed_Schema::Tuple { values, .. } => {
-                NP_Tuple::parse(buff_addr, schema_addr, parent_addr, parent_schema_addr, &memory, &values);
+                NP_Tuple::parse(buff_addr, schema_addr, parent_addr, parent_schema_addr, &memory, &values, index);
             },
             NP_Parsed_Schema::Map   { value, .. } => {
-                NP_List::parse(buff_addr, schema_addr, parent_addr, parent_schema_addr, &memory, value);
+                NP_Map::parse(buff_addr, schema_addr, parent_addr, parent_schema_addr, &memory, *value, index);
             }
         }
 

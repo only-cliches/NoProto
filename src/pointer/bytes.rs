@@ -9,7 +9,7 @@
 //!    "type": "bytes"
 //! }"#)?;
 //!
-//! let mut new_buffer = factory.empty_buffer(None)?;
+//! let mut new_buffer = factory.empty_buffer(None);
 //! new_buffer.set(&[], &[0u8, 1, 2, 3, 4] as NP_Bytes)?;
 //! 
 //! assert_eq!(&[0u8, 1, 2, 3, 4] as NP_Bytes, new_buffer.get::<NP_Bytes>(&[])?.unwrap());
@@ -413,7 +413,7 @@ fn schema_parsing_works() -> Result<(), NP_Error> {
 fn default_value_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"bytes\",\"default\":[1,2,3,4]}";
     let factory = crate::NP_Factory::new(schema)?;
-    let buffer = factory.empty_buffer(None)?;
+    let buffer = factory.empty_buffer(None);
     assert_eq!(buffer.get::<&[u8]>(&[])?.unwrap(), &[1,2,3,4]);
 
     Ok(())
@@ -423,7 +423,7 @@ fn default_value_works() -> Result<(), NP_Error> {
 fn fixed_size_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"bytes\",\"size\": 20}";
     let factory = crate::NP_Factory::new(schema)?;
-    let mut buffer = factory.empty_buffer(None)?;
+    let mut buffer = factory.empty_buffer(None);
     buffer.set(&[], &[1u8,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22] as &[u8])?;
     assert_eq!(buffer.get::<&[u8]>(&[])?.unwrap(), &[1u8,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20] as &[u8]);
 
@@ -434,7 +434,7 @@ fn fixed_size_works() -> Result<(), NP_Error> {
 fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"bytes\"}";
     let factory = crate::NP_Factory::new(schema)?;
-    let mut buffer = factory.empty_buffer(None)?;
+    let mut buffer = factory.empty_buffer(None);
     buffer.set(&[], &[1u8,2,3,4,5,6,7,8,9,10,11,12,13] as &[u8])?;
     assert_eq!(buffer.get::<&[u8]>(&[])?.unwrap(), &[1u8,2,3,4,5,6,7,8,9,10,11,12,13] as &[u8]);
     buffer.del(&[])?;

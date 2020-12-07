@@ -54,7 +54,7 @@
 //!    "exp": 2
 //! }"#)?;
 //!
-//! let mut new_buffer = factory.empty_buffer(None)?;
+//! let mut new_buffer = factory.empty_buffer(None);
 //! new_buffer.set(&[], NP_Dec::new(50283, 2))?;
 //! 
 //! assert_eq!(502.83f64, new_buffer.get::<NP_Dec>(&[])?.unwrap().to_float());
@@ -933,7 +933,7 @@ fn schema_parsing_works() -> Result<(), NP_Error> {
 fn default_value_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"decimal\",\"exp\":3,\"default\":203.293}";
     let factory = crate::NP_Factory::new(schema)?;
-    let buffer = factory.empty_buffer(None)?;
+    let buffer = factory.empty_buffer(None);
     assert_eq!(buffer.get::<NP_Dec>(&[])?.unwrap(), NP_Dec::new(203293, 3));
 
     Ok(())
@@ -944,7 +944,7 @@ fn default_value_works() -> Result<(), NP_Error> {
 fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"decimal\",\"exp\": 3}";
     let factory = crate::NP_Factory::new(schema)?;
-    let mut buffer = factory.empty_buffer(None)?;
+    let mut buffer = factory.empty_buffer(None);
     buffer.set(&[], NP_Dec::new(203293, 3))?;
     assert_eq!(buffer.get::<NP_Dec>(&[])?.unwrap(), NP_Dec::new(203293, 3));
     buffer.del(&[])?;

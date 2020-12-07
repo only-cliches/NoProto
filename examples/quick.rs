@@ -21,7 +21,7 @@ fn main() -> Result<(), NP_Error> {
     // create a new empty buffer
     let user_buffer = user_factory
         // optional capacity, optional address size (u16 by default)
-        .empty_buffer(None)?;
+        .empty_buffer(None);
 
 
     // close buffer and get internal bytes
@@ -29,7 +29,7 @@ fn main() -> Result<(), NP_Error> {
     // show bytes (empty)
     println!("bytes: {:?}", user_bytes);
     // open the buffer again
-    let mut user_buffer = user_factory.open_buffer(user_bytes);
+    let mut user_buffer = user_factory.open_buffer(user_bytes)?;
 
     // set an internal value of the buffer, set the  "name" column
     user_buffer.set(&["name"], "Billy Joel")?;
@@ -43,7 +43,7 @@ fn main() -> Result<(), NP_Error> {
     // show bytes
     let user_bytes: Vec<u8> = user_buffer.close();
     println!("bytes: {:?}", user_bytes);
-    let mut user_buffer = user_factory.open_buffer(user_bytes);
+    let mut user_buffer = user_factory.open_buffer(user_bytes)?;
 
     user_buffer.compact(None)?;
 
@@ -60,7 +60,7 @@ fn main() -> Result<(), NP_Error> {
     // show bytes
     let user_bytes: Vec<u8> = user_buffer.close();
     println!("bytes: {:?}", user_bytes);
-    let user_buffer = user_factory.open_buffer(user_bytes);
+    let user_buffer = user_factory.open_buffer(user_bytes)?;
 
 
     // get nested internal value, the age field

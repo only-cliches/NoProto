@@ -11,7 +11,7 @@
 //!    "type": "geo4"
 //! }"#)?;
 //!
-//! let mut new_buffer = factory.empty_buffer(None)?;
+//! let mut new_buffer = factory.empty_buffer(None);
 //! new_buffer.set(&[], NP_Geo::new(4, 45.509616, -122.714625))?;
 //! 
 //! assert_eq!("{\"lat\":45.5,\"lng\":-122.71}", new_buffer.get::<NP_Geo>(&[])?.unwrap().into_json().stringify());
@@ -818,17 +818,17 @@ fn schema_parsing_works() -> Result<(), NP_Error> {
 fn default_value_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"geo4\",\"default\":{\"lat\":20.23,\"lng\":-12.21}}";
     let factory = crate::NP_Factory::new(schema)?;
-    let buffer = factory.empty_buffer(None)?;
+    let buffer = factory.empty_buffer(None);
     assert_eq!((buffer.get::<NP_Geo>(&[])?.unwrap()).get_bytes().unwrap(), NP_Geo::new(4, 20.23, -12.21).get_bytes().unwrap());
 
     let schema = "{\"type\":\"geo8\",\"default\":{\"lat\":20.2334234,\"lng\":-12.2146363}}";
     let factory = crate::NP_Factory::new(schema)?;
-    let buffer = factory.empty_buffer(None)?;
+    let buffer = factory.empty_buffer(None);
     assert_eq!((buffer.get::<NP_Geo>(&[])?.unwrap()).get_bytes().unwrap(), NP_Geo::new(8, 20.2334234, -12.2146363).get_bytes().unwrap());
 
     let schema = "{\"type\":\"geo16\",\"default\":{\"lat\":20.233423434,\"lng\":-12.214636323}}";
     let factory = crate::NP_Factory::new(schema)?;
-    let buffer = factory.empty_buffer(None)?;
+    let buffer = factory.empty_buffer(None);
     assert_eq!((buffer.get::<NP_Geo>(&[])?.unwrap()).get_bytes().unwrap(), NP_Geo::new(16, 20.233423434, -12.214636323).get_bytes().unwrap());
 
     Ok(())
@@ -838,7 +838,7 @@ fn default_value_works() -> Result<(), NP_Error> {
 fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"geo4\"}";
     let factory = crate::NP_Factory::new(schema)?;
-    let mut buffer = factory.empty_buffer(None)?;
+    let mut buffer = factory.empty_buffer(None);
     buffer.set(&[], NP_Geo::new(4, 20.23, -12.21))?;
     assert_eq!((buffer.get::<NP_Geo>(&[])?.unwrap()).get_bytes().unwrap(), NP_Geo::new(4, 20.23, -12.21).get_bytes().unwrap());
     buffer.del(&[])?;

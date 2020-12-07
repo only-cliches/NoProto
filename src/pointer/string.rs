@@ -8,7 +8,7 @@
 //!    "type": "string"
 //! }"#)?;
 //!
-//! let mut new_buffer = factory.empty_buffer(None)?;
+//! let mut new_buffer = factory.empty_buffer(None);
 //! new_buffer.set(&[], "I want to play a game")?;
 //!
 //! assert_eq!("I want to play a game", new_buffer.get::<&str>(&[])?.unwrap());
@@ -398,7 +398,7 @@ fn schema_parsing_works() -> Result<(), NP_Error> {
 fn default_value_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"string\",\"default\":\"hello\"}";
     let factory = crate::NP_Factory::new(schema)?;
-    let buffer = factory.empty_buffer(None)?;
+    let buffer = factory.empty_buffer(None);
     assert_eq!(buffer.get::<&str>(&[])?.unwrap(), "hello");
 
     Ok(())
@@ -408,7 +408,7 @@ fn default_value_works() -> Result<(), NP_Error> {
 fn fixed_size_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"string\",\"size\": 20}";
     let factory = crate::NP_Factory::new(schema)?;
-    let mut buffer = factory.empty_buffer(None)?;
+    let mut buffer = factory.empty_buffer(None);
     buffer.set(&[], "hello there this sentence is long")?;
     assert_eq!(buffer.get::<&str>(&[])?.unwrap(), "hello there this sen");
 
@@ -419,7 +419,7 @@ fn fixed_size_works() -> Result<(), NP_Error> {
 fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"string\"}";
     let factory = crate::NP_Factory::new(schema)?;
-    let mut buffer = factory.empty_buffer(None)?;
+    let mut buffer = factory.empty_buffer(None);
     buffer.set(&[], "hello there this sentence is long")?;
     assert_eq!(
         buffer.get::<&str>(&[])?.unwrap(),

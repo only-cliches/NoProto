@@ -116,3 +116,18 @@ pub fn to_base32(num: u128, length: i32) -> String {
 
     final_string
 }
+
+
+pub fn opt_out_mut<'out, T>(opt: &'out mut Option<T>) -> &'out mut T {
+    match opt {
+        Some(x) => x,
+        None => panic!()
+    }
+}
+
+pub fn opt_out<'out, T>(opt: &'out Option<T>) -> &'out T {
+    match opt {
+        Some(x) => x,
+        None => panic!()
+    }
+}

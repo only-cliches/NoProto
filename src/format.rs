@@ -115,7 +115,7 @@
 //!     ]
 //! }"#)?;
 //!
-//! let mut new_buffer = factory.empty_buffer(None)?;
+//! let mut new_buffer = factory.empty_buffer(None);
 //! new_buffer.set(&["age"], 20u8)?;
 //!
 //! assert_eq!(vec![1, 1, 0, 4, 0, 6, 0, 11, 0, 0, 0, 20], new_buffer.close());
@@ -141,7 +141,7 @@
 //!     "of": {"type": "u8"}
 //! }"#)?;
 //!
-//! let mut new_buffer = factory.empty_buffer(None)?;
+//! let mut new_buffer = factory.empty_buffer(None);
 //! new_buffer.set(&["4"], 20u8)?;
 //! assert_eq!(vec![1, 1, 0, 4, 0, 8, 0, 8, 0, 14, 0, 0, 0, 4, 20], new_buffer.close());
 //! 
@@ -164,7 +164,7 @@
 //!     "value": {"type": "u8"}
 //! }"#)?;
 //!
-//! let mut new_buffer = factory.empty_buffer(None)?;
+//! let mut new_buffer = factory.empty_buffer(None);
 //! new_buffer.set(&["age"], 20u8)?;
 //! assert_eq!(vec![1, 1, 0, 4, 0, 8, 0, 1, 0, 19, 0, 0, 0, 14, 0, 3, 97, 103, 101, 20], new_buffer.close());
 //! 
@@ -195,7 +195,7 @@
 //! }"#)?;
 //! 
 //!
-//! let mut new_buffer = factory.empty_buffer(None)?;
+//! let mut new_buffer = factory.empty_buffer(None);
 //! new_buffer.set(&["0"], 20u8)?;
 //! new_buffer.set(&["1"], "hello")?;
 //! assert_eq!(vec![1, 1, 0, 4, 0, 8, 0, 9, 20, 0, 5, 104, 101, 108, 108, 111], new_buffer.close());
@@ -224,7 +224,7 @@
 //!    "type": "i32"
 //! }"#)?;
 //!
-//! let mut new_buffer = factory.empty_buffer(None)?;
+//! let mut new_buffer = factory.empty_buffer(None);
 //! new_buffer.set(&[], -2023830i32)?;
 //! assert_eq!(vec![1, 1, 0, 4, 127, 225, 30, 106], new_buffer.close());
 //! 
@@ -248,7 +248,7 @@
 //!    "type": "u32"
 //! }"#)?;
 //!
-//! let mut new_buffer = factory.empty_buffer(None)?;
+//! let mut new_buffer = factory.empty_buffer(None);
 //! new_buffer.set(&[], 28378u32)?;
 //! assert_eq!(vec![1, 1, 0, 4, 0, 0, 110, 218], new_buffer.close());
 //! 
@@ -272,7 +272,7 @@
 //!    "type": "f32"
 //! }"#)?;
 //!
-//! let mut new_buffer = factory.empty_buffer(None)?;
+//! let mut new_buffer = factory.empty_buffer(None);
 //! new_buffer.set(&[], 2.389988f32)?;
 //! assert_eq!(vec![1, 1, 0, 4, 64, 24, 245, 144], new_buffer.close());
 //! 
@@ -298,7 +298,7 @@
 //!    "choices": ["blue", "orange", "red"]
 //! }"#)?;
 //!
-//! let mut new_buffer = factory.empty_buffer(None)?;
+//! let mut new_buffer = factory.empty_buffer(None);
 //! new_buffer.set(&[], NP_Enum::new("red"))?;
 //! assert_eq!(vec![1, 1, 0, 4, 2], new_buffer.close());
 //! 
@@ -320,7 +320,7 @@
 //!    "type": "bool"
 //! }"#)?;
 //!
-//! let mut new_buffer = factory.empty_buffer(None)?;
+//! let mut new_buffer = factory.empty_buffer(None);
 //! new_buffer.set(&[], true)?;
 //! assert_eq!(vec![1, 1, 0, 4, 1], new_buffer.close());
 //! 
@@ -350,7 +350,7 @@
 //!    "exp": 2
 //! }"#)?;
 //!
-//! let mut new_buffer = factory.empty_buffer(None)?;
+//! let mut new_buffer = factory.empty_buffer(None);
 //! new_buffer.set(&[], NP_Dec::new(200, 0))?;
 //! assert_eq!(vec![1, 1, 0, 4, 128, 0, 0, 0, 0, 0, 78, 32], new_buffer.close());
 //! 
@@ -398,7 +398,7 @@
 //!    "type": "geo8"
 //! }"#)?;
 //!
-//! let mut new_buffer = factory.empty_buffer(None)?;
+//! let mut new_buffer = factory.empty_buffer(None);
 //! new_buffer.set(&[], NP_Geo::new(8, 41.303921, -81.901693))?;
 //! assert_eq!(vec![1, 1, 0, 4, 152, 158, 122, 106, 79, 46, 203, 30], new_buffer.close());
 //! 
@@ -423,7 +423,7 @@
 //!    "type": "uuid"
 //! }"#)?;
 //!
-//! let mut new_buffer = factory.empty_buffer(None)?;
+//! let mut new_buffer = factory.empty_buffer(None);
 //! new_buffer.set(&[], &NP_UUID::generate(32))?;
 //! assert_eq!(vec![1, 1, 0, 4, 202, 230, 170, 176, 127, 103, 66, 13, 89, 65, 221, 4, 153, 160, 117, 252], new_buffer.close());
 //! 
@@ -456,7 +456,7 @@
 //!    "type": "string"
 //! }"#)?;
 //!
-//! let mut new_buffer = factory.empty_buffer(None)?;
+//! let mut new_buffer = factory.empty_buffer(None);
 //! new_buffer.set(&[], "hello, world!")?;
 //! assert_eq!(vec![1, 1, 0, 4, 0, 13, 104, 101, 108, 108, 111, 44, 32, 119, 111, 114, 108, 100, 33], new_buffer.close());
 //! 
@@ -478,7 +478,7 @@
 //!    "type": "date"
 //! }"#)?;
 //!
-//! let mut new_buffer = factory.empty_buffer(None)?;
+//! let mut new_buffer = factory.empty_buffer(None);
 //! new_buffer.set(&[], NP_Date::new(1598490738507))?;
 //! assert_eq!(vec![1, 1, 0, 4, 0, 0, 1, 116, 45, 120, 255, 75], new_buffer.close());
 //! 

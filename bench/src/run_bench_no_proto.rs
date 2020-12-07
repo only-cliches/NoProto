@@ -43,7 +43,7 @@ impl NoProtoBench {
         let start = SystemTime::now();
 
         for x in 0..LOOPS {
-            let mut new_buff = factory.open_buffer(new_buffer.clone());
+            let mut new_buff = factory.open_buffer(new_buffer.clone())?;
 
             new_buff.set(&["list", "0", "name"], "bob")?;
 
@@ -93,7 +93,7 @@ impl NoProtoBench {
         let start = SystemTime::now();
 
         for x in 0..LOOPS {
-            let mut new_buff = factory.open_buffer(new_buffer.clone());
+            let mut new_buff = factory.open_buffer(new_buffer.clone())?;
 
             assert_eq!(new_buff.get(&["initialized"])?, Some(true));
             assert_eq!(new_buff.get(&["location"])?, Some("https://arstechnica.com"));

@@ -10,7 +10,7 @@
 //!    "choices": ["red", "green", "blue"]
 //! }"#)?;
 //!
-//! let mut new_buffer = factory.empty_buffer(None)?;
+//! let mut new_buffer = factory.empty_buffer(None);
 //! new_buffer.set(&[], NP_Enum::new("green"))?;
 //! 
 //! assert_eq!(NP_Enum::new("green"), new_buffer.get::<NP_Enum>(&[])?.unwrap());
@@ -403,7 +403,7 @@ fn schema_parsing_works() -> Result<(), NP_Error> {
 fn default_value_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"option\",\"default\":\"hello\",\"choices\":[\"hello\",\"world\"]}";
     let factory = crate::NP_Factory::new(schema)?;
-    let buffer = factory.empty_buffer(None)?;
+    let buffer = factory.empty_buffer(None);
     assert_eq!(buffer.get::<NP_Enum>(&[])?.unwrap(), NP_Enum::new("hello"));
 
     Ok(())
@@ -413,7 +413,7 @@ fn default_value_works() -> Result<(), NP_Error> {
 fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"option\",\"choices\":[\"hello\",\"world\"]}";
     let factory = crate::NP_Factory::new(schema)?;
-    let mut buffer = factory.empty_buffer(None)?;
+    let mut buffer = factory.empty_buffer(None);
     buffer.set(&[], NP_Enum::new("hello"))?;
     assert_eq!(buffer.get::<NP_Enum>(&[])?, Some(NP_Enum::new("hello")));
     buffer.del(&[])?;

@@ -11,7 +11,7 @@
 //!    "type": "date"
 //! }"#)?;
 //!
-//! let mut new_buffer = factory.empty_buffer(None)?;
+//! let mut new_buffer = factory.empty_buffer(None);
 //! new_buffer.set(&[], NP_Date::new(1604965249484))?;
 //! 
 //! assert_eq!(NP_Date::new(1604965249484), new_buffer.get::<NP_Date>(&[])?.unwrap());
@@ -248,7 +248,7 @@ fn schema_parsing_works() -> Result<(), NP_Error> {
 fn default_value_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"date\",\"default\":1605138980392}";
     let factory = crate::NP_Factory::new(schema)?;
-    let buffer = factory.empty_buffer(None)?;
+    let buffer = factory.empty_buffer(None);
     assert_eq!(buffer.get::<NP_Date>(&[])?.unwrap(), NP_Date::new(1605138980392));
 
     Ok(())
@@ -258,7 +258,7 @@ fn default_value_works() -> Result<(), NP_Error> {
 fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"date\"}";
     let factory = crate::NP_Factory::new(schema)?;
-    let mut buffer = factory.empty_buffer(None)?;
+    let mut buffer = factory.empty_buffer(None);
     buffer.set(&[], NP_Date::new(1605138980392))?;
     assert_eq!(buffer.get::<NP_Date>(&[])?, Some(NP_Date::new(1605138980392)));
     buffer.del(&[])?;
