@@ -1,6 +1,6 @@
 //! Internal buffer memory management
 
-use crate::{pointer::{NP_Cursor, NP_Cursor_Addr}, schema::NP_Parsed_Schema};
+use crate::{pointer::{NP_Cursor, NP_Cursor_Addr}, schema::NP_Parsed_Schema, utils::opt_out};
 use crate::{error::NP_Error};
 use core::cell::UnsafeCell;
 use alloc::vec::Vec;
@@ -9,7 +9,7 @@ use alloc::vec::Vec;
 #[doc(hidden)]
 pub struct NP_Memory<'memory> {
     bytes: UnsafeCell<Vec<u8>>,
-    pub parsed: UnsafeCell<Vec<NP_Cursor<'memory>>>,
+    parsed: UnsafeCell<Vec<NP_Cursor<'memory>>>,
     virtual_cursor: UnsafeCell<NP_Cursor<'memory>>,
     pub schema: &'memory Vec<NP_Parsed_Schema>
 }
@@ -21,9 +21,12 @@ impl<'memory> NP_Memory<'memory> {
 
 
     pub fn existing(bytes: Vec<u8>, schema: &'memory Vec<NP_Parsed_Schema>) -> Self {
-    
+        
+        let mut parsed_vec: Vec<NP_Cursor> = Vec::with_capacity(bytes.len() / 2);
+        parsed_vec.extend((0..(bytes.len() / 2)).map(|_| NP_Cursor::new_virtual()));
+
         NP_Memory {
-            parsed: UnsafeCell::new(Vec::with_capacity(bytes.len() / 2)),
+            parsed: UnsafeCell::new(parsed_vec),
             bytes: UnsafeCell::new(bytes),
             virtual_cursor: UnsafeCell::new(NP_Cursor::new_virtual()),
             schema: schema
@@ -39,16 +42,23 @@ impl<'memory> NP_Memory<'memory> {
 
         let mut new_bytes = Vec::with_capacity(use_size);
 
+        // root pointer
+        new_bytes.extend(&[0u8; 2]);
+
+        let mut parsed_vec: Vec<NP_Cursor> = Vec::with_capacity(use_size / 2);
+        parsed_vec.push(NP_Cursor::new_virtual());
+
         NP_Memory {
             bytes: UnsafeCell::new(new_bytes),
             virtual_cursor: UnsafeCell::new(NP_Cursor::new_virtual()),
-            parsed: UnsafeCell::new(Vec::with_capacity(use_size / 2)),
+            parsed: UnsafeCell::new(parsed_vec),
             schema: schema,
         }
     }
 
     pub fn malloc_borrow(&self, bytes: &[u8])  -> Result<usize, NP_Error> {
         let self_bytes = unsafe { &mut *self.bytes.get() };
+        let self_parsed = unsafe { &mut *self.parsed.get() };
 
         let location = self_bytes.len();
 
@@ -57,6 +67,7 @@ impl<'memory> NP_Memory<'memory> {
             return Err(NP_Error::new("Not enough space available in buffer!"))
         }
 
+        self_parsed.extend((0..(bytes.len() / 2)).map(|_| NP_Cursor::new_virtual()));
         self_bytes.extend(bytes);
         Ok(location)
     }
@@ -105,7 +116,8 @@ impl<'memory> NP_Memory<'memory> {
     #[inline(always)]
     pub fn insert_parsed(&self, index: usize, cursor: NP_Cursor<'memory>) {
         let self_cache = unsafe { &mut *self.parsed.get() };
-        self_cache.insert(index / 2, cursor);
+        let insert_index = index / 2;
+        self_cache[insert_index] = cursor;
     }
 
 

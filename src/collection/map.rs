@@ -23,6 +23,15 @@ pub struct NP_Map {
 
 impl NP_Map {
 
+    pub fn make_map<'make>(map_cursor_addr: &NP_Cursor_Addr, memory: &'make NP_Memory) -> Result<(), NP_Error> {
+
+        let cursor = memory.get_parsed(map_cursor_addr);
+            
+        cursor.data = NP_Cursor_Data::Map { value_map: NP_HashMap::new() };
+
+        Ok(())
+    }
+
 
     pub fn new_iter(cursor_addr: &NP_Cursor_Addr, memory: &NP_Memory) -> Self {
         let map_cursor = memory.get_parsed(cursor_addr);
@@ -78,7 +87,7 @@ impl NP_Map {
 
         let map_cursor = memory.get_parsed(&map_cursor_addr);
 
-        if map_cursor.buff_addr == 0 {
+        if map_cursor.value.get_addr_value() == 0 {
             return Err(NP_Error::new("adding map value to a map that doens't exist"));
         }
 
@@ -219,7 +228,7 @@ impl<'value> NP_Value<'value> for NP_Map {
 
         let c = memory.get_parsed(&cursor);
 
-        if c.buff_addr == 0 { return NP_JSON::Null };
+        if c.value.get_addr_value() == 0 { return NP_JSON::Null };
 
         let mut json_map = JSMAP::new();
 
@@ -237,11 +246,14 @@ impl<'value> NP_Value<'value> for NP_Map {
     fn do_compact(from_cursor: &NP_Cursor_Addr, from_memory: &'value NP_Memory, to_cursor: NP_Cursor_Addr, to_memory: &NP_Memory) -> Result<NP_Cursor_Addr, NP_Error> where Self: Sized {
 
         let from_c = from_memory.get_parsed(from_cursor);
-        let to_c = to_memory.get_parsed(&to_cursor);
-
-        if from_c.buff_addr == 0 || from_c.value.get_addr_value() == 0 {
+ 
+        if from_c.value.get_addr_value() == 0 {
             return Ok(to_cursor);
         }
+
+        Self::make_map(&to_cursor, to_memory)?;
+
+       let to_c = to_memory.get_parsed(&to_cursor);
 
         let value_of = match from_memory.schema[from_c.schema_addr] {
             NP_Parsed_Schema::Map { value, .. } => value,

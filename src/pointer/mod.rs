@@ -71,16 +71,16 @@ pub struct NP_Pointer_Map_Item {
 }
 
 pub trait NP_Pointer_Bytes {
-    fn get_addr_value(&self) -> u16         { panic!() }
-    fn set_addr_value(&mut self, addr: u16) { panic!() }
-    fn get_next_addr(&self) -> u16          { panic!() }
-    fn set_next_addr(&mut self, addr: u16)      { panic!() }
-    fn set_index(&mut self, index: u8)          { panic!() }
-    fn get_index(&self) -> u8               { panic!() }
-    fn set_key_addr(&mut self, hash: u16)       { panic!() }
-    fn get_key_addr(&self) -> u16           { panic!() }
-    fn reset(&mut self)   { panic!() }
-    fn get_size(&self) -> usize             { panic!() }
+    fn get_addr_value(&self) -> u16                                { panic!() }
+    fn set_addr_value(&mut self, addr: u16)                        { panic!() }
+    fn get_next_addr(&self) -> u16                                 { panic!() }
+    fn set_next_addr(&mut self, addr: u16)                         { panic!() }
+    fn set_index(&mut self, index: u8)                             { panic!() }
+    fn get_index(&self) -> u8                                      { panic!() }
+    fn set_key_addr(&mut self, hash: u16)                          { panic!() }
+    fn get_key_addr(&self) -> u16                                  { panic!() }
+    fn reset(&mut self)                                            { panic!() }
+    fn get_size(&self) -> usize                                    { panic!() }
     fn get_key<'key>(&self, memory: &'key NP_Memory) -> &'key str  { panic!() }
 }
 
@@ -172,7 +172,16 @@ impl NP_Pointer_Bytes for [u8; 8] {
     #[inline(always)]
     fn get_key_addr(&self) -> u16 { u16::from_be_bytes(unsafe { *(&self[4..6] as *const [u8] as *const [u8; 2]) }) }
     #[inline(always)]
-    fn reset(&mut self) { }
+    fn reset(&mut self) { 
+        self[0] = 0;
+        self[1] = 0;
+        self[2] = 0;
+        self[3] = 0;
+        self[4] = 0;
+        self[5] = 0;
+        self[6] = 0;
+        self[7] = 0;
+    }
     #[inline(always)]
     fn get_key<'key>(&self, memory: &'key NP_Memory) -> &'key str {
         let key_addr = self.get_key_addr() as usize;
@@ -331,8 +340,6 @@ impl<'cursor> NP_Cursor<'cursor> {
         if buff_addr > memory.read_bytes().len() {
             panic!()
         }
-
-        println!("PARSE {:?}", &memory.schema[schema_addr]);
 
         match &memory.schema[schema_addr] {
             NP_Parsed_Schema::Table { columns, .. } => {
@@ -499,10 +506,10 @@ impl<'cursor> NP_Cursor<'cursor> {
             let cursor = memory.get_parsed(&cursor_addr);
 
             // size of pointer
-            let base_size = unsafe { (*cursor.value).get_size() };
+            let base_size = cursor.value.get_size();
 
             // pointer is in buffer but has no value set
-            if unsafe { (*cursor.value).get_addr_value() } == 0 { // no value, just base size
+            if cursor.value.get_addr_value() == 0 { // no value, just base size
                 return Ok(base_size);
             }
 

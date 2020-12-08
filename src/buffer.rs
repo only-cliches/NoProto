@@ -1,5 +1,6 @@
 //! Top level abstraction for buffer objects
 
+use crate::collection::tuple::NP_Tuple;
 use crate::pointer::NP_Vtable;
 use core::hint::unreachable_unchecked;
 
@@ -85,7 +86,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// 
     pub fn json_encode(&self, path: &[&str]) -> Result<NP_JSON, NP_Error> {
 
-        let value_cursor = self.select(self.cursor_addr.clone(), false, path, 0)?;
+        let value_cursor = self.select(self.cursor_addr.clone(), false, path)?;
 
         if let Some(x) = value_cursor {
             Ok(NP_Cursor::json_encode(x, &self.memory))
@@ -130,7 +131,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// 
     pub fn move_cursor(&mut self, path: &[&str]) -> Result<bool, NP_Error> {
 
-        let value_cursor = self.select(self.cursor_addr.clone(), true, path, 0)?;
+        let value_cursor = self.select(self.cursor_addr.clone(), true, path)?;
 
         let cursor = if let Some(x) = value_cursor {
             x
@@ -180,7 +181,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// ```
     /// 
     pub fn set<X: 'buffer>(&mut self, path: &[&str], value: X) -> Result<bool, NP_Error> where X: NP_Value<'buffer> + NP_Scalar {
-        let value_cursor = self.select(self.cursor_addr.clone(), true, path, 0)?;
+        let value_cursor = self.select(self.cursor_addr.clone(), true, path)?;
         match value_cursor {
             Some(x) => {
                 X::set_value(x, &self.memory, value)?;
@@ -293,7 +294,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// 
     /// // get iterator of root (map)
     /// new_buffer.get_iter(&[])?.unwrap().into_iter().for_each(|item| {
-    ///     println!("hello");
+    ///     
     ///     match item.get_key() {
     ///         "color" => assert_eq!(item.get::<&str>().unwrap(), Some("blue")),
     ///         "sport" => assert_eq!(item.get::<&str>().unwrap(), Some("soccor")),
@@ -441,7 +442,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// 
     pub fn list_push<X>(&mut self, path: &[&str], value: X) -> Result<Option<u16>, NP_Error> where X: NP_Value<'buffer> + NP_Scalar {
 
-        let list_cursor_addr = if path.len() == 0 { self.cursor_addr.clone() } else { match self.select(self.cursor_addr.clone(), true, path, 0)? {
+        let list_cursor_addr = if path.len() == 0 { self.cursor_addr.clone() } else { match self.select(self.cursor_addr.clone(), true, path)? {
             Some(x) => x,
             None => return Ok(None)
         }};
@@ -508,7 +509,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// ```
     /// 
     pub fn get_type(&self, path: &[&str]) -> Result<Option<&'buffer NP_TypeKeys>, NP_Error> {
-        let value_cursor = self.select(self.cursor_addr.clone(), false, path, 0)?;
+        let value_cursor = self.select(self.cursor_addr.clone(), false, path)?;
 
         let found_cursor = if let Some(x) = value_cursor {
             x
@@ -628,7 +629,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// ```
     /// 
     pub fn length(&self, path: &[&str]) -> Result<Option<usize>, NP_Error> {
-        let value_cursor = self.select(self.cursor_addr.clone(), false, path, 0)?;
+        let value_cursor = self.select(self.cursor_addr.clone(), false, path)?;
 
         let found_cursor = if let Some(x) = value_cursor {
             x
@@ -638,9 +639,6 @@ impl<'buffer> NP_Buffer<'buffer> {
 
         let cursor_data = self.memory.get_parsed(&found_cursor);
 
-        if cursor_data.buff_addr == 0 {
-            return Ok(None);
-        }
         /*
 
         match &self.memory.schema[cursor_data.schema_addr] {
@@ -706,7 +704,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// 
     pub fn del(&mut self, path: &[&str]) -> Result<bool, NP_Error> {
 
-        let value_cursor = self.select(self.cursor_addr.clone(), false, path, 0)?;
+        let value_cursor = self.select(self.cursor_addr.clone(), false, path)?;
         match value_cursor {
             Some(x) => {
                 // clear value address in buffer
@@ -748,7 +746,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// ```
     /// 
     pub fn get<'get, X: 'get>(&'get self, path: &[&str]) -> Result<Option<X>, NP_Error> where X: NP_Value<'get> + NP_Scalar {
-        let value_cursor = self.select(self.cursor_addr.clone(), false, path, 0)?;
+        let value_cursor = self.select(self.cursor_addr.clone(), false, path)?;
 
         match value_cursor {
             Some(x) => {
@@ -892,6 +890,7 @@ impl<'buffer> NP_Buffer<'buffer> {
 
         let new_bytes = NP_Memory::new(Some(capacity), self.memory.schema);
         let new_root  = NP_Cursor_Addr::Real(ROOT_PTR_ADDR);
+        NP_Cursor::parse(0, 0, 0, 0, &new_bytes, 0)?;
 
         NP_Cursor::compact(&old_root, &self.memory, new_root, &new_bytes)?;
 
@@ -942,10 +941,11 @@ impl<'buffer> NP_Buffer<'buffer> {
         }
     }
 
-    fn select(&self, cursor: NP_Cursor_Addr, create_path: bool, path: &[&str], mut path_index: usize) -> Result<Option<NP_Cursor_Addr>, NP_Error> {
+    fn select(&self, cursor: NP_Cursor_Addr, create_path: bool, path: &[&str]) -> Result<Option<NP_Cursor_Addr>, NP_Error> {
 
         let mut loop_cursor = cursor.clone();
 
+        let mut path_index = 0usize;
         
         loop {
             
@@ -956,7 +956,6 @@ impl<'buffer> NP_Buffer<'buffer> {
             let cursor = self.memory.get_parsed(&loop_cursor);
 
             // now select into collections
-            println!("SELECT {:?} {:?}", self.memory.schema[cursor.schema_addr], self.memory.get_parsed(&NP_Cursor_Addr::Real(cursor.buff_addr)));
 
             match &self.memory.schema[cursor.schema_addr] {
                 NP_Parsed_Schema::Table { columns: column_schemas, columns_mapped,  .. } => {
@@ -967,10 +966,10 @@ impl<'buffer> NP_Buffer<'buffer> {
                         // column exists
                         Some(col_index) => {
                             if let NP_Cursor_Addr::Real(table_addr) = loop_cursor { // real loop
-
-                                let v_table =  *col_index / 4; // which vtable
+                                
+                                let v_table =  *col_index / 4; // which vta ble
                                 let v_table_idx = *col_index % 4; // which index on the selected vtable
-
+                                
                                 match &cursor.data {
                                     NP_Cursor_Data::Table { bytes  } => {
                                         let mut sel_v_table = &bytes[v_table];
@@ -992,14 +991,12 @@ impl<'buffer> NP_Buffer<'buffer> {
                                             path_index += 1;                                            
                                         }
                                     },
-                                    NP_Cursor_Data::Empty => {
+                                    NP_Cursor_Data::Empty => { // no table here yet
+                                        
                                         if create_path { // create table in buffer
-                                            let first_vtable_addr = self.memory.malloc_borrow(&[0u8; 10])?;
-                                            cursor.value.set_addr_value(first_vtable_addr as u16);
-                                            let mut vtables: [(usize, Option<&mut NP_Vtable>); 64] = NP_Vtable::new_empty();
-                                            vtables[0] = (table_addr as usize, Some(unsafe { &mut *(self.memory.write_bytes().as_ptr().add(first_vtable_addr as usize) as *mut NP_Vtable) }));
-                                           
 
+                                            let vtables = NP_Table::make_table(&loop_cursor, &self.memory)?;
+                                            
                                             let mut sel_v_table = &vtables[v_table];
 
                                             if sel_v_table.0 == 0 { // no vtable here, need to make one
@@ -1007,12 +1004,9 @@ impl<'buffer> NP_Buffer<'buffer> {
                                             }
 
                                             let item_addr = sel_v_table.0 + (v_table_idx * 2);
-
-                                            cursor.data = NP_Cursor_Data::Table { bytes: vtables};
                                             loop_cursor = NP_Cursor_Addr::Real(item_addr);
                                             path_index += 1;    
-
-                                        } else {
+                                        } else {    
                                             let virtual_cursor = self.memory.get_parsed(&loop_cursor);
                                             virtual_cursor.reset();
                                             virtual_cursor.parent_addr = cursor.buff_addr;
@@ -1070,8 +1064,28 @@ impl<'buffer> NP_Buffer<'buffer> {
                                         path_index += 1;                                            
                                     }
                                 },
-                                NP_Cursor_Data::Empty => {
+                                NP_Cursor_Data::Empty => { // no table here yet
+                                        
+                                    if create_path { // create table in buffer
 
+                                        let vtables = NP_Tuple::make_tuple(&loop_cursor, &self.memory)?;
+                                        
+                                        let mut sel_v_table = &vtables[v_table];
+
+                                        if sel_v_table.0 == 0 { // no vtable here, need to make one
+                                            sel_v_table = &NP_Tuple::extend_vtables(&loop_cursor, &self.memory, tuple_index)?[v_table];
+                                        }
+
+                                        let item_addr = sel_v_table.0 + (v_table_idx * 2);
+                                        loop_cursor = NP_Cursor_Addr::Real(item_addr);
+                                        path_index += 1;    
+                                    } else {    
+                                        let virtual_cursor = self.memory.get_parsed(&loop_cursor);
+                                        virtual_cursor.reset();
+                                        virtual_cursor.parent_addr = cursor.buff_addr;
+                                        virtual_cursor.schema_addr = values_schemas[tuple_index];
+                                        path_index += 1;
+                                    }
                                 },
                                 _ => unsafe { unreachable_unchecked() }
                             };
@@ -1089,10 +1103,9 @@ impl<'buffer> NP_Buffer<'buffer> {
                     let list_key_int = list_key.parse::<usize>();
                     match list_key_int {
                         Ok(list_index) => {
-                            println!("{:?} {:?}", list_index, &cursor.data);
                             match &cursor.data {
                                 NP_Cursor_Data::List { list_addrs, .. } => {
-                                    println!("{:?}", list_addrs);
+
                                     let mut list_item_addr = list_addrs[list_index];
 
                                     if list_item_addr == 0 && create_path {
@@ -1108,6 +1121,17 @@ impl<'buffer> NP_Buffer<'buffer> {
                                     } else { // real
                                         loop_cursor = NP_Cursor_Addr::Real(list_addrs[list_index]);
                                         path_index += 1;   
+                                    }
+                                },
+                                NP_Cursor_Data::Empty => {
+                                    if create_path {
+                                        NP_List::make_list(, memory: &'make NP_Memory)
+                                    } else {
+                                        let virtual_cursor = self.memory.get_parsed(&loop_cursor);
+                                        virtual_cursor.reset();
+                                        virtual_cursor.parent_addr = cursor.buff_addr;
+                                        virtual_cursor.schema_addr = *of;
+                                        path_index += 1;
                                     }
                                 },
                                 _ => unsafe { unreachable_unchecked() }
@@ -1139,6 +1163,9 @@ impl<'buffer> NP_Buffer<'buffer> {
                                     }
                                 }
                             }
+                        },
+                        NP_Cursor_Data::Empty => {
+
                         },
                         _ => unsafe { unreachable_unchecked() }
                     }
@@ -1200,7 +1227,7 @@ impl<'item> NP_Item<'item> {
     pub fn set<X>(&'item mut self, value: X) -> Result<(), NP_Error> where X: NP_Value<'item> + NP_Scalar {
 
         // virtual cursor
-        if self.cursor.buff_addr == 0 {
+        if self.cursor.buff_addr == 0 { // ERROR buff_addr can be zeor
             match self.cursor.value {
                 NP_Cursor_Value::ListItem { .. } => {
                     self.cursor = NP_List::commit_virtual_cursor(self.cursor, &self.memory)?;
@@ -1214,7 +1241,7 @@ impl<'item> NP_Item<'item> {
             }
         }
 
-        if self.cursor.buff_addr == 0 { // can't commit to cursor that's still virtual
+        if self.cursor.buff_addr == 0 {  // ERROR buff_addr can be zeor
             panic!()
         }
 
@@ -1325,4 +1352,6 @@ impl<'collection> Iterator for NP_Generic_Iterator<'collection> {
             _ => panic!()
         }
     }
-}*/
+}
+
+*/

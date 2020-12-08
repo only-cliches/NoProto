@@ -22,6 +22,18 @@ pub struct NP_List {
 
 impl NP_List {
 
+    pub fn make_list<'make>(list_cursor_addr: &NP_Cursor_Addr, memory: &'make NP_Memory) -> Result<(), NP_Error> {
+
+        let cursor = memory.get_parsed(list_cursor_addr);
+
+        let list_addr = memory.malloc_borrow(&[0u8; 4])?; // head & tail
+                
+        cursor.value.set_addr_value(list_addr as u16);
+        cursor.data = NP_Cursor_Data::List { list_addrs: [0; 255], bytes: unsafe { &mut *(memory.write_bytes().as_ptr().add(list_addr as usize) as *mut NP_List_Bytes) } };
+
+        Ok(())
+    }
+
     pub fn new_iter(cursor_addr: &NP_Cursor_Addr, memory: &NP_Memory, only_real: bool) -> Self {
         let list_cursor = memory.get_parsed(cursor_addr);
 
@@ -348,7 +360,7 @@ impl<'value> NP_Value<'value> for NP_List {
 
         let c = memory.get_parsed(&cursor);
 
-        if c.buff_addr == 0 { return NP_JSON::Null };
+        if c.value.get_addr_value() == 0 { return NP_JSON::Null };
 
         let mut json_list = Vec::new();
 
@@ -362,11 +374,14 @@ impl<'value> NP_Value<'value> for NP_List {
     fn do_compact(from_cursor: &NP_Cursor_Addr, from_memory: &'value NP_Memory, to_cursor: NP_Cursor_Addr, to_memory: &NP_Memory) -> Result<NP_Cursor_Addr, NP_Error> where Self: Sized {
 
         let from_c = from_memory.get_parsed(from_cursor);
-        let to_c = to_memory.get_parsed(&to_cursor);
 
-        if from_c.buff_addr == 0 || from_c.value.get_addr_value() == 0 {
+        if from_c.value.get_addr_value() == 0 {
             return Ok(to_cursor);
         }
+
+        Self::make_list(&to_cursor, to_memory)?;
+
+        let to_c = to_memory.get_parsed(&to_cursor);
 
         Self::for_each(from_cursor, from_memory, true, &mut |(index, item)| {
             let old_item = from_memory.get_parsed(&item);

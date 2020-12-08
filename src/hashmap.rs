@@ -7,15 +7,17 @@ pub static SEED: u32 = 2181155409;
 
 #[derive(Debug)]
 pub struct NP_HashMap {
-    data: Vec<usize>,
+    data: Vec<Vec<(u32, usize)>>,
     size: u16
 }
+
+const MAP_SIZE: usize = 1024;
 
 impl NP_HashMap {
 
     pub fn new() -> Self {
-        let mut vector = Vec::with_capacity(4096);
-        vector.extend((0..4096).map(|_| 0usize));
+        let mut vector = Vec::with_capacity(1024);
+        vector.extend((0..MAP_SIZE).map(|_| Vec::new()));
         Self { data: vector, size: 0 }
     }
 
@@ -30,7 +32,19 @@ impl NP_HashMap {
 
         self.size += 1;
 
-        self.data[hash as usize % 4096] = value;
+        let bucket = hash as usize % MAP_SIZE;
+
+        if self.data[bucket].len() == 0 {
+            self.data[bucket].push((hash, value));
+        } else {
+            for (k, v) in self.data[bucket].iter_mut() {
+                if *k == hash {
+                    *v = value;
+                    return Ok(())
+                }
+            }
+            self.data[bucket].push((hash, value));
+        }
 
         Ok(())
     }
@@ -44,24 +58,42 @@ impl NP_HashMap {
         self.size += 1;
 
         let hash = murmurhash3_x86_32(key.as_bytes(), SEED);
-        self.data[hash as usize % 4096] = value;
+    
+        self.insert_hash(hash, value)?;
 
         Ok(hash)
     }
 
     pub fn get_hash(&self, key: u32) -> Option<&usize> {
-        self.data.get(key as usize % 4096)
+        let bucket = key as usize % MAP_SIZE;
+        match self.data.get(bucket) {
+            Some(x) => {
+                for (k, v) in x.iter() {
+                    if *k == key {
+                        return Some(v)
+                    }
+                }
+                None
+            },
+            None => None
+        }
     }
 
     pub fn get(&self, key: &str) -> Option<&usize> {
-        let hash = murmurhash3_x86_32(key.as_bytes(), SEED) as usize;
-        self.data.get(hash % 4096)
+        let hash = murmurhash3_x86_32(key.as_bytes(), SEED);
+        self.get_hash(hash)
     }
 
     pub fn delete(&mut self, key: &str) {
         self.size -= 1;
-        let hash = murmurhash3_x86_32(key.as_bytes(), SEED) as usize;
-        self.data.remove(hash % 4096);
+        let hash = murmurhash3_x86_32(key.as_bytes(), SEED);
+        let bucket = hash as usize % MAP_SIZE;
+        match self.data.get_mut(bucket) {
+            Some(bucket) => {
+                bucket.retain(|(k, _v)| *k != hash);
+            },
+            _ => { }
+        }
     }
 }
 

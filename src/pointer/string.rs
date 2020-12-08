@@ -276,11 +276,9 @@ impl<'value> NP_Value<'value> for &'value str {
         }
     }
 
-    fn set_value<'set>(mut cursor: NP_Cursor_Addr, memory: &'set NP_Memory, value: Self) -> Result<NP_Cursor_Addr, NP_Error> where Self: 'set + Sized {
+    fn set_value<'set>(cursor: NP_Cursor_Addr, memory: &'set NP_Memory, value: Self) -> Result<NP_Cursor_Addr, NP_Error> where Self: 'set + Sized {
 
         let c = memory.get_parsed(&cursor);
-
-        assert_ne!(c.buff_addr, 0);
     
         let bytes = value.as_bytes();
     

@@ -22,6 +22,44 @@ pub struct NP_Table {
 
 impl NP_Table {
 
+    pub fn make_table<'make>(table_cursor_addr: &NP_Cursor_Addr, memory: &'make NP_Memory) -> Result<&'make [(usize, Option<&'make mut NP_Vtable>); 64], NP_Error> {
+
+        let cursor = memory.get_parsed(table_cursor_addr);
+
+        match &memory.schema[cursor.schema_addr] {
+            NP_Parsed_Schema::Table { columns: column_schemas, ..} => {
+                let first_vtable_addr = memory.malloc_borrow(&[0u8; 10])?;
+                
+                cursor.value.set_addr_value(first_vtable_addr as u16);
+                let mut vtables: [(usize, Option<&mut NP_Vtable>); 64] = NP_Vtable::new_empty();
+                vtables[0] = (first_vtable_addr as usize, Some(unsafe { &mut *(memory.write_bytes().as_ptr().add(first_vtable_addr as usize) as *mut NP_Vtable) }));
+                
+                // create cached pointers for vtable
+                for x in 0..4usize {
+                    if x < column_schemas.len() {
+                        let item_addr = vtables[0].0 + (x * 2);
+                        memory.insert_parsed(item_addr, NP_Cursor {
+                            buff_addr: item_addr, 
+                            schema_addr: column_schemas[x].2, 
+                            data: NP_Cursor_Data::Empty,
+                            temp_bytes: None,
+                            value: NP_Cursor::parse_cursor_value(item_addr, cursor.buff_addr, cursor.schema_addr, &memory), 
+                            parent_addr: cursor.buff_addr,
+                            index: x
+                        });
+                    }
+                }
+
+                cursor.data = NP_Cursor_Data::Table { bytes: vtables };
+
+                Ok(match &cursor.data {
+                    NP_Cursor_Data::Table { bytes } => bytes,
+                    _ => unsafe { unreachable_unchecked() }
+                })
+            }
+            _ => unsafe { unreachable_unchecked() }
+        }
+    }
 
     pub fn new_iter(cursor_addr: &NP_Cursor_Addr) -> Self {
 
@@ -270,7 +308,7 @@ impl<'value> NP_Value<'value> for NP_Table {
 
         let c = memory.get_parsed(&cursor);
 
-        if c.buff_addr == 0 { return NP_JSON::Null };
+        if c.value.get_addr_value() == 0 { return NP_JSON::Null };
 
         let mut json_map = JSMAP::new();
 
@@ -284,14 +322,18 @@ impl<'value> NP_Value<'value> for NP_Table {
     fn do_compact(from_cursor: &NP_Cursor_Addr, from_memory: &'value NP_Memory, to_cursor: NP_Cursor_Addr, to_memory: &NP_Memory) -> Result<NP_Cursor_Addr, NP_Error> where Self: Sized {
 
         let from_c = from_memory.get_parsed(from_cursor);
-        let to_c = to_memory.get_parsed(&to_cursor);
-
-        if from_c.buff_addr == 0 || from_c.value.get_addr_value() == 0 {
+        
+        if from_c.value.get_addr_value() == 0 {
             return Ok(to_cursor);
         }
 
+        Self::make_table(&to_cursor, &to_memory)?;
+
+        let to_c = to_memory.get_parsed(&to_cursor);
+
         Self::for_each(from_cursor, from_memory, &mut |(key, item)| {
             let old_item = from_memory.get_parsed(&item);
+
             if old_item.buff_addr != 0 && old_item.value.get_addr_value() != 0 { // pointer has value
                 let v_table =  old_item.index / 4; // which vtable
                 let v_table_idx = old_item.index % 4; // which index on the selected vtable
@@ -426,19 +468,19 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let mut buffer = factory.empty_buffer(None);
     buffer.set(&["name"], "hello")?;
     assert_eq!(buffer.get::<&str>(&["name"])?, Some("hello"));
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 18usize);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 19usize);
     buffer.del(&[])?;
     buffer.compact(None)?;
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 2usize);
 
     // good values are preserved through compaction
     let mut buffer = factory.empty_buffer(None);
     buffer.set(&["name"], "hello")?;
     assert_eq!(buffer.get::<&str>(&["name"])?, Some("hello"));
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 18usize);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 19usize);
     buffer.compact(None)?;
     assert_eq!(buffer.get::<&str>(&["name"])?, Some("hello"));
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 18usize);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 19usize);
 
     Ok(())
 }
