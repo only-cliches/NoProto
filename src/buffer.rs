@@ -78,7 +78,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// new_buffer.set(&["name"], "Jeb Kermin");
     /// new_buffer.set(&["age"], 30u8);
     /// 
-    /// assert_eq!("{\"name\":\"Jeb Kermin\",\"age\":30}", new_buffer.json_encode(&[])?.stringify());
+    /// assert_eq!("{\"age\":30,\"name\":\"Jeb Kermin\"}", new_buffer.json_encode(&[])?.stringify());
     /// assert_eq!("\"Jeb Kermin\"", new_buffer.json_encode(&["name"])?.stringify());
     /// 
     /// # Ok::<(), NP_Error>(()) 
@@ -112,7 +112,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// new_buffer.set(&[], "hello")?;
     /// // close buffer and get bytes
     /// let bytes: Vec<u8> = new_buffer.close();
-    /// assert_eq!([1, 1, 0, 4, 0, 5, 104, 101, 108, 108, 111].to_vec(), bytes);
+    /// assert_eq!([0, 2, 0, 5, 104, 101, 108, 108, 111].to_vec(), bytes);
     /// 
     /// # Ok::<(), NP_Error>(()) 
     /// ```
@@ -471,7 +471,7 @@ impl<'buffer> NP_Buffer<'buffer> {
             _ => unsafe { unreachable_unchecked() }
         }
 
-        match NP_List::push(&list_cursor_addr, &self.memory)? {
+        match NP_List::push(&list_cursor_addr, &self.memory, None)? {
             Some((index, new_item_addr)) => {
                 X::set_value(new_item_addr, &self.memory, value)?;
                 Ok(Some(index))
@@ -519,7 +519,7 @@ impl<'buffer> NP_Buffer<'buffer> {
 
         Ok(Some(self.memory.get_schema(&found_cursor).get_type_key()))
     }
-
+/*
     /// Get length of String, Bytes, Table, Tuple, List or Map Type
     /// 
     /// If the type found at the path provided does not support length operations, you'll get `None`.
@@ -639,7 +639,7 @@ impl<'buffer> NP_Buffer<'buffer> {
 
         let cursor_data = self.memory.get_parsed(&found_cursor);
 
-        /*
+        
 
         match &self.memory.schema[cursor_data.schema_addr] {
             NP_Parsed_Schema::List { i: _, sortable: _, of: _} => {
@@ -671,11 +671,11 @@ impl<'buffer> NP_Buffer<'buffer> {
             _ => {
                 Ok(None)
             }
-        }*/
+        }
         Ok(Some(0))
   
     }
-
+*/
     /// Clear an inner value from the buffer.  The path only works with dot notation.
     /// This can also be used to clear deeply nested collection objects or scalar objects.
     /// 
@@ -790,22 +790,22 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// let mut new_buffer = factory.empty_buffer(None);
     /// // set initial value
     /// new_buffer.set(&[], "hello")?;
-    /// // using 11 bytes
+    /// // using 9 bytes
     /// assert_eq!(NP_Size_Data {
-    ///     current_buffer: 11,
-    ///     after_compaction: 11,
+    ///     current_buffer: 9,
+    ///     after_compaction: 9,
     ///     wasted_bytes: 0
     /// }, new_buffer.calc_bytes()?);
     /// // update the value
     /// new_buffer.set(&[], "hello, world")?;
     /// // now using 25 bytes, with 7 bytes of wasted space
     /// assert_eq!(NP_Size_Data {
-    ///     current_buffer: 25,
-    ///     after_compaction: 18,
+    ///     current_buffer: 23,
+    ///     after_compaction: 16,
     ///     wasted_bytes: 7
     /// }, new_buffer.calc_bytes()?);
     /// // compact to save space
-    /// new_buffer.maybe_compact(None, None, |compact_data| {
+    /// new_buffer.maybe_compact(None, |compact_data| {
     ///     // only compact if wasted bytes are greater than 5
     ///     if compact_data.wasted_bytes > 5 {
     ///         true
@@ -815,8 +815,8 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// })?;
     /// // back down to 18 bytes with no wasted bytes
     /// assert_eq!(NP_Size_Data {
-    ///     current_buffer: 18,
-    ///     after_compaction: 18,
+    ///     current_buffer: 16,
+    ///     after_compaction: 16,
     ///     wasted_bytes: 0
     /// }, new_buffer.calc_bytes()?);
     /// 
@@ -855,24 +855,24 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// new_buffer.set(&[], "hello")?;
     /// // using 11 bytes
     /// assert_eq!(NP_Size_Data {
-    ///     current_buffer: 11,
-    ///     after_compaction: 11,
+    ///     current_buffer: 9,
+    ///     after_compaction: 9,
     ///     wasted_bytes: 0
     /// }, new_buffer.calc_bytes()?);
     /// // update the value
     /// new_buffer.set(&[], "hello, world")?;
     /// // now using 25 bytes, with 7 bytes of wasted bytes
     /// assert_eq!(NP_Size_Data {
-    ///     current_buffer: 25,
-    ///     after_compaction: 18,
+    ///     current_buffer: 23,
+    ///     after_compaction: 16,
     ///     wasted_bytes: 7
     /// }, new_buffer.calc_bytes()?);
     /// // compact to save space
     /// new_buffer.compact(None)?;
     /// // back down to 18 bytes with no wasted bytes
     /// assert_eq!(NP_Size_Data {
-    ///     current_buffer: 18,
-    ///     after_compaction: 18,
+    ///     current_buffer: 16,
+    ///     after_compaction: 16,
     ///     wasted_bytes: 0
     /// }, new_buffer.calc_bytes()?);
     /// 
@@ -916,8 +916,8 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// let mut new_buffer = factory.empty_buffer(None);
     /// new_buffer.set(&[], "hello")?;
     /// assert_eq!(NP_Size_Data {
-    ///     current_buffer: 11,
-    ///     after_compaction: 11,
+    ///     current_buffer: 9,
+    ///     after_compaction: 9,
     ///     wasted_bytes: 0
     /// }, new_buffer.calc_bytes()?);
     /// 
@@ -927,9 +927,8 @@ impl<'buffer> NP_Buffer<'buffer> {
     pub fn calc_bytes<'bytes>(&self) -> Result<NP_Size_Data, NP_Error> {
 
         let root = NP_Cursor_Addr::Real(ROOT_PTR_ADDR);
-        let real_bytes = NP_Cursor::calc_size(root, &self.memory)? + ROOT_PTR_ADDR;
+        let real_bytes = NP_Cursor::calc_size(root, &self.memory)?;
         let total_size = self.memory.read_bytes().len();
-
         if total_size >= real_bytes {
             return Ok(NP_Size_Data {
                 current_buffer: total_size,
@@ -1125,7 +1124,10 @@ impl<'buffer> NP_Buffer<'buffer> {
                                 },
                                 NP_Cursor_Data::Empty => {
                                     if create_path {
-                                        NP_List::make_list(, memory: &'make NP_Memory)
+                                        NP_List::make_list(&loop_cursor, &self.memory)?;
+                                        let list_item_addr = NP_List::insert(&loop_cursor, &self.memory, list_index)?;
+                                        loop_cursor = NP_Cursor_Addr::Real(list_item_addr);
+                                        path_index += 1;        
                                     } else {
                                         let virtual_cursor = self.memory.get_parsed(&loop_cursor);
                                         virtual_cursor.reset();
@@ -1159,13 +1161,27 @@ impl<'buffer> NP_Buffer<'buffer> {
                                         loop_cursor = NP_Map::insert(&loop_cursor, *value, &self.memory, path[path_index])?;
                                         path_index += 1;  
                                     } else {
-                                        return Ok(None);
+                                        let virtual_cursor = self.memory.get_parsed(&loop_cursor);
+                                        virtual_cursor.reset();
+                                        virtual_cursor.parent_addr = cursor.buff_addr;
+                                        virtual_cursor.schema_addr = *value;
+                                        path_index += 1;
                                     }
                                 }
                             }
                         },
                         NP_Cursor_Data::Empty => {
-
+                            if create_path {
+                                NP_Map::make_map(&loop_cursor, &self.memory)?;
+                                loop_cursor = NP_Map::insert(&loop_cursor, *value, &self.memory, path[path_index])?;
+                                path_index += 1;        
+                            } else {
+                                let virtual_cursor = self.memory.get_parsed(&loop_cursor);
+                                virtual_cursor.reset();
+                                virtual_cursor.parent_addr = cursor.buff_addr;
+                                virtual_cursor.schema_addr = *value;
+                                path_index += 1;
+                            }
                         },
                         _ => unsafe { unreachable_unchecked() }
                     }

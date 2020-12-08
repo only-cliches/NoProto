@@ -162,12 +162,7 @@ impl<'value> NP_Value<'value> for &'value str {
         }
 
         match memory.schema[c.schema_addr] {
-            NP_Parsed_Schema::UTF8String {
-                i: _,
-                size,
-                default: _,
-                sortable: _,
-            } => {
+            NP_Parsed_Schema::UTF8String { size, .. } => {
                 // fixed size
                 if size > 0 {
                     return Ok(size as usize);
@@ -176,8 +171,8 @@ impl<'value> NP_Value<'value> for &'value str {
                 // dynamic size
                 let bytes_size: usize = u16::from_be_bytes(*memory.get_2_bytes(value_addr).unwrap_or(&[0; 2])) as usize;
 
-                // return total size of this string
-                return Ok(bytes_size);
+                // return total size of this string plus length bytes
+                return Ok(bytes_size + 2);
             }
             _ => unsafe { unreachable_unchecked() },
         }
@@ -288,9 +283,7 @@ impl<'value> NP_Value<'value> for &'value str {
     
         let size = match memory.schema[c.schema_addr] {
             NP_Parsed_Schema::UTF8String { size, .. } => size,
-            _ => {
-                unsafe { unreachable_unchecked() }
-            }
+            _ => { unsafe { unreachable_unchecked() } }
         };
     
         if size > 0 {
@@ -427,7 +420,7 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     assert_eq!(buffer.get::<&str>(&[])?, None);
 
     buffer.compact(None)?;
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 2usize);
 
     Ok(())
 }

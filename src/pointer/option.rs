@@ -131,8 +131,6 @@ impl<'value> NP_Value<'value> for NP_Enum {
 
         let c = memory.get_parsed(&cursor);
 
-        assert_ne!(c.buff_addr, 0);
-
         match &memory.schema[c.schema_addr] {
             NP_Parsed_Schema::Enum { i: _, choices, default: _, sortable: _} => {
 
@@ -420,7 +418,7 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     assert_eq!(buffer.get::<NP_Enum>(&[])?, None);
 
     buffer.compact(None)?;
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 2usize);
 
     Ok(())
 }

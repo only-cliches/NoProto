@@ -84,8 +84,6 @@ impl<'value> NP_Value<'value> for &'value [u8] {
     fn set_value<'set>(mut cursor: NP_Cursor_Addr, memory: &'set NP_Memory, value: Self) -> Result<NP_Cursor_Addr, NP_Error> where Self: 'set + Sized {
 
         let c = memory.get_parsed(&cursor);
-
-        assert_ne!(c.buff_addr, 0);
     
         let bytes = value;
     
@@ -280,8 +278,8 @@ impl<'value> NP_Value<'value> for &'value [u8] {
                 // dynamic size
                 let bytes_size: usize = u16::from_be_bytes(*memory.get_2_bytes(value_addr).unwrap_or(&[0; 2])) as usize;
 
-                // return total size of this string
-                return Ok(bytes_size);
+                // return total size of this string plus length
+                return Ok(bytes_size + 2);
             }
             _ => unsafe { unreachable_unchecked() },
         }
@@ -441,7 +439,7 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     assert_eq!(buffer.get::<&[u8]>(&[])?, None);
 
     buffer.compact(None)?;
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 2usize);
 
     Ok(())
 }

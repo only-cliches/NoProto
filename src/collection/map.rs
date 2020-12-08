@@ -87,10 +87,6 @@ impl NP_Map {
 
         let map_cursor = memory.get_parsed(&map_cursor_addr);
 
-        if map_cursor.value.get_addr_value() == 0 {
-            return Err(NP_Error::new("adding map value to a map that doens't exist"));
-        }
-
         let new_item_cursor = NP_Cursor { 
             buff_addr: new_item_addr, 
             schema_addr: schema_addr, 
@@ -107,16 +103,15 @@ impl NP_Map {
 
         // set key
         let key_item_addr = memory.malloc_borrow(&[key.len() as u8])?;
-        memory.malloc_borrow(key.as_bytes());
+        memory.malloc_borrow(key.as_bytes())?;
         new_item_cursor.value.set_key_addr(key_item_addr as u16);
 
         let head = map_cursor.value.get_addr_value();
 
-        if head == 0 { // empty map
-            map_cursor.value.set_addr_value(new_item_addr as u16);
-        } else { // push item
-            map_cursor.value.set_next_addr(head);
-            map_cursor.value.set_addr_value(new_item_addr as u16);
+        map_cursor.value.set_addr_value(new_item_addr as u16);
+
+        if head != 0 { // set new cursors NEXT to old HEAD
+            new_item_cursor.value.set_next_addr(head);
         }
 
         let key_hash = murmurhash3_x86_32(key.as_bytes(), SEED);
@@ -126,6 +121,8 @@ impl NP_Map {
             },
             _ => unsafe { unreachable_unchecked() }
         }
+
+        memory.insert_parsed(new_item_addr, new_item_cursor);
 
         Ok(NP_Cursor_Addr::Real(new_item_addr))
     }
@@ -206,10 +203,6 @@ impl<'value> NP_Value<'value> for NP_Map {
             return Ok(0) 
         }
 
-        let base_size = 0usize;
-
-        let addr_size = 2usize;
-
         let mut acc_size = 0usize;
 
         Self::for_each(&cursor, memory, &mut |(_i, item)| {
@@ -220,7 +213,7 @@ impl<'value> NP_Value<'value> for NP_Map {
             acc_size += NP_Cursor::calc_size(item.clone(), memory).unwrap();
         });
 
-        Ok(acc_size + base_size)
+        Ok(acc_size)
    
     }
 
@@ -335,10 +328,11 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let mut buffer = factory.empty_buffer(None);
     buffer.set(&["name"], "hello, world")?;
     assert_eq!(buffer.get::<&str>(&["name"])?, Some("hello, world"));
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 34usize);
+    assert_eq!(buffer.calc_bytes()?.after_compaction, buffer.calc_bytes()?.current_buffer);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 27usize);
     buffer.del(&[])?;
     buffer.compact(None)?;
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 2usize);
 
     // values are preserved through compaction
     let mut buffer = factory.empty_buffer(None);
@@ -346,11 +340,11 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     buffer.set(&["name2"], "hello, world2")?;
     assert_eq!(buffer.get::<&str>(&["name"])?, Some("hello, world"));
     assert_eq!(buffer.get::<&str>(&["name2"])?, Some("hello, world2"));
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 62usize);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 54usize);
     buffer.compact(None)?;
     assert_eq!(buffer.get::<&str>(&["name"])?, Some("hello, world"));
     assert_eq!(buffer.get::<&str>(&["name2"])?, Some("hello, world2"));
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 62usize);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 54usize);
 
     Ok(())
 }

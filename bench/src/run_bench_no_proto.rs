@@ -1,5 +1,5 @@
 use crate::LOOPS;
-use no_proto::{error::NP_Error, memory::NP_Size};
+use no_proto::{error::NP_Error};
 use no_proto::NP_Factory;
 use std::io::prelude::*;
 use flate2::Compression;
@@ -28,7 +28,7 @@ impl NoProtoBench {
     
         for _x in 0..LOOPS {
             let new_buffer = NoProtoBench::encode_single(&factory)?;
-            assert_eq!(new_buffer.len(), 408);
+            assert_eq!(new_buffer.len(), 283);
         }
     
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
@@ -130,30 +130,30 @@ impl NoProtoBench {
 
     #[inline(always)]
     pub fn encode_single(factory: &NP_Factory) ->Result<Vec<u8>, NP_Error> {
-        let mut new_buffer = factory.empty_buffer(None, Some(NP_Size::U16));
+        let mut new_buffer = factory.empty_buffer(None);
 
-        new_buffer.insert(&["initialized"], true)?;
-        new_buffer.insert(&["location"], "https://arstechnica.com")?;
-        new_buffer.insert(&["fruit"], 2u8)?;
+        new_buffer.set(&["initialized"], true)?;
+        new_buffer.set(&["location"], "https://arstechnica.com")?;
+        new_buffer.set(&["fruit"], 2u8)?;
     
         for x in 0..3 {
     
             new_buffer.cursor_to_root();
-            new_buffer.move_cursor(&["list"], x.to_string().as_str())?;
-            new_buffer.insert(&["name"], "Hello, world!")?;
-            new_buffer.insert(&["rating"], 3.1415432432445543543 + (x as f32))?;
-            new_buffer.insert(&["postfix"], "!")?;
+            new_buffer.move_cursor(&["list", x.to_string().as_str()])?;
+            new_buffer.set(&["name"], "Hello, world!")?;
+            new_buffer.set(&["rating"], 3.1415432432445543543 + (x as f32))?;
+            new_buffer.set(&["postfix"], "!")?;
     
             new_buffer.move_cursor(&["sibling"])?;
-            new_buffer.insert(&["time"], 123456 + (x as u32))?;
-            new_buffer.insert(&["ratio"], 3.14159 + (x as f32))?;
-            new_buffer.insert(&["size"], 10000 + (x as u16))?;
+            new_buffer.set(&["time"], 123456 + (x as u32))?;
+            new_buffer.set(&["ratio"], 3.14159 + (x as f32))?;
+            new_buffer.set(&["size"], 10000 + (x as u16))?;
     
             new_buffer.move_cursor(&["parent"])?;
-            new_buffer.insert(&["id"], 0xABADCAFEABADCAFE + (x as u64))?;
-            new_buffer.insert(&["count"], 10000 + (x as u16))?;
-            new_buffer.insert(&["prefix"], "@")?;
-            new_buffer.insert(&["length"], 1000000 + (x as u32))?;
+            new_buffer.set(&["id"], 0xABADCAFEABADCAFE + (x as u64))?;
+            new_buffer.set(&["count"], 10000 + (x as u16))?;
+            new_buffer.set(&["prefix"], "@")?;
+            new_buffer.set(&["length"], 1000000 + (x as u32))?;
             
         }
     

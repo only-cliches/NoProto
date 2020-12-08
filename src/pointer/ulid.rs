@@ -12,7 +12,8 @@
 //! }"#)?;
 //!
 //! let mut new_buffer = factory.empty_buffer(None);
-//! new_buffer.set(&[], &NP_ULID::generate(1604965249484, 50))?;
+//! let ulid = NP_ULID::generate(1604965249484, 50);
+//! new_buffer.set(&[], &ulid)?;
 //! 
 //! assert_eq!("1EPQP4CEC3KANC3XYNG9YKAQ", new_buffer.get::<&NP_ULID>(&[])?.unwrap().to_string());
 //!
@@ -279,7 +280,7 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     assert_eq!(buffer.get::<&NP_ULID>(&[])?, None);
 
     buffer.compact(None)?;
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 2usize);
 
     Ok(())
 }

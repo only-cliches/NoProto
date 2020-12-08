@@ -10,7 +10,6 @@ extern crate protobuf;
 extern crate flatbuffers;
 #[macro_use] 
 extern crate json;
-extern crate perf_stats;
 
 mod run_bench_no_proto;
 mod run_bench_protocol_buffers;

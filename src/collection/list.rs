@@ -11,6 +11,7 @@ use alloc::string::ToString;
 /// List data type.
 /// 
 #[doc(hidden)]
+#[derive(Debug)]
 pub struct NP_List {
     cursor: NP_Cursor_Addr,
     index: usize,
@@ -62,7 +63,13 @@ impl NP_List {
                         tail_index: tail_index as usize,
                         cursor: cursor_addr.clone(),
                         only_real,
-                        index: 0,
+                        index: if only_real {
+                            let head_addr = bytes.get_head();
+                            let head_curosr = memory.get_parsed(&NP_Cursor_Addr::Real(head_addr as usize));
+                            head_curosr.value.get_index() as usize
+                        } else {
+                            0
+                        },
                         schema_of
                     }
                 }
@@ -85,7 +92,7 @@ impl NP_List {
         match list_cursor.data {
             NP_Cursor_Data::List { list_addrs, .. } => {
 
-                if list.index < list.tail_index {
+                if list.index <= list.tail_index {
 
                     let this_cursor = if list.only_real {
                         while list_addrs[list.index] == 0 {
@@ -170,7 +177,7 @@ impl NP_List {
         }
     }
 
-    pub fn push<'push>(list_cursor_addr: &NP_Cursor_Addr, memory: &NP_Memory) -> Result<Option<(u16, NP_Cursor_Addr)>, NP_Error> {
+    pub fn push<'push>(list_cursor_addr: &NP_Cursor_Addr, memory: &NP_Memory, index: Option<usize>) -> Result<Option<(u16, NP_Cursor_Addr)>, NP_Error> {
 
         let list_cursor = memory.get_parsed(&list_cursor_addr);
 
@@ -193,21 +200,31 @@ impl NP_List {
                             temp_bytes: None,
                             value: NP_Cursor::parse_cursor_value(new_item_addr, list_cursor.buff_addr, list_cursor.schema_addr, &memory), 
                             parent_addr: list_cursor.buff_addr,
-                            index: 0
+                            index: if let Some(idx) = index {
+                                idx
+                            } else {
+                                0
+                            }
                         };
 
                         if bytes.get_head() == 0 { // empty list
                             bytes.set_head(new_item_addr as u16);
                             bytes.set_tail(new_item_addr as u16);
-                            list_addrs[0] = new_item_addr;
+                            new_item_cursor.value.set_index(new_item_cursor.index as u8);
                         } else { // list has items
                             let old_tail = memory.get_parsed(&NP_Cursor_Addr::Real(bytes.get_tail() as usize));
                             old_tail.value.set_next_addr(new_item_addr as u16);
-                            new_item_cursor.value.set_index(old_tail.value.get_index() + 1);
-                            new_index = (old_tail.value.get_index() as usize) + 1;
+                            new_index = if let Some(idx) = index {
+                                idx as usize
+                            } else {
+                                old_tail.value.get_index() as usize + 1
+                            };
+                            new_item_cursor.value.set_index(new_index as u8);
                             new_item_cursor.index = new_index;
                             bytes.set_tail(new_item_addr as u16);
                         }
+
+                        list_addrs[new_item_cursor.index] = new_item_addr;
 
                         memory.insert_parsed(new_item_addr, new_item_cursor);
 
@@ -249,7 +266,9 @@ impl NP_List {
                                 index
                             };
 
-                            memory.insert_parsed(index, new_item_cursor);
+                            new_item_cursor.value.set_index(index as u8);
+
+                            memory.insert_parsed(new_item_addr, new_item_cursor);
 
                             list_addrs[index] = new_item_addr;
 
@@ -297,7 +316,8 @@ impl NP_List {
                             prev_addr.value.set_next_addr(new_item_addr as u16);
                         }
 
-                        memory.insert_parsed(index, new_item_cursor);
+                        new_item_cursor.value.set_index(index as u8);
+                        memory.insert_parsed(new_item_addr, new_item_cursor);
 
                         list_addrs[index] = new_item_addr;
 
@@ -386,7 +406,7 @@ impl<'value> NP_Value<'value> for NP_List {
         Self::for_each(from_cursor, from_memory, true, &mut |(index, item)| {
             let old_item = from_memory.get_parsed(&item);
             if old_item.buff_addr != 0 && old_item.value.get_addr_value() != 0 { // pointer has value
-                let (_new_index, new_item) = NP_List::push(&to_cursor, to_memory).unwrap().unwrap();
+                let (_new_index, new_item) = NP_List::push(&to_cursor, to_memory, Some(index)).unwrap().unwrap();
                 NP_Cursor::compact(&item, from_memory, new_item, to_memory).unwrap();
             }    
         });
@@ -461,10 +481,11 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let mut buffer = factory.empty_buffer(None);
     buffer.set(&["10"], "hello, world")?;
     assert_eq!(buffer.get::<&str>(&["10"])?, Some("hello, world"));
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 28usize);
+    assert_eq!(buffer.calc_bytes()?.after_compaction, buffer.calc_bytes()?.current_buffer);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 25usize);
     buffer.del(&[])?;
     buffer.compact(None)?;
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 2usize);
 
     // values preserved through compaction
     let mut buffer = factory.empty_buffer(None);
@@ -472,11 +493,13 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     buffer.set(&["12"], "hello, world2")?;
     assert_eq!(buffer.get::<&str>(&["10"])?, Some("hello, world"));
     assert_eq!(buffer.get::<&str>(&["12"])?, Some("hello, world2"));
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 49usize);
+    assert_eq!(buffer.calc_bytes()?.after_compaction, buffer.calc_bytes()?.current_buffer);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 45usize);
     buffer.compact(None)?;
     assert_eq!(buffer.get::<&str>(&["10"])?, Some("hello, world"));
     assert_eq!(buffer.get::<&str>(&["12"])?, Some("hello, world2"));
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 49usize);
+    assert_eq!(buffer.calc_bytes()?.after_compaction, buffer.calc_bytes()?.current_buffer);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 45usize);
 
     Ok(())
 }

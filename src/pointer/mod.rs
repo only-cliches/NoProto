@@ -71,6 +71,7 @@ pub struct NP_Pointer_Map_Item {
 }
 
 pub trait NP_Pointer_Bytes {
+    fn get_type(&self) -> &str                                     { panic!() }
     fn get_addr_value(&self) -> u16                                { panic!() }
     fn set_addr_value(&mut self, addr: u16)                        { panic!() }
     fn get_next_addr(&self) -> u16                                 { panic!() }
@@ -85,6 +86,7 @@ pub trait NP_Pointer_Bytes {
 }
 
 impl NP_Pointer_Bytes for NP_Pointer_Scalar {
+    fn get_type(&self) -> &str { "Scalar" }
     #[inline(always)]
     fn get_addr_value(&self) -> u16 { u16::from_be_bytes(self.addr_value) }
     #[inline(always)]
@@ -95,6 +97,7 @@ impl NP_Pointer_Bytes for NP_Pointer_Scalar {
     fn get_size(&self) -> usize { 2 }
 }
 impl NP_Pointer_Bytes for NP_Pointer_List_Item {
+    fn get_type(&self) -> &str { "List Item" }
     #[inline(always)]
     fn get_addr_value(&self) -> u16 { u16::from_be_bytes(self.addr_value) }
     #[inline(always)]
@@ -113,6 +116,7 @@ impl NP_Pointer_Bytes for NP_Pointer_List_Item {
     fn get_size(&self) -> usize { 5 }
 }
 impl NP_Pointer_Bytes for NP_Pointer_Map_Item {
+    fn get_type(&self) -> &str { "Map Item" }
     #[inline(always)]
     fn get_addr_value(&self) -> u16 { u16::from_be_bytes(self.addr_value) }
     #[inline(always)]
@@ -143,6 +147,7 @@ impl NP_Pointer_Bytes for NP_Pointer_Map_Item {
 }
 
 impl NP_Pointer_Bytes for [u8; 8] {
+    fn get_type(&self) -> &str { "Bytes" }
     #[inline(always)]
     fn get_addr_value(&self) -> u16 { u16::from_be_bytes(unsafe { *(&self[0..2] as *const [u8] as *const [u8; 2]) }) }
     #[inline(always)]
@@ -290,16 +295,18 @@ pub struct NP_Cursor<'cursor> {
     pub value: &'cursor mut dyn NP_Pointer_Bytes,
     /// Information about the parent cursor
     pub parent_addr: usize,
+    /// index of this cursor in collection
     pub index: usize
 }
 
 impl<'cursor> Debug for NP_Cursor<'cursor> {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter.write_str(self.buff_addr.to_string().as_str())?;
-        formatter.write_str(format!("Data:   {:?}", self.data).as_str())?;
-        formatter.write_str(format!("Schema: {:?}", self.schema_addr).as_str())?;
-        formatter.write_str(format!("Temp:   {:?}", self.temp_bytes).as_str())?;
-        formatter.write_str(format!("Value:  {:?}", self.value.get_addr_value()).as_str())?;
+        formatter.write_str(format!("Buffer: {:?}\n", self.buff_addr).to_string().as_str())?;
+        formatter.write_str(format!("Data:   {:?}\n", self.data).as_str())?;
+        formatter.write_str(format!("Schema: {:?}\n", self.schema_addr).as_str())?;
+        formatter.write_str(format!("Temp:   {:?}\n", self.temp_bytes).as_str())?;
+        formatter.write_str(format!("Value:  {:?}\n", self.value.get_addr_value()).as_str())?;
+        formatter.write_str(format!("Value Type:  {:?}\n", self.value.get_type()).as_str())?;
         Ok(())
     }
 }
@@ -376,10 +383,9 @@ impl<'cursor> NP_Cursor<'cursor> {
     
     #[inline(always)]
     pub fn parse_cursor_value<'parse>(buff_addr: usize, parent_addr: usize, parent_schema_addr: usize, memory: &NP_Memory) -> &'parse mut dyn NP_Pointer_Bytes {
-        if parent_addr == 0 { // parent is root, no possible colleciton above
+        if buff_addr == 0 {
             unsafe { &mut *(memory.write_bytes().as_ptr().add(buff_addr) as *mut NP_Pointer_Scalar) }
         } else {
-
             match memory.schema[parent_schema_addr] {
                 NP_Parsed_Schema::List { .. } => {
                     unsafe { &mut *(memory.write_bytes().as_ptr().add(buff_addr) as *mut NP_Pointer_List_Item) }
@@ -390,8 +396,10 @@ impl<'cursor> NP_Cursor<'cursor> {
                 _ => { // parent is scalar, table or tuple
                     unsafe { &mut *(memory.write_bytes().as_ptr().add(buff_addr) as *mut NP_Pointer_Scalar) }
                 }
-            }
+            }            
         }
+
+        
     }
 
     /// Exports this pointer and all it's descendants into a JSON object.
@@ -500,7 +508,7 @@ impl<'cursor> NP_Cursor<'cursor> {
     /// Calculate the number of bytes used by this pointer and it's descendants.
     /// 
     pub fn calc_size(cursor_addr: NP_Cursor_Addr, memory: &NP_Memory<'cursor>) -> Result<usize, NP_Error> {
-
+    
         if let NP_Cursor_Addr::Real(buff_addr) = cursor_addr {
 
             let cursor = memory.get_parsed(&cursor_addr);

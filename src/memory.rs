@@ -67,7 +67,7 @@ impl<'memory> NP_Memory<'memory> {
             return Err(NP_Error::new("Not enough space available in buffer!"))
         }
 
-        self_parsed.extend((0..(bytes.len() / 2)).map(|_| NP_Cursor::new_virtual()));
+        self_parsed.extend((0..((bytes.len() / 2) + 1)).map(|_| NP_Cursor::new_virtual()));
         self_bytes.extend(bytes);
         Ok(location)
     }

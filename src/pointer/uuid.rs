@@ -12,7 +12,8 @@
 //! }"#)?;
 //!
 //! let mut new_buffer = factory.empty_buffer(None);
-//! new_buffer.set(&[], &NP_UUID::generate(50))?;
+//! let uuid = NP_UUID::generate(50);
+//! new_buffer.set(&[], &uuid)?;
 //! 
 //! assert_eq!("48E6AAB0-7DF5-409F-4D57-4D969FA065EE", new_buffer.get::<&NP_UUID>(&[])?.unwrap().to_string());
 //!
@@ -260,7 +261,7 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     assert_eq!(buffer.get::<&NP_UUID>(&[])?, None);
 
     buffer.compact(None)?;
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 2usize);
 
     Ok(())
 }

@@ -174,7 +174,7 @@ impl NP_Table {
 
             vtables[0] = (table_addr as usize, Some(unsafe { &mut *(memory.write_bytes().as_ptr().add(table_addr as usize) as *mut NP_Vtable) }));
 
-            let mut next_vtable = opt_out(&mut vtables[0].1).get_next();
+            let mut next_vtable = opt_out(&vtables[0].1).get_next();
             let mut index = 1;
             while next_vtable != 0 {
                 vtables[index] = (next_vtable as usize, Some(unsafe { &mut *(memory.write_bytes().as_ptr().add(next_vtable as usize) as *mut NP_Vtable) }));
@@ -293,15 +293,31 @@ impl<'value> NP_Value<'value> for NP_Table {
             return Ok(0) 
         }
 
-        let base_size = 0; // head is stored in pointer as value
-
         let mut acc_size = 0usize;
 
+        // add vtables
+        match &c.data {
+            NP_Cursor_Data::Table { bytes } => {
+                let mut idx = 0usize;
+                while bytes[idx].0 != 0 {
+                    // each VTABLE is 10 bytes
+                    acc_size += 10;
+                    idx += 1;
+                }
+            },
+            _ => unsafe { unreachable_unchecked() }
+        }
+
+        // loop through values in table
         Self::for_each(&cursor, memory, &mut |(_i, item)| {
-            acc_size += NP_Cursor::calc_size(item.clone(), memory).unwrap();
+            let add_size = NP_Cursor::calc_size(item.clone(), memory).unwrap();
+            if add_size > 2 {
+                // scalar cursor is part of vtable
+                acc_size += add_size - 2;             
+            }
         });
    
-        Ok(base_size + acc_size)
+        Ok(acc_size)
     }
 
     fn to_json(cursor: NP_Cursor_Addr, memory: &'value NP_Memory) -> NP_JSON {
@@ -468,7 +484,8 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let mut buffer = factory.empty_buffer(None);
     buffer.set(&["name"], "hello")?;
     assert_eq!(buffer.get::<&str>(&["name"])?, Some("hello"));
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 19usize);
+    assert_eq!(buffer.calc_bytes()?.after_compaction, buffer.calc_bytes()?.current_buffer);
+    assert_eq!(buffer.calc_bytes()?.after_compaction, 19usize);
     buffer.del(&[])?;
     buffer.compact(None)?;
     assert_eq!(buffer.calc_bytes()?.current_buffer, 2usize);
