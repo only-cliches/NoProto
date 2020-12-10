@@ -149,6 +149,8 @@ impl NP_List {
 
         let list_addr = new_cursor.value.get_addr_value();
 
+        let mut list_addrs: [usize; 255] = [0; 255];
+
         if list_addr == 0 { // no list here
             memory.insert_parsed(buff_addr, new_cursor);
         } else { // list exists, parse it
@@ -161,18 +163,16 @@ impl NP_List {
 
                 let mut next_item = head;
 
-                let mut list_addrs: [u16; 255] = [0; 255];
-
                 while next_item != 0 {
-                    let list_item = memory.get_parsed(&NP_Cursor_Addr::Real(next_item as usize));
-                    let item_index = list_item.value.get_index() as usize;
+                    let list_item_data = NP_Cursor::parse_cursor_value(next_item as usize, buff_addr, schema_addr, memory);
+                    let item_index = list_item_data.get_index() as usize;
                     NP_Cursor::parse(next_item as usize, of_schema, buff_addr, schema_addr, &memory, item_index);
-                    list_addrs[item_index] = next_item;
-                    next_item = list_item.value.get_next_addr();
+                    list_addrs[item_index] = next_item as usize;
+                    next_item = list_item_data.get_next_addr();
                 }
             }
 
-            new_cursor.data = NP_Cursor_Data::List { bytes: list_data, list_addrs: [0; 255] };
+            new_cursor.data = NP_Cursor_Data::List { bytes: list_data, list_addrs: list_addrs };
             memory.insert_parsed(buff_addr, new_cursor);
         }
     }
@@ -306,7 +306,7 @@ impl NP_List {
                             old_tail.value.set_next_addr(new_item_addr as u16);
                             bytes.set_tail(new_item_addr as u16);
                         } else { // somehwere in the middle
-                            let mut walking_index = index - 1;
+                            let mut walking_index = index;
                             while list_addrs[walking_index] == 0 {
                                 walking_index -= 1;
                             }
@@ -500,6 +500,22 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     assert_eq!(buffer.get::<&str>(&["12"])?, Some("hello, world2"));
     assert_eq!(buffer.calc_bytes()?.after_compaction, buffer.calc_bytes()?.current_buffer);
     assert_eq!(buffer.calc_bytes()?.current_buffer, 45usize);
+
+    Ok(())
+}
+
+#[test]
+fn parseing_works() -> Result<(), NP_Error> {
+    let schema = "{\"type\":\"list\",\"of\":{\"type\":\"string\"}}";
+    let factory = crate::NP_Factory::new(schema)?;
+
+    // compaction removes values no longer in buffer
+    let mut buffer = factory.empty_buffer(None);
+    buffer.set(&["9"], "hello")?;
+    buffer.set(&["10"], "world")?;
+    let new_buffer = factory.open_buffer(buffer.close())?;
+    assert_eq!(new_buffer.get::<&str>(&["9"])?.unwrap(), "hello");
+    assert_eq!(new_buffer.get::<&str>(&["10"])?.unwrap(), "world");
 
     Ok(())
 }

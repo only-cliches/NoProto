@@ -124,26 +124,51 @@ impl NP_Table {
         match &mut cursor.data {
             NP_Cursor_Data::Table { bytes } => {
 
-                let mut index = 0usize;
+                match &memory.schema[cursor.schema_addr] {
+                    NP_Parsed_Schema::Table { columns, .. } => {
+                        let mut index = 0usize;
+                        let mut col_index = 0usize;
 
-                // find the last virtual table that has been saved in the buffer
-                loop {
-                    if bytes[index].0 == 0 {
-                        index += 1;
-                    } else {
-                        break;
-                    }
+                        // find the last virtual table that has been saved in the buffer
+                        loop {
+                            if bytes[index].0 != 0 {
+                                index += 1;
+                                col_index += 4;
+                            } else {
+                                break;
+                            }
+                        }
+
+                        // extend it
+                        while index <= desired_v_table {
+                            let new_vtable_addr = memory.malloc_borrow(&[0u8; 10])?;
+                            opt_out_mut(&mut bytes[index - 1].1).set_next(new_vtable_addr as u16);
+                            
+                            for x in 0..4 {
+                                if col_index < columns.len() {
+                                    let item_addr = new_vtable_addr + (x * 2);
+                                    memory.insert_parsed(item_addr, NP_Cursor {
+                                        buff_addr: item_addr, 
+                                        schema_addr: columns[col_index].2, 
+                                        data: NP_Cursor_Data::Empty,
+                                        temp_bytes: None,
+                                        value: NP_Cursor::parse_cursor_value(item_addr, cursor.buff_addr, cursor.schema_addr, &memory), 
+                                        parent_addr: cursor.buff_addr,
+                                        index: x
+                                    });
+
+                                    col_index += 1;
+                                }
+                            }
+                           
+                            bytes[index] = (new_vtable_addr, Some(unsafe { &mut *(memory.write_bytes().as_ptr().add(new_vtable_addr) as *mut NP_Vtable) }));
+                            index += 1;
+                        }
+
+                        Ok(bytes)
+                    },
+                    _ => unsafe { unreachable_unchecked() }
                 }
-
-                // extend it
-                while index <= desired_v_table {
-                    let new_vtable_addr = memory.malloc_borrow(&[0u8; 10])?;
-                    opt_out_mut(&mut bytes[index].1).set_next(new_vtable_addr as u16);
-                    index +=1;
-                    bytes[index] = (new_vtable_addr, Some(unsafe { &mut *(memory.write_bytes().as_ptr().add(new_vtable_addr) as *mut NP_Vtable) }))
-                }
-
-                Ok(bytes)
             },
             _ => unsafe { unreachable_unchecked() }
         }
@@ -183,24 +208,25 @@ impl NP_Table {
             }
 
             // parse children
-            match new_cursor.data {
-                NP_Cursor_Data::Table { bytes} => {
-                    let mut column_index = 0usize;
-                    for vtable in &bytes { // each vtable holds 4 columns
-                        if vtable.0 != 0 {
-                            for (i, pointer) in opt_out(&vtable.1).values.iter().enumerate() {
+            let mut column_index = 0usize;
+            for vtable in &vtables { // each vtable holds 4 columns
+                if column_index < columns.len() {
+                    if vtable.0 != 0 {
+                        for (i, pointer) in opt_out(&vtable.1).values.iter().enumerate() {
+                            if column_index < columns.len() {
                                 let item_buff_addr = vtable.0 + (i * 2);
-                                let schema_addr = columns[column_index].2;
-                                NP_Cursor::parse(item_buff_addr, schema_addr, buff_addr, schema_addr, &memory, column_index);
-                                column_index += 1;
+                                let col_schema_addr = columns[column_index].2;
+                                NP_Cursor::parse(item_buff_addr, col_schema_addr, buff_addr, schema_addr, &memory, column_index).unwrap();
                             }
-                        } else {
-                            column_index += 4;
+                            column_index += 1;       
                         }
-                    }
-                },
-                _ => { unsafe { unreachable_unchecked() }}
+                    } else {
+                        column_index += 4;
+                    }                    
+                }
             }
+             
+        
 
             // set table data 
             new_cursor.data = NP_Cursor_Data::Table { bytes: vtables };
@@ -498,6 +524,38 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     buffer.compact(None)?;
     assert_eq!(buffer.get::<&str>(&["name"])?, Some("hello"));
     assert_eq!(buffer.calc_bytes()?.current_buffer, 19usize);
+
+    Ok(())
+}
+
+
+#[test]
+fn test_vtables() -> Result<(), NP_Error> {
+    let factory = crate::NP_Factory::new(r#"{
+        "type": "table",
+        "columns": [
+            ["age",    {"type": "u8"}],
+            ["name",   {"type": "string"}],
+            ["color",  {"type": "string"}],
+            ["car",    {"type": "string"}],
+            ["rating", {"type": "u8"}]
+        ]
+    }"#)?;
+
+    // compaction removes cleared values
+    let mut buffer = factory.empty_buffer(None);
+    buffer.set(&["age"], 20u8)?;
+    buffer.set(&["name"], "hello")?;
+    buffer.set(&["color"], "blue")?;
+    buffer.set(&["car"], "Chevy")?;
+    buffer.set(&["rating"], 98u8)?;
+
+    let new_buffer = factory.open_buffer(buffer.close())?;
+    assert_eq!(new_buffer.get::<u8>(&["age"])?.unwrap(), 20u8);
+    assert_eq!(new_buffer.get::<&str>(&["name"])?.unwrap(), "hello");
+    assert_eq!(new_buffer.get::<&str>(&["color"])?.unwrap(), "blue");
+    assert_eq!(new_buffer.get::<&str>(&["car"])?.unwrap(), "Chevy");
+    assert_eq!(new_buffer.get::<u8>(&["rating"])?.unwrap(), 98u8);
 
     Ok(())
 }

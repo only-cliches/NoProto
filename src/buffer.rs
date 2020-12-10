@@ -947,7 +947,7 @@ impl<'buffer> NP_Buffer<'buffer> {
         let mut path_index = 0usize;
         
         loop {
-            
+
             if path.len() == path_index {
                 return Ok(Some(loop_cursor));
             }

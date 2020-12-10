@@ -47,7 +47,7 @@ impl NoProtoBench {
 
             new_buff.set(&["list", "0", "name"], "bob")?;
 
-            assert_eq!(new_buff.close().len(), 408);
+            assert_eq!(new_buff.close().len(), 283);
         }
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");

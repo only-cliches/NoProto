@@ -368,7 +368,7 @@ impl<'cursor> NP_Cursor<'cursor> {
                     schema_addr: schema_addr, 
                     data: NP_Cursor_Data::Scalar,
                     temp_bytes: None,
-                    value: NP_Cursor::parse_cursor_value(buff_addr, parent_schema_addr, parent_addr, &memory), 
+                    value: NP_Cursor::parse_cursor_value(buff_addr, parent_addr, parent_schema_addr, &memory), 
                     parent_addr: parent_addr,
                     index
                 };
