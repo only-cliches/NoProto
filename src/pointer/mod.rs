@@ -200,16 +200,6 @@ impl NP_Pointer_Bytes for [u8; 8] {
     }
 }
 
-#[derive(Debug)]
-pub enum NP_Cursor_Data<'data> {
-    Empty,
-    Scalar,
-    List { list_addrs: [usize; 255], bytes: &'data mut NP_List_Bytes },
-    Map { value_map: NP_HashMap },
-    Tuple { bytes: [(usize, Option<&'data mut NP_Vtable>); 64] }, // (buffer_addr, VTable )
-    Table { bytes: [(usize, Option<&'data mut NP_Vtable>); 64] }  // (buffer_addr, VTable )
-}
-
 #[repr(C)]
 #[derive(Debug)]
 pub struct NP_List_Bytes {
@@ -273,94 +263,53 @@ impl NP_Vtable {
     }
 }
 
-
-impl<'data> Default for NP_Cursor_Data<'data> {
-    fn default() -> Self {
-        NP_Cursor_Data::Empty
-    }
-}
-
 /// Cursor for pointer value in buffer
 /// 
-pub struct NP_Cursor<'cursor> {
+#[derive(Debug)]
+pub struct NP_Cursor {
     /// The location of this cursor in the buffer
     pub buff_addr: usize,
-    /// Stores information about the data at this pointer
-    pub data: NP_Cursor_Data<'cursor> ,
     /// The address of the schema for this cursor
     pub schema_addr: NP_Schema_Addr,
-    /// Virtual cursor bytes
-    pub temp_bytes: Option<[u8; 8]>,
     /// the values of the buffer pointer
-    pub value: &'cursor mut dyn NP_Pointer_Bytes,
-    /// Information about the parent cursor
-    pub parent_addr: usize,
-    /// index of this cursor in collection
-    pub index: usize
+    pub parent_schema_addr: usize,
 }
 
-impl<'cursor> Debug for NP_Cursor<'cursor> {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter.write_str(format!("Buffer: {:?}\n", self.buff_addr).to_string().as_str())?;
-        formatter.write_str(format!("Data:   {:?}\n", self.data).as_str())?;
-        formatter.write_str(format!("Schema: {:?}\n", self.schema_addr).as_str())?;
-        formatter.write_str(format!("Temp:   {:?}\n", self.temp_bytes).as_str())?;
-        formatter.write_str(format!("Value:  {:?}\n", self.value.get_addr_value()).as_str())?;
-        formatter.write_str(format!("Value Type:  {:?}\n", self.value.get_type()).as_str())?;
-        Ok(())
-    }
-}
+impl NP_Cursor {
 
-
-impl<'cursor> NP_Cursor<'cursor> {
-
-    pub fn new_virtual() -> Self {
+    pub fn new(buff_addr: usize, schema_addr: usize, parent_schema_addr: usize) -> Self {
         let mut bytes = [0u8; 8];
         Self {
-            buff_addr: 0,
-            data: NP_Cursor_Data::Empty,
-            schema_addr: 0,
-            temp_bytes: Some(bytes),
-            value: unsafe { &mut *(&mut bytes as *mut dyn NP_Pointer_Bytes) },
-            parent_addr: 0,
-            index: 0
+            buff_addr,
+            schema_addr,
+            parent_schema_addr
         }
     }
 
-    pub fn reset(&mut self) {
-        self.buff_addr = 0;
-        self.data = NP_Cursor_Data::Empty;
-        self.schema_addr = 0;
-        self.value.reset();
-        self.parent_addr = 0;
-    }
-
-    
     #[inline(always)]
-    pub fn parse_cursor_value<'parse>(buff_addr: usize, parent_addr: usize, parent_schema_addr: usize, memory: &NP_Memory) -> &'parse mut dyn NP_Pointer_Bytes {
-        if buff_addr == 0 {
-            unsafe { &mut *(memory.write_bytes().as_ptr().add(buff_addr) as *mut NP_Pointer_Scalar) }
+    pub fn get_value<'value>(&self, memory: &'value NP_Memory<'value>) -> &'value mut dyn NP_Pointer_Bytes {
+        let ptr = memory.write_bytes().as_mut_ptr();
+        if self.buff_addr == 0 {
+            unsafe { &mut *(ptr.add(self.buff_addr) as *mut NP_Pointer_Scalar) }
         } else {
-            match memory.schema[parent_schema_addr] {
+            match memory.schema[self.parent_schema_addr] {
                 NP_Parsed_Schema::List { .. } => {
-                    unsafe { &mut *(memory.write_bytes().as_ptr().add(buff_addr) as *mut NP_Pointer_List_Item) }
+                    unsafe { &mut *(ptr.add(self.buff_addr) as *mut NP_Pointer_List_Item) }
                 },
                 NP_Parsed_Schema::Map { .. } => {
-                    unsafe { &mut *(memory.write_bytes().as_ptr().add(buff_addr) as *mut NP_Pointer_Map_Item) }
+                    unsafe { &mut *(ptr.add(self.buff_addr) as *mut NP_Pointer_Map_Item) }
                 },
                 _ => { // parent is scalar, table or tuple
-                    unsafe { &mut *(memory.write_bytes().as_ptr().add(buff_addr) as *mut NP_Pointer_Scalar) }
+                    unsafe { &mut *(ptr.add(self.buff_addr) as *mut NP_Pointer_Scalar) }
                 }
             }            
         }
-
-        
     }
 
     /// Exports this pointer and all it's descendants into a JSON object.
     /// This will create a copy of the underlying data and return default values where there isn't data.
     /// 
-    pub fn json_encode(cursor: &NP_Cursor, memory: &'cursor NP_Memory) -> NP_JSON {
+    pub fn json_encode(cursor: &NP_Cursor, memory: &NP_Memory) -> NP_JSON {
 
         match memory.schema[cursor.schema_addr].get_type_key() {
             NP_TypeKeys::None           => { NP_JSON::Null },
@@ -394,7 +343,7 @@ impl<'cursor> NP_Cursor<'cursor> {
 
     /// Compact from old cursor and memory into new cursor and memory
     /// 
-    pub fn compact(from_cursor: NP_Cursor, from_memory: &'cursor NP_Memory, to_cursor: NP_Cursor<'cursor>, to_memory: &'cursor NP_Memory) -> Result<NP_Cursor<'cursor>, NP_Error> {
+    pub fn compact(from_cursor: NP_Cursor, from_memory: &NP_Memory, to_cursor: NP_Cursor, to_memory: &NP_Memory) -> Result<NP_Cursor, NP_Error> {
 
         match from_memory.schema[from_cursor.schema_addr].get_type_key() {
             NP_TypeKeys::Any           => { Ok(to_cursor) }
@@ -427,7 +376,7 @@ impl<'cursor> NP_Cursor<'cursor> {
 
     /// Set default for this value.  Not related to the schema default, this is the default value for this data type
     /// 
-    pub fn set_default(cursor: NP_Cursor, memory: &'cursor NP_Memory<'cursor>) -> Result<(), NP_Error> {
+    pub fn set_default(cursor: NP_Cursor, memory: &NP_Memory) -> Result<(), NP_Error> {
 
         match memory.schema[cursor.schema_addr].get_type_key() {
             NP_TypeKeys::None        => { panic!() },
@@ -462,13 +411,15 @@ impl<'cursor> NP_Cursor<'cursor> {
 
     /// Calculate the number of bytes used by this pointer and it's descendants.
     /// 
-    pub fn calc_size(cursor: &NP_Cursor, memory: &NP_Memory<'cursor>) -> Result<usize, NP_Error> {
+    pub fn calc_size(cursor: &NP_Cursor, memory: &NP_Memory) -> Result<usize, NP_Error> {
+        
+        let value = cursor.get_value(&memory);
     
         // size of pointer
-        let base_size = cursor.value.get_size();
+        let base_size = value.get_size();
 
         // pointer is in buffer but has no value set
-        if cursor.value.get_addr_value() == 0 { // no value, just base size
+        if value.get_addr_value() == 0 { // no value, just base size
             return Ok(base_size);
         }
 
@@ -540,7 +491,7 @@ pub trait NP_Value<'value> {
 
     /// Set the value of this scalar into the buffer
     /// 
-    fn set_value<'set>(_cursor: NP_Cursor, _memory: &'set NP_Memory, _value: Self) -> Result<NP_Cursor<'set>, NP_Error> where Self: 'set + Sized {
+    fn set_value<'set>(_cursor: NP_Cursor, _memory: &'set NP_Memory, _value: Self) -> Result<NP_Cursor, NP_Error> where Self: 'set + Sized {
         let message = "This type doesn't support set_value!".to_owned();
         Err(NP_Error::new(message.as_str()))
     }
@@ -562,7 +513,7 @@ pub trait NP_Value<'value> {
     
     /// Handle copying from old pointer/buffer to new pointer/buffer (recursive for collections)
     /// 
-    fn do_compact(from_cursor: NP_Cursor, from_memory: &'value NP_Memory, to_cursor: NP_Cursor<'value>, to_memory: &'value NP_Memory) -> Result<NP_Cursor<'value>, NP_Error> where Self: 'value + Sized {
+    fn do_compact(from_cursor: NP_Cursor, from_memory: &'value NP_Memory, to_cursor: NP_Cursor, to_memory: &'value NP_Memory) -> Result<NP_Cursor, NP_Error> where Self: 'value + Sized {
 
         match Self::into_value(&from_cursor, from_memory)? {
             Some(x) => {

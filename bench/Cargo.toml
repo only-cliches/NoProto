@@ -10,7 +10,8 @@ edition = "2018"
 flatbuffers = "0.7.0"
 flate2 = "1.0.19"
 json = "0.12.4"
-no_proto = { path = "../" }
+messagepack-rs = "0.8.0"
+# no_proto = { path = "../" }
 protobuf = "2.18.1"
 # no_proto = "0.4.2"
 rand = "0.7.3"
