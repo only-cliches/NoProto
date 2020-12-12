@@ -5,7 +5,7 @@ use crate::run_bench_protocol_buffers::ProtocolBufferBench;
 // use crate::run_bench_no_proto::NoProtoBench;
 use crate::run_bench_flatbuffers::FlatBufferBench;
 
-pub const LOOPS: usize = 1_000;
+pub const LOOPS: usize = 1_000_000;
 
 mod bench_fb;
 mod bench_pb;

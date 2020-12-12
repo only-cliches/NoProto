@@ -146,60 +146,6 @@ impl NP_Pointer_Bytes for NP_Pointer_Map_Item {
     }
 }
 
-impl NP_Pointer_Bytes for [u8; 8] {
-    fn get_type(&self) -> &str { "Bytes" }
-    #[inline(always)]
-    fn get_addr_value(&self) -> u16 { u16::from_be_bytes(unsafe { *(&self[0..2] as *const [u8] as *const [u8; 2]) }) }
-    #[inline(always)]
-    fn set_addr_value(&mut self, addr: u16) {
-        let b = addr.to_be_bytes();
-        self[0] = b[0];
-        self[1] = b[1];
-    }
-    #[inline(always)]
-    fn get_next_addr(&self) -> u16 { u16::from_be_bytes(unsafe { *(&self[2..4] as *const [u8] as *const [u8; 2]) }) }
-    #[inline(always)]
-    fn set_next_addr(&mut self, addr: u16) { 
-        let b = addr.to_be_bytes();
-        self[2] = b[0];
-        self[3] = b[1];
-    }
-    #[inline(always)]
-    fn set_index(&mut self, index: u8)  { self[4] = index }
-    #[inline(always)]
-    fn get_index(&self) -> u8  { self[4] }
-    #[inline(always)]
-    fn set_key_addr(&mut self, key_addr: u16)  { 
-        let b = key_addr.to_be_bytes();
-        self[4] = b[0];
-        self[5] = b[1];
-    }
-    #[inline(always)]
-    fn get_key_addr(&self) -> u16 { u16::from_be_bytes(unsafe { *(&self[4..6] as *const [u8] as *const [u8; 2]) }) }
-    #[inline(always)]
-    fn reset(&mut self) { 
-        self[0] = 0;
-        self[1] = 0;
-        self[2] = 0;
-        self[3] = 0;
-        self[4] = 0;
-        self[5] = 0;
-        self[6] = 0;
-        self[7] = 0;
-    }
-    #[inline(always)]
-    fn get_key<'key>(&self, memory: &'key NP_Memory) -> &'key str {
-        let key_addr = self.get_key_addr() as usize;
-        if key_addr == 0 {
-            return "";
-        } else {
-            let key_length = memory.read_bytes()[key_addr] as usize;
-            let key_bytes = &memory.read_bytes()[(key_addr + 1)..(key_addr + 1 + key_length)];
-            unsafe { core::str::from_utf8_unchecked(key_bytes) }
-        }
-    }
-}
-
 #[repr(C)]
 #[derive(Debug)]
 pub struct NP_List_Bytes {
@@ -237,19 +183,6 @@ pub struct NP_Vtable {
 
 impl NP_Vtable {
 
-    pub fn new_empty<'empty>() -> [(usize, Option<&'empty mut NP_Vtable>); 64] {
-        [
-            (0, None), (0, None), (0, None), (0, None), (0, None), (0, None), (0, None), (0, None),
-            (0, None), (0, None), (0, None), (0, None), (0, None), (0, None), (0, None), (0, None),
-            (0, None), (0, None), (0, None), (0, None), (0, None), (0, None), (0, None), (0, None),
-            (0, None), (0, None), (0, None), (0, None), (0, None), (0, None), (0, None), (0, None),
-            (0, None), (0, None), (0, None), (0, None), (0, None), (0, None), (0, None), (0, None),
-            (0, None), (0, None), (0, None), (0, None), (0, None), (0, None), (0, None), (0, None),
-            (0, None), (0, None), (0, None), (0, None), (0, None), (0, None), (0, None), (0, None),
-            (0, None), (0, None), (0, None), (0, None), (0, None), (0, None), (0, None), (0, None)
-        ]
-    }
-
     #[inline(always)]
     pub fn get_next(&self) -> u16 {
         u16::from_be_bytes(unsafe { *(&self.next as *const [u8] as *const [u8; 2]) }) 
@@ -265,7 +198,7 @@ impl NP_Vtable {
 
 /// Cursor for pointer value in buffer
 /// 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct NP_Cursor {
     /// The location of this cursor in the buffer
     pub buff_addr: usize,

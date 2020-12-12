@@ -1,5 +1,5 @@
 use crate::pointer::NP_Scalar;
-use crate::{pointer::{NP_Cursor_Addr, NP_Cursor_Data, NP_List_Bytes}, schema::NP_Schema_Addr};
+use crate::{pointer::{NP_List_Bytes}, schema::NP_Schema_Addr};
 use crate::{error::NP_Error, json_flex::{JSMAP, NP_JSON}, memory::{NP_Memory}, pointer::{NP_Value}, pointer::{NP_Cursor}, schema::NP_Parsed_Schema, schema::{NP_Schema, NP_TypeKeys}};
 
 use alloc::borrow::ToOwned;
@@ -13,7 +13,9 @@ use alloc::string::ToString;
 #[doc(hidden)]
 #[derive(Debug)]
 pub struct NP_List {
-    cursor: NP_Cursor_Addr,
+    cursor: NP_Cursor,
+    cursor_index: usize,
+    prev_cursor: Option<NP_Cursor>,
     index: usize,
     only_real: bool,
     tail_index: usize,
@@ -22,6 +24,11 @@ pub struct NP_List {
 
 
 impl NP_List {
+
+    #[inline(always)]
+    pub fn select(list_cursor: NP_Cursor, index: usize) -> Result<(usize, Option<NP_Cursor>), NP_Error> {
+        panic!()
+    }
 
     pub fn make_list<'make>(list_cursor_addr: &NP_Cursor_Addr, memory: &'make NP_Memory) -> Result<(), NP_Error> {
 
@@ -35,10 +42,11 @@ impl NP_List {
         Ok(())
     }
 
-    pub fn new_iter(cursor_addr: &NP_Cursor_Addr, memory: &NP_Memory, only_real: bool) -> Self {
-        let list_cursor = memory.get_parsed(cursor_addr);
+    pub fn new_iter(list_cursor: &NP_Cursor, memory: &NP_Memory, only_real: bool) -> Self {
 
-        let list_addr = list_cursor.value.get_addr_value();
+        let value = list_cursor.get_value(memory);
+
+        let list_addr = value.get_addr_value() as usize;
 
         let schema_of = match memory.schema[list_cursor.schema_addr] {
             NP_Parsed_Schema::List { of, .. } => of,
@@ -48,38 +56,40 @@ impl NP_List {
         let index = 0usize;
         let mut tail_index = 0usize;
 
-        match &list_cursor.data {
-            NP_Cursor_Data::List { bytes, .. } => {
+        if list_addr > 0 {
 
-                let tail_addr = bytes.get_tail();
+            let bytes = unsafe { &mut *(memory.write_bytes().as_ptr().add(list_addr) as *const NP_List_Bytes) };
 
-                if tail_addr != 0 { 
+            let tail_addr = bytes.get_tail() as usize;
+
+            if tail_addr != 0 { 
+            
+                let tail_cursor = NP_Cursor::new(tail_addr, schema_of, list_cursor.schema_addr);
+                let head_cursor = NP_Cursor::new(bytes.get_head() as usize, schema_of, list_cursor.schema_addr);
+
+                tail_index = tail_cursor.get_value(memory).get_index() as usize;
                 
-                    let tail_cursor = memory.get_parsed(&NP_Cursor_Addr::Real(tail_addr as usize));
-
-                    tail_index = tail_cursor.value.get_index() as usize;
-                    
-                    return Self {
-                        tail_index: tail_index as usize,
-                        cursor: cursor_addr.clone(),
-                        only_real,
-                        index: if only_real {
-                            let head_addr = bytes.get_head();
-                            let head_curosr = memory.get_parsed(&NP_Cursor_Addr::Real(head_addr as usize));
-                            head_curosr.value.get_index() as usize
-                        } else {
-                            0
-                        },
-                        schema_of
-                    }
+                return Self {
+                    prev_cursor: None,
+                    tail_index: tail_index as usize,
+                    cursor: head_cursor.clone(),
+                    cursor_index: head_cursor.get_value(memory).get_index() as usize,
+                    only_real,
+                    index: if only_real {
+                        head_cursor.get_value(memory).get_index() as usize
+                    } else {
+                        0
+                    },
+                    schema_of
                 }
-            },
-            _ => unsafe { unreachable_unchecked() }
+            }           
         }
 
         Self {
+            prev_cursor: None,
             tail_index: 0,
-            cursor: cursor_addr.clone(),
+            cursor: list_cursor.clone(),
+            cursor_index: 0,
             only_real,
             index: 0,
             schema_of

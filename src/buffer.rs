@@ -3,7 +3,7 @@
 use crate::collection::tuple::NP_Tuple;
 use core::hint::unreachable_unchecked;
 
-use crate::{hashmap::{SEED, murmurhash3_x86_32}, pointer::{NP_Cursor_Data, NP_Scalar}};
+use crate::{hashmap::{SEED, murmurhash3_x86_32}, pointer::{NP_Scalar}};
 use crate::{collection::map::NP_Map, utils::print_path};
 use crate::{schema::NP_TypeKeys, pointer::NP_Value};
 use crate::pointer::NP_Cursor;
@@ -29,7 +29,7 @@ pub const LIST_MAX_SIZE: usize = core::u16::MAX as usize;
 pub struct NP_Buffer<'buffer> {
     /// Schema data used by this buffer
     memory: NP_Memory<'buffer>,
-    cursor: NP_Cursor<'buffer>
+    cursor: NP_Cursor
 }
 
 /// When calling `maybe_compact` on a buffer, this struct is provided to help make a choice on wether to compact or not.
@@ -51,7 +51,7 @@ impl<'buffer> NP_Buffer<'buffer> {
         // Parse buffer
 
         Ok(NP_Buffer {
-            cursor: NP_Cursor_Addr::Real(ROOT_PTR_ADDR),
+            cursor: NP_Cursor::new(0, 0, 0),
             memory: memory
         })
     }
@@ -84,10 +84,10 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// 
     pub fn json_encode(&self, path: &[&str]) -> Result<NP_JSON, NP_Error> {
 
-        let value_cursor = self.select(self.cursor_addr.clone(), false, path)?;
+        let value_cursor = self.select(self.cursor.clone(), false, path)?;
 
         if let Some(x) = value_cursor {
-            Ok(NP_Cursor::json_encode(x, &self.memory))
+            Ok(NP_Cursor::json_encode(&x, &self.memory))
         } else {
             Ok(NP_JSON::Null)
         }
@@ -129,7 +129,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// 
     pub fn move_cursor(&mut self, path: &[&str]) -> Result<bool, NP_Error> {
 
-        let value_cursor = self.select(self.cursor_addr.clone(), true, path)?;
+        let value_cursor = self.select(self.cursor.clone(), true, path)?;
 
         let cursor = if let Some(x) = value_cursor {
             x
@@ -137,7 +137,7 @@ impl<'buffer> NP_Buffer<'buffer> {
             return Ok(false);
         };
 
-        self.cursor_addr = cursor;
+        self.cursor = cursor;
 
         Ok(true)
     }
@@ -145,7 +145,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// Reset cursor position to root of buffer
     /// 
     pub fn cursor_to_root(&mut self) {
-        self.cursor_addr = NP_Cursor_Addr::Real(ROOT_PTR_ADDR);
+        self.cursor = NP_Cursor::new(0, 0, 0);
     }
 
     /// Used to set scalar values inside the buffer, the path only works with dot notation.
@@ -179,7 +179,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// ```
     /// 
     pub fn set<X: 'buffer>(&mut self, path: &[&str], value: X) -> Result<bool, NP_Error> where X: NP_Value<'buffer> + NP_Scalar {
-        let value_cursor = self.select(self.cursor_addr.clone(), true, path)?;
+        let value_cursor = self.select(self.cursor.clone(), true, path)?;
         match value_cursor {
             Some(x) => {
                 X::set_value(x, &self.memory, value)?;
@@ -440,16 +440,10 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// 
     pub fn list_push<X>(&mut self, path: &[&str], value: X) -> Result<Option<u16>, NP_Error> where X: NP_Value<'buffer> + NP_Scalar {
 
-        let list_cursor_addr = if path.len() == 0 { self.cursor_addr.clone() } else { match self.select(self.cursor_addr.clone(), true, path)? {
+        let list_cursor = if path.len() == 0 { self.cursor.clone() } else { match self.select(self.cursor.clone(), true, path)? {
             Some(x) => x,
             None => return Ok(None)
         }};
-
-        if list_cursor_addr == NP_Cursor_Addr::Virtual {
-            return Err(NP_Error::new("Can't push onto virtual list!"));
-        }
-
-        let list_cursor = self.memory.get_parsed(&list_cursor_addr);
 
         match self.memory.schema[list_cursor.schema_addr] {
             NP_Parsed_Schema::List { of, .. } => {
@@ -507,7 +501,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// ```
     /// 
     pub fn get_type(&self, path: &[&str]) -> Result<Option<&'buffer NP_TypeKeys>, NP_Error> {
-        let value_cursor = self.select(self.cursor_addr.clone(), false, path)?;
+        let value_cursor = self.select(self.cursor.clone(), false, path)?;
 
         let found_cursor = if let Some(x) = value_cursor {
             x
@@ -515,7 +509,7 @@ impl<'buffer> NP_Buffer<'buffer> {
             return Ok(None)
         };
 
-        Ok(Some(self.memory.get_schema(&found_cursor).get_type_key()))
+        Ok(Some(self.memory.schema[found_cursor.schema_addr].get_type_key()))
     }
 /*
     /// Get length of String, Bytes, Table, Tuple, List or Map Type
@@ -702,11 +696,11 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// 
     pub fn del(&mut self, path: &[&str]) -> Result<bool, NP_Error> {
 
-        let value_cursor = self.select(self.cursor_addr.clone(), false, path)?;
+        let value_cursor = self.select(self.cursor.clone(), false, path)?;
         match value_cursor {
             Some(x) => {
                 // clear value address in buffer
-                self.memory.get_parsed(&x).value.set_addr_value(0);
+                self.cursor.get_value(&self.memory).set_addr_value(0);
                 Ok(true)
             }
             None => Ok(false)
@@ -744,16 +738,16 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// ```
     /// 
     pub fn get<'get, X: 'get>(&'get self, path: &[&str]) -> Result<Option<X>, NP_Error> where X: NP_Value<'get> + NP_Scalar {
-        let value_cursor = self.select(self.cursor_addr.clone(), false, path)?;
+        let value_cursor = self.select(self.cursor.clone(), false, path)?;
 
         match value_cursor {
             Some(x) => {
-                match X::into_value(x.clone(), &self.memory)? {
+                match X::into_value(&x, &self.memory)? {
                     Some(x) => {
                         Ok(Some(x))
                     },
                     None => {
-                        match X::schema_default(&self.memory.get_schema(&x)) {
+                        match X::schema_default(&self.memory.schema[x.schema_addr]) {
                             Some(y) => {
                                 Ok(Some(y))
                             },
@@ -884,15 +878,14 @@ impl<'buffer> NP_Buffer<'buffer> {
             None => self.memory.read_bytes().len()
         };
 
-        let old_root = NP_Cursor_Addr::Real(ROOT_PTR_ADDR);
+        let old_root = NP_Cursor::new(0, 0, 0);
 
         let new_bytes = NP_Memory::new(Some(capacity), self.memory.schema);
-        let new_root  = NP_Cursor_Addr::Real(ROOT_PTR_ADDR);
-        NP_Cursor::parse(0, 0, 0, 0, &new_bytes, 0)?;
+        let new_root  = NP_Cursor::new(0, 0, 0);
 
-        NP_Cursor::compact(&old_root, &self.memory, new_root, &new_bytes)?;
+        NP_Cursor::compact(old_root, &self.memory, new_root, &new_bytes)?;
 
-        self.cursor_addr = NP_Cursor_Addr::Real(ROOT_PTR_ADDR);
+        self.cursor = NP_Cursor::new(0, 0, 0);
 
         self.memory = new_bytes;
 
@@ -924,8 +917,8 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// 
     pub fn calc_bytes<'bytes>(&self) -> Result<NP_Size_Data, NP_Error> {
 
-        let root = NP_Cursor_Addr::Real(ROOT_PTR_ADDR);
-        let real_bytes = NP_Cursor::calc_size(root, &self.memory)?;
+        let root = NP_Cursor::new(0, 0, 0);
+        let real_bytes = NP_Cursor::calc_size(&root, &self.memory)?;
         let total_size = self.memory.read_bytes().len();
         if total_size >= real_bytes {
             return Ok(NP_Size_Data {
@@ -940,7 +933,7 @@ impl<'buffer> NP_Buffer<'buffer> {
 
     fn select(&self, cursor: NP_Cursor, create_path: bool, path: &[&str]) -> Result<Option<NP_Cursor>, NP_Error> {
 
-        let mut loop_cursor = cursor.clone();
+        let mut loop_cursor = cursor;
 
         let mut path_index = 0usize;
         
@@ -949,8 +942,6 @@ impl<'buffer> NP_Buffer<'buffer> {
             if path.len() == path_index {
                 return Ok(Some(loop_cursor));
             }
-
-            let cursor = self.memory.get_parsed(&loop_cursor);
 
             // now select into collections
 
