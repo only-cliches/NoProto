@@ -311,12 +311,6 @@ impl<'cursor> Debug for NP_Cursor<'cursor> {
     }
 }
 
-/// Represents a cursor address in the memory
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub enum NP_Cursor_Addr {
-    Virtual,
-    Real(usize)
-}
 
 impl<'cursor> NP_Cursor<'cursor> {
 
@@ -339,45 +333,6 @@ impl<'cursor> NP_Cursor<'cursor> {
         self.schema_addr = 0;
         self.value.reset();
         self.parent_addr = 0;
-    }
-
-
-    pub fn parse<'parse>(buff_addr: usize, schema_addr: NP_Schema_Addr, parent_addr: usize, parent_schema_addr: usize, memory: &NP_Memory, index: usize) -> Result<(), NP_Error> {
-
-        if buff_addr > memory.read_bytes().len() {
-            panic!()
-        }
-
-        match &memory.schema[schema_addr] {
-            NP_Parsed_Schema::Table { columns, .. } => {
-                NP_Table::parse(buff_addr, schema_addr, parent_addr, parent_schema_addr, &memory, &columns, index);
-            },
-            NP_Parsed_Schema::List  { of, .. } => {
-                NP_List::parse(buff_addr, schema_addr, parent_addr, parent_schema_addr, &memory, *of, index);
-            },
-            NP_Parsed_Schema::Tuple { values, .. } => {
-                NP_Tuple::parse(buff_addr, schema_addr, parent_addr, parent_schema_addr, &memory, &values, index);
-            },
-            NP_Parsed_Schema::Map   { value, .. } => {
-                NP_Map::parse(buff_addr, schema_addr, parent_addr, parent_schema_addr, &memory, *value, index);
-            },
-            _ => { // scalar items
-                
-                let new_cursor = NP_Cursor { 
-                    buff_addr: buff_addr, 
-                    schema_addr: schema_addr, 
-                    data: NP_Cursor_Data::Scalar,
-                    temp_bytes: None,
-                    value: NP_Cursor::parse_cursor_value(buff_addr, parent_addr, parent_schema_addr, &memory), 
-                    parent_addr: parent_addr,
-                    index
-                };
-
-                memory.insert_parsed(buff_addr, new_cursor);
-            }
-        }
-
-        Ok(())
     }
 
     
@@ -405,9 +360,9 @@ impl<'cursor> NP_Cursor<'cursor> {
     /// Exports this pointer and all it's descendants into a JSON object.
     /// This will create a copy of the underlying data and return default values where there isn't data.
     /// 
-    pub fn json_encode(cursor: NP_Cursor_Addr, memory: &'cursor NP_Memory) -> NP_JSON {
+    pub fn json_encode(cursor: &NP_Cursor, memory: &'cursor NP_Memory) -> NP_JSON {
 
-        match memory.schema[memory.get_parsed(&cursor).schema_addr].get_type_key() {
+        match memory.schema[cursor.schema_addr].get_type_key() {
             NP_TypeKeys::None           => { NP_JSON::Null },
             NP_TypeKeys::Any            => { NP_JSON::Null },
             NP_TypeKeys::UTF8String     => { NP_String::to_json(cursor, memory) },
@@ -439,9 +394,9 @@ impl<'cursor> NP_Cursor<'cursor> {
 
     /// Compact from old cursor and memory into new cursor and memory
     /// 
-    pub fn compact(from_cursor: &NP_Cursor_Addr, from_memory: &NP_Memory, to_cursor: NP_Cursor_Addr, to_memory: &NP_Memory) -> Result<NP_Cursor_Addr, NP_Error> {
+    pub fn compact(from_cursor: NP_Cursor, from_memory: &'cursor NP_Memory, to_cursor: NP_Cursor<'cursor>, to_memory: &'cursor NP_Memory) -> Result<NP_Cursor<'cursor>, NP_Error> {
 
-        match from_memory.schema[from_memory.get_parsed(&from_cursor).schema_addr].get_type_key() {
+        match from_memory.schema[from_cursor.schema_addr].get_type_key() {
             NP_TypeKeys::Any           => { Ok(to_cursor) }
             NP_TypeKeys::UTF8String    => { NP_String::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
             NP_TypeKeys::Bytes         => {  NP_Bytes::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
@@ -472,9 +427,9 @@ impl<'cursor> NP_Cursor<'cursor> {
 
     /// Set default for this value.  Not related to the schema default, this is the default value for this data type
     /// 
-    pub fn set_default(cursor: NP_Cursor_Addr, memory: &'cursor NP_Memory<'cursor>) -> Result<(), NP_Error> {
+    pub fn set_default(cursor: NP_Cursor, memory: &'cursor NP_Memory<'cursor>) -> Result<(), NP_Error> {
 
-        match memory.schema[memory.get_parsed(&cursor).schema_addr].get_type_key() {
+        match memory.schema[cursor.schema_addr].get_type_key() {
             NP_TypeKeys::None        => { panic!() },
             NP_TypeKeys::Any         => { panic!() },
             NP_TypeKeys::Table       => { panic!() },
@@ -507,55 +462,46 @@ impl<'cursor> NP_Cursor<'cursor> {
 
     /// Calculate the number of bytes used by this pointer and it's descendants.
     /// 
-    pub fn calc_size(cursor_addr: NP_Cursor_Addr, memory: &NP_Memory<'cursor>) -> Result<usize, NP_Error> {
+    pub fn calc_size(cursor: &NP_Cursor, memory: &NP_Memory<'cursor>) -> Result<usize, NP_Error> {
     
-        if let NP_Cursor_Addr::Real(buff_addr) = cursor_addr {
+        // size of pointer
+        let base_size = cursor.value.get_size();
 
-            let cursor = memory.get_parsed(&cursor_addr);
-
-            // size of pointer
-            let base_size = cursor.value.get_size();
-
-            // pointer is in buffer but has no value set
-            if cursor.value.get_addr_value() == 0 { // no value, just base size
-                return Ok(base_size);
-            }
-
-            // get the size of the value based on schema
-            let type_size = match memory.schema[cursor.schema_addr].get_type_key() {
-                NP_TypeKeys::None         => { Ok(0) },
-                NP_TypeKeys::Any          => { Ok(0) },
-                NP_TypeKeys::UTF8String   => { NP_String::get_size(cursor_addr, memory) },
-                NP_TypeKeys::Bytes        => {  NP_Bytes::get_size(cursor_addr, memory) },
-                NP_TypeKeys::Int8         => {        i8::get_size(cursor_addr, memory) },
-                NP_TypeKeys::Int16        => {       i16::get_size(cursor_addr, memory) },
-                NP_TypeKeys::Int32        => {       i32::get_size(cursor_addr, memory) },
-                NP_TypeKeys::Int64        => {       i64::get_size(cursor_addr, memory) },
-                NP_TypeKeys::Uint8        => {        u8::get_size(cursor_addr, memory) },
-                NP_TypeKeys::Uint16       => {       u16::get_size(cursor_addr, memory) },
-                NP_TypeKeys::Uint32       => {       u32::get_size(cursor_addr, memory) },
-                NP_TypeKeys::Uint64       => {       u64::get_size(cursor_addr, memory) },
-                NP_TypeKeys::Float        => {       f32::get_size(cursor_addr, memory) },
-                NP_TypeKeys::Double       => {       f64::get_size(cursor_addr, memory) },
-                NP_TypeKeys::Decimal      => {    NP_Dec::get_size(cursor_addr, memory) },
-                NP_TypeKeys::Boolean      => {      bool::get_size(cursor_addr, memory) },
-                NP_TypeKeys::Geo          => {    NP_Geo::get_size(cursor_addr, memory) },
-                NP_TypeKeys::Uuid         => {  _NP_UUID::get_size(cursor_addr, memory) },
-                NP_TypeKeys::Ulid         => {  _NP_ULID::get_size(cursor_addr, memory) },
-                NP_TypeKeys::Date         => {   NP_Date::get_size(cursor_addr, memory) },
-                NP_TypeKeys::Enum         => {   NP_Enum::get_size(cursor_addr, memory) },
-                NP_TypeKeys::Table        => {  NP_Table::get_size(cursor_addr, memory) },
-                NP_TypeKeys::Map          => {    NP_Map::get_size(cursor_addr, memory) },
-                NP_TypeKeys::List         => {   NP_List::get_size(cursor_addr, memory) },
-                NP_TypeKeys::Tuple        => {  NP_Tuple::get_size(cursor_addr, memory) }
-            }?;
-
-            Ok(type_size + base_size)
-        } else {
-            Ok(0)
+        // pointer is in buffer but has no value set
+        if cursor.value.get_addr_value() == 0 { // no value, just base size
+            return Ok(base_size);
         }
 
+        // get the size of the value based on schema
+        let type_size = match memory.schema[cursor.schema_addr].get_type_key() {
+            NP_TypeKeys::None         => { Ok(0) },
+            NP_TypeKeys::Any          => { Ok(0) },
+            NP_TypeKeys::UTF8String   => { NP_String::get_size(cursor, memory) },
+            NP_TypeKeys::Bytes        => {  NP_Bytes::get_size(cursor, memory) },
+            NP_TypeKeys::Int8         => {        i8::get_size(cursor, memory) },
+            NP_TypeKeys::Int16        => {       i16::get_size(cursor, memory) },
+            NP_TypeKeys::Int32        => {       i32::get_size(cursor, memory) },
+            NP_TypeKeys::Int64        => {       i64::get_size(cursor, memory) },
+            NP_TypeKeys::Uint8        => {        u8::get_size(cursor, memory) },
+            NP_TypeKeys::Uint16       => {       u16::get_size(cursor, memory) },
+            NP_TypeKeys::Uint32       => {       u32::get_size(cursor, memory) },
+            NP_TypeKeys::Uint64       => {       u64::get_size(cursor, memory) },
+            NP_TypeKeys::Float        => {       f32::get_size(cursor, memory) },
+            NP_TypeKeys::Double       => {       f64::get_size(cursor, memory) },
+            NP_TypeKeys::Decimal      => {    NP_Dec::get_size(cursor, memory) },
+            NP_TypeKeys::Boolean      => {      bool::get_size(cursor, memory) },
+            NP_TypeKeys::Geo          => {    NP_Geo::get_size(cursor, memory) },
+            NP_TypeKeys::Uuid         => {  _NP_UUID::get_size(cursor, memory) },
+            NP_TypeKeys::Ulid         => {  _NP_ULID::get_size(cursor, memory) },
+            NP_TypeKeys::Date         => {   NP_Date::get_size(cursor, memory) },
+            NP_TypeKeys::Enum         => {   NP_Enum::get_size(cursor, memory) },
+            NP_TypeKeys::Table        => {  NP_Table::get_size(cursor, memory) },
+            NP_TypeKeys::Map          => {    NP_Map::get_size(cursor, memory) },
+            NP_TypeKeys::List         => {   NP_List::get_size(cursor, memory) },
+            NP_TypeKeys::Tuple        => {  NP_Tuple::get_size(cursor, memory) }
+        }?;
 
+        Ok(type_size + base_size)
     }
 }
 
@@ -594,31 +540,31 @@ pub trait NP_Value<'value> {
 
     /// Set the value of this scalar into the buffer
     /// 
-    fn set_value<'set>(_cursor: NP_Cursor_Addr, _memory: &'set NP_Memory, _value: Self) -> Result<NP_Cursor_Addr, NP_Error> where Self: 'set + Sized {
+    fn set_value<'set>(_cursor: NP_Cursor, _memory: &'set NP_Memory, _value: Self) -> Result<NP_Cursor<'set>, NP_Error> where Self: 'set + Sized {
         let message = "This type doesn't support set_value!".to_owned();
         Err(NP_Error::new(message.as_str()))
     }
 
     /// Pull the data from the buffer and convert into type
     /// 
-    fn into_value(_cursor: NP_Cursor_Addr, _memory: &'value NP_Memory) -> Result<Option<Self>, NP_Error> where Self: Sized {
+    fn into_value(_cursor: &NP_Cursor, _memory: &'value NP_Memory) -> Result<Option<Self>, NP_Error> where Self: Sized {
         let message = "This type doesn't support into!".to_owned();
         Err(NP_Error::new(message.as_str()))
     }
 
     /// Convert this type into a JSON value (recursive for collections)
     /// 
-    fn to_json(_cursor: NP_Cursor_Addr, _memory: &'value NP_Memory) -> NP_JSON;
+    fn to_json(_cursor: &NP_Cursor, _memory: &'value NP_Memory) -> NP_JSON;
 
     /// Calculate the size of this pointer and it's children (recursive for collections)
     /// 
-    fn get_size(_cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>) -> Result<usize, NP_Error>;
+    fn get_size(_cursor: &NP_Cursor, memory: &NP_Memory<'value>) -> Result<usize, NP_Error>;
     
     /// Handle copying from old pointer/buffer to new pointer/buffer (recursive for collections)
     /// 
-    fn do_compact(from_cursor: &NP_Cursor_Addr, from_memory: &'value NP_Memory, to_cursor: NP_Cursor_Addr, to_memory: &NP_Memory) -> Result<NP_Cursor_Addr, NP_Error> where Self: Sized {
+    fn do_compact(from_cursor: NP_Cursor, from_memory: &'value NP_Memory, to_cursor: NP_Cursor<'value>, to_memory: &'value NP_Memory) -> Result<NP_Cursor<'value>, NP_Error> where Self: 'value + Sized {
 
-        match Self::into_value(from_cursor.clone(), from_memory)? {
+        match Self::into_value(&from_cursor, from_memory)? {
             Some(x) => {
                 return Self::set_value(to_cursor, to_memory, x);
             },

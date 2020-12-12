@@ -1,10 +1,9 @@
 //! Top level abstraction for buffer objects
 
 use crate::collection::tuple::NP_Tuple;
-use crate::pointer::NP_Vtable;
 use core::hint::unreachable_unchecked;
 
-use crate::{hashmap::{SEED, murmurhash3_x86_32}, pointer::{NP_Cursor_Addr, NP_Cursor_Data, NP_Scalar}};
+use crate::{hashmap::{SEED, murmurhash3_x86_32}, pointer::{NP_Cursor_Data, NP_Scalar}};
 use crate::{collection::map::NP_Map, utils::print_path};
 use crate::{schema::NP_TypeKeys, pointer::NP_Value};
 use crate::pointer::NP_Cursor;
@@ -30,7 +29,7 @@ pub const LIST_MAX_SIZE: usize = core::u16::MAX as usize;
 pub struct NP_Buffer<'buffer> {
     /// Schema data used by this buffer
     memory: NP_Memory<'buffer>,
-    cursor_addr: NP_Cursor_Addr
+    cursor: NP_Cursor<'buffer>
 }
 
 /// When calling `maybe_compact` on a buffer, this struct is provided to help make a choice on wether to compact or not.
@@ -50,10 +49,9 @@ impl<'buffer> NP_Buffer<'buffer> {
     pub fn _new(memory: NP_Memory<'buffer>) -> Result<Self, NP_Error> { // make new buffer
 
         // Parse buffer
-        NP_Cursor::parse(ROOT_PTR_ADDR, 0, 0, 0, &memory, 0)?;
 
         Ok(NP_Buffer {
-            cursor_addr: NP_Cursor_Addr::Real(ROOT_PTR_ADDR),
+            cursor: NP_Cursor_Addr::Real(ROOT_PTR_ADDR),
             memory: memory
         })
     }
@@ -940,7 +938,7 @@ impl<'buffer> NP_Buffer<'buffer> {
         }
     }
 
-    fn select(&self, cursor: NP_Cursor_Addr, create_path: bool, path: &[&str]) -> Result<Option<NP_Cursor_Addr>, NP_Error> {
+    fn select(&self, cursor: NP_Cursor, create_path: bool, path: &[&str]) -> Result<Option<NP_Cursor>, NP_Error> {
 
         let mut loop_cursor = cursor.clone();
 
