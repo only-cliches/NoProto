@@ -9,7 +9,7 @@ use core::{hint::unreachable_unchecked};
 use alloc::string::ToString;
 
 #[doc(hidden)]
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 struct List_Item {
     index: usize,
     buff_addr: usize
@@ -118,6 +118,7 @@ impl NP_List {
                                         let next_cursor = NP_Cursor::new(next_addr, self.schema_of, self.list_schema);
                                         let next_index = next_cursor.get_value(memory).get_index();
                                         self.index = next_index as usize;
+                                        self.previous = self.current.clone();
                                         self.current = Some(List_Item { buff_addr: next_addr, index: next_index as usize});
                                         Some((next_index as usize, Some(next_cursor)))
                                     }
