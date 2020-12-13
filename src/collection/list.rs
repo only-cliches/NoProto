@@ -8,18 +8,26 @@ use alloc::{vec::*};
 use core::{hint::unreachable_unchecked};
 use alloc::string::ToString;
 
+#[doc(hidden)]
+#[derive(Debug)]
+struct List_Item {
+    index: usize,
+    buff_addr: usize
+}
+
 /// List data type.
 /// 
 #[doc(hidden)]
 #[derive(Debug)]
 pub struct NP_List {
-    cursor: NP_Cursor,
-    cursor_index: usize,
-    prev_cursor: Option<NP_Cursor>,
+    current: Option<List_Item>,
+    previous: Option<List_Item>,
     index: usize,
+    tail: Option<List_Item>,
+    head: Option<List_Item>,
     only_real: bool,
-    tail_index: usize,
-    schema_of: usize
+    schema_of: usize,
+    list_schema: usize,
 }
 
 
@@ -30,7 +38,7 @@ impl NP_List {
         panic!()
     }
 
-    pub fn make_list<'make>(list_cursor_addr: &NP_Cursor_Addr, memory: &'make NP_Memory) -> Result<(), NP_Error> {
+    pub fn make_list<'make>(list_cursor_addr: &NP_Cursor, memory: &'make NP_Memory) -> Result<(), NP_Error> {
 
         let cursor = memory.get_parsed(list_cursor_addr);
 
@@ -66,74 +74,78 @@ impl NP_List {
             
                 let tail_cursor = NP_Cursor::new(tail_addr, schema_of, list_cursor.schema_addr);
                 let head_cursor = NP_Cursor::new(bytes.get_head() as usize, schema_of, list_cursor.schema_addr);
-
-                tail_index = tail_cursor.get_value(memory).get_index() as usize;
                 
                 return Self {
-                    prev_cursor: None,
-                    tail_index: tail_index as usize,
-                    cursor: head_cursor.clone(),
-                    cursor_index: head_cursor.get_value(memory).get_index() as usize,
+                    current: None,
+                    previous: None,
+                    head: Some(List_Item { index: head_cursor.get_value(memory).get_index() as usize, buff_addr: head_cursor.buff_addr}),
+                    tail: Some(List_Item { index: tail_cursor.get_value(memory).get_index() as usize, buff_addr: tail_cursor.buff_addr}),
                     only_real,
-                    index: if only_real {
-                        head_cursor.get_value(memory).get_index() as usize
-                    } else {
-                        0
-                    },
-                    schema_of
+                    index: 0,
+                    schema_of,
+                    list_schema: list_cursor.schema_addr
                 }
             }           
         }
 
         Self {
-            prev_cursor: None,
-            tail_index: 0,
-            cursor: list_cursor.clone(),
-            cursor_index: 0,
+            current: None,
+            previous: None,
+            head: None,
+            tail: None,
             only_real,
             index: 0,
-            schema_of
+            schema_of,
+            list_schema: list_cursor.schema_addr
         }
     }
 
-    pub fn step_iter(list: &mut Self, memory: &NP_Memory) -> Option<(usize, NP_Cursor_Addr)> {
-        let list_cursor = memory.get_parsed(&list.cursor);
+    pub fn step_iter(&mut self, memory: &NP_Memory) -> Option<(usize, Option<NP_Cursor>)> {
 
-        match list_cursor.data {
-            NP_Cursor_Data::List { list_addrs, .. } => {
+        match self.head {
+            Some(head) => {
+                match self.tail {
+                    Some(tail) => {
+                        match self.current {
+                            Some(current) => { // subsequent iterations
+                                let current_cursor = NP_Cursor::new(current.buff_addr, self.schema_of, self.list_schema);
+                                let value = current_cursor.get_value(memory);
+                                if self.only_real {
+                                    let next_addr = value.get_next_addr() as usize;
+                                    if next_addr == 0 {
+                                        None
+                                    } else {
+                                        let next_cursor = NP_Cursor::new(next_addr, self.schema_of, self.list_schema);
+                                        let next_index = next_cursor.get_value(memory).get_index();
+                                        self.index = next_index as usize;
+                                        self.current = Some(List_Item { buff_addr: next_addr, index: next_index as usize});
+                                        Some((next_index as usize, Some(next_cursor)))
+                                    }
+                                } else {
 
-                if list.index <= list.tail_index {
-
-                    let this_cursor = if list.only_real {
-                        while list_addrs[list.index] == 0 {
-                            list.index += 1;
+                                }
+                                // panic!()
+                            },
+                            None => { // first iteration
+                                self.current = Some(head);
+                                if self.only_real || head.index == 0 {
+                                    self.index = head.index;
+                                    Some((head.index, Some(NP_Cursor::new(head.buff_addr, self.schema_of, self.list_schema))))
+                                } else {
+                                    self.index = 0;
+                                    Some((0, None))
+                                }
+                            }
                         }
-                        NP_Cursor_Addr::Real(list_addrs[list.index])
-                    } else {
-                        if list_addrs[list.index] == 0 {
-                            let virt = memory.get_parsed(&NP_Cursor_Addr::Virtual);
-                            virt.reset();
-                            virt.schema_addr = list.schema_of;
-                            virt.parent_addr = list_cursor.buff_addr;
-                            virt.value.set_index(list.index as u8);
-                            NP_Cursor_Addr::Virtual
-                        } else {
-                            NP_Cursor_Addr::Real(list_addrs[list.index])
-                        }
-                    };
-
-                    list.index += 1;
-
-                    Some((list.index - 1, this_cursor))
-                } else {
-                    None
+                    },
+                    None => None
                 }
             },
-            _ => unsafe { unreachable_unchecked() }
+            None => None
         }
     }
 
-    pub fn for_each<F>(cursor_addr: &NP_Cursor_Addr, memory: &NP_Memory, only_real: bool, callback: &mut F) where F: FnMut((usize, NP_Cursor_Addr)) {
+    pub fn for_each<F>(cursor_addr: &NP_Cursor, memory: &NP_Memory, only_real: bool, callback: &mut F) where F: FnMut((usize, Option<NP_Cursor>)) {
 
         let mut list_iter = NP_List::new_iter(cursor_addr, memory, only_real);
 
@@ -143,51 +155,7 @@ impl NP_List {
 
     }
 
-    pub fn parse<'parse>(buff_addr: usize, schema_addr: NP_Schema_Addr, parent_addr: usize, parent_schema_addr: usize, memory: &NP_Memory<'parse>, of_schema: usize, index: usize) {
-
-        let list_value = NP_Cursor::parse_cursor_value(buff_addr, parent_addr, parent_schema_addr, &memory);
-
-        let mut new_cursor = NP_Cursor { 
-            buff_addr: buff_addr, 
-            schema_addr: schema_addr, 
-            data: NP_Cursor_Data::Empty,
-            temp_bytes: None,
-            value: list_value, 
-            parent_addr: parent_addr,
-            index: index
-        };
-
-        let list_addr = new_cursor.value.get_addr_value();
-
-        let mut list_addrs: [usize; 255] = [0; 255];
-
-        if list_addr == 0 { // no list here
-            memory.insert_parsed(buff_addr, new_cursor);
-        } else { // list exists, parse it
-
-            let list_data = unsafe { &mut *(memory.write_bytes().as_ptr().add(list_addr as usize) as *mut NP_List_Bytes) };
-
-            let head = list_data.get_head();
-
-            if head != 0 { // list has items
-
-                let mut next_item = head;
-
-                while next_item != 0 {
-                    let list_item_data = NP_Cursor::parse_cursor_value(next_item as usize, buff_addr, schema_addr, memory);
-                    let item_index = list_item_data.get_index() as usize;
-                    NP_Cursor::parse(next_item as usize, of_schema, buff_addr, schema_addr, &memory, item_index);
-                    list_addrs[item_index] = next_item as usize;
-                    next_item = list_item_data.get_next_addr();
-                }
-            }
-
-            new_cursor.data = NP_Cursor_Data::List { bytes: list_data, list_addrs: list_addrs };
-            memory.insert_parsed(buff_addr, new_cursor);
-        }
-    }
-
-    pub fn push<'push>(list_cursor_addr: &NP_Cursor_Addr, memory: &NP_Memory, index: Option<usize>) -> Result<Option<(u16, NP_Cursor_Addr)>, NP_Error> {
+    pub fn push<'push>(list_cursor_addr: &NP_Cursor, memory: &NP_Memory, index: Option<usize>) -> Result<Option<(u16, NP_Cursor)>, NP_Error> {
 
         let list_cursor = memory.get_parsed(&list_cursor_addr);
 
@@ -250,7 +218,7 @@ impl NP_List {
 
     /// Commit a virtual cursor into the buffer
     /// 
-    pub fn insert<'commit>(cursor_addr: &NP_Cursor_Addr, memory: &'commit NP_Memory, index: usize) -> Result<usize, NP_Error> {
+    pub fn insert<'commit>(cursor_addr: &NP_Cursor, memory: &'commit NP_Memory, index: usize) -> Result<usize, NP_Error> {
 
         let cursor = memory.get_parsed(&cursor_addr);
 
