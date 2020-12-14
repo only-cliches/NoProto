@@ -28,7 +28,7 @@ use crate::{
 use crate::{json_flex::NP_JSON, pointer::NP_Value, schema::NP_TypeKeys};
 use alloc::vec::Vec;
 
-use super::{NP_Cursor, NP_Cursor_Addr, NP_Scalar};
+use super::{NP_Cursor, NP_Scalar};
 use alloc::borrow::ToOwned;
 use core::str;
 use alloc::string::ToString;
@@ -73,7 +73,7 @@ impl<'value> NP_Value<'value> for &'value str {
 
                 Ok(NP_JSON::Dictionary(schema_json))
             }
-            _ => unsafe { unreachable_unchecked() },
+            _ => unsafe { panic!() },
         }
     }
 
@@ -105,17 +105,17 @@ impl<'value> NP_Value<'value> for &'value str {
         (fixed_size > 0, schema)
     }
 
-    fn into_value(cursor: NP_Cursor_Addr, memory: &'value NP_Memory) -> Result<Option<Self>, NP_Error> where Self: Sized {
+    fn into_value(cursor: &NP_Cursor, memory: &'value NP_Memory) -> Result<Option<Self>, NP_Error> where Self: Sized {
 
-        let c = memory.get_parsed(&cursor);
+        let c_value = cursor.get_value(memory);
 
-        let value_addr = c.value.get_addr_value() as usize;
+        let value_addr = c_value.get_addr_value() as usize;
         // empty value
         if value_addr == 0 {
             return Ok(None);
         }
 
-        match memory.schema[c.schema_addr] {
+        match memory.schema[cursor.schema_addr] {
             NP_Parsed_Schema::UTF8String { size, .. } => {
                 if size > 0 {
                     // fixed size
@@ -136,7 +136,7 @@ impl<'value> NP_Value<'value> for &'value str {
                     return Ok(Some(unsafe { str::from_utf8_unchecked(bytes) }));
                 }
             }
-            _ => unsafe { unreachable_unchecked() },
+            _ => unsafe { panic!() },
         }
     }
 
@@ -151,17 +151,17 @@ impl<'value> NP_Value<'value> for &'value str {
             }
         }
     }
-    fn get_size(cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>) -> Result<usize, NP_Error> {
+    fn get_size(cursor: &NP_Cursor, memory: &NP_Memory<'value>) -> Result<usize, NP_Error> {
 
-        let c = memory.get_parsed(&cursor);
-        let value_addr = c.value.get_addr_value() as usize;
+        let c_value = cursor.get_value(memory);
+        let value_addr = c_value.get_addr_value() as usize;
 
         // empty value
         if value_addr == 0 {
             return Ok(0);
         }
 
-        match memory.schema[c.schema_addr] {
+        match memory.schema[cursor.schema_addr] {
             NP_Parsed_Schema::UTF8String { size, .. } => {
                 // fixed size
                 if size > 0 {
@@ -174,7 +174,7 @@ impl<'value> NP_Value<'value> for &'value str {
                 // return total size of this string plus length bytes
                 return Ok(bytes_size + 2);
             }
-            _ => unsafe { unreachable_unchecked() },
+            _ => unsafe { panic!() },
         }
     }
 
@@ -251,19 +251,19 @@ impl<'value> NP_Value<'value> for &'value str {
         return Ok((has_fixed_size, schema_data, schema));
     }
 
-    fn to_json(cursor: NP_Cursor_Addr, memory: &'value NP_Memory) -> NP_JSON {
+    fn to_json(cursor: &NP_Cursor, memory: &'value NP_Memory) -> NP_JSON {
 
-        match Self::into_value(cursor.clone(), memory) {
+        match Self::into_value(cursor, memory) {
             Ok(x) => match x {
                 Some(y) => NP_JSON::String(y.to_string()),
                 None => {
-                    let c = memory.get_parsed(&cursor);
-                    match &memory.schema[c.schema_addr] {
+                    let c_value = cursor.get_value(memory);
+                    match &memory.schema[cursor.schema_addr] {
                         NP_Parsed_Schema::UTF8String { default, .. } => match default {
                             Some(x) => NP_JSON::String(x.to_string()),
                             None => NP_JSON::Null,
                         },
-                        _ => unsafe { unreachable_unchecked() },
+                        _ => unsafe { panic!() },
                     }
                 }
             },
@@ -271,9 +271,9 @@ impl<'value> NP_Value<'value> for &'value str {
         }
     }
 
-    fn set_value<'set>(cursor: NP_Cursor_Addr, memory: &'set NP_Memory, value: Self) -> Result<NP_Cursor_Addr, NP_Error> where Self: 'set + Sized {
+    fn set_value<'set>(cursor: NP_Cursor, memory: &'set NP_Memory, value: Self) -> Result<NP_Cursor, NP_Error> where Self: 'set + Sized {
 
-        let c = memory.get_parsed(&cursor);
+        let c_value = cursor.get_value(memory);
     
         let bytes = value.as_bytes();
     
@@ -281,15 +281,15 @@ impl<'value> NP_Value<'value> for &'value str {
     
         let write_bytes = memory.write_bytes();
     
-        let size = match memory.schema[c.schema_addr] {
+        let size = match memory.schema[cursor.schema_addr] {
             NP_Parsed_Schema::UTF8String { size, .. } => size,
-            _ => { unsafe { unreachable_unchecked() } }
+            _ => { unsafe { panic!() } }
         };
     
         if size > 0 {
             // fixed size bytes
     
-            if c.value.get_addr_value() == 0 {
+            if c_value.get_addr_value() == 0 {
                 // malloc new bytes
     
                 let mut empty_bytes: Vec<u8> = Vec::with_capacity(size as usize);
@@ -298,10 +298,10 @@ impl<'value> NP_Value<'value> for &'value str {
                 }
     
                 let new_addr = memory.malloc(empty_bytes)? as usize;
-                c.value.set_addr_value(new_addr as u16);
+                c_value.set_addr_value(new_addr as u16);
             }
 
-            let addr = c.value.get_addr_value() as usize;
+            let addr = c_value.get_addr_value() as usize;
     
             for x in 0..(size as usize) {
                 if x < bytes.len() {
@@ -317,7 +317,7 @@ impl<'value> NP_Value<'value> for &'value str {
         }
     
         // flexible size
-        let addr_value = c.value.get_addr_value() as usize;
+        let addr_value = c_value.get_addr_value() as usize;
     
         let prev_size: usize = if addr_value != 0 {
             let size_bytes: &[u8; 2] = memory.get_2_bytes(addr_value).unwrap_or(&[0; 2]);
@@ -359,7 +359,7 @@ impl<'value> NP_Value<'value> for &'value str {
                 memory.malloc_borrow(&size_bytes)?
             };
     
-            c.value.set_addr_value(new_addr as u16);
+            c_value.set_addr_value(new_addr as u16);
     
             memory.malloc_borrow(bytes)?;
     

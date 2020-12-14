@@ -107,6 +107,30 @@ impl MessagePackBench {
 
     }
 
+    pub fn decode_one_bench()  {
+        let buffer = Self::encode_single();
+
+        let start = SystemTime::now();
+
+
+        for _x in 0..LOOPS {
+            let mut container = Value::deserialize(&mut BufReader::new(Cursor::new(buffer.clone()))).unwrap();
+
+            match &container {
+                Value::Map(foobarcontainer) => {
+                    if let Value::String(location) = foobarcontainer.get("location").unwrap() {
+                        assert_eq!(location, &String::from("http://arstechnica.com"));
+                    } else { panic!() }
+                },
+                _ => panic!()
+            }
+        }
+
+        let time = SystemTime::now().duration_since(start).expect("Time went backwards");
+        println!("MessagePack: {:?}", time);      
+
+    }
+
     pub fn decode_bench()  {
         
         let buffer = Self::encode_single();

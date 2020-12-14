@@ -33,7 +33,7 @@ use core::convert::TryInto;
 use alloc::boxed::Box;
 use alloc::borrow::ToOwned;
 use alloc::{string::ToString};
-use super::{NP_Cursor, NP_Cursor_Addr};
+use super::{NP_Cursor};
 use crate::NP_Memory;
 
 /// Allows you to efficiently retrieve just the bytes of the geographic coordinate
@@ -121,45 +121,45 @@ impl<'value> NP_Value<'value> for NP_Geo_Bytes {
 
     fn schema_to_json(schema: &Vec<NP_Parsed_Schema>, address: usize)-> Result<NP_JSON, NP_Error> { NP_Geo::schema_to_json(schema, address)}
 
-    fn set_value<'set>(mut cursor: NP_Cursor_Addr, memory: &'set NP_Memory, value: Self) -> Result<NP_Cursor_Addr, NP_Error> where Self: 'set + Sized {
+    fn set_value<'set>(cursor: NP_Cursor, memory: &'set NP_Memory, value: Self) -> Result<NP_Cursor, NP_Error> where Self: 'set + Sized {
         Err(NP_Error::new("Can't set value with NP_Geo_Bytes, use NP_Geo instead!"))
     }
-    fn to_json(cursor: NP_Cursor_Addr, memory: &'value NP_Memory) -> NP_JSON {
+    fn to_json(cursor: &NP_Cursor, memory: &'value NP_Memory) -> NP_JSON {
         NP_Geo::to_json(cursor, memory)
     }
-    fn get_size(cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>) -> Result<usize, NP_Error> {
+    fn get_size(cursor: &NP_Cursor, memory: &NP_Memory<'value>) -> Result<usize, NP_Error> {
 
-        let c = memory.get_parsed(&cursor);
+        let c_value = cursor.get_value(memory);
 
-        if c.value.get_addr_value() == 0 {
+        if c_value.get_addr_value() == 0 {
             return Ok(0) 
         } else {
-            let size = match memory.schema[c.schema_addr] {
+            let size = match memory.schema[cursor.schema_addr] {
                 NP_Parsed_Schema::Geo { size, ..} => {
                     size
                 },
-                _ => { unsafe { unreachable_unchecked() } }
+                _ => { unsafe { panic!() } }
             };
             Ok(size as usize)
         }
     }
 
-    fn into_value(cursor: NP_Cursor_Addr, memory: &'value NP_Memory) -> Result<Option<Self>, NP_Error> {
+    fn into_value(cursor: &NP_Cursor, memory: &'value NP_Memory) -> Result<Option<Self>, NP_Error> where Self: Sized {
 
-        let c = memory.get_parsed(&cursor);
+        let c_value = cursor.get_value(memory);
 
-        let value_addr = c.value.get_addr_value() as usize;
+        let value_addr = c_value.get_addr_value() as usize;
 
         // empty value
         if value_addr == 0 {
             return Ok(None);
         }
 
-        let size = match memory.schema[c.schema_addr] {
+        let size = match memory.schema[cursor.schema_addr] {
             NP_Parsed_Schema::Geo { size, .. } => {
                 size
             },
-            _ => { unsafe { unreachable_unchecked() } }
+            _ => { unsafe { panic!() } }
         };
 
         Ok(Some(match size {
@@ -353,7 +353,7 @@ impl<'value> NP_Value<'value> for NP_Geo {
                     None
                 }
             },
-            _ => { unsafe { unreachable_unchecked() } }
+            _ => { unsafe { panic!() } }
         }
     }
 
@@ -378,23 +378,23 @@ impl<'value> NP_Value<'value> for NP_Geo {
         
                 Ok(NP_JSON::Dictionary(schema_json))
             },
-            _ => { unsafe { unreachable_unchecked() } }
+            _ => { unsafe { panic!() } }
         }
 
 
     }
 
-    fn set_value<'set>(mut cursor: NP_Cursor_Addr, memory: &'set NP_Memory, value: Self) -> Result<NP_Cursor_Addr, NP_Error> where Self: 'set + Sized {
+    fn set_value<'set>(cursor: NP_Cursor, memory: &'set NP_Memory, value: Self) -> Result<NP_Cursor, NP_Error> where Self: 'set + Sized {
 
-        let c = memory.get_parsed(&cursor);
+        let c_value = cursor.get_value(memory);
 
-        let mut value_address = c.value.get_addr_value() as usize;
+        let mut value_address = c_value.get_addr_value() as usize;
 
-        let size = match memory.schema[c.schema_addr] {
+        let size = match memory.schema[cursor.schema_addr] {
             NP_Parsed_Schema::Geo { size, .. } => {
                 size
             },
-            _ => { unsafe { unreachable_unchecked() } }
+            _ => { unsafe { panic!() } }
         };
 
         let value_bytes_size = size as usize;
@@ -474,7 +474,7 @@ impl<'value> NP_Value<'value> for NP_Geo {
             }
         };
 
-        let mut value_address = c.value.get_addr_value() as usize;
+        let mut value_address = c_value.get_addr_value() as usize;
 
         if value_address != 0 { // existing value, replace
 
@@ -502,29 +502,29 @@ impl<'value> NP_Value<'value> for NP_Geo {
                 }
             }
 
-            c.value.set_addr_value(value_address as u16);
+            c_value.set_addr_value(value_address as u16);
 
         }
 
         Ok(cursor)
     }
 
-    fn into_value(cursor: NP_Cursor_Addr, memory: &'value NP_Memory) -> Result<Option<Self>, NP_Error> {
+    fn into_value(cursor: &NP_Cursor, memory: &'value NP_Memory) -> Result<Option<Self>, NP_Error> where Self: Sized {
 
-        let c = memory.get_parsed(&cursor);
+        let c_value = cursor.get_value(memory);
 
-        let value_addr = c.value.get_addr_value() as  usize;
+        let value_addr = c_value.get_addr_value() as  usize;
 
         // empty value
         if value_addr == 0 {
             return Ok(None);
         }
     
-        let size = match memory.schema[c.schema_addr] {
+        let size = match memory.schema[cursor.schema_addr] {
             NP_Parsed_Schema::Geo { size, .. } => {
                 size
             },
-            _ => { unsafe { unreachable_unchecked() } }
+            _ => { unsafe { panic!() } }
         };
 
         Ok(Some(match size {
@@ -580,9 +580,9 @@ impl<'value> NP_Value<'value> for NP_Geo {
         }))
     }
 
-    fn to_json(cursor: NP_Cursor_Addr, memory: &'value NP_Memory) -> NP_JSON {
+    fn to_json(cursor: &NP_Cursor, memory: &'value NP_Memory) -> NP_JSON {
 
-        match Self::into_value(cursor.clone(), memory) {
+        match Self::into_value(cursor, memory) {
             Ok(x) => {
                 match x {
                     Some(y) => {
@@ -595,8 +595,8 @@ impl<'value> NP_Value<'value> for NP_Geo {
                     },
                     None => {
 
-                        let c = memory.get_parsed(&cursor);
-                        match &memory.schema[c.schema_addr] {
+                        let c_value = cursor.get_value(memory);
+                        match &memory.schema[cursor.schema_addr] {
                             NP_Parsed_Schema::Geo { i: _, sortable: _, default, size: _} => {
                                 if let Some(d) = default {
                                     let mut object = JSMAP::new();
@@ -609,7 +609,7 @@ impl<'value> NP_Value<'value> for NP_Geo {
                                     NP_JSON::Null
                                 }
                             },
-                            _ => { unsafe { unreachable_unchecked() } }
+                            _ => { unsafe { panic!() } }
                         }
                     }
                 }
@@ -620,20 +620,20 @@ impl<'value> NP_Value<'value> for NP_Geo {
         }
     }
 
-    fn get_size(cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>) -> Result<usize, NP_Error> {
+    fn get_size(cursor: &NP_Cursor, memory: &NP_Memory<'value>) -> Result<usize, NP_Error> {
 
-        let c = memory.get_parsed(&cursor);
+        let c_value = cursor.get_value(memory);
 
-        let value_addr = c.value.get_addr_value();
+        let value_addr = c_value.get_addr_value();
 
         if value_addr == 0 {
             return Ok(0) 
         } else {
-            let size = match memory.schema[c.schema_addr] {
+            let size = match memory.schema[cursor.schema_addr] {
                 NP_Parsed_Schema::Geo { i: _, sortable: _, default: _, size} => {
                     size
                 },
-                _ => { unsafe { unreachable_unchecked() } }
+                _ => { unsafe { panic!() } }
             };
             Ok(size as usize)
         }

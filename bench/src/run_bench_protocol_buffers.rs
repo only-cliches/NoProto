@@ -137,6 +137,20 @@ impl ProtocolBufferBench {
         println!("PBuffers:    {:?}", time);
     }
 
+    pub fn decode_one_bench() {
+        let start = SystemTime::now();
+
+        let buffer = Self::encode_single();
+
+        for x in 0..LOOPS {
+            let old_foo_bar: FooBarContainer = protobuf::parse_from_bytes(&buffer).unwrap();
+            assert_eq!(old_foo_bar.get_location(), "http://arstechnica.com");
+        }
+    
+        let time = SystemTime::now().duration_since(start).expect("Time went backwards");
+        println!("PBuffers:    {:?}", time);
+    }
+
     pub fn decode_bench()  {
         let start = SystemTime::now();
 

@@ -30,7 +30,7 @@ use alloc::string::String;
 use alloc::boxed::Box;
 use alloc::borrow::ToOwned;
 use alloc::{string::ToString};
-use super::{NP_Cursor, NP_Cursor_Addr};
+use super::{NP_Cursor};
 
 /// Holds Enum / Option type data.
 /// 
@@ -107,7 +107,7 @@ impl<'value> NP_Value<'value> for NP_Enum {
         
                 schema_json.insert("choices".to_owned(), NP_JSON::Array(options));
             },
-            _ => { unsafe { unreachable_unchecked() } }
+            _ => { unsafe { panic!() } }
         }
 
         Ok(NP_JSON::Dictionary(schema_json))
@@ -123,15 +123,15 @@ impl<'value> NP_Value<'value> for NP_Enum {
                     None
                 }
             },
-            _ => { unsafe { unreachable_unchecked() } }
+            _ => { unsafe { panic!() } }
         }
     }
 
-    fn set_value<'set>(mut cursor: NP_Cursor_Addr, memory: &'set NP_Memory, value: Self) -> Result<NP_Cursor_Addr, NP_Error> where Self: 'set + Sized {
+    fn set_value<'set>(cursor: NP_Cursor, memory: &'set NP_Memory, value: Self) -> Result<NP_Cursor, NP_Error> where Self: 'set + Sized {
 
-        let c = memory.get_parsed(&cursor);
+        let c_value = cursor.get_value(memory);
 
-        match &memory.schema[c.schema_addr] {
+        match &memory.schema[cursor.schema_addr] {
             NP_Parsed_Schema::Enum { i: _, choices, default: _, sortable: _} => {
 
                 let mut value_num: i32 = -1;
@@ -153,7 +153,7 @@ impl<'value> NP_Value<'value> for NP_Enum {
         
                 let bytes = value_num as u8;
 
-                let mut addr_value = c.value.get_addr_value() as usize;
+                let mut addr_value = c_value.get_addr_value() as usize;
         
                 if addr_value != 0 { // existing value, replace
         
@@ -165,27 +165,27 @@ impl<'value> NP_Value<'value> for NP_Enum {
                 } else { // new value
         
                     addr_value = memory.malloc_borrow(&[bytes])?;
-                    c.value.set_addr_value(addr_value as u16);
+                    c_value.set_addr_value(addr_value as u16);
 
                     return Ok(cursor);
                 }     
             },
-            _ => { unsafe { unreachable_unchecked() } }
+            _ => { unsafe { panic!() } }
         }               
     }
 
-    fn into_value(cursor: NP_Cursor_Addr, memory: &'value NP_Memory) -> Result<Option<Self>, NP_Error> {
+    fn into_value(cursor: &NP_Cursor, memory: &'value NP_Memory) -> Result<Option<Self>, NP_Error> where Self: Sized {
 
-        let c = memory.get_parsed(&cursor);
+        let c_value = cursor.get_value(memory);
 
-        let mut value_addr = c.value.get_addr_value() as usize;
+        let mut value_addr = c_value.get_addr_value() as usize;
 
         // empty value
         if value_addr == 0 {
             return Ok(None);
         }
   
-        match &memory.schema[c.schema_addr] {
+        match &memory.schema[cursor.schema_addr] {
             NP_Parsed_Schema::Enum { i: _, choices, default: _, sortable: _} => {
                 Ok(match memory.get_1_byte(value_addr) {
                     Some(x) => {
@@ -200,13 +200,13 @@ impl<'value> NP_Value<'value> for NP_Enum {
                     None => None
                 })
             },
-            _ => { unsafe { unreachable_unchecked() } }
+            _ => { unsafe { panic!() } }
         }
     }
 
-    fn to_json(cursor: NP_Cursor_Addr, memory: &'value NP_Memory) -> NP_JSON {
+    fn to_json(cursor: &NP_Cursor, memory: &'value NP_Memory) -> NP_JSON {
 
-        match Self::into_value(cursor.clone(), memory) {
+        match Self::into_value(cursor, memory) {
             Ok(x) => {
                 match x {
                     Some(y) => {
@@ -215,8 +215,8 @@ impl<'value> NP_Value<'value> for NP_Enum {
                                 NP_JSON::String(str_value.to_string())
                             },
                             NP_Enum::None => {
-                                let c = memory.get_parsed(&cursor);
-                                match &memory.schema[c.schema_addr] {
+                                let c_value = cursor.get_value(memory);
+                                match &memory.schema[cursor.schema_addr] {
                                     NP_Parsed_Schema::Enum { i: _, choices: _, default, sortable: _} => {
                                         if let Some(d) = default {
                                             match d {
@@ -231,14 +231,14 @@ impl<'value> NP_Value<'value> for NP_Enum {
                                             NP_JSON::Null
                                         }
                                     },
-                                    _ => { unsafe { unreachable_unchecked() } }
+                                    _ => { unsafe { panic!() } }
                                 }
                             }
                         }
                     },
                     None => {
-                        let c = memory.get_parsed(&cursor);
-                        match &memory.schema[c.schema_addr] {
+                        let c_value = cursor.get_value(memory);
+                        match &memory.schema[cursor.schema_addr] {
                             NP_Parsed_Schema::Enum { i: _, choices: _, default, sortable: _} => {
                                 if let Some(d) = default {
                                     match d {
@@ -249,7 +249,7 @@ impl<'value> NP_Value<'value> for NP_Enum {
                                     NP_JSON::Null
                                 }
                             },
-                            _ => { unsafe { unreachable_unchecked() } }
+                            _ => { unsafe { panic!() } }
                         }
                     }
                 }
@@ -260,10 +260,10 @@ impl<'value> NP_Value<'value> for NP_Enum {
         }
     }
 
-    fn get_size(cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>) -> Result<usize, NP_Error> {
-        let c = memory.get_parsed(&cursor);
+    fn get_size(cursor: &NP_Cursor, memory: &NP_Memory<'value>) -> Result<usize, NP_Error> {
+        let c_value = cursor.get_value(memory);
 
-        let value_address = c.value.get_addr_value() as usize;
+        let value_address = c_value.get_addr_value() as usize;
 
         if value_address == 0 {
             return Ok(0) 

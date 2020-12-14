@@ -86,6 +86,20 @@ impl JSONBench {
 
     }
 
+    pub fn decode_one_bench()  {
+        let buffer = Self::encode_single();
+
+        let start = SystemTime::now();
+
+        for _x in 0..LOOPS {
+            let container = json::parse(unsafe { from_utf8_unchecked(&buffer) }).unwrap();
+            assert_eq!(container["location"], JsonValue::String(String::from("http://arstechnica.com")));
+        }
+
+        let time = SystemTime::now().duration_since(start).expect("Time went backwards");
+        println!("JSON:        {:?}", time);   
+    }
+
     pub fn decode_bench()  {
         let buffer = Self::encode_single();
 

@@ -34,7 +34,7 @@ use alloc::string::String;
 use alloc::borrow::ToOwned;
 use alloc::string::ToString;
 
-use super::NP_Cursor_Addr;
+use super::NP_Cursor;
 
 
 /// Holds UUID which is good for random keys.
@@ -138,11 +138,11 @@ impl<'value> NP_Value<'value> for &NP_UUID {
         Ok(NP_JSON::Dictionary(schema_json))
     }
 
-    fn set_value<'set>(mut cursor: NP_Cursor_Addr, memory: &'set NP_Memory, value: Self) -> Result<NP_Cursor_Addr, NP_Error> where Self: 'set + Sized {
+    fn set_value<'set>(cursor: NP_Cursor, memory: &'set NP_Memory, value: Self) -> Result<NP_Cursor, NP_Error> where Self: 'set + Sized {
 
-        let c = memory.get_parsed(&cursor);
+        let c_value = cursor.get_value(memory);
 
-        let mut value_address = c.value.get_addr_value() as usize;
+        let mut value_address = c_value.get_addr_value() as usize;
 
         if value_address != 0 { // existing value, replace
             let bytes = value.value;
@@ -156,17 +156,17 @@ impl<'value> NP_Value<'value> for &NP_UUID {
         } else { // new value
 
             value_address = memory.malloc_borrow(&value.value)?;
-            c.value.set_addr_value(value_address as u16);
+            c_value.set_addr_value(value_address as u16);
         }                    
         
         Ok(cursor)
     }
 
-    fn into_value(cursor: NP_Cursor_Addr, memory: &'value NP_Memory) -> Result<Option<Self>, NP_Error> {
+    fn into_value(cursor: &NP_Cursor, memory: &'value NP_Memory) -> Result<Option<Self>, NP_Error> where Self: Sized {
 
-        let c = memory.get_parsed(&cursor);
+        let c_value = cursor.get_value(memory);
 
-        let value_addr = c.value.get_addr_value();
+        let value_addr = c_value.get_addr_value();
 
         // empty value
         if value_addr == 0 {
@@ -181,9 +181,9 @@ impl<'value> NP_Value<'value> for &NP_UUID {
         })
     }
 
-    fn to_json(cursor: NP_Cursor_Addr, memory: &'value NP_Memory) -> NP_JSON {
+    fn to_json(cursor: &NP_Cursor, memory: &'value NP_Memory) -> NP_JSON {
 
-        match Self::into_value(cursor.clone(), memory) {
+        match Self::into_value(cursor, memory) {
             Ok(x) => {
                 match x {
                     Some(y) => {
@@ -200,11 +200,11 @@ impl<'value> NP_Value<'value> for &NP_UUID {
         }
     }
 
-    fn get_size(cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>) -> Result<usize, NP_Error> {
+    fn get_size(cursor: &NP_Cursor, memory: &NP_Memory<'value>) -> Result<usize, NP_Error> {
 
-        let c = memory.get_parsed(&cursor);
+        let c_value = cursor.get_value(memory);
 
-        if c.value.get_addr_value() == 0 {
+        if c_value.get_addr_value() == 0 {
             Ok(0) 
         } else {
             Ok(16)

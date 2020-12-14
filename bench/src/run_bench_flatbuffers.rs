@@ -116,6 +116,21 @@ impl FlatBufferBench {
 
     }
 
+    pub fn decode_one_bench()  {
+        let buffer = Self::encode_single();
+
+        let start = SystemTime::now();
+
+        for x in 0..LOOPS {
+            let container = get_root_as_foo_bar_container(&buffer[..]);
+            assert_eq!(container.location(), Some("http://arstechnica.com"));
+        }
+
+        let time = SystemTime::now().duration_since(start).expect("Time went backwards");
+        println!("Flatbuffers: {:?}", time);      
+
+    }
+
     pub fn decode_bench()  {
         let buffer = Self::encode_single();
 

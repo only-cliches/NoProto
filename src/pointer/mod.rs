@@ -83,6 +83,7 @@ pub trait NP_Pointer_Bytes {
     fn reset(&mut self)                                            { panic!() }
     fn get_size(&self) -> usize                                    { panic!() }
     fn get_key<'key>(&self, memory: &'key NP_Memory) -> &'key str  { panic!() }
+    fn get_key_size<'key>(&self, memory: &'key NP_Memory) -> usize { panic!() }
 }
 
 impl NP_Pointer_Bytes for NP_Pointer_Scalar {
@@ -143,6 +144,32 @@ impl NP_Pointer_Bytes for NP_Pointer_Map_Item {
             let key_bytes = &memory.read_bytes()[(key_addr + 1)..(key_addr + 1 + key_length)];
             unsafe { core::str::from_utf8_unchecked(key_bytes) }
         }
+    }
+    #[inline(always)]
+    fn get_key_size<'key>(&self, memory: &'key NP_Memory) -> usize {
+        let key_addr = self.get_key_addr() as usize;
+        if key_addr == 0 {
+            return 0;
+        } else {
+            return memory.read_bytes()[key_addr] as usize;
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct NP_Map_Bytes {
+    head: [u8; 2]
+}
+
+impl NP_Map_Bytes {
+    #[inline(always)]
+    pub fn set_head(&mut self, head: u16) {
+        self.head = head.to_be_bytes();
+    }
+    #[inline(always)]
+    pub fn get_head(&self) -> u16 {
+        u16::from_be_bytes(self.head)
     }
 }
 
@@ -442,7 +469,7 @@ pub trait NP_Value<'value> {
 
     /// Calculate the size of this pointer and it's children (recursive for collections)
     /// 
-    fn get_size(_cursor: &NP_Cursor, memory: &NP_Memory<'value>) -> Result<usize, NP_Error>;
+    fn get_size(cursor: &'value NP_Cursor, memory: &'value NP_Memory<'value>) -> Result<usize, NP_Error>;
     
     /// Handle copying from old pointer/buffer to new pointer/buffer (recursive for collections)
     /// 

@@ -1,5 +1,3 @@
-
-use crate::pointer::NP_Cursor_Addr;
 use crate::{json_flex::{JSMAP}, schema::{NP_Parsed_Schema}};
 use alloc::vec::Vec;
 use crate::error::NP_Error;
@@ -29,19 +27,19 @@ impl<'value> NP_Value<'value> for NP_Any {
         Ok(NP_JSON::Dictionary(schema_json))
     }
 
-    fn set_value<'set>(mut cursor: NP_Cursor_Addr, memory: &'set NP_Memory, value: Self) -> Result<NP_Cursor_Addr, NP_Error> where Self: 'set + Sized {
+    fn set_value<'set>(cursor: NP_Cursor, memory: &'set NP_Memory, value: Self) -> Result<NP_Cursor, NP_Error> where Self: 'set + Sized {
         Err(NP_Error::new("Can't use .set() with (Any), must cast first with NP_Any::cast<T>(pointer)."))
     }
-    fn into_value(cursor: NP_Cursor_Addr, memory: &'value NP_Memory) -> Result<Option<Self>, NP_Error> {
+    fn into_value(cursor: &NP_Cursor, memory: &'value NP_Memory) -> Result<Option<Self>, NP_Error> where Self: Sized {
         Err(NP_Error::new("Type (Any) doesn't support .into()!"))
     }
-    fn to_json(cursor: NP_Cursor_Addr, memory: &'value NP_Memory) -> NP_JSON {
+    fn to_json(cursor: &NP_Cursor, memory: &'value NP_Memory) -> NP_JSON {
         NP_JSON::Null
     }
-    fn get_size(cursor: NP_Cursor_Addr, _memory: &NP_Memory<'value>) -> Result<usize, NP_Error> {
+    fn get_size(_cursor: &NP_Cursor, _memory: &NP_Memory<'value>) -> Result<usize, NP_Error> {
         Ok(0)
     }
-    fn do_compact(from_cursor: &NP_Cursor_Addr, from_memory: &'value NP_Memory, to_cursor: NP_Cursor_Addr, to_memory: &NP_Memory) -> Result<NP_Cursor_Addr, NP_Error> where Self: Sized {
+    fn do_compact(from_cursor: NP_Cursor, from_memory: &'value NP_Memory, to_cursor: NP_Cursor, to_memory: &'value NP_Memory) -> Result<NP_Cursor, NP_Error> where Self: 'value + Sized {
         Err(NP_Error::new("Cannot compact an ANY field!"))
     }
     fn from_json_to_schema(mut schema: Vec<NP_Parsed_Schema>, _json_schema: &Box<NP_JSON>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {

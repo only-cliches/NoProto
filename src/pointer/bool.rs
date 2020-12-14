@@ -17,7 +17,6 @@
 //! # Ok::<(), NP_Error>(()) 
 //! ```
 
-use crate::pointer::NP_Cursor_Addr;
 use core::hint::unreachable_unchecked;
 
 use crate::{json_flex::JSMAP, schema::{NP_Parsed_Schema}};
@@ -29,6 +28,8 @@ use alloc::boxed::Box;
 use alloc::{borrow::ToOwned};
 use crate::NP_Memory;
 use alloc::string::ToString;
+
+use super::NP_Cursor;
 
 impl super::NP_Scalar for bool {}
 
@@ -50,7 +51,7 @@ impl<'value> NP_Value<'value> for bool {
                     });
                 }
             },
-            _ => { unsafe { unreachable_unchecked() } }
+            _ => { unsafe { panic!() } }
         }
 
         Ok(NP_JSON::Dictionary(schema_json))
@@ -65,14 +66,14 @@ impl<'value> NP_Value<'value> for bool {
                     None => None
                 }
             },
-            _ => { unsafe { unreachable_unchecked() } }
+            _ => { unsafe { panic!() } }
         }
     }
 
-    fn set_value<'set>(cursor: NP_Cursor_Addr, memory: &'set NP_Memory, value: Self) -> Result<NP_Cursor_Addr, NP_Error> where Self: 'set + Sized {
+    fn set_value<'set>(cursor: NP_Cursor, memory: &'set NP_Memory, value: Self) -> Result<NP_Cursor, NP_Error> where Self: 'set + Sized {
 
-        let c = memory.get_parsed(&cursor);
-        let mut value_address = c.value.get_addr_value();  
+        let c_value = cursor.get_value(memory);
+        let mut value_address = c_value.get_addr_value();  
 
         if value_address != 0 { // existing value, replace
 
@@ -94,7 +95,7 @@ impl<'value> NP_Value<'value> for bool {
             };
 
             value_address = memory.malloc_borrow(&bytes)? as u16;
-            c.value.set_addr_value(value_address as u16);
+            c_value.set_addr_value(value_address as u16);
 
             return Ok(cursor);
 
@@ -102,11 +103,11 @@ impl<'value> NP_Value<'value> for bool {
         
     }
 
-    fn into_value(cursor: NP_Cursor_Addr, memory: &'value NP_Memory) -> Result<Option<Self>, NP_Error> {
+    fn into_value(cursor: &NP_Cursor, memory: &'value NP_Memory) -> Result<Option<Self>, NP_Error> where Self: Sized {
 
-        let c = memory.get_parsed(&cursor);
+        let c_value = cursor.get_value(memory);
 
-        let value_addr = c.value.get_addr_value() as usize;
+        let value_addr = c_value.get_addr_value() as usize;
 
         // empty value
         if value_addr == 0 {
@@ -121,11 +122,11 @@ impl<'value> NP_Value<'value> for bool {
         })
     }
 
-    fn to_json(cursor: NP_Cursor_Addr, memory: &'value NP_Memory) -> NP_JSON {
+    fn to_json(cursor: &NP_Cursor, memory: &'value NP_Memory) -> NP_JSON {
 
         
 
-        match Self::into_value(cursor.clone(), memory) {
+        match Self::into_value(cursor, memory) {
             Ok(x) => {
                 match x {
                     Some(y) => {
@@ -135,10 +136,8 @@ impl<'value> NP_Value<'value> for bool {
                             NP_JSON::False
                         }
                     },
-                    None => {
-                        let c = memory.get_parsed(&cursor);
-                        
-                        match memory.schema[c.schema_addr] {
+                    None => {                        
+                        match memory.schema[cursor.schema_addr] {
                             NP_Parsed_Schema::Boolean { i: _, sortable: _, default} => {
                                 if let Some(d) = default {
                                     if d == true {
@@ -150,7 +149,7 @@ impl<'value> NP_Value<'value> for bool {
                                     NP_JSON::Null
                                 }
                             },
-                            _ => { unsafe { unreachable_unchecked() } }
+                            _ => { unsafe { panic!() } }
                         }
                     }
                 }
@@ -161,9 +160,9 @@ impl<'value> NP_Value<'value> for bool {
         }
     }
 
-    fn get_size(cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>) -> Result<usize, NP_Error> {
-        let c = memory.get_parsed(&cursor);
-        if c.value.get_addr_value() == 0 {
+    fn get_size(cursor: &NP_Cursor, memory: &NP_Memory<'value>) -> Result<usize, NP_Error> {
+        let c_value = cursor.get_value(memory);
+        if c_value.get_addr_value() == 0 {
             Ok(0) 
         } else {
             Ok(core::mem::size_of::<u8>())

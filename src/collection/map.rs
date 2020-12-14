@@ -1,5 +1,5 @@
 use alloc::string::String;
-use crate::{hashmap::{NP_HashMap, SEED, murmurhash3_x86_32}, pointer::{NP_Cursor_Addr, NP_Cursor_Data}, schema::NP_Schema_Addr};
+use crate::{hashmap::{NP_HashMap, SEED, murmurhash3_x86_32}, pointer::NP_Map_Bytes, schema::NP_Schema_Addr};
 use crate::pointer::NP_Cursor;
 use crate::{json_flex::JSMAP};
 use crate::pointer::{NP_Value};
@@ -11,123 +11,165 @@ use alloc::boxed::Box;
 use alloc::borrow::ToOwned;
 use core::{str::from_utf8_unchecked, hint::unreachable_unchecked};
 
+#[doc(hidden)]
+#[derive(Debug, Clone, Copy)]
+struct Map_Item<'item> {
+    key: &'item str,
+    buff_addr: usize
+}
+
 /// The map type.
 /// 
 #[doc(hidden)]
-pub struct NP_Map { 
-    cursor: NP_Cursor_Addr,
-    index: usize,
-    value: Option<NP_Cursor_Addr>,
+pub struct NP_Map<'map> { 
+    current: Option<Map_Item<'map>>,
+    previous: Option<Map_Item<'map>>,
+    key: &'map str,
+    head: Option<Map_Item<'map>>,
+    map: NP_Cursor,
     value_of: usize
 }
 
-impl NP_Map {
+impl<'map> NP_Map<'map> {
 
-    pub fn make_map<'make>(map_cursor_addr: &NP_Cursor_Addr, memory: &'make NP_Memory) -> Result<(), NP_Error> {
-
-        let cursor = memory.get_parsed(map_cursor_addr);
-            
-        cursor.data = NP_Cursor_Data::Map { value_map: NP_HashMap::new() };
-
-        Ok(())
-    }
-
-
-    pub fn new_iter(cursor_addr: &NP_Cursor_Addr, memory: &NP_Memory) -> Self {
-        let map_cursor = memory.get_parsed(cursor_addr);
+    #[inline(always)]
+    pub fn select(map_cursor: NP_Cursor, key: &str, schema_only: bool, memory: &'map NP_Memory) -> Result<NP_Cursor, NP_Error> {
 
         let value_of = match memory.schema[map_cursor.schema_addr] {
             NP_Parsed_Schema::Map { value, .. } => value,
-            _ => unsafe { unreachable_unchecked() }
+            _ => unsafe { panic!() }
         };
 
+        if schema_only {
+            return Ok(NP_Cursor::new(0, value_of, map_cursor.schema_addr))
+        }
+
+        let mut map_iter = Self::new_iter(&map_cursor, memory);
+
+        // key is in map
+        while let Some((ikey, item)) = map_iter.step_iter(memory) {
+            if ikey == key {
+                return Ok(item.clone())
+            }
+        }
+
+        // key is not in map, make a new one
+        Self::insert(&map_cursor, memory, key)
+    }
+
+    #[inline(always)]
+    pub fn get_map<'get>(map_buff_addr: usize, memory: &'get NP_Memory<'get>) -> &'get mut NP_Map_Bytes {
+        unsafe { &mut *(memory.write_bytes().as_ptr().add(map_buff_addr as usize) as *mut NP_Map_Bytes) }
+    }
+
+    #[inline(always)]
+    pub fn new_iter(map_cursor: &NP_Cursor, memory: &'map NP_Memory) -> Self {
+
+        let value_of = match memory.schema[map_cursor.schema_addr] {
+            NP_Parsed_Schema::Map { value, .. } => value,
+            _ => unsafe { panic!() }
+        };
+
+        if map_cursor.get_value(memory).get_addr_value() == 0 {
+            return Self {
+                current: None,
+                previous: None,
+                key: "",
+                head: None,
+                map: map_cursor.clone(),
+                value_of
+            }
+        }
+
+        let head_addr = Self::get_map(map_cursor.buff_addr, memory).get_head();
+
+        let head_cursor = NP_Cursor::new(head_addr as usize, value_of, map_cursor.schema_addr);
+        let head_cursor_value = head_cursor.get_value(memory);
+
         Self {
-            cursor: cursor_addr.clone(),
-            value: None,
-            index: 0,
+            current: None,
+            previous: None,
+            key: "",
+            head: Some(Map_Item {
+                key: head_cursor_value.get_key(memory),
+                buff_addr: head_cursor.buff_addr 
+            }),
+            map: map_cursor.clone(),
             value_of
         }
     }
 
-    pub fn step_iter(map: &mut Self, memory: &NP_Memory) -> Option<(usize, NP_Cursor_Addr)> {
-        let map_cursor = memory.get_parsed(&map.cursor);
+    #[inline(always)]
+    pub fn step_iter(&mut self, memory: &'map NP_Memory<'map>) -> Option<(&'map str, NP_Cursor)> {
+        
+        match self.head {
+            Some(head) => {
 
-        if map.value == Option::None { // first iteration, get head
-
-            let head = map_cursor.value.get_addr_value() as usize;
-            if head == 0 {
-                return None
-            } else {
-                map.value = Some(NP_Cursor_Addr::Real(head));
-                map.index += 1;
-                return Some((map.index - 1, map.value.unwrap()))
-            }
-
-        } else { // subsequent iterations
-            let this_item_addr = map.value.unwrap();
-            let this_item = memory.get_parsed(&this_item_addr);
-            
-            let next_item_addr = this_item.value.get_next_addr() as usize;
-            if next_item_addr == 0 {
-                return None;
-            } else {
-                let this_cursor = NP_Cursor_Addr::Real(next_item_addr);
-
-                map.index += 1;
-
-                map.value = Some(this_cursor.clone());
-
-                return Some((map.index - 1, this_cursor))
-            }
+                match self.current {
+                    Some(current) => { // subsequent iterations
+                        let current_item = NP_Cursor::new(current.buff_addr, self.value_of, self.map.schema_addr);
+                        let current_value = current_item.get_value(memory);
+                        let next_value = current_value.get_next_addr() as usize;
+                        if next_value == 0 { //nothing left to step
+                            return None;
+                        } else {
+                            let next_value_cursor = NP_Cursor::new(next_value, self.value_of, self.map.schema_addr);
+                            let next_value_value = next_value_cursor.get_value(memory);
+                            self.previous = self.current.clone();
+                            let key = next_value_value.get_key(memory);
+                            self.current = Some(Map_Item { buff_addr: next_value, key: key });
+                            return Some((key, next_value_cursor))
+                        }
+                    },
+                    None => { // first iteration, get head
+                        self.current = Some(head.clone());
+                        return Some((head.key, NP_Cursor::new(head.buff_addr, self.value_of, self.map.schema_addr)))
+                    }
+                }
+            },
+            None => return None
         }
+
+
     }
 
-    pub fn insert(map_cursor_addr: &NP_Cursor_Addr, schema_addr: NP_Schema_Addr, memory: &NP_Memory, key: &str) -> Result<NP_Cursor_Addr, NP_Error> {
-        let new_item_addr = memory.malloc_borrow(&[0u8; 6])?;
+    #[inline(always)]
+    pub fn insert(map_cursor: &NP_Cursor, memory: &NP_Memory, key: &str) -> Result<NP_Cursor, NP_Error> {
 
-        let map_cursor = memory.get_parsed(&map_cursor_addr);
-
-        let new_item_cursor = NP_Cursor { 
-            buff_addr: new_item_addr, 
-            schema_addr: schema_addr, 
-            data: NP_Cursor_Data::Empty,
-            temp_bytes: None,
-            value: NP_Cursor::parse_cursor_value(new_item_addr, map_cursor.buff_addr, map_cursor.schema_addr, &memory), 
-            parent_addr: map_cursor.buff_addr,
-            index: 0
+        let value_of = match memory.schema[map_cursor.schema_addr] {
+            NP_Parsed_Schema::Map { value, .. } => value,
+            _ => unsafe { panic!() }
         };
 
         if key.len() >= 255 {
             return Err(NP_Error::new("Key length cannot be larger than 255 charecters!"));
         }
 
+        let map_value = map_cursor.get_value(memory);
+
+        let new_cursor_addr = memory.malloc_borrow(&[0u8; 6])?;
+        let new_cursor = NP_Cursor::new(new_cursor_addr, value_of, map_cursor.schema_addr);
+        let new_cursor_value = new_cursor.get_value(memory);
+
         // set key
         let key_item_addr = memory.malloc_borrow(&[key.len() as u8])?;
         memory.malloc_borrow(key.as_bytes())?;
-        new_item_cursor.value.set_key_addr(key_item_addr as u16);
+        new_cursor_value.set_key_addr(key_item_addr as u16);
 
-        let head = map_cursor.value.get_addr_value();
+        let head = map_value.get_addr_value() as usize;
 
-        map_cursor.value.set_addr_value(new_item_addr as u16);
+        // Set head of map to new cursor
+        map_value.set_addr_value(new_cursor_addr as u16);
 
         if head != 0 { // set new cursors NEXT to old HEAD
-            new_item_cursor.value.set_next_addr(head);
+            new_cursor_value.set_next_addr(head as u16);
         }
 
-        let key_hash = murmurhash3_x86_32(key.as_bytes(), SEED);
-        match &mut map_cursor.data {
-            NP_Cursor_Data::Map { value_map } => {
-                value_map.insert_hash(key_hash, new_item_addr)?;
-            },
-            _ => unsafe { unreachable_unchecked() }
-        }
-
-        memory.insert_parsed(new_item_addr, new_item_cursor);
-
-        Ok(NP_Cursor_Addr::Real(new_item_addr))
+        Ok(new_cursor)
     }
 
-    pub fn for_each<F>(cursor_addr: &NP_Cursor_Addr, memory: &NP_Memory, callback: &mut F) where F: FnMut((usize, NP_Cursor_Addr)) {
+    #[inline(always)]
+    pub fn for_each<F>(cursor_addr: &NP_Cursor, memory: &'map NP_Memory, callback: &mut F) where F: FnMut((&str, NP_Cursor)) {
 
         let mut map_iter = Self::new_iter(cursor_addr, memory);
 
@@ -137,44 +179,9 @@ impl NP_Map {
 
     }
 
-    pub fn parse<'parse>(buff_addr: usize, schema_addr: NP_Schema_Addr, parent_addr: usize, parent_schema_addr: usize, memory: &NP_Memory<'parse>, of_schema: usize, index: usize) {
-
-        let list_value = NP_Cursor::parse_cursor_value(buff_addr, parent_addr, parent_schema_addr, &memory);
-
-        let mut new_cursor = NP_Cursor { 
-            buff_addr: buff_addr, 
-            schema_addr: schema_addr, 
-            data: NP_Cursor_Data::Empty,
-            temp_bytes: None,
-            value: list_value, 
-            parent_addr: parent_addr,
-            index
-        };
-
-        let map_head = new_cursor.value.get_addr_value();
-
-        let mut next_item = map_head;
-
-        let mut map_addrs: NP_HashMap = NP_HashMap::new();
-
-
-        while next_item != 0 {
-            NP_Cursor::parse(next_item as usize, of_schema, buff_addr, schema_addr, &memory, 0);
-            let map_item = memory.get_parsed(&NP_Cursor_Addr::Real(next_item as usize));
-            let key_addr = map_item.value.get_key_addr() as usize;
-            let key_length = memory.read_bytes()[key_addr] as usize;
-            let key_data = &memory.read_bytes()[(key_addr + 1)..(key_addr + 1 + key_length)];
-            let key_hash = murmurhash3_x86_32(key_data, SEED);
-            map_addrs.insert_hash(key_hash, next_item as usize);
-            next_item = map_item.value.get_next_addr();
-        }
-        
-        new_cursor.data = NP_Cursor_Data::Map { value_map: map_addrs};
-        memory.insert_parsed(buff_addr, new_cursor);
-    }
 }
 
-impl<'value> NP_Value<'value> for NP_Map {
+impl<'value> NP_Value<'value> for NP_Map<'value> {
 
     fn type_idx() -> (&'value str, NP_TypeKeys) { ("map", NP_TypeKeys::Map) }
     fn self_type_idx(&self) -> (&'value str, NP_TypeKeys) { ("map", NP_TypeKeys::Map) }
@@ -187,7 +194,7 @@ impl<'value> NP_Value<'value> for NP_Map {
             NP_Parsed_Schema::Map { value, .. } => {
                 value
             },
-            _ => { unsafe { unreachable_unchecked() } }
+            _ => { unsafe { panic!() } }
         };
 
         schema_json.insert("value".to_owned(), NP_Schema::_type_to_json(schema, value_of)?);
@@ -195,71 +202,61 @@ impl<'value> NP_Value<'value> for NP_Map {
         Ok(NP_JSON::Dictionary(schema_json))
     }
 
-    fn get_size(cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>) -> Result<usize, NP_Error> {
+    fn get_size(cursor: &NP_Cursor, memory: &'value NP_Memory<'value>) -> Result<usize, NP_Error> {
 
-        let c = memory.get_parsed(&cursor);
+        let c_value = cursor.get_value(memory);
 
-        if c.value.get_addr_value() == 0 {
+        if c_value.get_addr_value() == 0 {
             return Ok(0) 
         }
 
         let mut acc_size = 0usize;
 
         Self::for_each(&cursor, memory, &mut |(_i, item)| {
-            let key_addr = memory.get_parsed(&item).value.get_key_addr() as usize;
-            let key_size = memory.read_bytes()[key_addr] as usize;
+            let key_size = item.get_value(memory).get_key_size(memory);
             acc_size += 1; // length byte
             acc_size += key_size;
-            acc_size += NP_Cursor::calc_size(item.clone(), memory).unwrap();
+            acc_size += NP_Cursor::calc_size(&item, memory).unwrap();
         });
 
         Ok(acc_size)
    
     }
 
-    fn to_json(cursor: NP_Cursor_Addr, memory: &'value NP_Memory) -> NP_JSON {
+    fn to_json(cursor: &NP_Cursor, memory: &'value NP_Memory) -> NP_JSON {
 
-        let c = memory.get_parsed(&cursor);
+        let c_value = cursor.get_value(memory);
 
-        if c.value.get_addr_value() == 0 { return NP_JSON::Null };
+        if c_value.get_addr_value() == 0 {
+            return NP_JSON::Null
+        }
 
         let mut json_map = JSMAP::new();
 
-        Self::for_each(&cursor, memory, &mut |(_i, item)| {
-            let key_addr = memory.get_parsed(&item).value.get_key_addr() as usize;
-            let key_size = memory.read_bytes()[key_addr] as usize;
-            let key_bytes = &memory.read_bytes()[(key_addr + 1)..(key_addr + 1 + key_size)];
-            json_map.insert(String::from(unsafe{ from_utf8_unchecked(key_bytes) }), NP_Cursor::json_encode(item.clone(), memory));
+        Self::for_each(&cursor, memory, &mut |(key, item)| {
+            json_map.insert(String::from(key), NP_Cursor::json_encode(&item, memory));
         });
 
         NP_JSON::Dictionary(json_map)
    
     }
 
-    fn do_compact(from_cursor: &NP_Cursor_Addr, from_memory: &'value NP_Memory, to_cursor: NP_Cursor_Addr, to_memory: &NP_Memory) -> Result<NP_Cursor_Addr, NP_Error> where Self: Sized {
+    fn do_compact(from_cursor: NP_Cursor, from_memory: &'value NP_Memory, to_cursor: NP_Cursor, to_memory: &'value NP_Memory) -> Result<NP_Cursor, NP_Error> where Self: 'value + Sized {
 
-        let from_c = from_memory.get_parsed(from_cursor);
- 
-        if from_c.value.get_addr_value() == 0 {
-            return Ok(to_cursor);
+        let from_value = from_cursor.get_value(from_memory);
+
+        if from_value.get_addr_value() == 0 {
+            return Ok(to_cursor) 
         }
 
-        Self::make_map(&to_cursor, to_memory)?;
-
-       let to_c = to_memory.get_parsed(&to_cursor);
-
-        let value_of = match from_memory.schema[from_c.schema_addr] {
+        let value_of = match from_memory.schema[from_cursor.schema_addr] {
             NP_Parsed_Schema::Map { value, .. } => value,
-            _ => unsafe { unreachable_unchecked() }
+            _ => unsafe { panic!() }
         };
-        Self::for_each(from_cursor, from_memory,  &mut |(index, item)| {
-            let old_item = from_memory.get_parsed(&item);
-            if old_item.buff_addr != 0 && old_item.value.get_addr_value() != 0 { // pointer has value
 
-                let key = old_item.value.get_key(from_memory);
-                let new_item = Self::insert(&to_cursor, value_of, to_memory, key).unwrap();
-                NP_Cursor::compact(&item, from_memory, new_item, to_memory).unwrap();
-            }    
+        Self::for_each(&from_cursor, from_memory,  &mut |(key, item)| {
+            let new_item = Self::insert(&to_cursor, to_memory, key).unwrap();
+            NP_Cursor::compact(item.clone(), from_memory, new_item, to_memory).unwrap();
         });
 
         Ok(to_cursor)

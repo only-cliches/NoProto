@@ -3,7 +3,7 @@
 use crate::collection::tuple::NP_Tuple;
 use core::hint::unreachable_unchecked;
 
-use crate::{hashmap::{SEED, murmurhash3_x86_32}, pointer::{NP_Scalar}};
+use crate::{pointer::{NP_Scalar}};
 use crate::{collection::map::NP_Map, utils::print_path};
 use crate::{schema::NP_TypeKeys, pointer::NP_Value};
 use crate::pointer::NP_Cursor;
@@ -129,7 +129,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// 
     pub fn move_cursor(&mut self, path: &[&str]) -> Result<bool, NP_Error> {
 
-        let value_cursor = self.select(self.cursor.clone(), true, path)?;
+        let value_cursor = self.select(self.cursor.clone(), false, path)?;
 
         let cursor = if let Some(x) = value_cursor {
             x
@@ -179,7 +179,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// ```
     /// 
     pub fn set<X: 'buffer>(&mut self, path: &[&str], value: X) -> Result<bool, NP_Error> where X: NP_Value<'buffer> + NP_Scalar {
-        let value_cursor = self.select(self.cursor.clone(), true, path)?;
+        let value_cursor = self.select(self.cursor.clone(), false, path)?;
         match value_cursor {
             Some(x) => {
                 X::set_value(x, &self.memory, value)?;
@@ -460,10 +460,10 @@ impl<'buffer> NP_Buffer<'buffer> {
                     return Err(NP_Error::new(err));
                 }
             },
-            _ => unsafe { unreachable_unchecked() }
+            _ => unsafe { panic!() }
         }
 
-        match NP_List::push(&list_cursor_addr, &self.memory, None)? {
+        match NP_List::push(&list_cursor, &self.memory, None)? {
             Some((index, new_item_addr)) => {
                 X::set_value(new_item_addr, &self.memory, value)?;
                 Ok(Some(index))
@@ -754,7 +754,7 @@ impl<'buffer> NP_Buffer<'buffer> {
                             None => {
                                 Ok(None)
                             }
-                        }
+                        }                        
                     }
                 }
             }
@@ -931,249 +931,61 @@ impl<'buffer> NP_Buffer<'buffer> {
         }
     }
 
-    fn select(&self, cursor: NP_Cursor, create_path: bool, path: &[&str]) -> Result<Option<NP_Cursor>, NP_Error> {
+    fn select(&self, cursor: NP_Cursor, schema_only: bool, path: &[&str]) -> Result<Option<NP_Cursor>, NP_Error> {
 
         let mut loop_cursor = cursor;
 
         let mut path_index = 0usize;
         
         loop {
-
+            
             if path.len() == path_index {
                 return Ok(Some(loop_cursor));
             }
 
             // now select into collections
-
-            match &self.memory.schema[cursor.schema_addr] {
-                NP_Parsed_Schema::Table { columns: column_schemas, columns_mapped,  .. } => {
-
-                    let column_index = columns_mapped.get(path[path_index]);
-
-                    match column_index {
-                        // column exists
-                        Some(col_index) => {
-                            if let NP_Cursor_Addr::Real(table_addr) = loop_cursor { // real loop
-                                
-                                let v_table =  *col_index / 4; // which vta ble
-                                let v_table_idx = *col_index % 4; // which index on the selected vtable
-                                
-                                match &cursor.data {
-                                    NP_Cursor_Data::Table { bytes  } => {
-                                        let mut sel_v_table = &bytes[v_table];
-
-                                        if sel_v_table.0 == 0 && create_path { // no vtable here, need to make one
-                                            sel_v_table = &NP_Table::extend_vtables(&loop_cursor, &self.memory, *col_index)?[v_table];
-                                        }
-
-                                        // virtual value
-                                        if sel_v_table.0 == 0 {
-                                            let virtual_cursor = self.memory.get_parsed(&loop_cursor);
-                                            virtual_cursor.reset();
-                                            virtual_cursor.parent_addr = cursor.buff_addr;
-                                            virtual_cursor.schema_addr = column_schemas[*col_index].2;
-                                            path_index += 1;
-                                        } else { // real
-                                            let item_addr = sel_v_table.0 + (v_table_idx * 2);
-                                            loop_cursor = NP_Cursor_Addr::Real(item_addr);
-                                            path_index += 1;                                            
-                                        }
-                                    },
-                                    NP_Cursor_Data::Empty => { // no table here yet
-                                        
-                                        if create_path { // create table in buffer
-
-                                            let vtables = NP_Table::make_table(&loop_cursor, &self.memory)?;
-                                            
-                                            let mut sel_v_table = &vtables[v_table];
-
-                                            if sel_v_table.0 == 0 { // no vtable here, need to make one
-                                                sel_v_table = &NP_Table::extend_vtables(&loop_cursor, &self.memory, *col_index)?[v_table];
-                                            }
-
-                                            let item_addr = sel_v_table.0 + (v_table_idx * 2);
-                                            loop_cursor = NP_Cursor_Addr::Real(item_addr);
-                                            path_index += 1;    
-                                        } else {    
-                                            let virtual_cursor = self.memory.get_parsed(&loop_cursor);
-                                            virtual_cursor.reset();
-                                            virtual_cursor.parent_addr = cursor.buff_addr;
-                                            virtual_cursor.schema_addr = column_schemas[*col_index].2;
-                                            path_index += 1;
-                                        }
-                                    },
-                                    _ => unsafe { unreachable_unchecked() }
-                                };
-
-                            } else { // virtual, just for schemas
-                                let virtual_cursor = self.memory.get_parsed(&loop_cursor);
-                                virtual_cursor.reset();
-                                virtual_cursor.parent_addr = cursor.buff_addr;
-                                virtual_cursor.schema_addr = column_schemas[*col_index].2;
-                                path_index += 1;
-                            }
-                        },
-                        // column doesn't exist
-                        None => {
-                            return Ok(None)
-                        }
+            match &self.memory.schema[loop_cursor.schema_addr] {
+                NP_Parsed_Schema::Table {  .. } => {
+                    if let Some(next) = NP_Table::select(loop_cursor, path[path_index], schema_only, &self.memory)? {
+                        loop_cursor = next;
+                        path_index += 1;
+                    } else {
+                        return Ok(None);
                     }
                 },
-                NP_Parsed_Schema::Tuple { values: values_schemas, .. } => {
-                    let list_key = &path[path_index];
-                    let list_key_int = list_key.parse::<usize>();
-                    match list_key_int {
-                        Ok(tuple_index) => {
-                            if tuple_index > values_schemas.len() {
+                NP_Parsed_Schema::Tuple { .. } => {
+                    match path[path_index].parse::<usize>() {
+                        Ok(x) => {
+                            if let Some(next) = NP_Tuple::select(loop_cursor, x, schema_only, &self.memory)? {
+                                loop_cursor = next;
+                                path_index += 1;
+                            } else {
                                 return Ok(None);
                             }
-
-                            let v_table =  tuple_index / 4;
-                            let v_table_idx = tuple_index % 4;
-
-                            match &cursor.data {
-                                NP_Cursor_Data::Tuple { bytes  } => {
-                                    let mut sel_v_table = &bytes[v_table];
-
-                                    if sel_v_table.0 == 0 && create_path { // no vtable here, need to make one
-                                        sel_v_table = &NP_Table::extend_vtables(&loop_cursor, &self.memory, tuple_index)?[v_table];
-                                    }
-
-                                    // virtual value
-                                    if sel_v_table.0 == 0 {
-                                        let virtual_cursor = self.memory.get_parsed(&loop_cursor);
-                                        virtual_cursor.reset();
-                                        virtual_cursor.parent_addr = cursor.buff_addr;
-                                        virtual_cursor.schema_addr = values_schemas[tuple_index];
-                                        path_index += 1;
-                                    } else { // real
-                                        let item_addr = sel_v_table.0 + (v_table_idx * 2);
-                                        loop_cursor = NP_Cursor_Addr::Real(item_addr);
-                                        path_index += 1;                                            
-                                    }
-                                },
-                                NP_Cursor_Data::Empty => { // no table here yet
-                                        
-                                    if create_path { // create table in buffer
-
-                                        let vtables = NP_Tuple::make_tuple(&loop_cursor, &self.memory)?;
-                                        
-                                        let mut sel_v_table = &vtables[v_table];
-
-                                        if sel_v_table.0 == 0 { // no vtable here, need to make one
-                                            sel_v_table = &NP_Tuple::extend_vtables(&loop_cursor, &self.memory, tuple_index)?[v_table];
-                                        }
-
-                                        let item_addr = sel_v_table.0 + (v_table_idx * 2);
-                                        loop_cursor = NP_Cursor_Addr::Real(item_addr);
-                                        path_index += 1;    
-                                    } else {    
-                                        let virtual_cursor = self.memory.get_parsed(&loop_cursor);
-                                        virtual_cursor.reset();
-                                        virtual_cursor.parent_addr = cursor.buff_addr;
-                                        virtual_cursor.schema_addr = values_schemas[tuple_index];
-                                        path_index += 1;
-                                    }
-                                },
-                                _ => unsafe { unreachable_unchecked() }
-                            };
-
                         },
                         Err(_e) => {
-                            let mut err = String::from("Can't query tuple with string, need number! Path: \n");
-                            err.push_str(print_path(&path, path_index).as_str());
-                            return Err(NP_Error::new(err))
+                            return Err(NP_Error::new("Need a number to index into tuple, string found!"))
                         }
                     }
                 },
-                NP_Parsed_Schema::List { of, .. } => {
-                    let list_key = &path[path_index];
-                    let list_key_int = list_key.parse::<usize>();
-                    match list_key_int {
-                        Ok(list_index) => {
-                            match &cursor.data {
-                                NP_Cursor_Data::List { list_addrs, .. } => {
-
-                                    let mut list_item_addr = list_addrs[list_index];
-
-                                    if list_item_addr == 0 && create_path {
-                                        list_item_addr = NP_List::insert(&loop_cursor, &self.memory, list_index)?;
-                                    }
-
-                                    if list_item_addr == 0 { // virtual
-                                        let virtual_cursor = self.memory.get_parsed(&loop_cursor);
-                                        virtual_cursor.reset();
-                                        virtual_cursor.parent_addr = cursor.buff_addr;
-                                        virtual_cursor.schema_addr = *of;
-                                        path_index += 1;
-                                    } else { // real
-                                        loop_cursor = NP_Cursor_Addr::Real(list_addrs[list_index]);
-                                        path_index += 1;   
-                                    }
-                                },
-                                NP_Cursor_Data::Empty => {
-                                    if create_path {
-                                        NP_List::make_list(&loop_cursor, &self.memory)?;
-                                        let list_item_addr = NP_List::insert(&loop_cursor, &self.memory, list_index)?;
-                                        loop_cursor = NP_Cursor_Addr::Real(list_item_addr);
-                                        path_index += 1;        
-                                    } else {
-                                        let virtual_cursor = self.memory.get_parsed(&loop_cursor);
-                                        virtual_cursor.reset();
-                                        virtual_cursor.parent_addr = cursor.buff_addr;
-                                        virtual_cursor.schema_addr = *of;
-                                        path_index += 1;
-                                    }
-                                },
-                                _ => unsafe { unreachable_unchecked() }
+                NP_Parsed_Schema::List { .. } => {
+                    match path[path_index].parse::<usize>() {
+                        Ok(x) => {
+                            if let Some(next) = NP_List::select(loop_cursor, x, schema_only, &self.memory)? {
+                                loop_cursor = next.1.unwrap();
+                                path_index += 1;
+                            } else {
+                                return Ok(None);
                             }
                         },
                         Err(_e) => {
-                            let mut err = String::from("Can't query tuple with string, need number! Path: \n");
-                            err.push_str(print_path(&path, path_index).as_str());
-                            return Err(NP_Error::new(err))
-                        }    
+                            return Err(NP_Error::new("Need a number to index into list, string found!"))
+                        }
                     }
                 },
-                NP_Parsed_Schema::Map { value, .. } => {
-                    match &mut cursor.data {
-                        NP_Cursor_Data::Map { value_map, .. } => {
-                            let key_hash = murmurhash3_x86_32(path[path_index].as_bytes(), SEED);
-
-                            match value_map.get_hash(key_hash) {
-                                Some(map_item_addr) => {
-                                    loop_cursor = NP_Cursor_Addr::Real(*map_item_addr);
-                                    path_index += 1;   
-                                },
-                                None => {
-                                    if create_path {
-                                        loop_cursor = NP_Map::insert(&loop_cursor, *value, &self.memory, path[path_index])?;
-                                        path_index += 1;  
-                                    } else {
-                                        let virtual_cursor = self.memory.get_parsed(&loop_cursor);
-                                        virtual_cursor.reset();
-                                        virtual_cursor.parent_addr = cursor.buff_addr;
-                                        virtual_cursor.schema_addr = *value;
-                                        path_index += 1;
-                                    }
-                                }
-                            }
-                        },
-                        NP_Cursor_Data::Empty => {
-                            if create_path {
-                                NP_Map::make_map(&loop_cursor, &self.memory)?;
-                                loop_cursor = NP_Map::insert(&loop_cursor, *value, &self.memory, path[path_index])?;
-                                path_index += 1;        
-                            } else {
-                                let virtual_cursor = self.memory.get_parsed(&loop_cursor);
-                                virtual_cursor.reset();
-                                virtual_cursor.parent_addr = cursor.buff_addr;
-                                virtual_cursor.schema_addr = *value;
-                                path_index += 1;
-                            }
-                        },
-                        _ => unsafe { unreachable_unchecked() }
-                    }
+                NP_Parsed_Schema::Map {  .. } => {
+                    loop_cursor = NP_Map::select(loop_cursor, path[path_index], schema_only, &self.memory)?;
+                    path_index += 1;
                 },
                 _ => { // we've reached a scalar value but not at the end of the path
                     return Ok(None);

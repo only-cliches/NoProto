@@ -20,6 +20,44 @@ Benchmarks can be ran with `cargo run --release`.
 
 # Old Benchmarks
 
+## Dec 13, 2020
+### v0.6.0
+
+====== SIZE BENCHMARK ======
+NoProto:     size: 283b, zlib: 226b
+Flatbuffers: size: 336b, zlib: 214b
+PBuffers:    size: 220b, zlib: 163b
+MessagePack: size: 431b, zlib: 245b
+JSON:        size: 673b, zlib: 246b
+
+====== ENCODE BENCHMARK ======
+NoProto:     3.645993s
+Flatbuffers: 2.031044s
+PBuffers:    3.814115s
+MessagePack: 29.39988s
+JSON:        5.54222s
+
+====== DECODE BENCHMARK ======
+NoProto:     2.625244s
+Flatbuffers: 156.943ms
+PBuffers:    2.864848s
+MessagePack: 16.351103s
+JSON:        9.231317s
+
+====== DECODE ONE BENCHMARK ======
+NoProto:     204.795ms
+Flatbuffers: 11.63ms
+PBuffers:    2.828876s
+MessagePack: 15.166845s
+JSON:        7.23197s
+
+====== UPDATE BENCHMARK ======
+NoProto:     267.654ms
+Flatbuffers: 2.214119s
+PBuffers:    6.673877s
+MessagePack: 32.867811s
+JSON:        8.96524s
+
 ## Dec 1, 2020
 ### v0.5.1 
 Macbook Air M1 with 8GB

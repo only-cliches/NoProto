@@ -1,6 +1,6 @@
 use crate::{hashmap::NP_HashMap, utils::{opt_out, opt_out_mut}};
 use alloc::string::String;
-use crate::pointer::{NP_Cursor_Addr, NP_Cursor_Data, NP_Vtable};
+use crate::pointer::{NP_Vtable};
 use crate::{pointer::{NP_Cursor}, schema::{NP_Parsed_Schema, NP_Schema_Addr}};
 use crate::{memory::{NP_Memory}, pointer::{NP_Value}, error::NP_Error, schema::{NP_Schema, NP_TypeKeys}, json_flex::{JSMAP, NP_JSON}};
 
@@ -13,230 +13,168 @@ use core::{result::Result, hint::unreachable_unchecked};
 /// The data type for tables in NoProto buffers.
 /// 
 #[doc(hidden)]
-pub struct NP_Table {
-    cursor: NP_Cursor_Addr,
-    index: usize
+pub struct NP_Table<'table> {
+    index: usize,
+    v_table: Option<&'table mut NP_Vtable>,
+    v_table_addr: usize,
+    v_table_index: usize,
+    table: NP_Cursor
 }
 
+impl<'table> NP_Table<'table> {
 
+    #[inline(always)]
+    pub fn select(mut table_cursor: NP_Cursor, key: &str, schema_only: bool, memory: &NP_Memory) -> Result<Option<NP_Cursor>, NP_Error> {
+        match &memory.schema[table_cursor.schema_addr] {
+            NP_Parsed_Schema::Table { columns, columns_mapped, .. } => {
+                match columns_mapped.get(key) {
+                    Some(x) => {
+                        let column_schema_data = &columns[*x];
 
-impl NP_Table {
+                        if schema_only {
+                            return Ok(Some(NP_Cursor::new(0, column_schema_data.2, table_cursor.schema_addr)));
+                        }
 
-    pub fn make_table<'make>(table_cursor_addr: &NP_Cursor_Addr, memory: &'make NP_Memory) -> Result<&'make [(usize, Option<&'make mut NP_Vtable>); 64], NP_Error> {
+                        let v_table =  *x / 4; // which vtable
+                        let v_table_idx = *x % 4; // which index on the selected vtable
 
-        let cursor = memory.get_parsed(table_cursor_addr);
+                        let mut table_value = table_cursor.get_value(memory);
+                        if table_value.get_addr_value() == 0 {
+                            table_cursor = Self::make_first_vtable(table_cursor, memory)?;
+                        }
+                        table_value = table_cursor.get_value(memory);
 
-        match &memory.schema[cursor.schema_addr] {
-            NP_Parsed_Schema::Table { columns: column_schemas, ..} => {
-                let first_vtable_addr = memory.malloc_borrow(&[0u8; 10])?;
-                
-                cursor.value.set_addr_value(first_vtable_addr as u16);
-                let mut vtables: [(usize, Option<&mut NP_Vtable>); 64] = NP_Vtable::new_empty();
-                vtables[0] = (first_vtable_addr as usize, Some(unsafe { &mut *(memory.write_bytes().as_ptr().add(first_vtable_addr as usize) as *mut NP_Vtable) }));
-                
-                // create cached pointers for vtable
-                for x in 0..4usize {
-                    if x < column_schemas.len() {
-                        let item_addr = vtables[0].0 + (x * 2);
-                        memory.insert_parsed(item_addr, NP_Cursor {
-                            buff_addr: item_addr, 
-                            schema_addr: column_schemas[x].2, 
-                            data: NP_Cursor_Data::Empty,
-                            temp_bytes: None,
-                            value: NP_Cursor::parse_cursor_value(item_addr, cursor.buff_addr, cursor.schema_addr, &memory), 
-                            parent_addr: cursor.buff_addr,
-                            index: x
-                        });
+                        let mut seek_vtable = 0usize;
+                        let mut vtable_address = table_value.get_addr_value() as usize;
+ 
+                        while seek_vtable < v_table {
+                            let this_vtable = Self::get_vtable(vtable_address, memory);
+                            let next_vtable = this_vtable.get_next();
+
+                            if next_vtable == 0 {
+                                vtable_address = Self::make_next_vtable(this_vtable, memory)?;
+                            } else {
+                                vtable_address = next_vtable as usize;
+                            }
+
+                            seek_vtable += 1;
+                        }
+
+                        let item_address = vtable_address + (v_table_idx * 2);
+
+                        Ok(Some(NP_Cursor::new(item_address, columns[*x].2, table_cursor.schema_addr)))
+                    },
+                    None => Ok(None)
+                }
+            },
+            _ => unsafe { panic!() }
+        }
+    }
+
+    #[inline(always)]
+    pub fn make_first_vtable<'make>(table_cursor: NP_Cursor, memory: &'make NP_Memory) -> Result<NP_Cursor, NP_Error> {
+
+        let first_vtable_addr = memory.malloc_borrow(&[0u8; 10])?;
+        
+        let table_value = table_cursor.get_value(memory);
+        table_value.set_addr_value(first_vtable_addr as u16);
+
+        Ok(table_cursor)
+    }
+
+    #[inline(always)]
+    pub fn make_next_vtable<'make>(prev_vtable: &'make mut NP_Vtable, memory: &'make NP_Memory) -> Result<usize, NP_Error> {
+
+        let vtable_addr = memory.malloc_borrow(&[0u8; 10])?;
+        
+        prev_vtable.set_next(vtable_addr as u16);
+
+        Ok(vtable_addr)
+    }
+
+    #[inline(always)]
+    pub fn new_iter(cursor: &NP_Cursor, memory: &'table NP_Memory) -> Self {
+
+        let table_value = cursor.get_value(memory);
+
+        let addr_value = table_value.get_addr_value() as usize;
+
+        Self {
+            table: cursor.clone(),
+            v_table: if addr_value == 0 {
+                None
+            } else {
+                Some(Self::get_vtable(addr_value, memory))
+            },
+            v_table_addr: addr_value,
+            v_table_index: 0,
+            index: 0,
+        }
+    }
+
+    #[inline(always)]
+    pub fn get_vtable<'vtable>(v_table_addr: usize, memory: &'vtable NP_Memory) -> &'vtable mut NP_Vtable {
+        unsafe { &mut *(memory.write_bytes().as_ptr().add(v_table_addr) as *mut NP_Vtable) }
+    }
+
+    #[inline(always)]
+    pub fn step_iter(&mut self, memory: &'table NP_Memory) -> Option<(usize, &'table str, Option<NP_Cursor>)> {
+
+        match &memory.schema[self.table.schema_addr] {
+            NP_Parsed_Schema::Table { columns, .. } => {
+
+                if columns.len() <= self.index {
+                    return None;
+                }
+
+                let v_table =  self.index / 4; // which vtable
+                let v_table_idx = self.index % 4; // which index on the selected vtable
+
+                if self.v_table_index > v_table_idx {
+                    self.v_table_index = v_table_idx;
+                    match &self.v_table {
+                        Some(vtable) => {
+                            let next_vtable = vtable.get_next() as usize;
+                            if next_vtable > 0 {
+                                self.v_table = Some(Self::get_vtable(next_vtable, memory));
+                                self.v_table_addr = next_vtable;
+                            } else {
+                                self.v_table = None;
+                                self.v_table_addr = 0;
+                            }
+                        },
+                        _ => {}
                     }
                 }
 
-                cursor.data = NP_Cursor_Data::Table { bytes: vtables };
+                let this_index = self.index;
+                self.index += 1;
 
-                Ok(match &cursor.data {
-                    NP_Cursor_Data::Table { bytes } => bytes,
-                    _ => unsafe { unreachable_unchecked() }
-                })
-            }
-            _ => unsafe { unreachable_unchecked() }
-        }
-    }
-
-    pub fn new_iter(cursor_addr: &NP_Cursor_Addr) -> Self {
-
-        Self {
-            cursor: cursor_addr.clone(),
-            index: 0,
-        }
-
-    }
-
-    pub fn step_iter<'step>(table: &mut Self, memory: &'step NP_Memory) -> Option<(&'step str, NP_Cursor_Addr)> {
-        let table_cursor = memory.get_parsed(&table.cursor);
-
-        match &mut table_cursor.data {
-            NP_Cursor_Data::Table { bytes } => {
-                match &memory.schema[table_cursor.schema_addr] {
-                    NP_Parsed_Schema::Table { columns, .. } => {
-
-                        if columns.len() <= table.index {
-                            return None;
-                        }
-
-                        let v_table =  table.index / 4; // which vtable
-                        let v_table_idx = table.index % 4; // which index on the selected vtable
-        
-                        if bytes[v_table].0 == 0 { // vtable doesn't exist
-                            let virtual_cursor = memory.get_parsed(&NP_Cursor_Addr::Virtual);
-                            virtual_cursor.reset();
-                            virtual_cursor.parent_addr = table_cursor.buff_addr;
-                            virtual_cursor.schema_addr = columns[table.index].2;
-                            virtual_cursor.index = table.index;
-                            table.index += 1;
-                            return Some((columns[table.index - 1].1.as_str(), NP_Cursor_Addr::Virtual))
-                        } else { // vtable exists
-                            let item_address = bytes[v_table].0 + (v_table_idx * 2);
-                            table.index += 1;
-                            return Some((columns[table.index - 1].1.as_str(), NP_Cursor_Addr::Real(item_address)))
-                        }
-                    },
-                    _ => unsafe { unreachable_unchecked() }
+                if self.v_table_addr != 0 {
+                    let item_address = self.v_table_addr + (v_table_idx * 2);
+                    Some((this_index, columns[this_index].1.as_str(), Some(NP_Cursor::new(item_address, columns[this_index].2, self.table.schema_addr))))
+                } else {
+                    Some((this_index, columns[this_index].1.as_str(), None))
                 }
             },
-            _ => unsafe { unreachable_unchecked() }
+            _ => unsafe { panic!() }
         }
     }
 
-    pub fn for_each<'each, F>(cursor_addr: &NP_Cursor_Addr, memory: &'each NP_Memory, callback: &mut F) where F: FnMut((&'each str, NP_Cursor_Addr)) {
+    #[inline(always)]
+    pub fn for_each<F>(cursor_addr: &NP_Cursor, memory: &'table NP_Memory, callback: &mut F) where F: FnMut((usize, &'table str, Option<NP_Cursor>)) {
 
-        let mut list_iter = Self::new_iter(cursor_addr);
+        let mut table = Self::new_iter(cursor_addr, memory);
 
-        while let Some((index, item)) = Self::step_iter(&mut list_iter, memory) {
-            callback((index, item))
+        while let Some((index, key, item)) = table.step_iter(memory) {
+            callback((index, key, item))
         }
 
-    }
-
-    pub fn extend_vtables<'extend>(cursor: &NP_Cursor_Addr, memory: &'extend NP_Memory, col_index: usize) -> Result<&'extend [(usize, Option<&'extend mut NP_Vtable>); 64], NP_Error> {
-        let cursor = memory.get_parsed(cursor);
-
-        let desired_v_table =  col_index / 4;
-
-        match &mut cursor.data {
-            NP_Cursor_Data::Table { bytes } => {
-
-                match &memory.schema[cursor.schema_addr] {
-                    NP_Parsed_Schema::Table { columns, .. } => {
-                        let mut index = 0usize;
-                        let mut col_index = 0usize;
-
-                        // find the last virtual table that has been saved in the buffer
-                        loop {
-                            if bytes[index].0 != 0 {
-                                index += 1;
-                                col_index += 4;
-                            } else {
-                                break;
-                            }
-                        }
-
-                        // extend it
-                        while index <= desired_v_table {
-                            let new_vtable_addr = memory.malloc_borrow(&[0u8; 10])?;
-                            opt_out_mut(&mut bytes[index - 1].1).set_next(new_vtable_addr as u16);
-                            
-                            for x in 0..4 {
-                                if col_index < columns.len() {
-                                    let item_addr = new_vtable_addr + (x * 2);
-                                    memory.insert_parsed(item_addr, NP_Cursor {
-                                        buff_addr: item_addr, 
-                                        schema_addr: columns[col_index].2, 
-                                        data: NP_Cursor_Data::Empty,
-                                        temp_bytes: None,
-                                        value: NP_Cursor::parse_cursor_value(item_addr, cursor.buff_addr, cursor.schema_addr, &memory), 
-                                        parent_addr: cursor.buff_addr,
-                                        index: x
-                                    });
-
-                                    col_index += 1;
-                                }
-                            }
-                           
-                            bytes[index] = (new_vtable_addr, Some(unsafe { &mut *(memory.write_bytes().as_ptr().add(new_vtable_addr) as *mut NP_Vtable) }));
-                            index += 1;
-                        }
-
-                        Ok(bytes)
-                    },
-                    _ => unsafe { unreachable_unchecked() }
-                }
-            },
-            _ => unsafe { unreachable_unchecked() }
-        }
-    }
-
-    pub fn parse<'parse>(buff_addr: usize, schema_addr: NP_Schema_Addr, parent_addr: usize, parent_schema_addr: usize, memory: &NP_Memory<'parse>, columns: &Vec<(u8, String, usize)>, index: usize) {
-
-        let table_value = NP_Cursor::parse_cursor_value(buff_addr, parent_addr, parent_schema_addr, &memory);
-
-        let mut new_cursor = NP_Cursor { 
-            buff_addr: buff_addr, 
-            schema_addr: schema_addr, 
-            data: NP_Cursor_Data::Empty,
-            temp_bytes: None,
-            value: table_value, 
-            parent_addr: parent_addr,
-            index
-        };
-
-        let table_addr = new_cursor.value.get_addr_value();
-
-        if table_addr == 0 { // no table here
-            memory.insert_parsed(buff_addr, new_cursor);
-        } else { // table exists, parse it
-
-            // parse vtables 
-            let mut vtables: [(usize, Option<&mut NP_Vtable>); 64] = NP_Vtable::new_empty();
-
-            vtables[0] = (table_addr as usize, Some(unsafe { &mut *(memory.write_bytes().as_ptr().add(table_addr as usize) as *mut NP_Vtable) }));
-
-            let mut next_vtable = opt_out(&vtables[0].1).get_next();
-            let mut index = 1;
-            while next_vtable != 0 {
-                vtables[index] = (next_vtable as usize, Some(unsafe { &mut *(memory.write_bytes().as_ptr().add(next_vtable as usize) as *mut NP_Vtable) }));
-                next_vtable = opt_out(&mut vtables[index].1).get_next();
-                index += 1;
-            }
-
-            // parse children
-            let mut column_index = 0usize;
-            for vtable in &vtables { // each vtable holds 4 columns
-                if column_index < columns.len() {
-                    if vtable.0 != 0 {
-                        for (i, pointer) in opt_out(&vtable.1).values.iter().enumerate() {
-                            if column_index < columns.len() {
-                                let item_buff_addr = vtable.0 + (i * 2);
-                                let col_schema_addr = columns[column_index].2;
-                                NP_Cursor::parse(item_buff_addr, col_schema_addr, buff_addr, schema_addr, &memory, column_index).unwrap();
-                            }
-                            column_index += 1;       
-                        }
-                    } else {
-                        column_index += 4;
-                    }                    
-                }
-            }
-             
-        
-
-            // set table data 
-            new_cursor.data = NP_Cursor_Data::Table { bytes: vtables };
-            memory.insert_parsed(buff_addr, new_cursor);
-
-        }
     }
 }
 
-impl<'value> NP_Value<'value> for NP_Table {
+impl<'value> NP_Value<'value> for NP_Table<'value> {
+
     fn type_idx() -> (&'value str, NP_TypeKeys) { ("table", NP_TypeKeys::Table) }
     fn self_type_idx(&self) -> (&'value str, NP_TypeKeys) { ("table", NP_TypeKeys::Table) }
 
@@ -303,7 +241,7 @@ impl<'value> NP_Value<'value> for NP_Table {
                     NP_JSON::Array(cols)
                 }).collect()
             },
-            _ => { unsafe { unreachable_unchecked() } }
+            _ => { unsafe { panic!() } }
         };
 
         schema_json.insert("columns".to_owned(), NP_JSON::Array(columns));
@@ -311,91 +249,94 @@ impl<'value> NP_Value<'value> for NP_Table {
         Ok(NP_JSON::Dictionary(schema_json))
     }
  
-    fn get_size(cursor: NP_Cursor_Addr, memory: &NP_Memory<'value>) -> Result<usize, NP_Error> {
+    fn get_size(cursor: &NP_Cursor, memory: &'value NP_Memory<'value>) -> Result<usize, NP_Error> {
 
-        let c = memory.get_parsed(&cursor);
+        let c_value = cursor.get_value(memory);
 
-        if c.value.get_addr_value() == 0 {
+        if c_value.get_addr_value() == 0 {
             return Ok(0) 
         }
 
         let mut acc_size = 0usize;
 
-        // add vtables
-        match &c.data {
-            NP_Cursor_Data::Table { bytes } => {
-                let mut idx = 0usize;
-                while bytes[idx].0 != 0 {
-                    // each VTABLE is 10 bytes
-                    acc_size += 10;
-                    idx += 1;
-                }
-            },
-            _ => unsafe { unreachable_unchecked() }
+        let mut nex_vtable = c_value.get_addr_value() as usize;
+
+        while nex_vtable > 0 {
+            acc_size += 10;
+            let vtable = Self::get_vtable(nex_vtable, memory);
+            nex_vtable = vtable.get_next() as usize;
         }
 
         // loop through values in table
-        Self::for_each(&cursor, memory, &mut |(_i, item)| {
-            let add_size = NP_Cursor::calc_size(item.clone(), memory).unwrap();
-            if add_size > 2 {
-                // scalar cursor is part of vtable
-                acc_size += add_size - 2;             
+        Self::for_each(&cursor, memory, &mut |(_i, _key, item)| {
+            if let Some(real) = item {
+                let add_size = NP_Cursor::calc_size(&real, memory).unwrap();
+                if add_size > 2 {
+                    // scalar cursor is part of vtable
+                    acc_size += add_size - 2;             
+                }
             }
         });
    
         Ok(acc_size)
     }
 
-    fn to_json(cursor: NP_Cursor_Addr, memory: &'value NP_Memory) -> NP_JSON {
+    fn to_json(cursor: &NP_Cursor, memory: &'value NP_Memory) -> NP_JSON {
 
-        let c = memory.get_parsed(&cursor);
+        let c_value = cursor.get_value(memory);
 
-        if c.value.get_addr_value() == 0 { return NP_JSON::Null };
+        if c_value.get_addr_value() == 0 { return NP_JSON::Null };
 
         let mut json_map = JSMAP::new();
 
-        Self::for_each(&cursor, memory, &mut |(key, item)| {
-            json_map.insert(String::from(key), NP_Cursor::json_encode(item.clone(), memory));     
+        Self::for_each(&cursor, memory, &mut |(idx, key, item)| {
+            if let Some(real) = item {
+                json_map.insert(String::from(key), NP_Cursor::json_encode(&real, memory));  
+            } else {
+                json_map.insert(String::from(key), NP_JSON::Null);  
+            }
         });
 
         NP_JSON::Dictionary(json_map)
     }
 
-    fn do_compact(from_cursor: &NP_Cursor_Addr, from_memory: &'value NP_Memory, to_cursor: NP_Cursor_Addr, to_memory: &NP_Memory) -> Result<NP_Cursor_Addr, NP_Error> where Self: Sized {
+    fn do_compact(from_cursor: NP_Cursor, from_memory: &'value NP_Memory, mut to_cursor: NP_Cursor, to_memory: &'value NP_Memory) -> Result<NP_Cursor, NP_Error> where Self: 'value + Sized {
 
-        let from_c = from_memory.get_parsed(from_cursor);
-        
-        if from_c.value.get_addr_value() == 0 {
-            return Ok(to_cursor);
+        let from_value = from_cursor.get_value(from_memory);
+
+        if from_value.get_addr_value() == 0 {
+            return Ok(to_cursor) 
         }
 
-        Self::make_table(&to_cursor, &to_memory)?;
+        to_cursor = Self::make_first_vtable(to_cursor, to_memory)?;
+        let to_cursor_value = to_cursor.get_value(to_memory);
+        let mut last_real_vtable = to_cursor_value.get_addr_value() as usize;
+        let mut last_vtable_idx = 0usize;
 
-        let to_c = to_memory.get_parsed(&to_cursor);
+        let col_schemas = match &from_memory.schema[from_cursor.schema_addr] {
+            NP_Parsed_Schema::Table { columns, .. } => {
+                columns
+            },
+            _ => unsafe { panic!() }
+        };
 
-        Self::for_each(from_cursor, from_memory, &mut |(key, item)| {
-            let old_item = from_memory.get_parsed(&item);
+        Self::for_each(&from_cursor, from_memory, &mut |(idx, key, item)| {
 
-            if old_item.buff_addr != 0 && old_item.value.get_addr_value() != 0 { // pointer has value
-                let v_table =  old_item.index / 4; // which vtable
-                let v_table_idx = old_item.index % 4; // which index on the selected vtable
+            if let Some(real) = item {
 
-                match &to_c.data {
-                    NP_Cursor_Data::Table { bytes } => {
-                        let mut sel_v_table = &bytes[v_table];
 
-                        if sel_v_table.0 == 0 { // no vtable here, need to make one
-                            sel_v_table = &Self::extend_vtables(&to_cursor, to_memory, old_item.index).unwrap()[v_table];
-                        }
-
-                        let item_addr = sel_v_table.0 + (v_table_idx * 2);
-                        NP_Cursor::compact(&item, from_memory, NP_Cursor_Addr::Real(item_addr), to_memory).unwrap();
-                    }
-                    _ => unsafe { unreachable_unchecked() }
+                let v_table =  idx / 4; // which vtable
+                let v_table_idx = idx % 4; // which index on the selected vtable
+                
+                if last_vtable_idx < v_table {
+                    let vtable_data = Self::get_vtable(last_real_vtable, to_memory);
+                    last_real_vtable = Self::make_next_vtable(vtable_data, to_memory).unwrap();
+                    last_vtable_idx += 1;
                 }
 
-                
-            }    
+                let item_addr = last_real_vtable + (v_table_idx * 2);
+                NP_Cursor::compact(real.clone(), from_memory, NP_Cursor::new(item_addr, col_schemas[idx].2, to_cursor.schema_addr), to_memory).unwrap();
+            }
         });
 
         Ok(to_cursor)

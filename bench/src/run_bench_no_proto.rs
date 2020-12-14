@@ -47,6 +47,8 @@ impl NoProtoBench {
 
             new_buff.set(&["list", "0", "name"], "bob")?;
 
+            // new_buff.compact(None)?;
+
             assert_eq!(new_buff.close().len(), 283);
         }
 
@@ -85,6 +87,22 @@ impl NoProtoBench {
                 ["fruit", {"type": "u8"}]
             ]
         }"#)
+    }
+
+    pub fn decode_one_bench() -> Result<(), NP_Error> {
+        let factory = NoProtoBench::get_factory()?;
+        let new_buffer = NoProtoBench::encode_single(&factory)?;
+        let start = SystemTime::now();
+
+        for x in 0..LOOPS {
+            let new_buff = factory.open_buffer(new_buffer.clone())?;
+            assert_eq!(new_buff.get(&["location"])?, Some("https://arstechnica.com"));
+        }
+
+        let time = SystemTime::now().duration_since(start).expect("Time went backwards");
+        println!("NoProto:     {:?}", time);
+
+        Ok(())
     }
 
     pub fn decode_bench() -> Result<(), NP_Error> {
