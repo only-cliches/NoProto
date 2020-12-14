@@ -9,7 +9,7 @@ use crate::protobuf::Message;
 use std::io::prelude::*;
 use flate2::Compression;
 use flate2::write::ZlibEncoder;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{SystemTime};
 
 pub struct ProtocolBufferBench();
 
@@ -30,7 +30,7 @@ impl ProtocolBufferBench {
     pub fn encode_bench() {
         let start = SystemTime::now();
 
-        for x in 0..LOOPS {
+        for _x in 0..LOOPS {
             let buffer = Self::encode_single();
             assert_eq!(buffer.len(), 220);
         }
@@ -81,7 +81,7 @@ impl ProtocolBufferBench {
 
         let buffer = Self::encode_single();
 
-        for x in 0..LOOPS {
+        for _x in 0..LOOPS {
             let old_foo_bar: FooBarContainer = protobuf::parse_from_bytes(&buffer).unwrap();
 
 
@@ -142,7 +142,7 @@ impl ProtocolBufferBench {
 
         let buffer = Self::encode_single();
 
-        for x in 0..LOOPS {
+        for _x in 0..LOOPS {
             let old_foo_bar: FooBarContainer = protobuf::parse_from_bytes(&buffer).unwrap();
             assert_eq!(old_foo_bar.get_location(), "http://arstechnica.com");
         }
@@ -156,7 +156,7 @@ impl ProtocolBufferBench {
 
         let buffer = Self::encode_single();
 
-        for x in 0..LOOPS {
+        for _x in 0..LOOPS {
             let old_foo_bar: FooBarContainer = protobuf::parse_from_bytes(&buffer).unwrap();
 
             old_foo_bar.get_list().iter().enumerate().for_each(|(y, old_foo_b)| {

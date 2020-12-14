@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 use std::io::prelude::*;
 use flate2::Compression;
 use flate2::write::ZlibEncoder;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{SystemTime};
 
 
 pub struct MessagePackBench();
@@ -80,7 +80,7 @@ impl MessagePackBench {
 
         let start = SystemTime::now();
 
-        for x in 0..LOOPS {
+        for _x in 0..LOOPS {
             let mut container = Value::deserialize(&mut BufReader::new(Cursor::new(buffer.clone()))).unwrap();
 
             match &mut container {
@@ -114,7 +114,7 @@ impl MessagePackBench {
 
 
         for _x in 0..LOOPS {
-            let mut container = Value::deserialize(&mut BufReader::new(Cursor::new(buffer.clone()))).unwrap();
+            let container = Value::deserialize(&mut BufReader::new(Cursor::new(buffer.clone()))).unwrap();
 
             match &container {
                 Value::Map(foobarcontainer) => {
@@ -139,7 +139,7 @@ impl MessagePackBench {
 
 
         for _x in 0..LOOPS {
-            let mut container = Value::deserialize(&mut BufReader::new(Cursor::new(buffer.clone()))).unwrap();
+            let container = Value::deserialize(&mut BufReader::new(Cursor::new(buffer.clone()))).unwrap();
 
             match &container {
                 Value::Map(foobarcontainer) => {

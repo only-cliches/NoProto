@@ -10,11 +10,10 @@ use alloc::borrow::ToOwned;
 use alloc::{boxed::Box};
 use alloc::string::ToString;
 
-use super::table::NP_Table;
-
 /// Tuple data type.
 /// 
 #[doc(hidden)]
+#[derive(Debug)]
 pub struct NP_Tuple<'tuple> {
     index: usize,
     v_table: Option<&'tuple mut NP_Vtable>,
@@ -23,11 +22,12 @@ pub struct NP_Tuple<'tuple> {
     table: NP_Cursor
 }
 
+#[allow(missing_docs)]
 impl<'tuple> NP_Tuple<'tuple> {
 
 
     #[inline(always)]
-    pub fn select(mut tuple_cursor: NP_Cursor, index: usize, schema_only: bool, memory: &NP_Memory) -> Result<Option<NP_Cursor>, NP_Error> {
+    pub fn select(mut tuple_cursor: NP_Cursor, index: usize, make_path: bool, memory: &NP_Memory) -> Result<Option<NP_Cursor>, NP_Error> {
         match &memory.schema[tuple_cursor.schema_addr] {
             NP_Parsed_Schema::Tuple { values, .. } => {
 
@@ -37,16 +37,16 @@ impl<'tuple> NP_Tuple<'tuple> {
         
                 let column_schema_data = values[index];
 
-                if schema_only {
-                    return Ok(Some(NP_Cursor::new(0, column_schema_data, tuple_cursor.schema_addr)));
-                }
-
                 let v_table =  index / 4; // which vtable
                 let v_table_idx = index % 4; // which index on the selected vtable
 
                 let mut table_value = tuple_cursor.get_value(memory);
                 if table_value.get_addr_value() == 0 {
-                    tuple_cursor = Self::make_first_vtable(tuple_cursor, memory)?;
+                    if make_path {
+                        tuple_cursor = Self::make_first_vtable(tuple_cursor, memory)?;
+                    } else {
+                        return Ok(None);
+                    }
                 }
                 table_value = tuple_cursor.get_value(memory);
 
@@ -71,7 +71,7 @@ impl<'tuple> NP_Tuple<'tuple> {
                 Ok(Some(NP_Cursor::new(item_address, column_schema_data, tuple_cursor.schema_addr)))
              
             },
-            _ => unsafe { panic!() }
+            _ => unsafe { unreachable_unchecked() }
         }
     }
 
@@ -81,6 +81,30 @@ impl<'tuple> NP_Tuple<'tuple> {
         
         let table_value = table_cursor.get_value(memory);
         table_value.set_addr_value(first_vtable_addr as u16);
+
+
+        match &memory.schema[table_cursor.schema_addr] {
+            NP_Parsed_Schema::Tuple { values, sortable, .. } => {
+                if *sortable {
+                    // make all the vtables we'll need forever
+                    let mut v_table_capacity = 4usize;
+                    let mut vtable = Self::get_vtable(first_vtable_addr, memory);
+                    while v_table_capacity < values.len() {
+                        let next_addr = Self::make_next_vtable(vtable, memory)?;
+                        vtable = Self::get_vtable(next_addr, memory);
+                        v_table_capacity += 4;
+                    }
+
+                    // set default values for everything
+                    for x in 0..values.len() {
+                        let cursor = Self::select(table_cursor.clone(), x, false, memory)?.unwrap();
+                        NP_Cursor::set_default(cursor, memory)?;
+                    }
+                }
+
+            },
+            _ => unsafe { unreachable_unchecked() }
+        }
 
         Ok(table_cursor)
     }
@@ -129,8 +153,8 @@ impl<'tuple> NP_Tuple<'tuple> {
                 let v_table =  self.index / 4; // which vtable
                 let v_table_idx = self.index % 4; // which index on the selected vtable
 
-                if self.v_table_index > v_table_idx {
-                    self.v_table_index = v_table_idx;
+                if self.v_table_index > v_table {
+                    self.v_table_index = v_table;
                     match &self.v_table {
                         Some(vtable) => {
                             let next_vtable = vtable.get_next() as usize;
@@ -156,20 +180,10 @@ impl<'tuple> NP_Tuple<'tuple> {
                     Some((this_index, None))
                 }
             },
-            _ => unsafe { panic!() }
+            _ => unsafe { unreachable_unchecked() }
         }
 
         
-    }
-
-    pub fn for_each<F>(cursor_addr: &NP_Cursor, memory: &'tuple NP_Memory, callback: &mut F) where F: FnMut((usize, Option<NP_Cursor>)) {
-
-        let mut table = Self::new_iter(cursor_addr, memory);
-
-        while let Some((index, item)) = table.step_iter(memory) {
-            callback((index, item))
-        }
-
     }
 
 }
@@ -189,7 +203,7 @@ impl<'value> NP_Value<'value> for NP_Tuple<'value> {
                     NP_Schema::_type_to_json(schema, *column).unwrap()
                 }).collect())
             },
-            _ => { unsafe { panic!() } }
+            _ => { unsafe { unreachable_unchecked() } }
         };
 
         schema_json.insert("values".to_owned(), NP_JSON::Array(schema_state.1));
@@ -219,16 +233,17 @@ impl<'value> NP_Value<'value> for NP_Tuple<'value> {
             nex_vtable = vtable.get_next() as usize;
         }
 
-        // loop through values in table
-        Self::for_each(&cursor, memory, &mut |(_i, item)| {
+        let mut table = Self::new_iter(&cursor, memory);
+
+        while let Some((_index, item)) = table.step_iter(memory) {
             if let Some(real) = item {
                 let add_size = NP_Cursor::calc_size(&real, memory).unwrap();
                 if add_size > 2 {
                     // scalar cursor is part of vtable
                     acc_size += add_size - 2;             
                 }
-            }
-        });
+            }            
+        }
    
         Ok(acc_size)
     }
@@ -241,13 +256,16 @@ impl<'value> NP_Value<'value> for NP_Tuple<'value> {
 
         let mut json_list = Vec::new();
 
-        Self::for_each(&cursor, memory, &mut |(idx, item)| {
+        let mut table = Self::new_iter(&cursor, memory);
+
+        while let Some((_idx, item)) = table.step_iter(memory) {
             if let Some(real) = item {
                 json_list.push(NP_Cursor::json_encode(&real, memory));  
             } else {
                 json_list.push(NP_JSON::Null);  
             }
-        });
+        }
+
 
         NP_JSON::Array(json_list)
     }
@@ -269,11 +287,12 @@ impl<'value> NP_Value<'value> for NP_Tuple<'value> {
             NP_Parsed_Schema::Table { columns, .. } => {
                 columns
             },
-            _ => unsafe { panic!() }
+            _ => unsafe { unreachable_unchecked() }
         };
 
-        Self::for_each(&from_cursor, from_memory, &mut |(idx, item)| {
+        let mut table = Self::new_iter(&from_cursor, from_memory);
 
+        while let Some((idx, item)) = table.step_iter(from_memory) {
             if let Some(real) = item {
 
                 let v_table =  idx / 4; // which vtable
@@ -287,8 +306,8 @@ impl<'value> NP_Value<'value> for NP_Tuple<'value> {
 
                 let item_addr = last_real_vtable + (v_table_idx * 2);
                 NP_Cursor::compact(real.clone(), from_memory, NP_Cursor::new(item_addr, col_schemas[idx].2, to_cursor.schema_addr), to_memory).unwrap();
-            }
-        });
+            }            
+        }
 
         Ok(to_cursor)
     }
@@ -444,6 +463,21 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     buffer.del(&[])?;
     buffer.compact(None)?;
     assert_eq!(buffer.calc_bytes()?.current_buffer, 2usize);
+
+    Ok(())
+}
+
+#[test]
+fn sorting_tuples_works() -> Result<(), NP_Error> {
+    let schema = "{\"type\":\"tuple\",\"values\":[{\"type\":\"string\",\"size\":10},{\"type\":\"uuid\"},{\"type\":\"uint8\"}],\"sorted\":true}";
+    let factory = crate::NP_Factory::new(schema)?;
+    let mut buffer = factory.empty_buffer(None);
+    assert_eq!(buffer.read_bytes(), &[0u8, 2, 0, 12, 0, 22, 0, 38, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0].to_vec());
+    buffer.set(&["0"], "hello")?;
+    let uuid = crate::pointer::uuid::NP_UUID::generate(22);
+    buffer.set(&["1"], &uuid)?;
+    buffer.set(&["2"], 20u8)?;
+    assert_eq!(buffer.read_bytes(), &[0u8, 2, 0, 12, 0, 22, 0, 38, 0, 0, 0, 0, 104, 101, 108, 108, 111, 0, 0, 0, 0, 0, 76, 230, 170, 176, 120, 208, 69, 186, 109, 122, 100, 179, 210, 224, 68, 195, 20].to_vec());
 
     Ok(())
 }

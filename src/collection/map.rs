@@ -1,5 +1,5 @@
 use alloc::string::String;
-use crate::{hashmap::{NP_HashMap, SEED, murmurhash3_x86_32}, pointer::NP_Map_Bytes, schema::NP_Schema_Addr};
+use crate::{pointer::NP_Map_Bytes};
 use crate::pointer::NP_Cursor;
 use crate::{json_flex::JSMAP};
 use crate::pointer::{NP_Value};
@@ -9,7 +9,7 @@ use alloc::string::ToString;
 use alloc::vec::Vec;
 use alloc::boxed::Box;
 use alloc::borrow::ToOwned;
-use core::{str::from_utf8_unchecked, hint::unreachable_unchecked};
+use core::{hint::unreachable_unchecked};
 
 #[doc(hidden)]
 #[derive(Debug, Clone, Copy)]
@@ -21,40 +21,35 @@ struct Map_Item<'item> {
 /// The map type.
 /// 
 #[doc(hidden)]
+#[derive(Debug)]
 pub struct NP_Map<'map> { 
     current: Option<Map_Item<'map>>,
-    previous: Option<Map_Item<'map>>,
-    key: &'map str,
     head: Option<Map_Item<'map>>,
     map: NP_Cursor,
     value_of: usize
 }
 
+#[allow(missing_docs)]
 impl<'map> NP_Map<'map> {
 
     #[inline(always)]
-    pub fn select(map_cursor: NP_Cursor, key: &str, schema_only: bool, memory: &'map NP_Memory) -> Result<NP_Cursor, NP_Error> {
-
-        let value_of = match memory.schema[map_cursor.schema_addr] {
-            NP_Parsed_Schema::Map { value, .. } => value,
-            _ => unsafe { panic!() }
-        };
-
-        if schema_only {
-            return Ok(NP_Cursor::new(0, value_of, map_cursor.schema_addr))
-        }
+    pub fn select(map_cursor: NP_Cursor, key: &str, make_path: bool, memory: &'map NP_Memory) -> Result<Option<NP_Cursor>, NP_Error> {
 
         let mut map_iter = Self::new_iter(&map_cursor, memory);
 
-        // key is in map
+        // key is maybe in map
         while let Some((ikey, item)) = map_iter.step_iter(memory) {
             if ikey == key {
-                return Ok(item.clone())
+                return Ok(Some(item.clone()))
             }
         }
 
-        // key is not in map, make a new one
-        Self::insert(&map_cursor, memory, key)
+        // key is not in map
+        if make_path {
+            Ok(Some(Self::insert(&map_cursor, memory, key)?))
+        } else {
+            Ok(None)
+        }
     }
 
     #[inline(always)]
@@ -67,14 +62,12 @@ impl<'map> NP_Map<'map> {
 
         let value_of = match memory.schema[map_cursor.schema_addr] {
             NP_Parsed_Schema::Map { value, .. } => value,
-            _ => unsafe { panic!() }
+            _ => unsafe { unreachable_unchecked() }
         };
 
         if map_cursor.get_value(memory).get_addr_value() == 0 {
             return Self {
                 current: None,
-                previous: None,
-                key: "",
                 head: None,
                 map: map_cursor.clone(),
                 value_of
@@ -88,8 +81,6 @@ impl<'map> NP_Map<'map> {
 
         Self {
             current: None,
-            previous: None,
-            key: "",
             head: Some(Map_Item {
                 key: head_cursor_value.get_key(memory),
                 buff_addr: head_cursor.buff_addr 
@@ -115,7 +106,6 @@ impl<'map> NP_Map<'map> {
                         } else {
                             let next_value_cursor = NP_Cursor::new(next_value, self.value_of, self.map.schema_addr);
                             let next_value_value = next_value_cursor.get_value(memory);
-                            self.previous = self.current.clone();
                             let key = next_value_value.get_key(memory);
                             self.current = Some(Map_Item { buff_addr: next_value, key: key });
                             return Some((key, next_value_cursor))
@@ -138,7 +128,7 @@ impl<'map> NP_Map<'map> {
 
         let value_of = match memory.schema[map_cursor.schema_addr] {
             NP_Parsed_Schema::Map { value, .. } => value,
-            _ => unsafe { panic!() }
+            _ => unsafe { unreachable_unchecked() }
         };
 
         if key.len() >= 255 {
@@ -168,17 +158,6 @@ impl<'map> NP_Map<'map> {
         Ok(new_cursor)
     }
 
-    #[inline(always)]
-    pub fn for_each<F>(cursor_addr: &NP_Cursor, memory: &'map NP_Memory, callback: &mut F) where F: FnMut((&str, NP_Cursor)) {
-
-        let mut map_iter = Self::new_iter(cursor_addr, memory);
-
-        while let Some((index, item)) = Self::step_iter(&mut map_iter, memory) {
-            callback((index, item))
-        }
-
-    }
-
 }
 
 impl<'value> NP_Value<'value> for NP_Map<'value> {
@@ -194,7 +173,7 @@ impl<'value> NP_Value<'value> for NP_Map<'value> {
             NP_Parsed_Schema::Map { value, .. } => {
                 value
             },
-            _ => { unsafe { panic!() } }
+            _ => { unsafe { unreachable_unchecked() } }
         };
 
         schema_json.insert("value".to_owned(), NP_Schema::_type_to_json(schema, value_of)?);
@@ -212,12 +191,15 @@ impl<'value> NP_Value<'value> for NP_Map<'value> {
 
         let mut acc_size = 0usize;
 
-        Self::for_each(&cursor, memory, &mut |(_i, item)| {
+        let mut map_iter = Self::new_iter(&cursor, memory);
+
+        while let Some((_index, item)) = Self::step_iter(&mut map_iter, memory) {
             let key_size = item.get_value(memory).get_key_size(memory);
             acc_size += 1; // length byte
             acc_size += key_size;
-            acc_size += NP_Cursor::calc_size(&item, memory).unwrap();
-        });
+            acc_size += NP_Cursor::calc_size(&item, memory).unwrap();     
+        }
+
 
         Ok(acc_size)
    
@@ -233,9 +215,11 @@ impl<'value> NP_Value<'value> for NP_Map<'value> {
 
         let mut json_map = JSMAP::new();
 
-        Self::for_each(&cursor, memory, &mut |(key, item)| {
-            json_map.insert(String::from(key), NP_Cursor::json_encode(&item, memory));
-        });
+        let mut map_iter = Self::new_iter(&cursor, memory);
+
+        while let Some((key, item)) = Self::step_iter(&mut map_iter, memory) {
+            json_map.insert(String::from(key), NP_Cursor::json_encode(&item, memory));     
+        }
 
         NP_JSON::Dictionary(json_map)
    
@@ -249,15 +233,13 @@ impl<'value> NP_Value<'value> for NP_Map<'value> {
             return Ok(to_cursor) 
         }
 
-        let value_of = match from_memory.schema[from_cursor.schema_addr] {
-            NP_Parsed_Schema::Map { value, .. } => value,
-            _ => unsafe { panic!() }
-        };
+        let mut map_iter = Self::new_iter(&from_cursor, from_memory);
 
-        Self::for_each(&from_cursor, from_memory,  &mut |(key, item)| {
+        while let Some((key, item)) = Self::step_iter(&mut map_iter, from_memory) {
             let new_item = Self::insert(&to_cursor, to_memory, key).unwrap();
-            NP_Cursor::compact(item.clone(), from_memory, new_item, to_memory).unwrap();
-        });
+            NP_Cursor::compact(item.clone(), from_memory, new_item, to_memory).unwrap();           
+        }
+
 
         Ok(to_cursor)
     }

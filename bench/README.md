@@ -25,48 +25,48 @@ Benchmarks can be ran with `cargo run --release`.
 
 ## Dec 13, 2020
 ### v0.6.0
-Macbook Air M1 with 8GB
+3.4Ghz i5 2017 21.5" iMac with 32 GB RAM
 
 ```
 ====== SIZE BENCHMARK ======
-NoProto:     size: 283b, zlib: 226b
-Flatbuffers: size: 336b, zlib: 214b
-PBuffers:    size: 220b, zlib: 163b
-MessagePack: size: 431b, zlib: 245b
-JSON:        size: 673b, zlib: 246b
-BSON:        size: 600b, zlib: 279b
+NoProto:     size: 283b, zlib: 226b  1x
+Flatbuffers: size: 336b, zlib: 214b  1.2x
+PBuffers:    size: 220b, zlib: 163b  0.8x
+MessagePack: size: 431b, zlib: 245b  1.5x
+JSON:        size: 673b, zlib: 246b  2.4x
+BSON:        size: 600b, zlib: 279b  2.1x
 
 ====== ENCODE BENCHMARK ======
-NoProto:     2.645972s
-Flatbuffers: 1.534927s
-PBuffers:    2.175921s
-MessagePack: 18.81802s
-JSON:        3.48892s
-BSON:        21.875655s
+NoProto:     3.536623s   1.00x
+Flatbuffers: 1.942583s   1.80x
+PBuffers:    3.551301s   0.99x
+MessagePack: 28.050727s  0.12x
+JSON:        5.436352s   0.65x
+BSON:        36.564978s  0.01x
 
 ====== DECODE BENCHMARK ======
-NoProto:     1.960938s
-Flatbuffers: 104.1ms
-PBuffers:    1.697763s
-MessagePack: 10.457951s
-JSON:        6.657481s
-BSON:        21.234239s
+NoProto:     2.496591s   1.00x
+Flatbuffers: 320.065ms   8.00x
+PBuffers:    2.888706s   0.80x
+MessagePack: 16.576576s  0.15x
+JSON:        8.957872s   0.30x
+BSON:        32.770133s  0.08x
 
 ====== DECODE ONE BENCHMARK ======
-NoProto:     138.19ms
-Flatbuffers: 8.563ms
-PBuffers:    1.655446s
-MessagePack: 9.588131s
-JSON:        4.210371s
-BSON:        20.255856s
+NoProto:     206.966ms    1.00x
+Flatbuffers: 13.127ms    16.00x
+PBuffers:    2.715129s    0.07x
+MessagePack: 14.300117s   0.01x
+JSON:        7.836841s    0.02x
+BSON:        37.513607s   0.01x
 
 ====== UPDATE ONE BENCHMARK ======
-NoProto:     181.864ms
-Flatbuffers: 1.553352s
-PBuffers:    3.914178s
-MessagePack: 21.046205s
-JSON:        5.158453s
-BSON:        27.430653s
+NoProto:     264.399ms     1.00x
+Flatbuffers: 3.086538s     0.08x
+PBuffers:    10.119442s     0.02x
+MessagePack: 35.322739s    0.01x
+JSON:        9.749246s     0.02x
+BSON:        48.0097s    0.01x
 ```
 
 ## Dec 1, 2020

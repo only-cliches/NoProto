@@ -30,26 +30,27 @@ pub struct NP_List {
 }
 
 
+#[allow(missing_docs)]
 impl NP_List {
 
     #[inline(always)]
-    pub fn select(list_cursor: NP_Cursor, index: usize, schema_only: bool, memory: &NP_Memory) -> Result<Option<(usize, Option<NP_Cursor>)>, NP_Error> {
+    pub fn select(list_cursor: NP_Cursor, index: usize, make_path: bool, memory: &NP_Memory) -> Result<Option<(usize, Option<NP_Cursor>)>, NP_Error> {
         let list_value = list_cursor.get_value(memory);
 
         if index > 255 { return Ok(None) }
 
         let schema_of = match memory.schema[list_cursor.schema_addr] {
             NP_Parsed_Schema::List { of, .. } => of,
-            _ => unsafe { panic!() }
+            _ => unsafe { unreachable_unchecked() }
         };
-
-        if schema_only {
-            return Ok(Some((index, Some(NP_Cursor::new(0, schema_of, list_cursor.parent_schema_addr)))))
-        }
 
         // if no list here, make one please
         if list_value.get_addr_value() == 0 {
-            Self::make_list(&list_cursor, memory)?;
+            if make_path {
+                Self::make_list(&list_cursor, memory)?;
+            } else {
+                return Ok(Some((index, None)))
+            }
         }
 
         let list_data = Self::get_list(list_value.get_addr_value() as usize, memory);
@@ -120,7 +121,7 @@ impl NP_List {
     }
 
     #[inline(always)]
-    pub fn make_item_in_loop(mut self, memory: &NP_Memory) -> Result<NP_Cursor, NP_Error> {
+    pub fn make_item_in_loop(self, memory: &NP_Memory) -> Result<NP_Cursor, NP_Error> {
         
         let list_value = self.list.get_value(memory);
         let list_data = Self::get_list(list_value.get_addr_value() as usize, memory);
@@ -174,11 +175,8 @@ impl NP_List {
 
         let schema_of = match memory.schema[list_cursor.schema_addr] {
             NP_Parsed_Schema::List { of, .. } => of,
-            _ => unsafe { panic!() }
+            _ => unsafe { unreachable_unchecked() }
         };
-
-        let index = 0usize;
-        let mut tail_index = 0usize;
 
         if list_addr > 0 {
 
@@ -221,69 +219,54 @@ impl NP_List {
 
         match self.head {
             Some(head) => {
-                match self.tail {
-                    Some(tail) => {
-                        match self.current {
-                            Some(current) => { // subsequent iterations
-                                let current_cursor = NP_Cursor::new(current.buff_addr, self.schema_of, self.list.schema_addr);
-                                let value = current_cursor.get_value(memory);
-                                let next_addr = value.get_next_addr() as usize;
 
-                                if next_addr == 0 {
-                                    return None;
-                                }
+                match self.current {
+                    Some(current) => { // subsequent iterations
+                        let current_cursor = NP_Cursor::new(current.buff_addr, self.schema_of, self.list.schema_addr);
+                        let value = current_cursor.get_value(memory);
+                        let next_addr = value.get_next_addr() as usize;
 
-                                if self.only_real {    
-                                    let next_cursor = NP_Cursor::new(next_addr, self.schema_of, self.list.schema_addr);
-                                    let next_index = next_cursor.get_value(memory).get_index();
-                                    self.index = next_index as usize;
-                                    self.previous = self.current.clone();
-                                    self.current = Some(List_Item { buff_addr: next_addr, index: next_index as usize});
-                                    Some((next_index as usize, Some(next_cursor)))
-                                } else {
-                                    if current.index > self.index {
-                                        self.index += 1;
-                                        Some((self.index - 1, None))
-                                    } else if current.index == self.index {
-                                        let next_cursor = NP_Cursor::new(next_addr, self.schema_of, self.list.schema_addr);
-                                        let next_index = next_cursor.get_value(memory).get_index();
-                                        self.index += 1;
-                                        self.previous = self.current.clone();
-                                        self.current = Some(List_Item { buff_addr: next_addr, index: next_index as usize});
-                                        Some((self.index - 1, Some(NP_Cursor::new(current.buff_addr, self.schema_of, self.list.schema_addr))))
-                                    } else {
-                                        None
-                                    }
-                                }
-                            },
-                            None => { // first iteration
-                                self.current = Some(head);
-                                if self.only_real || head.index == 0 {
-                                    self.index = head.index;
-                                    Some((head.index, Some(NP_Cursor::new(head.buff_addr, self.schema_of, self.list.schema_addr))))
-                                } else {
-                                    self.index = 0;
-                                    Some((0, None))
-                                }
+                        if next_addr == 0 {
+                            return None;
+                        }
+
+                        if self.only_real {    
+                            let next_cursor = NP_Cursor::new(next_addr, self.schema_of, self.list.schema_addr);
+                            let next_index = next_cursor.get_value(memory).get_index();
+                            self.index = next_index as usize;
+                            self.previous = self.current.clone();
+                            self.current = Some(List_Item { buff_addr: next_addr, index: next_index as usize});
+                            Some((next_index as usize, Some(next_cursor)))
+                        } else {
+                            if current.index > self.index {
+                                self.index += 1;
+                                Some((self.index - 1, None))
+                            } else if current.index == self.index {
+                                let next_cursor = NP_Cursor::new(next_addr, self.schema_of, self.list.schema_addr);
+                                let next_index = next_cursor.get_value(memory).get_index();
+                                self.index += 1;
+                                self.previous = self.current.clone();
+                                self.current = Some(List_Item { buff_addr: next_addr, index: next_index as usize});
+                                Some((self.index - 1, Some(NP_Cursor::new(current.buff_addr, self.schema_of, self.list.schema_addr))))
+                            } else {
+                                None
                             }
                         }
                     },
-                    None => None
+                    None => { // first iteration
+                        self.current = Some(head);
+                        if self.only_real || head.index == 0 {
+                            self.index = head.index;
+                            Some((head.index, Some(NP_Cursor::new(head.buff_addr, self.schema_of, self.list.schema_addr))))
+                        } else {
+                            self.index = 0;
+                            Some((0, None))
+                        }
+                    }
                 }
             },
             None => None
         }
-    }
-
-    #[inline(always)]
-    pub fn for_each<F>(cursor_addr: &NP_Cursor, memory: &NP_Memory, only_real: bool, start_index: usize, callback: &mut F) where F: FnMut((usize, Option<NP_Cursor>)) {
-
-        let mut list_iter = Self::new_iter(cursor_addr, memory, only_real, start_index);
-
-        while let Some((index, item)) = Self::step_iter(&mut list_iter, memory) {
-            callback((index, item))
-        }
-
     }
 
     #[inline(always)]
@@ -297,8 +280,6 @@ impl NP_List {
 
         match memory.schema[list_cursor.schema_addr] {
             NP_Parsed_Schema::List {  of, .. } => {
-
-                let of_schema = &memory.schema[of];
 
                 let mut new_index: usize = index.unwrap_or(0);
 
@@ -356,7 +337,7 @@ impl<'value> NP_Value<'value> for NP_List {
             NP_Parsed_Schema::List { i: _, sortable: _, of} => {
                 *of
             },
-            _ => { unsafe { panic!() } }
+            _ => { unsafe { unreachable_unchecked() } }
         };
 
         schema_json.insert("of".to_owned(), NP_Schema::_type_to_json(schema, list_of)?);
@@ -377,12 +358,13 @@ impl<'value> NP_Value<'value> for NP_List {
 
         let mut acc_size = 0usize;
 
-        Self::for_each(&cursor, memory, true, 0, &mut |(_i, item)| {
+        let mut list_iter = Self::new_iter(&cursor, memory, true, 0);
+
+        while let Some((_index, item)) = Self::step_iter(&mut list_iter, memory) {
             if let Some(item_cursor) = &item {
                 acc_size += NP_Cursor::calc_size(item_cursor, memory).unwrap();
             }
-        });
- 
+        } 
 
         Ok(acc_size + base_size)
     }
@@ -397,13 +379,15 @@ impl<'value> NP_Value<'value> for NP_List {
 
         let mut json_list = Vec::new();
 
-        Self::for_each(&cursor, memory, true, 0, &mut |(_i, item)| {
-            if let Some(item_cursor) = &item {
+        let mut list_iter = Self::new_iter(&cursor, memory, false, 0);
+
+        while let Some((_index, item)) = Self::step_iter(&mut list_iter, memory) {
+             if let Some(item_cursor) = &item {
                 json_list.push(NP_Cursor::json_encode(item_cursor, memory));   
             } else {
                 json_list.push(NP_JSON::Null);   
-            }
-        });
+            }    
+        }
 
         NP_JSON::Array(json_list)
     }
@@ -418,12 +402,14 @@ impl<'value> NP_Value<'value> for NP_List {
 
         Self::make_list(&to_cursor, to_memory)?;
 
-        Self::for_each(&from_cursor, from_memory, true, 0, &mut |(index, item)| {
+        let mut list_iter = Self::new_iter(&from_cursor, from_memory, true, 0);
+
+        while let Some((index, item)) = Self::step_iter(&mut list_iter, from_memory) {
             if let Some(old_item) = &item {
                 let (_new_index, new_item) = NP_List::push(&to_cursor, to_memory, Some(index)).unwrap().unwrap();
                 NP_Cursor::compact(old_item.clone(), from_memory, new_item, to_memory).unwrap();
-            } 
-        });
+            }       
+        }
 
         Ok(to_cursor)
     }

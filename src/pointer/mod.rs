@@ -23,7 +23,6 @@ pub mod uuid;
 pub mod option;
 pub mod date;
 
-use crate::hashmap::NP_HashMap;
 use core::{fmt::{Debug}};
 
 use alloc::prelude::v1::Box;
@@ -70,6 +69,8 @@ pub struct NP_Pointer_Map_Item {
     pub key_addr: [u8; 2]
 }
 
+#[doc(hidden)]
+#[allow(missing_docs, unused_variables)]
 pub trait NP_Pointer_Bytes {
     fn get_type(&self) -> &str                                     { panic!() }
     fn get_addr_value(&self) -> u16                                { panic!() }
@@ -158,10 +159,13 @@ impl NP_Pointer_Bytes for NP_Pointer_Map_Item {
 
 #[repr(C)]
 #[derive(Debug)]
+#[doc(hidden)]
+#[allow(missing_docs)]
 pub struct NP_Map_Bytes {
     head: [u8; 2]
 }
 
+#[allow(missing_docs)]
 impl NP_Map_Bytes {
     #[inline(always)]
     pub fn set_head(&mut self, head: u16) {
@@ -175,11 +179,14 @@ impl NP_Map_Bytes {
 
 #[repr(C)]
 #[derive(Debug)]
+#[doc(hidden)]
+#[allow(missing_docs)]
 pub struct NP_List_Bytes {
     head: [u8; 2],
     tail: [u8; 2]
 }
 
+#[allow(missing_docs)]
 impl NP_List_Bytes {
     #[inline(always)]
     pub fn set_head(&mut self, head: u16) {
@@ -202,12 +209,15 @@ impl NP_List_Bytes {
 // holds 4 u16 addresses and a next value (10 bytes)
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
+#[doc(hidden)]
+#[allow(missing_docs)]
 pub struct NP_Vtable {
     pub values: [NP_Pointer_Scalar; 4],
     next: [u8; 2]
 }
 
 
+#[allow(missing_docs)]
 impl NP_Vtable {
 
     #[inline(always)]
@@ -225,6 +235,7 @@ impl NP_Vtable {
 
 /// Cursor for pointer value in buffer
 /// 
+#[doc(hidden)]
 #[derive(Debug, Clone, Copy)]
 pub struct NP_Cursor {
     /// The location of this cursor in the buffer
@@ -232,13 +243,13 @@ pub struct NP_Cursor {
     /// The address of the schema for this cursor
     pub schema_addr: NP_Schema_Addr,
     /// the values of the buffer pointer
-    pub parent_schema_addr: usize,
+    pub parent_schema_addr: usize
 }
 
 impl NP_Cursor {
 
+    /// Create a new cursor
     pub fn new(buff_addr: usize, schema_addr: usize, parent_schema_addr: usize) -> Self {
-        let mut bytes = [0u8; 8];
         Self {
             buff_addr,
             schema_addr,
@@ -247,6 +258,7 @@ impl NP_Cursor {
     }
 
     #[inline(always)]
+    /// Get the value bytes of this cursor
     pub fn get_value<'value>(&self, memory: &'value NP_Memory<'value>) -> &'value mut dyn NP_Pointer_Bytes {
         let ptr = memory.write_bytes().as_mut_ptr();
         if self.buff_addr == 0 {

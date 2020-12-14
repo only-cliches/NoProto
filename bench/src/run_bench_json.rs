@@ -1,10 +1,10 @@
 use crate::LOOPS;
 
-use std::{io::prelude::*, str::{from_utf8, from_utf8_unchecked}};
+use std::{io::prelude::*, str::{from_utf8_unchecked}};
 use flate2::Compression;
 use flate2::write::ZlibEncoder;
-use json::{JsonResult, JsonValue};
-use std::time::{SystemTime, UNIX_EPOCH};
+use json::{JsonValue};
+use std::time::{SystemTime};
 
 
 pub struct JSONBench();
@@ -73,7 +73,7 @@ impl JSONBench {
 
         let start = SystemTime::now();
 
-        for x in 0..LOOPS {
+        for _x in 0..LOOPS {
             let mut container = json::parse(unsafe { from_utf8_unchecked(&buffer) }).unwrap();
 
             container["list"][0]["name"] = JsonValue::String(String::from("bob"));

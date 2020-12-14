@@ -1,4 +1,4 @@
-use crate::{hashmap::NP_HashMap, utils::{opt_out, opt_out_mut}};
+use crate::{hashmap::NP_HashMap};
 use alloc::string::String;
 use crate::pointer::{NP_Vtable};
 use crate::{pointer::{NP_Cursor}, schema::{NP_Parsed_Schema, NP_Schema_Addr}};
@@ -13,6 +13,7 @@ use core::{result::Result, hint::unreachable_unchecked};
 /// The data type for tables in NoProto buffers.
 /// 
 #[doc(hidden)]
+#[derive(Debug)]
 pub struct NP_Table<'table> {
     index: usize,
     v_table: Option<&'table mut NP_Vtable>,
@@ -21,27 +22,29 @@ pub struct NP_Table<'table> {
     table: NP_Cursor
 }
 
+#[allow(missing_docs)]
 impl<'table> NP_Table<'table> {
 
     #[inline(always)]
-    pub fn select(mut table_cursor: NP_Cursor, key: &str, schema_only: bool, memory: &NP_Memory) -> Result<Option<NP_Cursor>, NP_Error> {
+    pub fn select(mut table_cursor: NP_Cursor, key: &str, make_path: bool, memory: &NP_Memory) -> Result<Option<NP_Cursor>, NP_Error> {
         match &memory.schema[table_cursor.schema_addr] {
             NP_Parsed_Schema::Table { columns, columns_mapped, .. } => {
                 match columns_mapped.get(key) {
                     Some(x) => {
-                        let column_schema_data = &columns[*x];
-
-                        if schema_only {
-                            return Ok(Some(NP_Cursor::new(0, column_schema_data.2, table_cursor.schema_addr)));
-                        }
 
                         let v_table =  *x / 4; // which vtable
                         let v_table_idx = *x % 4; // which index on the selected vtable
 
                         let mut table_value = table_cursor.get_value(memory);
+
                         if table_value.get_addr_value() == 0 {
-                            table_cursor = Self::make_first_vtable(table_cursor, memory)?;
+                            if make_path {
+                                table_cursor = Self::make_first_vtable(table_cursor, memory)?;
+                            } else {
+                                return Ok(None);
+                            }
                         }
+
                         table_value = table_cursor.get_value(memory);
 
                         let mut seek_vtable = 0usize;
@@ -67,7 +70,7 @@ impl<'table> NP_Table<'table> {
                     None => Ok(None)
                 }
             },
-            _ => unsafe { panic!() }
+            _ => unsafe { unreachable_unchecked() }
         }
     }
 
@@ -130,8 +133,8 @@ impl<'table> NP_Table<'table> {
                 let v_table =  self.index / 4; // which vtable
                 let v_table_idx = self.index % 4; // which index on the selected vtable
 
-                if self.v_table_index > v_table_idx {
-                    self.v_table_index = v_table_idx;
+                if self.v_table_index > v_table {
+                    self.v_table_index = v_table;
                     match &self.v_table {
                         Some(vtable) => {
                             let next_vtable = vtable.get_next() as usize;
@@ -157,19 +160,8 @@ impl<'table> NP_Table<'table> {
                     Some((this_index, columns[this_index].1.as_str(), None))
                 }
             },
-            _ => unsafe { panic!() }
+            _ => unsafe { unreachable_unchecked() }
         }
-    }
-
-    #[inline(always)]
-    pub fn for_each<F>(cursor_addr: &NP_Cursor, memory: &'table NP_Memory, callback: &mut F) where F: FnMut((usize, &'table str, Option<NP_Cursor>)) {
-
-        let mut table = Self::new_iter(cursor_addr, memory);
-
-        while let Some((index, key, item)) = table.step_iter(memory) {
-            callback((index, key, item))
-        }
-
     }
 }
 
@@ -214,7 +206,7 @@ impl<'value> NP_Value<'value> for NP_Table<'value> {
             let (_, schema) = NP_Schema::from_bytes(schema_parsed, offset + 2, bytes);
             schema_parsed = schema;
             parsed_columns.push((x as u8, col_name.to_string(), column_addr));
-            hash_map.insert(col_name, x);
+            hash_map.insert(col_name, x).unwrap();
             offset += schema_size + 2;
         }
 
@@ -241,7 +233,7 @@ impl<'value> NP_Value<'value> for NP_Table<'value> {
                     NP_JSON::Array(cols)
                 }).collect()
             },
-            _ => { unsafe { panic!() } }
+            _ => { unsafe { unreachable_unchecked() } }
         };
 
         schema_json.insert("columns".to_owned(), NP_JSON::Array(columns));
@@ -267,16 +259,17 @@ impl<'value> NP_Value<'value> for NP_Table<'value> {
             nex_vtable = vtable.get_next() as usize;
         }
 
-        // loop through values in table
-        Self::for_each(&cursor, memory, &mut |(_i, _key, item)| {
+        let mut table = Self::new_iter(&cursor, memory);
+
+        while let Some((_index, _key, item)) = table.step_iter(memory) {
             if let Some(real) = item {
                 let add_size = NP_Cursor::calc_size(&real, memory).unwrap();
                 if add_size > 2 {
                     // scalar cursor is part of vtable
                     acc_size += add_size - 2;             
                 }
-            }
-        });
+            }         
+        }
    
         Ok(acc_size)
     }
@@ -289,13 +282,15 @@ impl<'value> NP_Value<'value> for NP_Table<'value> {
 
         let mut json_map = JSMAP::new();
 
-        Self::for_each(&cursor, memory, &mut |(idx, key, item)| {
+        let mut table = Self::new_iter(&cursor, memory);
+
+        while let Some((_index, key, item)) = table.step_iter(memory) {
             if let Some(real) = item {
                 json_map.insert(String::from(key), NP_Cursor::json_encode(&real, memory));  
             } else {
                 json_map.insert(String::from(key), NP_JSON::Null);  
-            }
-        });
+            }            
+        }
 
         NP_JSON::Dictionary(json_map)
     }
@@ -317,13 +312,13 @@ impl<'value> NP_Value<'value> for NP_Table<'value> {
             NP_Parsed_Schema::Table { columns, .. } => {
                 columns
             },
-            _ => unsafe { panic!() }
+            _ => unsafe { unreachable_unchecked() }
         };
 
-        Self::for_each(&from_cursor, from_memory, &mut |(idx, key, item)| {
+        let mut table = Self::new_iter(&from_cursor, from_memory);
 
-            if let Some(real) = item {
-
+        while let Some((idx, _key, item)) = table.step_iter(from_memory) {
+           if let Some(real) = item {
 
                 let v_table =  idx / 4; // which vtable
                 let v_table_idx = idx % 4; // which index on the selected vtable
@@ -336,8 +331,8 @@ impl<'value> NP_Value<'value> for NP_Table<'value> {
 
                 let item_addr = last_real_vtable + (v_table_idx * 2);
                 NP_Cursor::compact(real.clone(), from_memory, NP_Cursor::new(item_addr, col_schemas[idx].2, to_cursor.schema_addr), to_memory).unwrap();
-            }
-        });
+            }         
+        }
 
         Ok(to_cursor)
     }
@@ -379,7 +374,7 @@ impl<'value> NP_Value<'value> for NP_Table<'value> {
                     columns.push((x, column_name.clone(), column_schema_addr));
                     let (_is_sortable, column_type, schema_p) = NP_Schema::from_json(schema_parsed, &Box::new(col[1].clone()))?;
                     schema_parsed = schema_p;
-                    columns_mapped.insert(column_name.as_str(), x as usize);
+                    columns_mapped.insert(column_name.as_str(), x as usize)?;
                     column_data.push((column_name, column_type));
                     x += 1;
                 }

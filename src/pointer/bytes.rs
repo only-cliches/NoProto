@@ -59,7 +59,7 @@ impl<'value> NP_Value<'value> for &'value [u8] {
                     schema_json.insert("default".to_owned(), NP_JSON::Array(default_bytes));
                 }
             },
-            _ => { unsafe { panic!() } }
+            _ => { unsafe { unreachable_unchecked() } }
         }
 
 
@@ -76,7 +76,7 @@ impl<'value> NP_Value<'value> for &'value [u8] {
                     None
                 }
             },
-            _ => { unsafe { panic!() } }
+            _ => { unsafe { unreachable_unchecked() } }
         }
     }
 
@@ -94,7 +94,7 @@ impl<'value> NP_Value<'value> for &'value [u8] {
         let size = match memory.schema[cursor.schema_addr] {
             NP_Parsed_Schema::Bytes { size, .. } => size,
             _ => {
-                unsafe { panic!() }
+                unsafe { unreachable_unchecked() }
             }
         };
     
@@ -216,7 +216,7 @@ impl<'value> NP_Value<'value> for &'value [u8] {
                     return Ok(Some(bytes));
                 }
             }
-            _ => unsafe { panic!() },
+            _ => unsafe { unreachable_unchecked() },
         }
     }
 
@@ -234,7 +234,6 @@ impl<'value> NP_Value<'value> for &'value [u8] {
                     },
                     None => {
 
-                        let c_value = cursor.get_value(memory);
                         match &memory.schema[cursor.schema_addr] {
                             NP_Parsed_Schema::Bytes { default, .. } => {
                                 match default {
@@ -248,7 +247,7 @@ impl<'value> NP_Value<'value> for &'value [u8] {
                                     None => NP_JSON::Null
                                 }
                             },
-                            _ => { unsafe { panic!() } }
+                            _ => { unsafe { unreachable_unchecked() } }
                         }
                     }
                 }
@@ -281,7 +280,7 @@ impl<'value> NP_Value<'value> for &'value [u8] {
                 // return total size of this string plus length
                 return Ok(bytes_size + 2);
             }
-            _ => unsafe { panic!() },
+            _ => unsafe { unreachable_unchecked() },
         }
     }
 

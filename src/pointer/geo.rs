@@ -121,7 +121,7 @@ impl<'value> NP_Value<'value> for NP_Geo_Bytes {
 
     fn schema_to_json(schema: &Vec<NP_Parsed_Schema>, address: usize)-> Result<NP_JSON, NP_Error> { NP_Geo::schema_to_json(schema, address)}
 
-    fn set_value<'set>(cursor: NP_Cursor, memory: &'set NP_Memory, value: Self) -> Result<NP_Cursor, NP_Error> where Self: 'set + Sized {
+    fn set_value<'set>(_cursor: NP_Cursor, _memory: &'set NP_Memory, _value: Self) -> Result<NP_Cursor, NP_Error> where Self: 'set + Sized {
         Err(NP_Error::new("Can't set value with NP_Geo_Bytes, use NP_Geo instead!"))
     }
     fn to_json(cursor: &NP_Cursor, memory: &'value NP_Memory) -> NP_JSON {
@@ -138,7 +138,7 @@ impl<'value> NP_Value<'value> for NP_Geo_Bytes {
                 NP_Parsed_Schema::Geo { size, ..} => {
                     size
                 },
-                _ => { unsafe { panic!() } }
+                _ => { unsafe { unreachable_unchecked() } }
             };
             Ok(size as usize)
         }
@@ -159,7 +159,7 @@ impl<'value> NP_Value<'value> for NP_Geo_Bytes {
             NP_Parsed_Schema::Geo { size, .. } => {
                 size
             },
-            _ => { unsafe { panic!() } }
+            _ => { unsafe { unreachable_unchecked() } }
         };
 
         Ok(Some(match size {
@@ -353,7 +353,7 @@ impl<'value> NP_Value<'value> for NP_Geo {
                     None
                 }
             },
-            _ => { unsafe { panic!() } }
+            _ => { unsafe { unreachable_unchecked() } }
         }
     }
 
@@ -378,7 +378,7 @@ impl<'value> NP_Value<'value> for NP_Geo {
         
                 Ok(NP_JSON::Dictionary(schema_json))
             },
-            _ => { unsafe { panic!() } }
+            _ => { unsafe { unreachable_unchecked() } }
         }
 
 
@@ -388,13 +388,11 @@ impl<'value> NP_Value<'value> for NP_Geo {
 
         let c_value = cursor.get_value(memory);
 
-        let mut value_address = c_value.get_addr_value() as usize;
-
         let size = match memory.schema[cursor.schema_addr] {
             NP_Parsed_Schema::Geo { size, .. } => {
                 size
             },
-            _ => { unsafe { panic!() } }
+            _ => { unsafe { unreachable_unchecked() } }
         };
 
         let value_bytes_size = size as usize;
@@ -524,7 +522,7 @@ impl<'value> NP_Value<'value> for NP_Geo {
             NP_Parsed_Schema::Geo { size, .. } => {
                 size
             },
-            _ => { unsafe { panic!() } }
+            _ => { unsafe { unreachable_unchecked() } }
         };
 
         Ok(Some(match size {
@@ -595,7 +593,6 @@ impl<'value> NP_Value<'value> for NP_Geo {
                     },
                     None => {
 
-                        let c_value = cursor.get_value(memory);
                         match &memory.schema[cursor.schema_addr] {
                             NP_Parsed_Schema::Geo { i: _, sortable: _, default, size: _} => {
                                 if let Some(d) = default {
@@ -609,7 +606,7 @@ impl<'value> NP_Value<'value> for NP_Geo {
                                     NP_JSON::Null
                                 }
                             },
-                            _ => { unsafe { panic!() } }
+                            _ => { unsafe { unreachable_unchecked() } }
                         }
                     }
                 }
@@ -633,7 +630,7 @@ impl<'value> NP_Value<'value> for NP_Geo {
                 NP_Parsed_Schema::Geo { i: _, sortable: _, default: _, size} => {
                     size
                 },
-                _ => { unsafe { panic!() } }
+                _ => { unsafe { unreachable_unchecked() } }
             };
             Ok(size as usize)
         }

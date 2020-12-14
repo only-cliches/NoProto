@@ -4,7 +4,7 @@ use no_proto::NP_Factory;
 use std::io::prelude::*;
 use flate2::Compression;
 use flate2::write::ZlibEncoder;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{SystemTime};
 pub struct NoProtoBench();
 
 impl NoProtoBench {
@@ -42,7 +42,7 @@ impl NoProtoBench {
         let new_buffer = NoProtoBench::encode_single(&factory)?;
         let start = SystemTime::now();
 
-        for x in 0..LOOPS {
+        for _x in 0..LOOPS {
             let mut new_buff = factory.open_buffer(new_buffer.clone())?;
 
             new_buff.set(&["list", "0", "name"], "bob")?;
@@ -94,7 +94,7 @@ impl NoProtoBench {
         let new_buffer = NoProtoBench::encode_single(&factory)?;
         let start = SystemTime::now();
 
-        for x in 0..LOOPS {
+        for _x in 0..LOOPS {
             let new_buff = factory.open_buffer(new_buffer.clone())?;
             assert_eq!(new_buff.get(&["location"])?, Some("https://arstechnica.com"));
         }
@@ -110,7 +110,7 @@ impl NoProtoBench {
         let new_buffer = NoProtoBench::encode_single(&factory)?;
         let start = SystemTime::now();
 
-        for x in 0..LOOPS {
+        for _x in 0..LOOPS {
             let mut new_buff = factory.open_buffer(new_buffer.clone())?;
 
             assert_eq!(new_buff.get(&["initialized"])?, Some(true));

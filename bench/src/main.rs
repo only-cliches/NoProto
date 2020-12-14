@@ -14,7 +14,6 @@ extern crate protobuf;
 extern crate flatbuffers;
 #[macro_use] 
 extern crate json;
-#[macro_use] 
 extern crate bson;
 
 mod run_bench_no_proto;

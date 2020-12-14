@@ -2,11 +2,7 @@
 
 
 
-use std::mem;
-use std::cmp::Ordering;
-
 extern crate flatbuffers;
-use self::flatbuffers::EndianScalar;
 
 #[allow(unused_imports, dead_code)]
 pub mod benchfb {

@@ -81,7 +81,7 @@ impl<'value> NP_Value<'value> for NP_Date {
                     schema_json.insert("default".to_owned(), NP_JSON::Integer(d.value as i64));
                 }
             },
-            _ => { unsafe { panic!() } }
+            _ => { unsafe { unreachable_unchecked() } }
         }
     
         Ok(NP_JSON::Dictionary(schema_json))
@@ -96,7 +96,7 @@ impl<'value> NP_Value<'value> for NP_Date {
                     None
                 }
             },
-            _ => { unsafe { panic!() } }
+            _ => { unsafe { unreachable_unchecked() } }
         }
     }
 
@@ -162,7 +162,7 @@ impl<'value> NP_Value<'value> for NP_Date {
                                     NP_JSON::Null
                                 }
                             },
-                            _ => { unsafe { panic!() } }
+                            _ => { unsafe { unreachable_unchecked() } }
                         }
                     }
                 }

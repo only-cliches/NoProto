@@ -1,9 +1,9 @@
 #![warn(missing_docs)]
 #![allow(non_camel_case_types)]
-// #![no_std]
+#![no_std]
 
 //! ## Simple & Performant Zero-Copy Serialization
-//! Performance of Flatbuffers / Cap'N Proto with flexibility of JSON
+//! Performance of Protocol Buffers with flexibility of JSON
 //! 
 //! [Github](https://github.com/ClickSimply/NoProto) | [Crates.io](https://crates.io/crates/no_proto) | [Documentation](https://docs.rs/no_proto)
 //! 
@@ -18,38 +18,32 @@
 //! - Supports most common native data types
 //! - Supports collection types (list, map, table & tuple)
 //! - Supports deep nesting of collection types
+//! - Easy and performant export to JSON.
 //! - [Thoroughly documented](https://docs.rs/no_proto/latest/no_proto/format/index.html) & simple data storage format
 //! 
-//! NoProto allows you to store, read & mutate structured data with near zero overhead. It's like Cap'N Proto/Flatbuffers except buffers and schemas are dynamic at runtime instead of requiring compilation.  It's like JSON but faster, type safe and allows native types.
+//! NoProto allows you to store, read & mutate structured data with near zero overhead. It's like Protocol Buffers except buffers and schemas are dynamic at runtime instead of requiring compilation.  It's like JSON but faster, type safe and allows native types.
 //! 
 //! Byte-wise sorting comes in the box and is a first class operation. Two NoProto buffers can be compared at the byte level *without deserializing* and a correct ordering between the buffer's internal values will be the result.  This is extremely useful for storing ordered keys in databases. 
 //! 
 //! NoProto moves the cost of deserialization to the access methods instead of deserializing the entire object ahead of time (Incremental Deserialization). This makes it a perfect use case for things like database storage or file storage of structured data.
 //! 
-//! *Compared to FlatBuffers / Cap'N Proto / Protocol Buffers*
+//! *Compared to Protocol Buffers*
 //! - Comparable serialization & deserialization performance
+//! - Updating buffers is orders of magnitude faster
 //! - Easier & Simpler API
 //! - Schemas are dynamic at runtime, no compilation step
 //! - Supports more types and better nested type support
 //! - Byte-wise sorting is first class operation
 //! - Mutate (add/delete/update) existing/imported buffers
 //! 
-//! *Compared to JSON*
-//! - Usually more space efficient
+//! *Compared to JSON / BSON*
+//! - Far more space efficient
+//! - Significantly faster serialization & deserialization
 //! - Deserializtion is zero copy
-//! - Faster serialization & deserialization
 //! - Has schemas / type safe
 //! - Supports byte-wise sorting
 //! - Supports raw bytes & other native types
 //! 
-//! *Compared to BSON*
-//! - Usually more space efficient
-//! - Deserializtion is zero copy
-//! - Faster serialization & deserialization
-//! - Has schemas / type safe
-//! - Byte-wise sorting is first class operation
-//! - Supports much larger documents (4GB vs 16KB)
-//! - Better collection support & more supported types
 //! 
 //! *Compared to Serde*
 //! - Supports byte-wise sorting
@@ -59,7 +53,7 @@
 //! 
 //! | Format           | Zero-Copy | Size Limit | Mutable | Schemas | Language Agnostic | No Compiling    | Byte-wise Sorting |
 //! |------------------|-----------|------------|---------|---------|-------------------|-----------------|-------------------|
-//! | **NoProto**      | ✓         | ~4GB       | ✓       | ✓       | ✓                 | ✓               | ✓                 |
+//! | **NoProto**      | ✓         | ~16KB      | ✓       | ✓       | ✓                 | ✓               | ✓                 |
 //! | JSON             | 𐄂         | Unlimited  | ✓       | 𐄂       | ✓                 | ✓               | 𐄂                 |
 //! | BSON             | 𐄂         | ~16KB      | ✓       | 𐄂       | ✓                 | ✓               | 𐄂                 |
 //! | MessagePack      | 𐄂         | Unlimited  | ✓       | 𐄂       | ✓                 | ✓               | 𐄂                 |
@@ -148,21 +142,28 @@
 //! 4. [`Data Format`](https://docs.rs/no_proto/latest/no_proto/format/index.html) - Learn how data is saved into the buffer.
 //! 
 //! ## Benchmarks
-//! While it's difficult to properly benchmark libraries like these in a fair way, I've made an attempt in the graph below.  These benchmarks are available in the `bench` folder and you can easily run them yourself with `cargo run`.
+//! While it's difficult to properly benchmark libraries like these in a fair way, I've made an attempt in the graph below.  These benchmarks are available in the `bench` folder and you can easily run them yourself with `cargo run`. 
 //! 
 //! The format and data used in the benchmarks were taken from the `flatbuffers` benchmarks github repo.  You should always benchmark/test your own use case for each library before making any decisions on what to use.
 //! 
-//! | Library            | Encode | Decode | Update | Size | Size (Zlib) |
-//! |--------------------|--------|--------|--------|------|-------------|
-//! | NoProto            | 5.6s   | x      | 0.6s   | 417  | 324         |
-//! | FlatBuffers        | 1.5s   | x      | 1.5s   | 336  | 214         |
-//! | Protocol Buffers 2 | 2.0s   | x      | 3.8s   | 220  | 163         |
+//! **Legend**: Higher % is better, 200% means the competing library did the same task as NoProto in half the time, 50% means it took twice as long.
 //! 
-//! <sub>* Benchmarks ran on a 2020 MacBook Air with M1 CPU and 8GB Ram</sub>
+//! | Library            | Encode | Decode All | Decode 1 | Update 1 | Size | Size (Zlib) |
+//! |--------------------|--------|------------|----------|----------|------|-------------|
+//! | NoProto            | 100%   | 100%       | 100%     | 100%     | 283  | 226         |
+//! | FlatBuffers        | 180%   | 800%       | 1600%    | 8%       | 336  | 214         |
+//! | Protocol Buffers 2 | 99%    | 80%        | 7%       | 2%       | 220  | 163         |
+//! | MessagePack        | 12%    | 15%        | 1%       | 1%       | 431  | 245         |
+//! | JSON               | 65%    | 30%        | 2%       | 2%       | 673  | 246         |
+//! | BSON               | 1%     | 8%         | 1%       | 1%       | 600  | 279         |
 //! 
-//! - *encode*: Transfer a collection of data into a serialized form 1,000,000 times.
-//! - *decode*: Decode/Deserialize an entire object into all it's parts 1,000,000 times.
-//! - *update*: Deserialize, update a single property, then serialize an object 1,000,000 times.
+//! 
+//! - **Encode**: Transfer a collection of data into a serialized form 1,000,000 times.
+//! - **Decode All**: Decode/Deserialize an object into all it's properties 1,000,000 times.
+//! - **Decode 1**: Decode/Deserialize one property of an object 1,000,000 times.
+//! - **Update 1**: Deserialize, update a single property, then serialize an object 1,000,000 times.
+//! 
+//! Complete benchmark source code is available [here](https://github.com/only-cliches/NoProto/tree/master/bench).
 //! 
 //! #### Limitations
 //! - Buffers cannot be larger than 2^16 bytes (~16kb).
@@ -171,10 +172,8 @@
 //! - Tables are limited to 255 columns and column names cannot be larger than 255 bytes.
 //! - Buffers are not validated or checked before deserializing.
 //! 
-//! #### Non Goals / Known Tradeoffs
-//! There are formats that focus on being as compact as possible.  While NoProto is not intentionally wasteful, it's primary focus is not on compactness.  If you need the smallest possible format MessagePack is a good choice.  It's all about tradeoffs, NoProto uses up extra bytes over other formats to make zero copy de/serialization, traversal and mutation as fast as possible.
-//! 
-//! If every CPU cycle counts, you don't mind compiling fixed schemas and you don't plan to mutate your buffers/objects, FlatBuffers/CapnProto is probably the way to go.  NoProto is usually within the same magnitude of performance as FlatBuffers/CapN Proto, but it's impossible to make it as fast as formats that compile your schemas ahead of time.
+//! #### Non Goals / Known Tradeoffs 
+//! If every CPU cycle counts, you don't mind compiling fixed schemas and you don't plan to mutate your buffers/objects, FlatBuffers/CapnProto is probably the way to go.  It's impossible to make a flexible format like NoProto as fast as formats that compile your schemas ahead of time.
 //! 
 //! ----------------------
 //! 
@@ -222,8 +221,6 @@ use buffer::{NP_Buffer};
 use alloc::vec::Vec;
 use alloc::{borrow::ToOwned};
 use schema::NP_Parsed_Schema;
-
-const PROTOCOL_VERSION: u8 = 1;
 
 /// Factories are created from schemas.  Once you have a factory you can use it to create new buffers or open existing ones.
 /// 
@@ -347,6 +344,7 @@ impl NP_Factory {
     pub fn export_schema(&self) -> Result<NP_JSON, NP_Error> {
         self.schema.to_json()
     }
+
 
     /// Open existing Vec<u8> as buffer for this factory.  
     /// 

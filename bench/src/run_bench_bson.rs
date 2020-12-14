@@ -1,9 +1,9 @@
 use crate::LOOPS;
 
-use std::{io::prelude::*, str::{from_utf8, from_utf8_unchecked}};
+use std::{io::prelude::*};
 use flate2::Compression;
 use flate2::write::ZlibEncoder;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{SystemTime};
 use bson::*;
 
 
@@ -75,7 +75,7 @@ impl BSONBench {
 
         let start = SystemTime::now();
 
-        for x in 0..LOOPS {
+        for _x in 0..LOOPS {
             let mut container = Document::from_reader(&mut std::io::Cursor::new(buffer.clone())).unwrap();
 
             let list = container.get_array_mut("list").unwrap();
@@ -99,7 +99,7 @@ impl BSONBench {
         let start = SystemTime::now();
 
         for _x in 0..LOOPS {
-            let mut container = Document::from_reader(&mut std::io::Cursor::new(buffer.clone())).unwrap();
+            let container = Document::from_reader(&mut std::io::Cursor::new(buffer.clone())).unwrap();
 
             assert_eq!(container.get_str("location").unwrap(), "http://arstechnica.com");
         }
@@ -114,7 +114,7 @@ impl BSONBench {
         let start = SystemTime::now();
 
         for _x in 0..LOOPS {
-            let mut container = Document::from_reader(&mut std::io::Cursor::new(buffer.clone())).unwrap();
+            let container = Document::from_reader(&mut std::io::Cursor::new(buffer.clone())).unwrap();
 
             assert_eq!(container.get_str("location").unwrap(), "http://arstechnica.com");
             assert_eq!(container.get_i32("fruit").unwrap(), 2i32);

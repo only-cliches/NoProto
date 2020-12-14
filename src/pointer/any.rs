@@ -13,8 +13,7 @@ use crate::NP_Memory;
 #[derive(Debug)]
 pub struct NP_Any { }
 
-impl NP_Any { }
-
+#[allow(unused_variables)]
 impl<'value> NP_Value<'value> for NP_Any {
 
     fn type_idx() -> (&'value str, NP_TypeKeys) { ("any", NP_TypeKeys::Any) }

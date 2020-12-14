@@ -1,10 +1,10 @@
 [package]
 name = "no_proto"
 license = "MIT"
-version = "0.5.1"
-description = "Simple & Performant Zero-Copy Serialization.  Performance of Flatbuffers / Cap'N Proto with flexibility of JSON."
-homepage = "https://github.com/ClickSimply/NoProto"
-repository = "https://github.com/ClickSimply/NoProto"
+version = "0.6.0"
+description = "Simple & Performant Zero-Copy Serialization.  Performance of Protocol Buffers with flexibility of JSON."
+homepage = "https://github.com/only-cliches/NoProto"
+repository = "https://github.com/only-cliches/NoProto"
 documentation="https://docs.rs/crate/no_proto/"
 authors = ["Scott Lott <me@scottlott.com>"]
 readme = "README.md"

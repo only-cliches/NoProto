@@ -659,6 +659,7 @@ pub type NP_Schema_Addr = usize;
 /// When a schema is parsed from JSON or Bytes, it is stored in this recursive type
 /// 
 #[allow(missing_docs)]
+#[derive(Debug)]
 pub enum NP_Parsed_Schema {
     None,
     Any        { sortable: bool, i:NP_TypeKeys },
@@ -686,15 +687,6 @@ pub enum NP_Parsed_Schema {
     List       { sortable: bool, i:NP_TypeKeys, of: NP_Schema_Addr },
     Tuple      { sortable: bool, i:NP_TypeKeys, values: Vec<NP_Schema_Addr>}
 }
-
-impl Debug for NP_Parsed_Schema {
-    
-    fn fmt(&self, writer: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> { 
-        writer.write_str(format!("{:?}", self.get_type_key()).as_str())?;
-        Ok(())
-    }
-}
-
 
 impl NP_Parsed_Schema {
 

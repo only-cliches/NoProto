@@ -46,52 +46,6 @@ impl Rand {
     }
 }
 
-/*
-pub fn from_utf8_lossy(input: &[u8]) -> String {
-    let mut empty = String::from("");
-
-    loop {
-        match str::from_utf8(input) {
-            Ok(valid) => {
-                empty.push_str(valid);
-                break
-            }
-            Err(error) => {
-                let (valid, _after_valid) = input.split_at(error.valid_up_to());
-                unsafe {
-                    empty.push_str(str::from_utf8_unchecked(valid))
-                }
-                empty.push_str("\u{FFFD}");
-
-                if let Some(_invalid_sequence_length) = error.error_len() {
-                    empty.push_str("?");
-                } else {
-                    break
-                }
-            }
-        }
-    }
-
-    empty
-}*/
-
-pub fn print_path(path: &[&str], path_index: usize) -> String {
-    let mut path_str: String = "".to_owned();
-    let mut ct: usize = 0;
-    path.iter().for_each(|v| {
-        if ct == path_index {
-            path_str.push_str(">");
-        }
-        path_str.push_str(v);
-        if ct == path_index {
-            path_str.push_str("<");
-        }
-        path_str.push_str(" ");
-        ct += 1;
-    });
-    path_str
-}
-
 pub fn to_base32(num: u128, length: i32) -> String {
 
     let mut result: Vec<&str> = Vec::with_capacity(length as usize);
@@ -115,19 +69,4 @@ pub fn to_base32(num: u128, length: i32) -> String {
     }
 
     final_string
-}
-
-
-pub fn opt_out_mut<'out, T>(opt: &'out mut Option<T>) -> &'out mut T {
-    match opt {
-        Some(x) => x,
-        None => panic!()
-    }
-}
-
-pub fn opt_out<'out, T>(opt: &'out Option<T>) -> &'out T {
-    match opt {
-        Some(x) => x,
-        None => panic!()
-    }
 }

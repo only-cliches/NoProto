@@ -51,7 +51,7 @@ impl<'value> NP_Value<'value> for bool {
                     });
                 }
             },
-            _ => { unsafe { panic!() } }
+            _ => { unsafe { unreachable_unchecked() } }
         }
 
         Ok(NP_JSON::Dictionary(schema_json))
@@ -66,7 +66,7 @@ impl<'value> NP_Value<'value> for bool {
                     None => None
                 }
             },
-            _ => { unsafe { panic!() } }
+            _ => { unsafe { unreachable_unchecked() } }
         }
     }
 
@@ -149,7 +149,7 @@ impl<'value> NP_Value<'value> for bool {
                                     NP_JSON::Null
                                 }
                             },
-                            _ => { unsafe { panic!() } }
+                            _ => { unsafe { unreachable_unchecked() } }
                         }
                     }
                 }

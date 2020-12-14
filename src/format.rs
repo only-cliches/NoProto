@@ -9,33 +9,24 @@
 //! 
 //! Pointers contain one or more addresses depending on the pointer type.  The addresses will point to data or other pointers.
 //! 
-//! There are 2 different address sizes, u16 and u32.  Addresses are always stored in little endian format and addresses are always zero based from the beginning of the buffer.  In other words, address `23` always means 23 bytes from the beginning of the buffer.
+//! There is only one address size, u16.  Addresses are always stored in big endian format and addresses are always zero based from the beginning of the buffer.  In other words, address `23` always means 23 bytes from the beginning of the buffer.
 //! 
-//! | Pointer Kind | u16 size (bytes) | u32 size (bytes) |
-//! |--------------|------------------|------------------|
-//! | Standard     | 2                | 4                |
-//! | Map Item     | 6                | 12               |
-//! | List Item    | 6                | 10               |
+//! | Pointer Kind | u16 size (bytes) |
+//! |--------------|------------------|
+//! | Standard     | 2                | 
+//! | Map Item     | 6                | 
+//! | List Item    | 5                |
 //!  
-//! The first two bytes of every buffer are:
-//! 1. The protocol version used for this buffer, currently always 1.  This allows future breaking changes if needed.
-//! 2. The address sized used in this buffer.  0 for u32 addresses, 1 for u16 addresses.  All addresses in the buffer are the same size, deteremined by this flag.
 //! 
-//! The next 2 (for u16) or 4 (for u32) bytes are the root pointer, these bytes should contain the address of the root object in the buffer.
+//! The firsr 2 bytes of every buffer is the root pointer, these bytes should contain the address of the root object in the buffer.
 //! 
 //! Most of the time these bytes will point to the data immediately following them, but it's possible to clear the root object causing these bytes to be zero, or to update the root data which would cause this address to update to something else.
 //! 
 //! For example, here is a buffer with u16 address size that contains the string `hello`, it's schema is just `{type: "string"}`.
 //! 
 //! ```text
-//! [       1,        1,         0, 4,          0, 5, 104, 101, 108, 108, 111]
-//! [protocol, u16 size, root pointer, string length,   h,   e,   l,   l,   o]
-//! ```
-//! 
-//! Here is the same buffer for u32 address size:
-//! ```text
-//! [       1,        0,   0, 0, 0, 6,    0, 0, 0, 5, 104, 101, 108, 108, 111]
-//! [protocol, u32 size, root pointer, string length,   h,   e,   l,   l,   o]
+//! [        0, 2,          0, 5, 104, 101, 108, 108, 111]
+//! [root pointer, string length,   h,   e,   l,   l,   o]
 //! ```
 //! 
 //! It should be noted that a schema is *required* to parse a buffer, otherwise you don't know the difference between pointers, data and what data types beyond the root.
@@ -50,14 +41,14 @@
 //! Used by items in a map object.  Contains the following:
 //! ```text
 //! | address of data | next map item pointer address | address of bytes for this key |
-//! |     u16/u32     |             u16/u32           |          u16/u32              |
+//! |        u16      |               u16             |            u16                |
 //! ```
 //! 
 //! Map collections represent a linked list of these pointers.  There should only be map item pointers for items in the map that have data.
 //! 
 //! The last map item pointer in a map should have a zero in the next item address for no further map items.
 //! 
-//! The `key` is always stored as a variable sequence of bytes provided by the client.  If you go to the address of the key you should find a length (u16/u32) followed by a sequence of bytes that represents the key.
+//! The `key` is always stored as a variable sequence of bytes provided by the client.  If you go to the address of the key you should find a length byte (u8) followed by a sequence of bytes that represents the key.
 //! 
 //! 
 //! ### List Item Pointer
@@ -65,7 +56,7 @@
 //! Used by items in a list object.  Contains the following:
 //! ```text
 //! | address of data | next list item pointer address | item index |
-//! |   u16/u32       |          u16/u32               |    u16     |
+//! |      u16        |             u16                |    u8      |
 //! ```
 //! 
 //! Unlike tables and maps, the order of the list items point to eachother should be kept so that the index is the correct sequence.
@@ -88,20 +79,13 @@
 //! 
 //! ### Table (Collection)
 //! 
-//! The table data type stores one or more vtables for the column values.  Each vtable contains:
-//! - 1 leading byte that tells you how many columns are in the vtable
-//! - 1 or more address (u32/u16) pointers for the table column values
-//! - a trailing address(u32/u16) of the next vtable (should be zero if no more vtables)
+//! The table data type stores one or more vtables for the column values.  Each vtable is 10 bytes and contains:
+//! - 4 address (u16) pointers for the table column values
+//! - a trailing address(u16) of the next vtable (should be zero if no more vtables)
 //! 
-//! The column indexes should accumulate across the vtables, and there should be at least one vtable entry for each column.
+//! Each vtable can address up to 4 columns, so if there are 30 columns in a schema there may be as many as 8 vtables in the buffer: `30 / 4 = 7.5`
 //! 
-//! For example, if you have 4 columns and 2 vtables, the indexes could be arranged like this:
-//! | vtable 1 | vtable 2 |
-//! |  0, 1, 2 |  3, 4    |
-//! 
-//! Vtables can contain as few as one column entry or as many as the total columns in the schema (up to 255).
-//! 
-//! Typically you won't have more than 1 vtable unless the schema has been modified with additional columns.
+//! Vtables are created as needed,  For example if there are 100 columns in the schema but the client only ever sets values to the first 4 columns  there will only ever be 1 vtable in the buffer.
 //! 
 //! 
 //! ```
@@ -128,7 +112,7 @@
 //! 
 //! ### List (Collection)
 //! 
-//! The list type stores two addresses (u16/u32), one to the first `ListItem` pointer (head) and one to the last `ListItem` pointer (tail).
+//! The list type stores two addresses (u16), one to the first `ListItem` pointer (head) and one to the last `ListItem` pointer (tail).
 //! 
 //! If there is only one list item pointer in the list, the head and tail addresses should be identical.
 //! 
@@ -153,7 +137,7 @@
 //! 
 //! ### Map (Collection)
 //! 
-//! The map type stores a single address (u16/u32) to the first `MapItem` pointer for this map followed by a `u16` with the total number of values in the map.
+//! The map type stores a single address (u16) to the first `MapItem` pointer.
 //! 
 //! ```
 //! use no_proto::error::NP_Error;
@@ -176,11 +160,15 @@
 //! 
 //! ### Tuple (Collection)
 //! 
-//! The tuple will have as many addresses (u16/u32) as there are items in the schema.  For example, if there are 5 items in the schema there should be 5 addresses in the tuple.
+//! The tuple data type stores one or more vtables for the values.  Each vtable is 10 bytes and contains:
+//! - 4 address (u16) pointers for the tuple values
+//! - a trailing address(u16) of the next vtable (should be zero if no more vtables)
 //! 
-//! So if a tuple is 20 items long in the schema, it should always ocuppy at least 40 bytes (u16) or 80 bytes (u32).
+//! Each vtable can address up to 4 values, so if there are 30 values in a schema there may be as many as 8 vtables in the buffer: `30 / 4 = 7.5`
 //! 
-//! Each "address" should be treated like a standard pointer to a value in the tuple.
+//! Vtables are normally created as needed,  For example if there are 100 values in the schema but the client only ever sets the first 4 values there will only ever be 1 vtable in the buffer.
+//! 
+//! If the tuple is set to be sorted, all vtables needed by the schema are created at once in a continuous chain.  Following the continuos chain of vtables, default zero bytes are set for all children of the tuple.  This gaurantees all sorted tuples of the same schema have identical leading bytes followed by sortable bytes determined by the value of the data.
 //! 
 //! ```
 //! use no_proto::error::NP_Error;
@@ -445,7 +433,7 @@
 //! [22, 0, 0]
 //! ```
 //! 
-//! If there is no fixed `size` in the schema, store a size (u16/u32) followed by the actual data.
+//! If there is no fixed `size` in the schema, store a size (u16) followed by the actual data.
 //! 
 //! If it's a string, the data should be utf-8 encoded when it's saved into the buffer and utf-8 decoded when it's retrieved.
 //! 

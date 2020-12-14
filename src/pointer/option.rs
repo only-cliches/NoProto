@@ -107,7 +107,7 @@ impl<'value> NP_Value<'value> for NP_Enum {
         
                 schema_json.insert("choices".to_owned(), NP_JSON::Array(options));
             },
-            _ => { unsafe { panic!() } }
+            _ => { unsafe { unreachable_unchecked() } }
         }
 
         Ok(NP_JSON::Dictionary(schema_json))
@@ -123,7 +123,7 @@ impl<'value> NP_Value<'value> for NP_Enum {
                     None
                 }
             },
-            _ => { unsafe { panic!() } }
+            _ => { unsafe { unreachable_unchecked() } }
         }
     }
 
@@ -170,7 +170,7 @@ impl<'value> NP_Value<'value> for NP_Enum {
                     return Ok(cursor);
                 }     
             },
-            _ => { unsafe { panic!() } }
+            _ => { unsafe { unreachable_unchecked() } }
         }               
     }
 
@@ -178,7 +178,7 @@ impl<'value> NP_Value<'value> for NP_Enum {
 
         let c_value = cursor.get_value(memory);
 
-        let mut value_addr = c_value.get_addr_value() as usize;
+        let value_addr = c_value.get_addr_value() as usize;
 
         // empty value
         if value_addr == 0 {
@@ -200,7 +200,7 @@ impl<'value> NP_Value<'value> for NP_Enum {
                     None => None
                 })
             },
-            _ => { unsafe { panic!() } }
+            _ => { unsafe { unreachable_unchecked() } }
         }
     }
 
@@ -215,7 +215,6 @@ impl<'value> NP_Value<'value> for NP_Enum {
                                 NP_JSON::String(str_value.to_string())
                             },
                             NP_Enum::None => {
-                                let c_value = cursor.get_value(memory);
                                 match &memory.schema[cursor.schema_addr] {
                                     NP_Parsed_Schema::Enum { i: _, choices: _, default, sortable: _} => {
                                         if let Some(d) = default {
@@ -231,13 +230,12 @@ impl<'value> NP_Value<'value> for NP_Enum {
                                             NP_JSON::Null
                                         }
                                     },
-                                    _ => { unsafe { panic!() } }
+                                    _ => { unsafe { unreachable_unchecked() } }
                                 }
                             }
                         }
                     },
                     None => {
-                        let c_value = cursor.get_value(memory);
                         match &memory.schema[cursor.schema_addr] {
                             NP_Parsed_Schema::Enum { i: _, choices: _, default, sortable: _} => {
                                 if let Some(d) = default {
@@ -249,7 +247,7 @@ impl<'value> NP_Value<'value> for NP_Enum {
                                     NP_JSON::Null
                                 }
                             },
-                            _ => { unsafe { panic!() } }
+                            _ => { unsafe { unreachable_unchecked() } }
                         }
                     }
                 }

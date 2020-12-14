@@ -1,6 +1,6 @@
 //! Internal buffer memory management
 
-use crate::{pointer::{NP_Cursor}, schema::NP_Parsed_Schema, utils::opt_out};
+use crate::{schema::NP_Parsed_Schema};
 use crate::{error::NP_Error};
 use core::cell::UnsafeCell;
 use alloc::vec::Vec;

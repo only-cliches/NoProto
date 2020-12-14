@@ -73,7 +73,7 @@ impl<'value> NP_Value<'value> for &'value str {
 
                 Ok(NP_JSON::Dictionary(schema_json))
             }
-            _ => unsafe { panic!() },
+            _ => unsafe { unreachable_unchecked() },
         }
     }
 
@@ -136,7 +136,7 @@ impl<'value> NP_Value<'value> for &'value str {
                     return Ok(Some(unsafe { str::from_utf8_unchecked(bytes) }));
                 }
             }
-            _ => unsafe { panic!() },
+            _ => unsafe { unreachable_unchecked() },
         }
     }
 
@@ -146,9 +146,7 @@ impl<'value> NP_Value<'value> for &'value str {
                 Some(x) => Some(x),
                 None => None,
             },
-            _ => {
-                panic!()
-            }
+            _ => unsafe { unreachable_unchecked() }
         }
     }
     fn get_size(cursor: &NP_Cursor, memory: &NP_Memory<'value>) -> Result<usize, NP_Error> {
@@ -174,7 +172,7 @@ impl<'value> NP_Value<'value> for &'value str {
                 // return total size of this string plus length bytes
                 return Ok(bytes_size + 2);
             }
-            _ => unsafe { panic!() },
+            _ => unsafe { unreachable_unchecked() },
         }
     }
 
@@ -257,13 +255,12 @@ impl<'value> NP_Value<'value> for &'value str {
             Ok(x) => match x {
                 Some(y) => NP_JSON::String(y.to_string()),
                 None => {
-                    let c_value = cursor.get_value(memory);
                     match &memory.schema[cursor.schema_addr] {
                         NP_Parsed_Schema::UTF8String { default, .. } => match default {
                             Some(x) => NP_JSON::String(x.to_string()),
                             None => NP_JSON::Null,
                         },
-                        _ => unsafe { panic!() },
+                        _ => unsafe { unreachable_unchecked() },
                     }
                 }
             },
@@ -283,7 +280,7 @@ impl<'value> NP_Value<'value> for &'value str {
     
         let size = match memory.schema[cursor.schema_addr] {
             NP_Parsed_Schema::UTF8String { size, .. } => size,
-            _ => { unsafe { panic!() } }
+            _ => { unsafe { unreachable_unchecked() } }
         };
     
         if size > 0 {

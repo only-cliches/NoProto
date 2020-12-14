@@ -687,7 +687,7 @@ impl<'value> NP_Value<'value> for NP_Dec {
         
                 Ok(NP_JSON::Dictionary(schema_json))
             },
-            _ => { unsafe { panic!() } }
+            _ => { unsafe { unreachable_unchecked() } }
         }
     }
 
@@ -701,7 +701,7 @@ impl<'value> NP_Value<'value> for NP_Dec {
                     None
                 }
             },
-            _ => { unsafe { panic!() } }
+            _ => { unsafe { unreachable_unchecked() } }
         }
     }
 
@@ -716,7 +716,7 @@ impl<'value> NP_Value<'value> for NP_Dec {
             NP_Parsed_Schema::Decimal { i: _, sortable: _, default: _, exp} => {
                 exp
             },
-            _ => { unsafe { panic!() } }
+            _ => { unsafe { unreachable_unchecked() } }
         };
 
 
@@ -768,7 +768,7 @@ impl<'value> NP_Value<'value> for NP_Dec {
             NP_Parsed_Schema::Decimal { i: _, sortable: _, default: _, exp} => {
                 exp
             },
-            _ => { unsafe { panic!() } }
+            _ => { unsafe { unreachable_unchecked() } }
         };
 
 
@@ -784,12 +784,11 @@ impl<'value> NP_Value<'value> for NP_Dec {
 
     fn to_json(cursor: &NP_Cursor, memory: &'value NP_Memory) -> NP_JSON {
 
-        let c_value = cursor.get_value(memory);
         let exp = match memory.schema[cursor.schema_addr] {
             NP_Parsed_Schema::Decimal { exp, .. } => {
                 exp
             },
-            _ => { unsafe { panic!() } }
+            _ => { unsafe { unreachable_unchecked() } }
         };
 
 
@@ -818,7 +817,7 @@ impl<'value> NP_Value<'value> for NP_Dec {
                                     NP_JSON::Null
                                 }
                             },
-                            _ => { unsafe { panic!() } }
+                            _ => { unsafe { unreachable_unchecked() } }
                         }
                     }
                 }

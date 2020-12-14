@@ -15,7 +15,7 @@ use flatbuffers::FlatBufferBuilder;
 use std::io::prelude::*;
 use flate2::Compression;
 use flate2::write::ZlibEncoder;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{SystemTime};
 
 
 pub struct FlatBufferBench();
@@ -76,7 +76,7 @@ impl FlatBufferBench {
 
         let start = SystemTime::now();
 
-        for x in 0..LOOPS {
+        for _x in 0..LOOPS {
             let container = get_root_as_foo_bar_container(&buffer[..]);
 
             let mut fbb: FlatBufferBuilder = FlatBufferBuilder::new();
@@ -121,7 +121,7 @@ impl FlatBufferBench {
 
         let start = SystemTime::now();
 
-        for x in 0..LOOPS {
+        for _x in 0..LOOPS {
             let container = get_root_as_foo_bar_container(&buffer[..]);
             assert_eq!(container.location(), Some("http://arstechnica.com"));
         }
@@ -136,7 +136,7 @@ impl FlatBufferBench {
 
         let start = SystemTime::now();
 
-        for x in 0..LOOPS {
+        for _x in 0..LOOPS {
             let container = get_root_as_foo_bar_container(&buffer[..]);
 
             container.list().unwrap().iter().enumerate().for_each(|(x, foobar)| {
