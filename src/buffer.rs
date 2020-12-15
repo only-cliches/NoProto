@@ -168,7 +168,7 @@ impl<'buffer> NP_Buffer<'buffer> {
         self.cursor = NP_Cursor::new(0, 0, 0);
     }
 
-    /// Used to set scalar values inside the buffer, the path only works with dot notation.
+    /// Used to set scalar values inside the buffer.
     /// 
     /// The type that you cast the request to will be compared to the schema, if it doesn't match the schema the request will fail.
     /// 
@@ -478,7 +478,9 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// 
     /// If the type found at the path provided does not support length operations, you'll get `None`.
     /// 
-    /// If the length of the item is zero, you can expect `Some(0)`.
+    /// If there is no value at the path provodid, you will get `None`.
+    /// 
+    /// If an item is found and it's length is zero, you can expect `Some(0)`.
     /// 
     /// ## String Example
     /// ```
@@ -653,10 +655,10 @@ impl<'buffer> NP_Buffer<'buffer> {
   
     }
 
-    /// Clear an inner value from the buffer.  The path only works with dot notation.
+    /// Clear an inner value from the buffer.
     /// This can also be used to clear deeply nested collection objects or scalar objects.
     /// 
-    /// Returns `true` if it deleted a value, `false` otherwise.
+    /// Returns `true` if it found a value to delete (and deleted it), `false` otherwise.
     /// 
     /// ```
     /// use no_proto::error::NP_Error;
@@ -692,7 +694,7 @@ impl<'buffer> NP_Buffer<'buffer> {
         }
     }
   
-    /// Retrieve an inner value from the buffer.  The path only works with dot notation.
+    /// Retrieve an inner value from the buffer. 
     /// 
     /// The type that you cast the request to will be compared to the schema, if it doesn't match the schema the request will fail.
     /// 
@@ -758,13 +760,13 @@ impl<'buffer> NP_Buffer<'buffer> {
         }
     }
 
-    /// This performs a compaction if the closure provided as the third argument returns `true`.
+    /// This performs a compaction if the closure provided as the second argument returns `true`.
     /// Compaction is a pretty expensive operation (requires full copy of the whole buffer) so should be done sparingly.
-    /// The closure is provided an argument that contains the original size of the buffer, how many bytes could be saved by compaction, and how large the new buffer would be after compaction.
+    /// The closure is provided an argument that contains the original size of the buffer, how many bytes could be saved by compaction, and how large the new buffer would be after compaction.  The closure should return `true` to perform compaction, `false` otherwise.
     /// 
     /// The first argument, new_capacity, is the capacity of the underlying Vec<u8> that we'll be copying the data into.  The default is the size of the old buffer.
     /// 
-    /// The second argument, new_size, can be used to change the size of the address space in the new buffer.  Default behavior is to copy the address size of the old buffer.  Be careful, if you're going from a larg address space down to a smaller one the data might not fit in the new buffer.
+    /// **WARNING** Your cursor location and backup will be reset to the root.
     /// 
     /// ```
     /// use no_proto::error::NP_Error;
@@ -827,7 +829,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// 
     /// The first argument, new_capacity, is the capacity of the underlying Vec<u8> that we'll be copying the data into.  The default is the size of the old buffer.
     /// 
-    /// The second argument, new_size, can be used to change the size of the address space in the new buffer.  Default behavior is to copy the address size of the old buffer.  Be careful, if you're going from a larg address space down to a smaller one the data might not fit in the new buffer.
+    /// **WARNING** Your cursor location and backup will be reset to the root.
     /// 
     /// ```
     /// use no_proto::error::NP_Error;

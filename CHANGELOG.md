@@ -1,8 +1,9 @@
 # 0.6.0 December 14, 2020
-- Complete rewrite again.
+- Complete rewrite again (twice this time).
 - There is now only one address size, `u16`, limits buffers to 16kb max size.
 - Dramatically reduced the cost of reading/updating addresses in buffer.
 - Lists & maps are now limited to 255 items.
+- Performance is now comparable to Protocol Buffers, I'm pretty happy about that.
 
 # 0.5.1 November 30, 2020
 - Forgot to apply `no_std` after debugging in previous release.

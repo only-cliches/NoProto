@@ -28,7 +28,7 @@
 //! NoProto moves the cost of deserialization to the access methods instead of deserializing the entire object ahead of time (Incremental Deserialization). This makes it a perfect use case for things like database storage or file storage of structured data.
 //! 
 //! *Compared to Protocol Buffers*
-//! - Comparable serialization & deserialization performance
+//! - Similar serialization & deserialization performance
 //! - Updating buffers is orders of magnitude faster
 //! - Easier & Simpler API
 //! - Schemas are dynamic at runtime, no compilation step
@@ -142,7 +142,7 @@
 //! 4. [`Data Format`](https://docs.rs/no_proto/latest/no_proto/format/index.html) - Learn how data is saved into the buffer.
 //! 
 //! ## Benchmarks
-//! While it's difficult to properly benchmark libraries like these in a fair way, I've made an attempt in the graph below.  These benchmarks are available in the `bench` folder and you can easily run them yourself with `cargo run`. 
+//! While it's difficult to properly benchmark libraries like these in a fair way, I've made an attempt in the graph below.  These benchmarks are available in the `bench` folder and you can easily run them yourself with `cargo run --release`. 
 //! 
 //! The format and data used in the benchmarks were taken from the `flatbuffers` benchmarks github repo.  You should always benchmark/test your own use case for each library before making any decisions on what to use.
 //! 
@@ -165,6 +165,10 @@
 //! 
 //! Complete benchmark source code is available [here](https://github.com/only-cliches/NoProto/tree/master/bench).
 //! 
+//! In my opinion the benchmarks above make NoProto the clear winner if you ever plan to mutate or update your buffer data.  If buffer data can always be immutable and the fixed schemas aren't an issue, Flatbuffers is the better choice.
+//! 
+//! I also think there's a strong argument here against using data without a schema.  The cost of an entirely flexible formats like JSON or BSON is crazy.  Putting schemas on your data not only increases your data hygiene but makes the storage of the data far more comapct while increasing the deserialization and serialization perfomrance substantially.
+//! 
 //! #### Limitations
 //! - Buffers cannot be larger than 2^16 bytes (~16kb).
 //! - Collections (Lists, Maps, Tuples & Tables) cannot have more than 255 immediate child items.
@@ -173,7 +177,7 @@
 //! - Buffers are not validated or checked before deserializing.
 //! 
 //! #### Non Goals / Known Tradeoffs 
-//! If every CPU cycle counts, you don't mind compiling fixed schemas and you don't plan to mutate your buffers/objects, FlatBuffers/CapnProto is probably the way to go.  It's impossible to make a flexible format like NoProto as fast as formats that compile your schemas ahead of time.
+//! If every CPU cycle counts, you don't mind compiling fixed schemas and you don't plan to mutate your buffers/objects, FlatBuffers/CapnProto is probably the way to go.  It's impossible to make a flexible format like NoProto as fast as formats that compile your schemas ahead of time and store data immutably.
 //! 
 //! ----------------------
 //! 
@@ -207,6 +211,7 @@ pub mod error;
 pub mod json_flex;
 pub mod format;
 pub mod memory;
+pub mod rpc;
 mod hashmap;
 mod utils;
 
