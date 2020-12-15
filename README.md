@@ -16,15 +16,16 @@ Performance of Protocol Buffers with flexibility of JSON
 - Supports deep nesting of collection types
 - Easy and performant export to JSON.
 - [Thoroughly documented](https://docs.rs/no_proto/latest/no_proto/format/index.html) & simple data storage format
+- Panic/unwrap() free, this library will never cause a panic in your application.
 
-NoProto allows you to store, read & mutate structured data with near zero overhead. It's like Protocol Buffers except buffers and schemas are dynamic at runtime instead of requiring compilation.  It's like JSON but faster, type safe and allows native types.
+NoProto allows you to store, read & mutate structured data with very little overhead. It's like Protocol Buffers except buffers and schemas are dynamic at runtime.  It's like JSON but way faster, type safe and supports native types.
+
+Also unlike Protocol Buffers you can insert values in any order and values can later be removed or updated without rebuilding the whole buffer.
 
 Byte-wise sorting comes in the box and is a first class operation. Two NoProto buffers can be compared at the byte level *without deserializing* and a correct ordering between the buffer's internal values will be the result.  This is extremely useful for storing ordered keys in databases. 
 
-NoProto moves the cost of deserialization to the access methods instead of deserializing the entire object ahead of time (Incremental Deserialization). This makes it a perfect use case for things like database storage or file storage of structured data.
-
 *Compared to Protocol Buffers*
-- Comparable serialization & deserialization performance
+- Similar serialization & deserialization performance
 - Updating buffers is orders of magnitude faster
 - Easier & Simpler API
 - Schemas are dynamic at runtime, no compilation step
@@ -98,7 +99,7 @@ assert_eq!(name, Some("Billy Joel"));
 let user_bytes: Vec<u8> = user_buffer.close();
 
 // open the buffer again
-let user_buffer = user_factory.open_buffer(user_bytes)?;
+let user_buffer = user_factory.open_buffer(user_bytes);
 
 // get nested internal value, first tag from the tag list
 let tag = user_buffer.get::<&str>(&["tags", "0"])?;
@@ -115,18 +116,6 @@ let user_bytes: Vec<u8> = user_buffer.close();
 
 // we can now save user_bytes to disk, 
 // send it over the network, or whatever else is needed with the data
-
-// The schema can also be compiled into a byte array for more efficient schema parsing.
-let byte_schema: Vec<u8> = user_factory.compile_schema();
-
-// The byte schema can be used just like JSON schema, but it's WAY faster to parse.
-let user_factory2 = NP_Factory::new_compiled(byte_schema);
-
-// confirm the new byte schema works with existing buffers
-let user_buffer = user_factory2.open_buffer(user_bytes)?;
-let tag = user_buffer.get::<&str>(&["tags", "0"])?;
-assert_eq!(tag, Some("first tag"));
-
 ```
 
 ## Guided Learning / Next Steps:
@@ -136,7 +125,7 @@ assert_eq!(tag, Some("first tag"));
 4. [`Data Format`](https://docs.rs/no_proto/latest/no_proto/format/index.html) - Learn how data is saved into the buffer.
 
 ## Benchmarks
-While it's difficult to properly benchmark libraries like these in a fair way, I've made an attempt in the graph below.  These benchmarks are available in the `bench` folder and you can easily run them yourself with `cargo run`. 
+While it's difficult to properly benchmark libraries like these in a fair way, I've made an attempt in the graph below.  These benchmarks are available in the `bench` folder and you can easily run them yourself with `cargo run --release`. 
 
 The format and data used in the benchmarks were taken from the `flatbuffers` benchmarks github repo.  You should always benchmark/test your own use case for each library before making any decisions on what to use.
 
@@ -144,20 +133,24 @@ The format and data used in the benchmarks were taken from the `flatbuffers` ben
 
 | Library            | Encode | Decode All | Decode 1 | Update 1 | Size | Size (Zlib) |
 |--------------------|--------|------------|----------|----------|------|-------------|
-| NoProto            | 100%   | 100%       | 100%     | 100%     | 283  | 226         |
-| FlatBuffers        | 180%   | 800%       | 1600%    | 8%       | 336  | 214         |
-| Protocol Buffers 2 | 99%    | 80%        | 7%       | 2%       | 220  | 163         |
-| MessagePack        | 12%    | 15%        | 1%       | 1%       | 431  | 245         |
-| JSON               | 65%    | 30%        | 2%       | 2%       | 673  | 246         |
-| BSON               | 1%     | 8%         | 1%       | 1%       | 600  | 279         |
+| NoProto            | 100%   | 100%       | 100%     | 100%     | 284  | 229         |
+| FlatBuffers        | 193%   | 1800%      | 1600%    | 16%      | 336  | 214         |
+| Protocol Buffers 2 | 103%   | 80%        | 7%       | 5%       | 220  | 163         |
+| MessagePack        | 13%    | 16%        | 1%       | 1%       | 431  | 245         |
+| JSON               | 68%    | 29%        | 3%       | 5%       | 673  | 246         |
+| BSON               | 9%     | 7%         | 1%       | 1%       | 600  | 279         |
 
 
-- **Encode**: Transfer a collection of data into a serialized form 1,000,000 times.
-- **Decode All**: Decode/Deserialize an object into all it's properties 1,000,000 times.
-- **Decode 1**: Decode/Deserialize one property of an object 1,000,000 times.
-- **Update 1**: Deserialize, update a single property, then serialize an object 1,000,000 times.
+- **Encode**: Transfer a collection of test data into a serialized Vec<u8>.
+- **Decode All**: Deserialize the test object from the Vec<u8> into all it's properties.
+- **Decode 1**: Deserialize the test object from the Vec<u8> into one of it's properties.
+- **Update 1**: Deserialize, update a single property, then serialize back into Vec<u8>.
 
 Complete benchmark source code is available [here](https://github.com/only-cliches/NoProto/tree/master/bench).
+
+In my opinion the benchmarks above make NoProto the clear winner if you ever plan to mutate or update your buffer data.  If buffer data can always be immutable and the fixed compiled schemas aren't an issue, Flatbuffers is the better choice.
+
+I also think there's a strong argument here against using data without a schema.  The cost of an entirely flexible formats like JSON or BSON is crazy.  Putting schemas on your data not only increases your data hygiene but makes the storage of the data far more comapct while increasing the deserialization and serialization perfomrance substantially.
 
 #### Limitations
 - Buffers cannot be larger than 2^16 bytes (~16kb).
@@ -167,7 +160,7 @@ Complete benchmark source code is available [here](https://github.com/only-clich
 - Buffers are not validated or checked before deserializing.
 
 #### Non Goals / Known Tradeoffs 
-If every CPU cycle counts, you don't mind compiling fixed schemas and you don't plan to mutate your buffers/objects, FlatBuffers/CapnProto is probably the way to go.  It's impossible to make a flexible format like NoProto as fast as formats that compile your schemas ahead of time.
+If every CPU cycle counts, you don't mind compiling fixed schemas and you don't plan to mutate your buffers/objects, FlatBuffers/CapnProto is probably the way to go.  It's impossible to make a flexible format like NoProto as fast as formats that compile your schemas ahead of time and store data immutably.
 
 ----------------------
 

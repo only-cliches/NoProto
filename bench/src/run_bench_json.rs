@@ -22,7 +22,7 @@ impl JSONBench {
         println!("JSON:        size: {}b, zlib: {}b", encoded.len(), compressed.len());
     }
 
-    pub fn encode_bench() {
+    pub fn encode_bench(base: u128) {
         let start = SystemTime::now();
 
         for _x in 0..LOOPS {
@@ -31,7 +31,7 @@ impl JSONBench {
         }
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
-        println!("JSON:        {:?}", time);        
+        println!("JSON:        {:>5.2}ms {:.2}", time.as_millis(), (base as f64 / time.as_micros() as f64));  
     }
 
     #[inline(always)]
@@ -68,7 +68,7 @@ impl JSONBench {
 
 
 
-    pub fn update_bench()  {
+    pub fn update_bench(base: u128)  {
         let buffer = Self::encode_single();
 
         let start = SystemTime::now();
@@ -82,11 +82,11 @@ impl JSONBench {
         }
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
-        println!("JSON:        {:?}", time);      
+        println!("JSON:        {:>5.2}ms {:.2}", time.as_millis(), (base as f64 / time.as_micros() as f64));   
 
     }
 
-    pub fn decode_one_bench()  {
+    pub fn decode_one_bench(base: u128)  {
         let buffer = Self::encode_single();
 
         let start = SystemTime::now();
@@ -97,10 +97,10 @@ impl JSONBench {
         }
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
-        println!("JSON:        {:?}", time);   
+        println!("JSON:        {:>5.2}ms {:.2}", time.as_millis(), (base as f64 / time.as_micros() as f64));  
     }
 
-    pub fn decode_bench()  {
+    pub fn decode_bench(base: u128)  {
         let buffer = Self::encode_single();
 
         let start = SystemTime::now();
@@ -111,9 +111,11 @@ impl JSONBench {
             assert_eq!(container["location"], JsonValue::String(String::from("http://arstechnica.com")));
             assert_eq!(container["fruit"].as_f64(), Some(2.0f64));
             assert_eq!(container["initialized"], JsonValue::Boolean(true));
-
+            let mut loops = 0;
             if let JsonValue::Array(list) = &container["list"] {
+                
                 list.iter().enumerate().for_each(|(x, foobar)| {
+                    loops += 1;
                     assert_eq!(foobar["name"], JsonValue::String(String::from("Hello, World!")));
                     assert_eq!(foobar["rating"].as_f64().unwrap(), 3.1415432432445543543 + (x as f64));
                     assert_eq!(foobar["postfix"], JsonValue::String(String::from("!")));
@@ -126,10 +128,11 @@ impl JSONBench {
                     assert_eq!(foobar["sibling"]["parent"]["length"].as_f64().unwrap(), 10000f64 + (x as f64));
                 });
             }
+            assert!(loops == 3);
         }
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
-        println!("JSON:        {:?}", time);      
+        println!("JSON:        {:>5.2}ms {:.2}", time.as_millis(), (base as f64 / time.as_micros() as f64));     
 
     }
 }

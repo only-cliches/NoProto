@@ -81,7 +81,7 @@ impl<'value> NP_Value<'value> for NP_Date {
                     schema_json.insert("default".to_owned(), NP_JSON::Integer(d.value as i64));
                 }
             },
-            _ => { unsafe { unreachable_unchecked() } }
+            _ => { }
         }
     
         Ok(NP_JSON::Dictionary(schema_json))
@@ -96,7 +96,7 @@ impl<'value> NP_Value<'value> for NP_Date {
                     None
                 }
             },
-            _ => { unsafe { unreachable_unchecked() } }
+            _ => None
         }
     }
 
@@ -162,7 +162,7 @@ impl<'value> NP_Value<'value> for NP_Date {
                                     NP_JSON::Null
                                 }
                             },
-                            _ => { unsafe { unreachable_unchecked() } }
+                            _ => NP_JSON::Null
                         }
                     }
                 }
@@ -263,7 +263,7 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     assert_eq!(buffer.get::<NP_Date>(&[])?, None);
 
     buffer.compact(None)?;
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 2usize);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 3usize);
 
     Ok(())
 }

@@ -82,7 +82,7 @@ impl NP_ULID {
     /// Generates a ULID with the given time and a provided random number generator.
     /// This is the preferrable way to generate a ULID, if you can provide a better RNG function than the psudorandom one built into this library, you should.
     /// 
-    pub fn generate_with_rand<F>(now_ms: u64, random_fn: F) -> NP_ULID where F: Fn(u8, u8) -> u8 {
+    pub fn generate_with_rand<F>(now_ms: u64, random_fn: F) -> NP_ULID where F: Fn() -> u8 {
 
         let mut id: [u8; 16] = [0; 16];
 
@@ -92,7 +92,7 @@ impl NP_ULID {
             if x < 6 {
                 id[x] = time_bytes[x + 2];
             } else {
-                id[x] = random_fn(0, 255) as u8;
+                id[x] = random_fn();
             }
         }
 
@@ -280,7 +280,7 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     assert_eq!(buffer.get::<&NP_ULID>(&[])?, None);
 
     buffer.compact(None)?;
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 2usize);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 3usize);
 
     Ok(())
 }

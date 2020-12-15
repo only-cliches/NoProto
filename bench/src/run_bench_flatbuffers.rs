@@ -33,7 +33,7 @@ impl FlatBufferBench {
         println!("Flatbuffers: size: {}b, zlib: {}b", encoded.len(), compressed.len());
     }
 
-    pub fn encode_bench() {
+    pub fn encode_bench(base: u128) {
         let start = SystemTime::now();
 
         for _x in 0..LOOPS {
@@ -42,7 +42,7 @@ impl FlatBufferBench {
         }
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
-        println!("Flatbuffers: {:?}", time);        
+        println!("Flatbuffers: {:>5.2}ms {:.2}", time.as_millis(), (base as f64 / time.as_micros() as f64));       
     }
 
     #[inline(always)]
@@ -71,7 +71,7 @@ impl FlatBufferBench {
 
 
 
-    pub fn update_bench()  {
+    pub fn update_bench(base: u128)  {
         let buffer = Self::encode_single();
 
         let start = SystemTime::now();
@@ -112,11 +112,10 @@ impl FlatBufferBench {
         }
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
-        println!("Flatbuffers: {:?}", time);      
-
+        println!("Flatbuffers: {:>5.2}ms {:.2}", time.as_millis(), (base as f64 / time.as_micros() as f64));     
     }
 
-    pub fn decode_one_bench()  {
+    pub fn decode_one_bench(base: u128)  {
         let buffer = Self::encode_single();
 
         let start = SystemTime::now();
@@ -127,11 +126,11 @@ impl FlatBufferBench {
         }
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
-        println!("Flatbuffers: {:?}", time);      
+        println!("Flatbuffers: {:>5.2}ms {:.2}", time.as_millis(), (base as f64 / time.as_micros() as f64));    
 
     }
 
-    pub fn decode_bench()  {
+    pub fn decode_bench(base: u128)  {
         let buffer = Self::encode_single();
 
         let start = SystemTime::now();
@@ -139,8 +138,10 @@ impl FlatBufferBench {
         for _x in 0..LOOPS {
             let container = get_root_as_foo_bar_container(&buffer[..]);
 
-            container.list().unwrap().iter().enumerate().for_each(|(x, foobar)| {
+            let mut loops = 0;
 
+            container.list().unwrap().iter().enumerate().for_each(|(x, foobar)| {
+                loops += 1;
                 let old_bar = foobar.sibling().unwrap();
                 let old_foo = old_bar.parent();
 
@@ -158,13 +159,15 @@ impl FlatBufferBench {
                 assert_eq!(foobar.postfix(), "!".as_bytes()[0]);
             });
 
+            assert!(loops == 3);
+
             assert_eq!(container.location(), Some("http://arstechnica.com"));
             assert_eq!(container.fruit(), EnumFB::Apples);
             assert_eq!(container.initialized(), true);
         }
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
-        println!("Flatbuffers: {:?}", time);      
+        println!("Flatbuffers: {:>5.2}ms {:.2}", time.as_millis(), (base as f64 / time.as_micros() as f64));   
 
     }
 }

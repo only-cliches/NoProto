@@ -43,38 +43,39 @@ fn main() {
 
     println!("\n====== ENCODE BENCHMARK ======");
     
-    NoProtoBench::encode_bench().unwrap();
-    FlatBufferBench::encode_bench();
-    ProtocolBufferBench::encode_bench();
-    MessagePackBench::encode_bench();
-    JSONBench::encode_bench();
-    BSONBench::encode_bench();
+    let base = NoProtoBench::encode_bench().unwrap();
+    FlatBufferBench::encode_bench(base);
+    ProtocolBufferBench::encode_bench(base);
+    MessagePackBench::encode_bench(base);
+    JSONBench::encode_bench(base);
+    BSONBench::encode_bench(base);
 
     println!("\n====== DECODE BENCHMARK ======");
-    
-    NoProtoBench::decode_bench().unwrap();
-    FlatBufferBench::decode_bench();
-    ProtocolBufferBench::decode_bench();
-    MessagePackBench::decode_bench();
-    JSONBench::decode_bench();
-    BSONBench::decode_bench();
+
+    let base = NoProtoBench::decode_bench().unwrap();
+    FlatBufferBench::decode_bench(base);
+    ProtocolBufferBench::decode_bench(base);
+    MessagePackBench::decode_bench(base);
+    JSONBench::decode_bench(base);
+    BSONBench::decode_bench(base);
 
     println!("\n====== DECODE ONE BENCHMARK ======");
+
+    let base = NoProtoBench::decode_one_bench().unwrap();
+    FlatBufferBench::decode_one_bench(base);
+    ProtocolBufferBench::decode_one_bench(base);
+    MessagePackBench::decode_one_bench(base);
+    JSONBench::decode_one_bench(base);
+    BSONBench::decode_one_bench(base);
     
-    NoProtoBench::decode_one_bench().unwrap();
-    FlatBufferBench::decode_one_bench();
-    ProtocolBufferBench::decode_one_bench();
-    MessagePackBench::decode_one_bench();
-    JSONBench::decode_one_bench();
-    BSONBench::decode_one_bench();
 
     println!("\n====== UPDATE ONE BENCHMARK ======");
 
-    NoProtoBench::update_bench().unwrap();
-    FlatBufferBench::update_bench();
-    ProtocolBufferBench::update_bench();
-    MessagePackBench::update_bench();
-    JSONBench::update_bench();
-    BSONBench::update_bench();
+    let base = NoProtoBench::update_bench().unwrap();
+    FlatBufferBench::update_bench(base);
+    ProtocolBufferBench::update_bench(base);
+    MessagePackBench::update_bench(base);
+    JSONBench::update_bench(base);
+    BSONBench::update_bench(base);
 }
 

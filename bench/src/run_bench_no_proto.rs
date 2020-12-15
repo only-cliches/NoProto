@@ -21,41 +21,41 @@ impl NoProtoBench {
     }
 
 
-    pub fn encode_bench() -> Result<(), NP_Error> {
+    pub fn encode_bench() -> Result<u128, NP_Error> {
         let factory = NoProtoBench::get_factory()?;
 
         let start = SystemTime::now();
     
         for _x in 0..LOOPS {
             let new_buffer = NoProtoBench::encode_single(&factory)?;
-            assert_eq!(new_buffer.len(), 283);
+            assert_eq!(new_buffer.len(), 284);
         }
     
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
-        println!("NoProto:     {:?}", time);
-    
-        Ok(())
+        println!("NoProto:     {:>5.2}ms 1.00", time.as_millis());
+
+        Ok(time.as_micros())
     }
 
-    pub fn update_bench() -> Result<(), NP_Error> {
+    pub fn update_bench() -> Result<u128, NP_Error> {
         let factory = NoProtoBench::get_factory()?;
         let new_buffer = NoProtoBench::encode_single(&factory)?;
         let start = SystemTime::now();
 
         for _x in 0..LOOPS {
-            let mut new_buff = factory.open_buffer(new_buffer.clone())?;
+            let mut new_buff = factory.open_buffer(new_buffer.clone());
 
             new_buff.set(&["list", "0", "name"], "bob")?;
 
             // new_buff.compact(None)?;
 
-            assert_eq!(new_buff.close().len(), 283);
+            assert_eq!(new_buff.close().len(), 284);
         }
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
-        println!("NoProto:     {:?}", time);
+        println!("NoProto:     {:>5.2}ms 1.00", time.as_millis());
 
-        Ok(())
+        Ok(time.as_micros())
     }
 
     #[inline(always)]
@@ -89,29 +89,29 @@ impl NoProtoBench {
         }"#)
     }
 
-    pub fn decode_one_bench() -> Result<(), NP_Error> {
+    pub fn decode_one_bench() -> Result<u128, NP_Error> {
         let factory = NoProtoBench::get_factory()?;
         let new_buffer = NoProtoBench::encode_single(&factory)?;
         let start = SystemTime::now();
 
         for _x in 0..LOOPS {
-            let new_buff = factory.open_buffer(new_buffer.clone())?;
+            let new_buff = factory.open_buffer(new_buffer.clone());
             assert_eq!(new_buff.get(&["location"])?, Some("https://arstechnica.com"));
         }
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
-        println!("NoProto:     {:?}", time);
+        println!("NoProto:     {:>5.2}ms 1.00", time.as_millis());
 
-        Ok(())
+        Ok(time.as_micros())
     }
 
-    pub fn decode_bench() -> Result<(), NP_Error> {
+    pub fn decode_bench() -> Result<u128, NP_Error> {
         let factory = NoProtoBench::get_factory()?;
         let new_buffer = NoProtoBench::encode_single(&factory)?;
         let start = SystemTime::now();
 
         for _x in 0..LOOPS {
-            let mut new_buff = factory.open_buffer(new_buffer.clone())?;
+            let mut new_buff = factory.open_buffer(new_buffer.clone());
 
             assert_eq!(new_buff.get(&["initialized"])?, Some(true));
             assert_eq!(new_buff.get(&["location"])?, Some("https://arstechnica.com"));
@@ -141,9 +141,9 @@ impl NoProtoBench {
         }
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
-        println!("NoProto:     {:?}", time);
+        println!("NoProto:     {:>5.2}ms 1.00", time.as_millis());
 
-        Ok(())
+        Ok(time.as_micros())
     }
 
     #[inline(always)]

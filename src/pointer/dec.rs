@@ -687,7 +687,7 @@ impl<'value> NP_Value<'value> for NP_Dec {
         
                 Ok(NP_JSON::Dictionary(schema_json))
             },
-            _ => { unsafe { unreachable_unchecked() } }
+            _ => Err(NP_Error::new("unreachable"))
         }
     }
 
@@ -701,7 +701,7 @@ impl<'value> NP_Value<'value> for NP_Dec {
                     None
                 }
             },
-            _ => { unsafe { unreachable_unchecked() } }
+            _ => None
         }
     }
 
@@ -716,7 +716,7 @@ impl<'value> NP_Value<'value> for NP_Dec {
             NP_Parsed_Schema::Decimal { i: _, sortable: _, default: _, exp} => {
                 exp
             },
-            _ => { unsafe { unreachable_unchecked() } }
+            _ => 0
         };
 
 
@@ -768,7 +768,7 @@ impl<'value> NP_Value<'value> for NP_Dec {
             NP_Parsed_Schema::Decimal { i: _, sortable: _, default: _, exp} => {
                 exp
             },
-            _ => { unsafe { unreachable_unchecked() } }
+            _ => 0
         };
 
 
@@ -788,7 +788,7 @@ impl<'value> NP_Value<'value> for NP_Dec {
             NP_Parsed_Schema::Decimal { exp, .. } => {
                 exp
             },
-            _ => { unsafe { unreachable_unchecked() } }
+            _ => 0
         };
 
 
@@ -817,7 +817,7 @@ impl<'value> NP_Value<'value> for NP_Dec {
                                     NP_JSON::Null
                                 }
                             },
-                            _ => { unsafe { unreachable_unchecked() } }
+                            _ => NP_JSON::Null
                         }
                     }
                 }
@@ -950,7 +950,7 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     assert_eq!(buffer.get::<NP_Dec>(&[])?, None);
 
     buffer.compact(None)?;
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 2usize);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 3usize);
 
     Ok(())
 }

@@ -35,8 +35,8 @@ impl<'memory> NP_Memory<'memory> {
 
         let mut new_bytes = Vec::with_capacity(use_size);
 
-        // root pointer
-        new_bytes.extend(&[0u8; 2]);
+        // size, root pointer
+        new_bytes.extend(&[0u8; 3]);
 
         NP_Memory {
             bytes: UnsafeCell::new(new_bytes),

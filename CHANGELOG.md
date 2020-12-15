@@ -1,3 +1,11 @@
+# 0.6.1 December 15, 2020
+- Restored the first byte for later use.  Probably add `u32` address size again in the future.
+- The format should now be considered stable, won't be making any further changes to it.
+- Removed all panics, unwraps, and `unreachable_unchecked` calls.
+- Strings now support `lowercase` and `uppercase` properties in schema.
+- Added sortable buffer export and import capability.
+- Cleaned up benchmark formatting a bit.
+
 # 0.6.0 December 14, 2020
 - Complete rewrite again (twice this time).
 - There is now only one address size, `u16`, limits buffers to 16kb max size.

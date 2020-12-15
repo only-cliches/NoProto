@@ -107,7 +107,7 @@ impl<'value> NP_Value<'value> for NP_Enum {
         
                 schema_json.insert("choices".to_owned(), NP_JSON::Array(options));
             },
-            _ => { unsafe { unreachable_unchecked() } }
+            _ => { }
         }
 
         Ok(NP_JSON::Dictionary(schema_json))
@@ -123,7 +123,7 @@ impl<'value> NP_Value<'value> for NP_Enum {
                     None
                 }
             },
-            _ => { unsafe { unreachable_unchecked() } }
+            _ => None
         }
     }
 
@@ -170,7 +170,7 @@ impl<'value> NP_Value<'value> for NP_Enum {
                     return Ok(cursor);
                 }     
             },
-            _ => { unsafe { unreachable_unchecked() } }
+            _ => Err(NP_Error::new("unreachable"))
         }               
     }
 
@@ -200,7 +200,7 @@ impl<'value> NP_Value<'value> for NP_Enum {
                     None => None
                 })
             },
-            _ => { unsafe { unreachable_unchecked() } }
+            _ => Err(NP_Error::new("unreachable"))
         }
     }
 
@@ -230,7 +230,7 @@ impl<'value> NP_Value<'value> for NP_Enum {
                                             NP_JSON::Null
                                         }
                                     },
-                                    _ => { unsafe { unreachable_unchecked() } }
+                                    _ => NP_JSON::Null
                                 }
                             }
                         }
@@ -247,7 +247,7 @@ impl<'value> NP_Value<'value> for NP_Enum {
                                     NP_JSON::Null
                                 }
                             },
-                            _ => { unsafe { unreachable_unchecked() } }
+                            _ => NP_JSON::Null
                         }
                     }
                 }
@@ -416,7 +416,7 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     assert_eq!(buffer.get::<NP_Enum>(&[])?, None);
 
     buffer.compact(None)?;
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 2usize);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 3usize);
 
     Ok(())
 }

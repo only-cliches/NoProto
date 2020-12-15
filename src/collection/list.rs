@@ -1,3 +1,4 @@
+use crate::utils::opt_err;
 use crate::{pointer::{NP_List_Bytes}};
 use crate::{error::NP_Error, json_flex::{JSMAP, NP_JSON}, memory::{NP_Memory}, pointer::{NP_Value}, pointer::{NP_Cursor}, schema::NP_Parsed_Schema, schema::{NP_Schema, NP_TypeKeys}};
 
@@ -41,7 +42,7 @@ impl NP_List {
 
         let schema_of = match memory.schema[list_cursor.schema_addr] {
             NP_Parsed_Schema::List { of, .. } => of,
-            _ => unsafe { unreachable_unchecked() }
+            _ => 0
         };
 
         // if no list here, make one please
@@ -116,7 +117,7 @@ impl NP_List {
         }
 
         // should never reach here
-        panic!()
+        Err(NP_Error::new("unreachable"))
 
     }
 
@@ -149,7 +150,7 @@ impl NP_List {
 
             Ok(new_cursor)
         } else {
-            panic!()
+            Err(NP_Error::new("unreachable"))
         }
     }
 
@@ -163,7 +164,11 @@ impl NP_List {
 
     #[inline(always)]
     pub fn get_list<'list>(list_cursor_value_addr: usize, memory: &'list NP_Memory<'list>) -> &'list mut NP_List_Bytes {
-        unsafe { &mut *(memory.write_bytes().as_ptr().add(list_cursor_value_addr as usize) as *mut NP_List_Bytes) }
+        if list_cursor_value_addr > memory.read_bytes().len() { // attack
+            unsafe { &mut *(memory.write_bytes().as_ptr() as *mut NP_List_Bytes) }
+        } else { // normal operation
+            unsafe { &mut *(memory.write_bytes().as_ptr().add(list_cursor_value_addr as usize) as *mut NP_List_Bytes) }
+        }
     }
 
     #[inline(always)]
@@ -175,12 +180,14 @@ impl NP_List {
 
         let schema_of = match memory.schema[list_cursor.schema_addr] {
             NP_Parsed_Schema::List { of, .. } => of,
-            _ => unsafe { unreachable_unchecked() }
+            _ => 0
         };
 
-        if list_addr > 0 {
+        let memory_bytes = memory.write_bytes();
 
-            let bytes = unsafe { &mut *(memory.write_bytes().as_ptr().add(list_addr) as *mut NP_List_Bytes) };
+        if list_addr > 0 && list_addr < (memory_bytes.len() + 4) {
+
+            let bytes = unsafe { &mut *(memory_bytes.as_ptr().add(list_addr) as *mut NP_List_Bytes) };
 
             let tail_addr = bytes.get_tail() as usize;
 
@@ -334,10 +341,8 @@ impl<'value> NP_Value<'value> for NP_List {
 
 
         let list_of = match &schema[address] {
-            NP_Parsed_Schema::List { i: _, sortable: _, of} => {
-                *of
-            },
-            _ => { unsafe { unreachable_unchecked() } }
+            NP_Parsed_Schema::List { i: _, sortable: _, of} => { *of },
+            _ => 0
         };
 
         schema_json.insert("of".to_owned(), NP_Schema::_type_to_json(schema, list_of)?);
@@ -353,7 +358,7 @@ impl<'value> NP_Value<'value> for NP_List {
             return Ok(0) 
         }
 
-        // head + tail;,
+        // head + tail
         let base_size = 4usize;
 
         let mut acc_size = 0usize;
@@ -362,9 +367,9 @@ impl<'value> NP_Value<'value> for NP_List {
 
         while let Some((_index, item)) = Self::step_iter(&mut list_iter, memory) {
             if let Some(item_cursor) = &item {
-                acc_size += NP_Cursor::calc_size(item_cursor, memory).unwrap();
+                acc_size += NP_Cursor::calc_size(item_cursor, memory)?;
             }
-        } 
+        }
 
         Ok(acc_size + base_size)
     }
@@ -406,8 +411,8 @@ impl<'value> NP_Value<'value> for NP_List {
 
         while let Some((index, item)) = Self::step_iter(&mut list_iter, from_memory) {
             if let Some(old_item) = &item {
-                let (_new_index, new_item) = NP_List::push(&to_cursor, to_memory, Some(index)).unwrap().unwrap();
-                NP_Cursor::compact(old_item.clone(), from_memory, new_item, to_memory).unwrap();
+                let (_new_index, new_item) = opt_err(NP_List::push(&to_cursor, to_memory, Some(index))?)?;
+                NP_Cursor::compact(old_item.clone(), from_memory, new_item, to_memory)?;
             }       
         }
 
@@ -482,10 +487,10 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     buffer.set(&["10"], "hello, world")?;
     assert_eq!(buffer.get::<&str>(&["10"])?, Some("hello, world"));
     assert_eq!(buffer.calc_bytes()?.after_compaction, buffer.calc_bytes()?.current_buffer);
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 25usize);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 26usize);
     buffer.del(&[])?;
     buffer.compact(None)?;
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 2usize);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 3usize);
 
     // values preserved through compaction
     let mut buffer = factory.empty_buffer(None);
@@ -494,12 +499,12 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     assert_eq!(buffer.get::<&str>(&["10"])?, Some("hello, world"));
     assert_eq!(buffer.get::<&str>(&["12"])?, Some("hello, world2"));
     assert_eq!(buffer.calc_bytes()?.after_compaction, buffer.calc_bytes()?.current_buffer);
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 45usize);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 46usize);
     buffer.compact(None)?;
     assert_eq!(buffer.get::<&str>(&["10"])?, Some("hello, world"));
     assert_eq!(buffer.get::<&str>(&["12"])?, Some("hello, world2"));
     assert_eq!(buffer.calc_bytes()?.after_compaction, buffer.calc_bytes()?.current_buffer);
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 45usize);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 46usize);
 
     Ok(())
 }
@@ -513,7 +518,7 @@ fn parseing_works() -> Result<(), NP_Error> {
     let mut buffer = factory.empty_buffer(None);
     buffer.set(&["9"], "hello")?;
     buffer.set(&["10"], "world")?;
-    let new_buffer = factory.open_buffer(buffer.close())?;
+    let new_buffer = factory.open_buffer(buffer.close());
     assert_eq!(new_buffer.get::<&str>(&["9"])?.unwrap(), "hello");
     assert_eq!(new_buffer.get::<&str>(&["10"])?.unwrap(), "world");
 

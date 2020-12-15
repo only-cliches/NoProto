@@ -17,8 +17,6 @@
 //! # Ok::<(), NP_Error>(()) 
 //! ```
 
-use core::hint::unreachable_unchecked;
-
 use crate::{json_flex::JSMAP, schema::{NP_Parsed_Schema}};
 use crate::error::NP_Error;
 use crate::{schema::{NP_TypeKeys}, pointer::NP_Value, json_flex::NP_JSON};
@@ -51,7 +49,7 @@ impl<'value> NP_Value<'value> for bool {
                     });
                 }
             },
-            _ => { unsafe { unreachable_unchecked() } }
+            _ =>  { }
         }
 
         Ok(NP_JSON::Dictionary(schema_json))
@@ -66,7 +64,7 @@ impl<'value> NP_Value<'value> for bool {
                     None => None
                 }
             },
-            _ => { unsafe { unreachable_unchecked() } }
+            _ => None
         }
     }
 
@@ -149,7 +147,7 @@ impl<'value> NP_Value<'value> for bool {
                                     NP_JSON::Null
                                 }
                             },
-                            _ => { unsafe { unreachable_unchecked() } }
+                            _ => NP_JSON::Null
                         }
                     }
                 }
@@ -248,7 +246,7 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     assert_eq!(buffer.get::<bool>(&[])?, None);
 
     buffer.compact(None)?;
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 2usize);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 3usize);
 
     Ok(())
 }

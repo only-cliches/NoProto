@@ -1,3 +1,5 @@
+use alloc::string::String;
+use crate::utils::opt_err;
 use crate::{ pointer::NP_Vtable};
 use core::hint::unreachable_unchecked;
 
@@ -71,7 +73,7 @@ impl<'tuple> NP_Tuple<'tuple> {
                 Ok(Some(NP_Cursor::new(item_address, column_schema_data, tuple_cursor.schema_addr)))
              
             },
-            _ => unsafe { unreachable_unchecked() }
+            _ => Err(NP_Error::new("unreachable"))
         }
     }
 
@@ -97,13 +99,13 @@ impl<'tuple> NP_Tuple<'tuple> {
 
                     // set default values for everything
                     for x in 0..values.len() {
-                        let cursor = Self::select(table_cursor.clone(), x, false, memory)?.unwrap();
+                        let cursor = opt_err(Self::select(table_cursor.clone(), x, false, memory)?)?;
                         NP_Cursor::set_default(cursor, memory)?;
                     }
                 }
 
             },
-            _ => unsafe { unreachable_unchecked() }
+            _ => { }
         }
 
         Ok(table_cursor)
@@ -137,8 +139,13 @@ impl<'tuple> NP_Tuple<'tuple> {
         }
     }
 
+    #[inline(always)]
     pub fn get_vtable<'vtable>(v_table_addr: usize, memory: &'vtable NP_Memory) -> &'vtable mut NP_Vtable {
-        unsafe { &mut *(memory.write_bytes().as_ptr().add(v_table_addr) as *mut NP_Vtable) }
+        if v_table_addr > memory.read_bytes().len() { // attack
+            unsafe { &mut *(memory.write_bytes().as_ptr() as *mut NP_Vtable) }
+        } else { // normal operation
+            unsafe { &mut *(memory.write_bytes().as_ptr().add(v_table_addr) as *mut NP_Vtable) }
+        }
     }
 
     pub fn step_iter(&mut self, memory: &'tuple NP_Memory) -> Option<(usize, Option<NP_Cursor>)> {
@@ -180,7 +187,7 @@ impl<'tuple> NP_Tuple<'tuple> {
                     Some((this_index, None))
                 }
             },
-            _ => unsafe { unreachable_unchecked() }
+            _ => None
         }
 
         
@@ -200,10 +207,10 @@ impl<'value> NP_Value<'value> for NP_Tuple<'value> {
         let schema_state: (bool, Vec<NP_JSON>) = match &schema[address] {
             NP_Parsed_Schema::Tuple { i: _, sortable, values } => {
                 (*sortable, values.into_iter().map(|column| {
-                    NP_Schema::_type_to_json(schema, *column).unwrap()
+                    NP_Schema::_type_to_json(schema, *column).unwrap_or(NP_JSON::Null)
                 }).collect())
             },
-            _ => { unsafe { unreachable_unchecked() } }
+            _ => (false, Vec::new())
         };
 
         schema_json.insert("values".to_owned(), NP_JSON::Array(schema_state.1));
@@ -237,7 +244,7 @@ impl<'value> NP_Value<'value> for NP_Tuple<'value> {
 
         while let Some((_index, item)) = table.step_iter(memory) {
             if let Some(real) = item {
-                let add_size = NP_Cursor::calc_size(&real, memory).unwrap();
+                let add_size = NP_Cursor::calc_size(&real, memory)?;
                 if add_size > 2 {
                     // scalar cursor is part of vtable
                     acc_size += add_size - 2;             
@@ -283,11 +290,12 @@ impl<'value> NP_Value<'value> for NP_Tuple<'value> {
         let mut last_real_vtable = to_cursor_value.get_addr_value() as usize;
         let mut last_vtable_idx = 0usize;
 
+        let c: Vec<(u8, String, usize)>;
         let col_schemas = match &from_memory.schema[from_cursor.schema_addr] {
             NP_Parsed_Schema::Table { columns, .. } => {
                 columns
             },
-            _ => unsafe { unreachable_unchecked() }
+            _ => { c = Vec::new(); &c }
         };
 
         let mut table = Self::new_iter(&from_cursor, from_memory);
@@ -300,12 +308,12 @@ impl<'value> NP_Value<'value> for NP_Tuple<'value> {
                 
                 if last_vtable_idx < v_table {
                     let vtable_data = Self::get_vtable(last_real_vtable, to_memory);
-                    last_real_vtable = Self::make_next_vtable(vtable_data, to_memory).unwrap();
+                    last_real_vtable = Self::make_next_vtable(vtable_data, to_memory)?;
                     last_vtable_idx += 1;
                 }
 
                 let item_addr = last_real_vtable + (v_table_idx * 2);
-                NP_Cursor::compact(real.clone(), from_memory, NP_Cursor::new(item_addr, col_schemas[idx].2, to_cursor.schema_addr), to_memory).unwrap();
+                NP_Cursor::compact(real.clone(), from_memory, NP_Cursor::new(item_addr, col_schemas[idx].2, to_cursor.schema_addr), to_memory)?;
             }            
         }
 
@@ -459,10 +467,10 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     buffer.set(&["0"], "hello")?;
     assert_eq!(buffer.get::<&str>(&["0"])?, Some("hello"));
     assert_eq!(buffer.calc_bytes()?.after_compaction, buffer.calc_bytes()?.current_buffer);
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 19usize);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 20usize);
     buffer.del(&[])?;
     buffer.compact(None)?;
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 2usize);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 3usize);
 
     Ok(())
 }
@@ -472,12 +480,12 @@ fn sorting_tuples_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"tuple\",\"values\":[{\"type\":\"string\",\"size\":10},{\"type\":\"uuid\"},{\"type\":\"uint8\"}],\"sorted\":true}";
     let factory = crate::NP_Factory::new(schema)?;
     let mut buffer = factory.empty_buffer(None);
-    assert_eq!(buffer.read_bytes(), &[0u8, 2, 0, 12, 0, 22, 0, 38, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0].to_vec());
+    assert_eq!(buffer.read_bytes(), &[0u8, 0, 3, 0, 13, 0, 23, 0, 39, 0, 0, 0, 0, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0].to_vec());
     buffer.set(&["0"], "hello")?;
     let uuid = crate::pointer::uuid::NP_UUID::generate(22);
     buffer.set(&["1"], &uuid)?;
     buffer.set(&["2"], 20u8)?;
-    assert_eq!(buffer.read_bytes(), &[0u8, 2, 0, 12, 0, 22, 0, 38, 0, 0, 0, 0, 104, 101, 108, 108, 111, 0, 0, 0, 0, 0, 76, 230, 170, 176, 120, 208, 69, 186, 109, 122, 100, 179, 210, 224, 68, 195, 20].to_vec());
+    assert_eq!(buffer.read_bytes(), &[0u8, 0, 3, 0, 13, 0, 23, 0, 39, 0, 0, 0, 0, 104, 101, 108, 108, 111, 32, 32, 32, 32, 32, 76, 230, 170, 176, 120, 208, 69, 186, 109, 122, 100, 179, 210, 224, 68, 195, 20].to_vec());
 
     Ok(())
 }

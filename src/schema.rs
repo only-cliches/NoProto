@@ -615,7 +615,7 @@ pub enum NP_TypeKeys {
 
 impl From<u8> for NP_TypeKeys {
     fn from(value: u8) -> Self {
-        if value > 24 { panic!() }
+        if value > 24 { return NP_TypeKeys::None; }
         unsafe { core::mem::transmute(value) }
     }
 }
@@ -624,7 +624,7 @@ impl NP_TypeKeys {
     /// Convert this NP_TypeKey into a specific type index
     pub fn into_type_idx<'idx>(&self) -> (&'idx str, NP_TypeKeys) {
         match self {
-            NP_TypeKeys::None =>       { panic!() }
+            NP_TypeKeys::None =>       {    ("none", NP_TypeKeys::None) }
             NP_TypeKeys::Any =>        {    NP_Any::type_idx() }
             NP_TypeKeys::UTF8String => { NP_String::type_idx() }
             NP_TypeKeys::Bytes =>      {  NP_Bytes::type_idx() }
@@ -656,6 +656,22 @@ impl NP_TypeKeys {
 /// Schema Address (usize alias)
 pub type NP_Schema_Addr = usize;
 
+#[derive(Debug, Clone, Eq, PartialEq, Copy)]
+#[repr(u8)]
+#[allow(missing_docs)]
+pub enum String_Case {
+    None = 0,
+    Lowercase = 1,
+    Uppercase = 2,
+}
+
+impl From<u8> for String_Case {
+    fn from(value: u8) -> Self {
+        if value > 2 { return String_Case::None; }
+        unsafe { core::mem::transmute(value) }
+    }
+}
+
 /// When a schema is parsed from JSON or Bytes, it is stored in this recursive type
 /// 
 #[allow(missing_docs)]
@@ -663,7 +679,7 @@ pub type NP_Schema_Addr = usize;
 pub enum NP_Parsed_Schema {
     None,
     Any        { sortable: bool, i:NP_TypeKeys },
-    UTF8String { sortable: bool, i:NP_TypeKeys, default: Option<String>, size: u16 },
+    UTF8String { sortable: bool, i:NP_TypeKeys, default: Option<String>, size: u16, case: String_Case },
     Bytes      { sortable: bool, i:NP_TypeKeys, default: Option<Vec<u8>>, size: u16 },
     Int8       { sortable: bool, i:NP_TypeKeys, default: Option<i8> },
     Int16      { sortable: bool, i:NP_TypeKeys, default: Option<i16> },
@@ -831,7 +847,7 @@ impl NP_Schema {
             NP_Parsed_Schema::Map        { .. }      => {    NP_Map::schema_to_json(parsed_schema, address) }
             NP_Parsed_Schema::List       { .. }      => {   NP_List::schema_to_json(parsed_schema, address) }
             NP_Parsed_Schema::Tuple      { .. }      => {  NP_Tuple::schema_to_json(parsed_schema, address) }
-            _ => { panic!() }
+            _ => { Ok(NP_JSON::Null) }
         }
     }
 
@@ -852,7 +868,7 @@ impl NP_Schema {
     pub fn from_bytes(cache: Vec<NP_Parsed_Schema>, address: usize, bytes: &Vec<u8>) -> (bool, Vec<NP_Parsed_Schema>) {
         let this_type = NP_TypeKeys::from(bytes[address]);
         match this_type {
-            NP_TypeKeys::None =>       { panic!() }
+            NP_TypeKeys::None =>       { (false, Vec::new()) }
             NP_TypeKeys::Any =>        {    NP_Any::from_bytes_to_schema(cache, address, bytes) }
             NP_TypeKeys::UTF8String => { NP_String::from_bytes_to_schema(cache, address, bytes) }
             NP_TypeKeys::Bytes =>      {  NP_Bytes::from_bytes_to_schema(cache, address, bytes) }

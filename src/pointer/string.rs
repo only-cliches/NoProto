@@ -16,10 +16,11 @@
 //! # Ok::<(), NP_Error>(())
 //! ```
 
+use alloc::string::String;
 use alloc::prelude::v1::Box;
 use core::hint::unreachable_unchecked;
 
-use crate::error::NP_Error;
+use crate::{error::NP_Error, schema::String_Case};
 use crate::{
     json_flex::JSMAP,
     memory::NP_Memory,
@@ -48,17 +49,22 @@ impl<'value> NP_Value<'value> for &'value str {
 
     fn schema_to_json(schema: &Vec<NP_Parsed_Schema>, address: usize) -> Result<NP_JSON, NP_Error> {
         match &schema[address] {
-            NP_Parsed_Schema::UTF8String {
-                i: _,
-                size,
-                default,
-                sortable: _,
-            } => {
+            NP_Parsed_Schema::UTF8String { size, default, case, ..} => {
                 let mut schema_json = JSMAP::new();
                 schema_json.insert(
                     "type".to_owned(),
                     NP_JSON::String(Self::type_idx().0.to_string()),
                 );
+
+                match case {
+                    String_Case::Uppercase => {
+                        schema_json.insert("uppercase".to_owned(), NP_JSON::True);
+                    },
+                    String_Case::Lowercase => {
+                        schema_json.insert("lowercase".to_owned(), NP_JSON::True);
+                    },
+                    _ => {}
+                }
 
                 if *size > 0 {
                     schema_json.insert("size".to_owned(), NP_JSON::Integer(size.clone().into()));
@@ -72,32 +78,38 @@ impl<'value> NP_Value<'value> for &'value str {
                 }
 
                 Ok(NP_JSON::Dictionary(schema_json))
-            }
-            _ => unsafe { unreachable_unchecked() },
+            },
+            _ => Ok(NP_JSON::Null)
         }
     }
 
     fn from_bytes_to_schema(mut schema: Vec<NP_Parsed_Schema>, address: usize, bytes: &Vec<u8>) -> (bool, Vec<NP_Parsed_Schema>) {
+
+        // case byte
+        let case_byte = String_Case::from(bytes[address + 1]);
+
         // fixed size
-        let fixed_size = u16::from_be_bytes([bytes[address + 1], bytes[address + 2]]);
+        let fixed_size = u16::from_be_bytes([bytes[address + 2], bytes[address + 3]]);
 
         // default value size
-        let default_size = u16::from_be_bytes([bytes[address + 3], bytes[address + 4]]) as usize;
+        let default_size = u16::from_be_bytes([bytes[address + 4], bytes[address + 5]]) as usize;
 
         if default_size == 0 {
             schema.push(NP_Parsed_Schema::UTF8String {
                 i: NP_TypeKeys::UTF8String,
                 default: None,
+                case: case_byte,
                 sortable: fixed_size > 0,
                 size: fixed_size,
             })
         } else {
-            let default_bytes = str::from_utf8(&bytes[(address + 5)..(address + 5 + (default_size - 1))]).unwrap();
+            let default_bytes = str::from_utf8(&bytes[(address + 6)..(address + 6 + (default_size - 1))]).unwrap_or_default();
 
             schema.push(NP_Parsed_Schema::UTF8String {
                 i: NP_TypeKeys::UTF8String,
                 default: Some(default_bytes.to_string()),
                 size: fixed_size,
+                case: case_byte,
                 sortable: fixed_size > 0,
             })
         }
@@ -136,7 +148,7 @@ impl<'value> NP_Value<'value> for &'value str {
                     return Ok(Some(unsafe { str::from_utf8_unchecked(bytes) }));
                 }
             }
-            _ => unsafe { unreachable_unchecked() },
+            _ => Err(NP_Error::new("unreachable")),
         }
     }
 
@@ -146,7 +158,7 @@ impl<'value> NP_Value<'value> for &'value str {
                 Some(x) => Some(x),
                 None => None,
             },
-            _ => unsafe { unreachable_unchecked() }
+            _ => None
         }
     }
     fn get_size(cursor: &NP_Cursor, memory: &NP_Memory<'value>) -> Result<usize, NP_Error> {
@@ -172,7 +184,7 @@ impl<'value> NP_Value<'value> for &'value str {
                 // return total size of this string plus length bytes
                 return Ok(bytes_size + 2);
             }
-            _ => unsafe { unreachable_unchecked() },
+            _ => Err(NP_Error::new("unreachable")),
         }
     }
 
@@ -180,6 +192,25 @@ impl<'value> NP_Value<'value> for &'value str {
 
         let mut schema_data: Vec<u8> = Vec::new();
         schema_data.push(NP_TypeKeys::UTF8String as u8);
+
+        let mut case_byte = String_Case::None;
+        let mut set = 0;
+
+        match json_schema["lowercase"] {
+            NP_JSON::True => { case_byte = String_Case::Lowercase; set += 1; },
+            _ => {}
+        }
+
+        match json_schema["uppercase"] {
+            NP_JSON::True => { case_byte = String_Case::Uppercase; set += 1; },
+            _ => {}
+        }
+
+        if set == 2 {
+            return Err(NP_Error::new("Only one of uppercase and lowercase can be set!"));
+        }
+
+        schema_data.push(case_byte as u8);
 
         let mut has_fixed_size = false;
 
@@ -243,6 +274,7 @@ impl<'value> NP_Value<'value> for &'value str {
             i: NP_TypeKeys::UTF8String,
             size: size,
             default: default,
+            case: case_byte,
             sortable: has_fixed_size,
         });
 
@@ -260,7 +292,7 @@ impl<'value> NP_Value<'value> for &'value str {
                             Some(x) => NP_JSON::String(x.to_string()),
                             None => NP_JSON::Null,
                         },
-                        _ => unsafe { unreachable_unchecked() },
+                        _ => NP_JSON::Null,
                     }
                 }
             },
@@ -271,18 +303,34 @@ impl<'value> NP_Value<'value> for &'value str {
     fn set_value<'set>(cursor: NP_Cursor, memory: &'set NP_Memory, value: Self) -> Result<NP_Cursor, NP_Error> where Self: 'set + Sized {
 
         let c_value = cursor.get_value(memory);
-    
-        let bytes = value.as_bytes();
+
+        let (size, case) = match memory.schema[cursor.schema_addr] {
+            NP_Parsed_Schema::UTF8String { size, case, .. } => (size, case),
+            _ => (0, String_Case::None)
+        };
+
+        let mut bytes = value.as_bytes();
+
+        let mut owned: String;
+        match case {
+            String_Case::Uppercase => {
+                owned = String::from(value);
+                owned.make_ascii_uppercase();
+                bytes = owned.as_bytes();
+            },
+            String_Case::Lowercase => {
+                owned = String::from(value);
+                owned.make_ascii_lowercase();
+                bytes = owned.as_bytes();
+            },
+            _ => {}
+        }
     
         let str_size = bytes.len() as usize;
     
         let write_bytes = memory.write_bytes();
     
-        let size = match memory.schema[cursor.schema_addr] {
-            NP_Parsed_Schema::UTF8String { size, .. } => size,
-            _ => { unsafe { unreachable_unchecked() } }
-        };
-    
+
         if size > 0 {
             // fixed size bytes
     
@@ -291,7 +339,7 @@ impl<'value> NP_Value<'value> for &'value str {
     
                 let mut empty_bytes: Vec<u8> = Vec::with_capacity(size as usize);
                 for _x in 0..size {
-                    empty_bytes.push(0);
+                    empty_bytes.push(32); // white space
                 }
     
                 let new_addr = memory.malloc(empty_bytes)? as usize;
@@ -305,8 +353,8 @@ impl<'value> NP_Value<'value> for &'value str {
                     // assign values of bytes
                     write_bytes[(addr + x)] = bytes[x];
                 } else {
-                    // rest is zeros
-                    write_bytes[(addr + x)] = 0;
+                    // rest is white space
+                    write_bytes[(addr + x)] = 32;
                 }
             }
     
@@ -375,6 +423,14 @@ fn schema_parsing_works() -> Result<(), NP_Error> {
     let factory = crate::NP_Factory::new(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
 
+    let schema = "{\"type\":\"string\",\"lowercase\":true}";
+    let factory = crate::NP_Factory::new(schema)?;
+    assert_eq!(schema, factory.schema.to_json()?.stringify());
+
+    let schema = "{\"type\":\"string\",\"uppercase\":true}";
+    let factory = crate::NP_Factory::new(schema)?;
+    assert_eq!(schema, factory.schema.to_json()?.stringify());
+
     let schema = "{\"type\":\"string\"}";
     let factory = crate::NP_Factory::new(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
@@ -417,7 +473,26 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     assert_eq!(buffer.get::<&str>(&[])?, None);
 
     buffer.compact(None)?;
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 2usize);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 3usize);
+
+    Ok(())
+}
+
+
+#[test]
+fn uppercase_lowercase_works() -> Result<(), NP_Error> {
+    let schema = "{\"type\":\"string\",\"lowercase\": true}";
+    let factory = crate::NP_Factory::new(schema)?;
+    let mut buffer = factory.empty_buffer(None);
+    buffer.set(&[], "HELLO")?;
+    assert_eq!(buffer.get::<&str>(&[])?.unwrap(),"hello");
+
+    let schema = "{\"type\":\"string\",\"uppercase\": true}";
+    let factory = crate::NP_Factory::new(schema)?;
+    let mut buffer = factory.empty_buffer(None);
+    buffer.set(&[], "hello")?;
+    assert_eq!(buffer.get::<&str>(&[])?.unwrap(),"HELLO");
+
 
     Ok(())
 }

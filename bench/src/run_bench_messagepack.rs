@@ -25,7 +25,7 @@ impl MessagePackBench {
         println!("MessagePack: size: {}b, zlib: {}b", encoded.len(), compressed.len());
     }
 
-    pub fn encode_bench() {
+    pub fn encode_bench(base: u128) {
         let start = SystemTime::now();
 
         for _x in 0..LOOPS {
@@ -34,7 +34,7 @@ impl MessagePackBench {
         }
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
-        println!("MessagePack: {:?}", time);        
+        println!("MessagePack: {:>5.2}ms {:.2}", time.as_millis(), (base as f64 / time.as_micros() as f64));      
     }
 
     #[inline(always)]
@@ -75,7 +75,7 @@ impl MessagePackBench {
 
 
 
-    pub fn update_bench()  {
+    pub fn update_bench(base: u128)  {
         let buffer = Self::encode_single();
 
         let start = SystemTime::now();
@@ -103,11 +103,11 @@ impl MessagePackBench {
         }
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
-        println!("MessagePack: {:?}", time);      
+        println!("MessagePack: {:>5.2}ms {:.2}", time.as_millis(), (base as f64 / time.as_micros() as f64));   
 
     }
 
-    pub fn decode_one_bench()  {
+    pub fn decode_one_bench(base: u128)  {
         let buffer = Self::encode_single();
 
         let start = SystemTime::now();
@@ -127,11 +127,11 @@ impl MessagePackBench {
         }
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
-        println!("MessagePack: {:?}", time);      
+        println!("MessagePack: {:>5.2}ms {:.2}", time.as_millis(), (base as f64 / time.as_micros() as f64));      
 
     }
 
-    pub fn decode_bench()  {
+    pub fn decode_bench(base: u128)  {
         
         let buffer = Self::encode_single();
 
@@ -152,8 +152,10 @@ impl MessagePackBench {
                     if let Value::Bool(init) = foobarcontainer.get("initialized").unwrap() {
                         assert_eq!(init, &true);
                     } else { panic!() }
+                    let mut loops = 0;
                     if let Value::Array(list) = foobarcontainer.get("list").unwrap() {
                         list.iter().enumerate().for_each(|(x, value)| {
+                            loops += 1;
                             if let Value::Map(foobar) = value {
                                 if let Value::String(name) = foobar.get("name").unwrap() {
                                     assert_eq!(name, &String::from("Hello, World!"));
@@ -192,13 +194,14 @@ impl MessagePackBench {
                             } else { panic!() }
                         });
                     } else { panic!() }
+                    assert!(loops == 3);
                 },
                 _ => panic!()
             }
         }
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
-        println!("MessagePack: {:?}", time);      
+        println!("MessagePack: {:>5.2}ms {:.2}", time.as_millis(), (base as f64 / time.as_micros() as f64));   
 
     }
 }

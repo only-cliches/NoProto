@@ -22,7 +22,7 @@ impl BSONBench {
         println!("BSON:        size: {}b, zlib: {}b", encoded.len(), compressed.len());
     }
 
-    pub fn encode_bench() {
+    pub fn encode_bench(base: u128) {
         let start = SystemTime::now();
 
         for _x in 0..LOOPS {
@@ -31,7 +31,7 @@ impl BSONBench {
         }
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
-        println!("BSON:        {:?}", time);        
+        println!("BSON:        {:>5.2}ms {:.2}", time.as_millis(), (base as f64 / time.as_micros() as f64));     
     }
 
     #[inline(always)]
@@ -70,7 +70,7 @@ impl BSONBench {
     }
 
 
-    pub fn update_bench()  {
+    pub fn update_bench(base: u128)  {
         let buffer = Self::encode_single();
 
         let start = SystemTime::now();
@@ -89,11 +89,11 @@ impl BSONBench {
         }
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
-        println!("BSON:        {:?}", time);      
+        println!("BSON:        {:>5.2}ms {:.2}", time.as_millis(), (base as f64 / time.as_micros() as f64));   
 
     }
 
-    pub fn decode_one_bench()  {
+    pub fn decode_one_bench(base: u128)  {
         let buffer = Self::encode_single();
 
         let start = SystemTime::now();
@@ -105,10 +105,10 @@ impl BSONBench {
         }
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
-        println!("BSON:        {:?}", time);   
+        println!("BSON:        {:>5.2}ms {:.2}", time.as_millis(), (base as f64 / time.as_micros() as f64));
     }
 
-    pub fn decode_bench()  {
+    pub fn decode_bench(base: u128)  {
         let buffer = Self::encode_single();
 
         let start = SystemTime::now();
@@ -120,7 +120,10 @@ impl BSONBench {
             assert_eq!(container.get_i32("fruit").unwrap(), 2i32);
             assert_eq!(container.get_bool("initialized").unwrap(), true);
 
+            let mut loops = 0;
+
             container.get_array("list").unwrap().iter().enumerate().for_each(|(x, bson)| {
+                loops += 1;
                 let foobar = bson.as_document().unwrap();
                 assert_eq!(foobar.get_str("name").unwrap(), "Hello, World!");
                 assert_eq!(foobar.get_f64("rating").unwrap(), 3.1415432432445543543 + (x as f64));
@@ -135,10 +138,12 @@ impl BSONBench {
                 assert_eq!(parent.get_str("prefix").unwrap(), "@");
                 assert_eq!(parent.get_i32("length").unwrap(), 10000 + (x as i32));
             });
+
+            assert!(loops == 3);
         }
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
-        println!("BSON:        {:?}", time);      
+        println!("BSON:        {:>5.2}ms {:.2}", time.as_millis(), (base as f64 / time.as_micros() as f64));      
 
     }
 }

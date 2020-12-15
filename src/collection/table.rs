@@ -70,7 +70,7 @@ impl<'table> NP_Table<'table> {
                     None => Ok(None)
                 }
             },
-            _ => unsafe { unreachable_unchecked() }
+            _ => Err(NP_Error::new("unreachable"))
         }
     }
 
@@ -117,7 +117,11 @@ impl<'table> NP_Table<'table> {
 
     #[inline(always)]
     pub fn get_vtable<'vtable>(v_table_addr: usize, memory: &'vtable NP_Memory) -> &'vtable mut NP_Vtable {
-        unsafe { &mut *(memory.write_bytes().as_ptr().add(v_table_addr) as *mut NP_Vtable) }
+        if v_table_addr > memory.read_bytes().len() { // attack
+            unsafe { &mut *(memory.write_bytes().as_ptr() as *mut NP_Vtable) }
+        } else { // normal operation
+            unsafe { &mut *(memory.write_bytes().as_ptr().add(v_table_addr) as *mut NP_Vtable) }
+        }
     }
 
     #[inline(always)]
@@ -160,7 +164,7 @@ impl<'table> NP_Table<'table> {
                     Some((this_index, columns[this_index].1.as_str(), None))
                 }
             },
-            _ => unsafe { unreachable_unchecked() }
+            _ => None
         }
     }
 }
@@ -206,7 +210,7 @@ impl<'value> NP_Value<'value> for NP_Table<'value> {
             let (_, schema) = NP_Schema::from_bytes(schema_parsed, offset + 2, bytes);
             schema_parsed = schema;
             parsed_columns.push((x as u8, col_name.to_string(), column_addr));
-            hash_map.insert(col_name, x).unwrap();
+            hash_map.insert(col_name, x).unwrap_or_default();
             offset += schema_size + 2;
         }
 
@@ -229,11 +233,11 @@ impl<'value> NP_Value<'value> for NP_Table<'value> {
                 columns.into_iter().map(|column| {
                     let mut cols: Vec<NP_JSON> = Vec::new();
                     cols.push(NP_JSON::String(column.1.to_string()));
-                    cols.push(NP_Schema::_type_to_json(&schema, column.2).unwrap());
+                    cols.push(NP_Schema::_type_to_json(&schema, column.2).unwrap_or(NP_JSON::Null));
                     NP_JSON::Array(cols)
                 }).collect()
             },
-            _ => { unsafe { unreachable_unchecked() } }
+            _ => Vec::new()
         };
 
         schema_json.insert("columns".to_owned(), NP_JSON::Array(columns));
@@ -263,7 +267,7 @@ impl<'value> NP_Value<'value> for NP_Table<'value> {
 
         while let Some((_index, _key, item)) = table.step_iter(memory) {
             if let Some(real) = item {
-                let add_size = NP_Cursor::calc_size(&real, memory).unwrap();
+                let add_size = NP_Cursor::calc_size(&real, memory)?;
                 if add_size > 2 {
                     // scalar cursor is part of vtable
                     acc_size += add_size - 2;             
@@ -308,11 +312,12 @@ impl<'value> NP_Value<'value> for NP_Table<'value> {
         let mut last_real_vtable = to_cursor_value.get_addr_value() as usize;
         let mut last_vtable_idx = 0usize;
 
+        let c: Vec<(u8, String, usize)>;
         let col_schemas = match &from_memory.schema[from_cursor.schema_addr] {
             NP_Parsed_Schema::Table { columns, .. } => {
                 columns
             },
-            _ => unsafe { unreachable_unchecked() }
+            _ => { c = Vec::new(); &c }
         };
 
         let mut table = Self::new_iter(&from_cursor, from_memory);
@@ -325,12 +330,12 @@ impl<'value> NP_Value<'value> for NP_Table<'value> {
                 
                 if last_vtable_idx < v_table {
                     let vtable_data = Self::get_vtable(last_real_vtable, to_memory);
-                    last_real_vtable = Self::make_next_vtable(vtable_data, to_memory).unwrap();
+                    last_real_vtable = Self::make_next_vtable(vtable_data, to_memory)?;
                     last_vtable_idx += 1;
                 }
 
                 let item_addr = last_real_vtable + (v_table_idx * 2);
-                NP_Cursor::compact(real.clone(), from_memory, NP_Cursor::new(item_addr, col_schemas[idx].2, to_cursor.schema_addr), to_memory).unwrap();
+                NP_Cursor::compact(real.clone(), from_memory, NP_Cursor::new(item_addr, col_schemas[idx].2, to_cursor.schema_addr), to_memory)?;
             }         
         }
 
@@ -447,19 +452,19 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     buffer.set(&["name"], "hello")?;
     assert_eq!(buffer.get::<&str>(&["name"])?, Some("hello"));
     assert_eq!(buffer.calc_bytes()?.after_compaction, buffer.calc_bytes()?.current_buffer);
-    assert_eq!(buffer.calc_bytes()?.after_compaction, 19usize);
+    assert_eq!(buffer.calc_bytes()?.after_compaction, 20usize);
     buffer.del(&[])?;
     buffer.compact(None)?;
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 2usize);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 3usize);
 
     // good values are preserved through compaction
     let mut buffer = factory.empty_buffer(None);
     buffer.set(&["name"], "hello")?;
     assert_eq!(buffer.get::<&str>(&["name"])?, Some("hello"));
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 19usize);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 20usize);
     buffer.compact(None)?;
     assert_eq!(buffer.get::<&str>(&["name"])?, Some("hello"));
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 19usize);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 20usize);
 
     Ok(())
 }
@@ -486,7 +491,7 @@ fn test_vtables() -> Result<(), NP_Error> {
     buffer.set(&["car"], "Chevy")?;
     buffer.set(&["rating"], 98u8)?;
 
-    let new_buffer = factory.open_buffer(buffer.close())?;
+    let new_buffer = factory.open_buffer(buffer.close());
     assert_eq!(new_buffer.get::<u8>(&["age"])?.unwrap(), 20u8);
     assert_eq!(new_buffer.get::<&str>(&["name"])?.unwrap(), "hello");
     assert_eq!(new_buffer.get::<&str>(&["color"])?.unwrap(), "blue");

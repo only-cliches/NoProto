@@ -3,6 +3,8 @@ use alloc::string::String;
 use alloc::borrow::ToOwned;
 use alloc::vec::Vec;
 
+use crate::error::NP_Error;
+
 const KX: u32 = 123456789;
 const KY: u32 = 362436069;
 const KZ: u32 = 521288629;
@@ -43,6 +45,14 @@ impl Rand {
     pub fn gen_range(&mut self, a: i32, b: i32) -> i32 {
         let m = (b-a+1) as u32;
         return a+(self.rand()%m) as i32;
+    }
+}
+
+#[inline(always)]
+pub fn opt_err<T>(optin: Option<T>) -> Result<T, NP_Error> {
+    match optin {
+        Some(x) => Ok(x),
+        None => Err(NP_Error::new("No value found here!"))
     }
 }
 

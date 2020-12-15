@@ -51,7 +51,7 @@ impl super::NP_Scalar for NP_Geo_Bytes{}
 
 impl NP_Geo_Bytes {
     /// Get the actual geographic coordinate for these bytes
-    pub fn into_geo(self) -> Option<NP_Geo> {
+    pub fn into_geo(self) -> NP_Geo {
         match self.size {
             16 => {
          
@@ -67,7 +67,7 @@ impl NP_Geo_Bytes {
 
                 let dev = NP_Geo::get_deviser(16);
 
-                Some(NP_Geo { lat: lat / dev, lng: lon / dev, size: 16})
+                NP_Geo { lat: lat / dev, lng: lon / dev, size: 16}
             },
             8 => {
                 let mut bytes_lat = self.lat.as_slice().try_into().unwrap_or([0; 4]);
@@ -82,7 +82,7 @@ impl NP_Geo_Bytes {
 
                 let dev = NP_Geo::get_deviser(8);
 
-                Some(NP_Geo { lat: lat / dev, lng: lon / dev, size: 8})
+                NP_Geo { lat: lat / dev, lng: lon / dev, size: 8}
             },
             4 => {
                 let mut bytes_lat = self.lat.as_slice().try_into().unwrap_or([0; 2]);
@@ -97,10 +97,10 @@ impl NP_Geo_Bytes {
 
                 let dev = NP_Geo::get_deviser(4);
 
-                Some(NP_Geo { lat: lat / dev, lng: lon / dev, size: 4})
+                NP_Geo { lat: lat / dev, lng: lon / dev, size: 4}
             },
             _ => {
-                None
+                NP_Geo { lat: 0f64, lng: 0f64, size: 4}
             }
         }
     }
@@ -138,7 +138,7 @@ impl<'value> NP_Value<'value> for NP_Geo_Bytes {
                 NP_Parsed_Schema::Geo { size, ..} => {
                     size
                 },
-                _ => { unsafe { unreachable_unchecked() } }
+                _ => 0
             };
             Ok(size as usize)
         }
@@ -159,7 +159,7 @@ impl<'value> NP_Value<'value> for NP_Geo_Bytes {
             NP_Parsed_Schema::Geo { size, .. } => {
                 size
             },
-            _ => { unsafe { unreachable_unchecked() } }
+            _ => 0
         };
 
         Ok(Some(match size {
@@ -353,7 +353,7 @@ impl<'value> NP_Value<'value> for NP_Geo {
                     None
                 }
             },
-            _ => { unsafe { unreachable_unchecked() } }
+            _ => None
         }
     }
 
@@ -378,7 +378,7 @@ impl<'value> NP_Value<'value> for NP_Geo {
         
                 Ok(NP_JSON::Dictionary(schema_json))
             },
-            _ => { unsafe { unreachable_unchecked() } }
+            _ => Err(NP_Error::new("unreachable"))
         }
 
 
@@ -392,7 +392,7 @@ impl<'value> NP_Value<'value> for NP_Geo {
             NP_Parsed_Schema::Geo { size, .. } => {
                 size
             },
-            _ => { unsafe { unreachable_unchecked() } }
+            _ => 0
         };
 
         let value_bytes_size = size as usize;
@@ -522,7 +522,7 @@ impl<'value> NP_Value<'value> for NP_Geo {
             NP_Parsed_Schema::Geo { size, .. } => {
                 size
             },
-            _ => { unsafe { unreachable_unchecked() } }
+            _ => 0
         };
 
         Ok(Some(match size {
@@ -606,7 +606,7 @@ impl<'value> NP_Value<'value> for NP_Geo {
                                     NP_JSON::Null
                                 }
                             },
-                            _ => { unsafe { unreachable_unchecked() } }
+                            _ => NP_JSON::Null
                         }
                     }
                 }
@@ -630,7 +630,7 @@ impl<'value> NP_Value<'value> for NP_Geo {
                 NP_Parsed_Schema::Geo { i: _, sortable: _, default: _, size} => {
                     size
                 },
-                _ => { unsafe { unreachable_unchecked() } }
+                _ => 0
             };
             Ok(size as usize)
         }
@@ -650,7 +650,7 @@ impl<'value> NP_Value<'value> for NP_Geo {
                         schema_data.push(1);
                         schema_data.extend(x.lat.clone());
                         schema_data.extend(x.lng.clone());
-                        let g = x.into_geo().unwrap();
+                        let g = x.into_geo();
                         Some(NP_Geo::new(4, g.lat, g.lng))
                     },
                     None => {
@@ -675,7 +675,7 @@ impl<'value> NP_Value<'value> for NP_Geo {
                         schema_data.push(1);
                         schema_data.extend(x.lat.clone());
                         schema_data.extend(x.lng.clone());
-                        let g = x.into_geo().unwrap();
+                        let g = x.into_geo();
                         Some(NP_Geo::new(8, g.lat, g.lng))
                     },
                     None => {
@@ -700,7 +700,7 @@ impl<'value> NP_Value<'value> for NP_Geo {
                         schema_data.push(1);
                         schema_data.extend(x.lat.clone());
                         schema_data.extend(x.lng.clone());
-                        let g = x.into_geo().unwrap();
+                        let g = x.into_geo();
                         Some(NP_Geo::new(16, g.lat, g.lng))
                     },
                     None => {
@@ -746,7 +746,7 @@ impl<'value> NP_Value<'value> for NP_Geo {
                     i: NP_TypeKeys::Geo,
                     size: size,
                     sortable: false,
-                    default: Some(default_value.into_geo().unwrap())
+                    default: Some(default_value.into_geo())
                 });
                 (false, schema)
             },
@@ -758,7 +758,7 @@ impl<'value> NP_Value<'value> for NP_Geo {
                     i: NP_TypeKeys::Geo,
                     size: size,
                     sortable: false,
-                    default: Some(default_value.into_geo().unwrap())
+                    default: Some(default_value.into_geo())
                 });
                 (false, schema)
             },
@@ -770,7 +770,7 @@ impl<'value> NP_Value<'value> for NP_Geo {
                     i: NP_TypeKeys::Geo,
                     size: size,
                     sortable: false,
-                    default: Some(default_value.into_geo().unwrap())
+                    default: Some(default_value.into_geo())
                 });
                 (false, schema)
             },
@@ -847,7 +847,7 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     });
 
     buffer.compact(None)?;
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 2usize);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 3usize);
 
     Ok(())
 }

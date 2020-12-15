@@ -59,7 +59,7 @@ impl<'value> NP_Value<'value> for &'value [u8] {
                     schema_json.insert("default".to_owned(), NP_JSON::Array(default_bytes));
                 }
             },
-            _ => { unsafe { unreachable_unchecked() } }
+            _ => { }
         }
 
 
@@ -76,7 +76,7 @@ impl<'value> NP_Value<'value> for &'value [u8] {
                     None
                 }
             },
-            _ => { unsafe { unreachable_unchecked() } }
+            _ => None
         }
     }
 
@@ -93,9 +93,7 @@ impl<'value> NP_Value<'value> for &'value [u8] {
     
         let size = match memory.schema[cursor.schema_addr] {
             NP_Parsed_Schema::Bytes { size, .. } => size,
-            _ => {
-                unsafe { unreachable_unchecked() }
-            }
+            _ => 0
         };
     
         if size > 0 {
@@ -216,7 +214,7 @@ impl<'value> NP_Value<'value> for &'value [u8] {
                     return Ok(Some(bytes));
                 }
             }
-            _ => unsafe { unreachable_unchecked() },
+            _ => Err(NP_Error::new("unreachable")),
         }
     }
 
@@ -247,7 +245,7 @@ impl<'value> NP_Value<'value> for &'value [u8] {
                                     None => NP_JSON::Null
                                 }
                             },
-                            _ => { unsafe { unreachable_unchecked() } }
+                            _ => NP_JSON::Null
                         }
                     }
                 }
@@ -280,7 +278,7 @@ impl<'value> NP_Value<'value> for &'value [u8] {
                 // return total size of this string plus length
                 return Ok(bytes_size + 2);
             }
-            _ => unsafe { unreachable_unchecked() },
+            _ => Err(NP_Error::new("unreachable")),
         }
     }
 
@@ -438,7 +436,7 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     assert_eq!(buffer.get::<&[u8]>(&[])?, None);
 
     buffer.compact(None)?;
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 2usize);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 3usize);
 
     Ok(())
 }

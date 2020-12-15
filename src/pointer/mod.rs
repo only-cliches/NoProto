@@ -23,6 +23,7 @@ pub mod uuid;
 pub mod option;
 pub mod date;
 
+use crate::buffer::ROOT_PTR_ADDR;
 use core::{fmt::{Debug}};
 
 use alloc::prelude::v1::Box;
@@ -72,19 +73,19 @@ pub struct NP_Pointer_Map_Item {
 #[doc(hidden)]
 #[allow(missing_docs, unused_variables)]
 pub trait NP_Pointer_Bytes {
-    fn get_type(&self) -> &str                                     { panic!() }
-    fn get_addr_value(&self) -> u16                                { panic!() }
-    fn set_addr_value(&mut self, addr: u16)                        { panic!() }
-    fn get_next_addr(&self) -> u16                                 { panic!() }
-    fn set_next_addr(&mut self, addr: u16)                         { panic!() }
-    fn set_index(&mut self, index: u8)                             { panic!() }
-    fn get_index(&self) -> u8                                      { panic!() }
-    fn set_key_addr(&mut self, hash: u16)                          { panic!() }
-    fn get_key_addr(&self) -> u16                                  { panic!() }
-    fn reset(&mut self)                                            { panic!() }
-    fn get_size(&self) -> usize                                    { panic!() }
-    fn get_key<'key>(&self, memory: &'key NP_Memory) -> &'key str  { panic!() }
-    fn get_key_size<'key>(&self, memory: &'key NP_Memory) -> usize { panic!() }
+    fn get_type(&self) -> &str                                     { "" }
+    fn get_addr_value(&self) -> u16                                { 0 }
+    fn set_addr_value(&mut self, addr: u16)                        {   }
+    fn get_next_addr(&self) -> u16                                 { 0 }
+    fn set_next_addr(&mut self, addr: u16)                         {   }
+    fn set_index(&mut self, index: u8)                             {   }
+    fn get_index(&self) -> u8                                      { 0 }
+    fn set_key_addr(&mut self, hash: u16)                          {   }
+    fn get_key_addr(&self) -> u16                                  { 0 }
+    fn reset(&mut self)                                            {   }
+    fn get_size(&self) -> usize                                    { 0 }
+    fn get_key<'key>(&self, memory: &'key NP_Memory) -> &'key str  { "" }
+    fn get_key_size<'key>(&self, memory: &'key NP_Memory) -> usize { 0  }
 }
 
 impl NP_Pointer_Bytes for NP_Pointer_Scalar {
@@ -261,8 +262,9 @@ impl NP_Cursor {
     /// Get the value bytes of this cursor
     pub fn get_value<'value>(&self, memory: &'value NP_Memory<'value>) -> &'value mut dyn NP_Pointer_Bytes {
         let ptr = memory.write_bytes().as_mut_ptr();
-        if self.buff_addr == 0 {
-            unsafe { &mut *(ptr.add(self.buff_addr) as *mut NP_Pointer_Scalar) }
+        // if requesting root pointer or address is higher than buffer length
+        if self.buff_addr == ROOT_PTR_ADDR || self.buff_addr > memory.read_bytes().len() {
+            unsafe { &mut *(ptr.add(ROOT_PTR_ADDR) as *mut NP_Pointer_Scalar) }
         } else {
             match memory.schema[self.parent_schema_addr] {
                 NP_Parsed_Schema::List { .. } => {
@@ -274,7 +276,7 @@ impl NP_Cursor {
                 _ => { // parent is scalar, table or tuple
                     unsafe { &mut *(ptr.add(self.buff_addr) as *mut NP_Pointer_Scalar) }
                 }
-            }            
+            }                   
         }
     }
 
@@ -342,7 +344,7 @@ impl NP_Cursor {
             NP_TypeKeys::Map           => {    NP_Map::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
             NP_TypeKeys::List          => {   NP_List::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
             NP_TypeKeys::Tuple         => {  NP_Tuple::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-            _ => { panic!() }
+            _ => { Err(NP_Error::new("unreachable")) }
         }
     }
 
@@ -351,12 +353,12 @@ impl NP_Cursor {
     pub fn set_default(cursor: NP_Cursor, memory: &NP_Memory) -> Result<(), NP_Error> {
 
         match memory.schema[cursor.schema_addr].get_type_key() {
-            NP_TypeKeys::None        => { panic!() },
-            NP_TypeKeys::Any         => { panic!() },
-            NP_TypeKeys::Table       => { panic!() },
-            NP_TypeKeys::Map         => { panic!() },
-            NP_TypeKeys::List        => { panic!() },
-            NP_TypeKeys::Tuple       => { panic!() },
+            NP_TypeKeys::None        => { return Err(NP_Error::new("unreachable")); },
+            NP_TypeKeys::Any         => { return Err(NP_Error::new("unreachable")); },
+            NP_TypeKeys::Table       => { return Err(NP_Error::new("unreachable")); },
+            NP_TypeKeys::Map         => { return Err(NP_Error::new("unreachable")); },
+            NP_TypeKeys::List        => { return Err(NP_Error::new("unreachable")); },
+            NP_TypeKeys::Tuple       => { return Err(NP_Error::new("unreachable")); },
             NP_TypeKeys::UTF8String  => {  NP_String::set_value(cursor, memory, &String::default())?; },
             NP_TypeKeys::Bytes       => {   NP_Bytes::set_value(cursor, memory, &NP_Bytes::default())?; },
             NP_TypeKeys::Int8        => {         i8::set_value(cursor, memory, i8::default())?; },

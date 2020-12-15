@@ -1,7 +1,7 @@
 [package]
 name = "no_proto"
 license = "MIT"
-version = "0.6.0"
+version = "0.6.1"
 description = "Simple & Performant Zero-Copy Serialization.  Performance of Protocol Buffers with flexibility of JSON."
 homepage = "https://github.com/only-cliches/NoProto"
 repository = "https://github.com/only-cliches/NoProto"

@@ -1,5 +1,5 @@
 use alloc::string::String;
-use crate::{pointer::NP_Map_Bytes};
+use crate::{pointer::NP_Map_Bytes, utils::opt_err};
 use crate::pointer::NP_Cursor;
 use crate::{json_flex::JSMAP};
 use crate::pointer::{NP_Value};
@@ -54,7 +54,11 @@ impl<'map> NP_Map<'map> {
 
     #[inline(always)]
     pub fn get_map<'get>(map_buff_addr: usize, memory: &'get NP_Memory<'get>) -> &'get mut NP_Map_Bytes {
-        unsafe { &mut *(memory.write_bytes().as_ptr().add(map_buff_addr as usize) as *mut NP_Map_Bytes) }
+        if map_buff_addr > memory.read_bytes().len() { // attack
+            unsafe { &mut *(memory.write_bytes().as_ptr() as *mut NP_Map_Bytes) }
+        } else { // normal operation
+            unsafe { &mut *(memory.write_bytes().as_ptr().add(map_buff_addr as usize) as *mut NP_Map_Bytes) }
+        }
     }
 
     #[inline(always)]
@@ -62,7 +66,7 @@ impl<'map> NP_Map<'map> {
 
         let value_of = match memory.schema[map_cursor.schema_addr] {
             NP_Parsed_Schema::Map { value, .. } => value,
-            _ => unsafe { unreachable_unchecked() }
+            _ => 0
         };
 
         if map_cursor.get_value(memory).get_addr_value() == 0 {
@@ -128,7 +132,7 @@ impl<'map> NP_Map<'map> {
 
         let value_of = match memory.schema[map_cursor.schema_addr] {
             NP_Parsed_Schema::Map { value, .. } => value,
-            _ => unsafe { unreachable_unchecked() }
+            _ => 0
         };
 
         if key.len() >= 255 {
@@ -170,10 +174,8 @@ impl<'value> NP_Value<'value> for NP_Map<'value> {
         schema_json.insert("type".to_owned(), NP_JSON::String(Self::type_idx().0.to_string()));
 
         let value_of = match schema[address] {
-            NP_Parsed_Schema::Map { value, .. } => {
-                value
-            },
-            _ => { unsafe { unreachable_unchecked() } }
+            NP_Parsed_Schema::Map { value, .. } => { value },
+            _ => 0
         };
 
         schema_json.insert("value".to_owned(), NP_Schema::_type_to_json(schema, value_of)?);
@@ -197,7 +199,7 @@ impl<'value> NP_Value<'value> for NP_Map<'value> {
             let key_size = item.get_value(memory).get_key_size(memory);
             acc_size += 1; // length byte
             acc_size += key_size;
-            acc_size += NP_Cursor::calc_size(&item, memory).unwrap();     
+            acc_size += NP_Cursor::calc_size(&item, memory)?;
         }
 
 
@@ -236,8 +238,8 @@ impl<'value> NP_Value<'value> for NP_Map<'value> {
         let mut map_iter = Self::new_iter(&from_cursor, from_memory);
 
         while let Some((key, item)) = Self::step_iter(&mut map_iter, from_memory) {
-            let new_item = Self::insert(&to_cursor, to_memory, key).unwrap();
-            NP_Cursor::compact(item.clone(), from_memory, new_item, to_memory).unwrap();           
+            let new_item = Self::insert(&to_cursor, to_memory, key)?;
+            NP_Cursor::compact(item.clone(), from_memory, new_item, to_memory)?;    
         }
 
 
@@ -308,10 +310,10 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     buffer.set(&["name"], "hello, world")?;
     assert_eq!(buffer.get::<&str>(&["name"])?, Some("hello, world"));
     assert_eq!(buffer.calc_bytes()?.after_compaction, buffer.calc_bytes()?.current_buffer);
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 27usize);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 28usize);
     buffer.del(&[])?;
     buffer.compact(None)?;
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 2usize);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 3usize);
 
     // values are preserved through compaction
     let mut buffer = factory.empty_buffer(None);
@@ -319,11 +321,11 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     buffer.set(&["name2"], "hello, world2")?;
     assert_eq!(buffer.get::<&str>(&["name"])?, Some("hello, world"));
     assert_eq!(buffer.get::<&str>(&["name2"])?, Some("hello, world2"));
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 54usize);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 55usize);
     buffer.compact(None)?;
     assert_eq!(buffer.get::<&str>(&["name"])?, Some("hello, world"));
     assert_eq!(buffer.get::<&str>(&["name2"])?, Some("hello, world2"));
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 54usize);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 55usize);
 
     Ok(())
 }

@@ -27,7 +27,7 @@ impl ProtocolBufferBench {
         println!("PBuffers:    size: {}b, zlib: {}b", encoded.len(), compressed.len());
     }
 
-    pub fn encode_bench() {
+    pub fn encode_bench(base: u128) {
         let start = SystemTime::now();
 
         for _x in 0..LOOPS {
@@ -36,7 +36,7 @@ impl ProtocolBufferBench {
         }
     
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
-        println!("PBuffers:    {:?}", time);
+        println!("PBuffers:    {:>5.2}ms {:.2}", time.as_millis(), (base as f64 / time.as_micros() as f64));  
     }
 
     #[inline(always)]
@@ -76,7 +76,7 @@ impl ProtocolBufferBench {
         bytes
     }
 
-    pub fn update_bench()  {
+    pub fn update_bench(base: u128)  {
         let start = SystemTime::now();
 
         let buffer = Self::encode_single();
@@ -134,10 +134,10 @@ impl ProtocolBufferBench {
         }
     
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
-        println!("PBuffers:    {:?}", time);
+        println!("PBuffers:    {:>5.2}ms {:.2}", time.as_millis(), (base as f64 / time.as_micros() as f64));
     }
 
-    pub fn decode_one_bench() {
+    pub fn decode_one_bench(base: u128) {
         let start = SystemTime::now();
 
         let buffer = Self::encode_single();
@@ -148,10 +148,10 @@ impl ProtocolBufferBench {
         }
     
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
-        println!("PBuffers:    {:?}", time);
+        println!("PBuffers:    {:>5.2}ms {:.2}", time.as_millis(), (base as f64 / time.as_micros() as f64));
     }
 
-    pub fn decode_bench()  {
+    pub fn decode_bench(base: u128)  {
         let start = SystemTime::now();
 
         let buffer = Self::encode_single();
@@ -159,8 +159,9 @@ impl ProtocolBufferBench {
         for _x in 0..LOOPS {
             let old_foo_bar: FooBarContainer = protobuf::parse_from_bytes(&buffer).unwrap();
 
+            let mut loops = 0;
             old_foo_bar.get_list().iter().enumerate().for_each(|(y, old_foo_b)| {
-
+                loops += 1;
                 assert_eq!(old_foo_b.get_name(), "Hello, World!");
                 assert_eq!(old_foo_b.get_rating(), 3.1415432432445543543 + y as f64);
                 assert_eq!(old_foo_b.get_postfix(), "!".as_bytes()[0] as u32);
@@ -179,13 +180,15 @@ impl ProtocolBufferBench {
 
             });
 
+            assert!(loops == 3);
+
             assert_eq!(old_foo_bar.get_location(), "http://arstechnica.com");
             assert_eq!(old_foo_bar.get_initialized(), true);
             assert_eq!(old_foo_bar.get_fruit(), Enum::Apples);
         }
     
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
-        println!("PBuffers:    {:?}", time);
+        println!("PBuffers:    {:>5.2}ms {:.2}", time.as_millis(), (base as f64 / time.as_micros() as f64));
     }
 
 }

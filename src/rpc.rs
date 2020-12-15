@@ -1,4 +1,5 @@
-
+//! Remote Procedure Call APIs
+//! 
 
 use alloc::vec::Vec;
 use crate::{NP_JSON, buffer::NP_Buffer, error::NP_Error};
@@ -9,11 +10,11 @@ pub struct NP_RPC_Factory {
 
 impl NP_RPC_Factory {
 
-    pub fn new(json_rcp_schema: &str) {
+    pub fn new(json_rcp_schema: &str) -> Result<Self, NP_Error> {
         todo!()
     }
 
-    pub fn new_compiled(bytes_rpc_schema: Vec<u8>) {
+    pub fn new_compiled(bytes_rpc_schema: Vec<u8>) -> Result<Self, NP_Error>  {
         todo!()
     }
 

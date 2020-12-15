@@ -1,5 +1,6 @@
 //! Top level abstraction for buffer objects
 
+use crate::utils::opt_err;
 use crate::collection::tuple::NP_Tuple;
 
 use crate::{pointer::{NP_Scalar}};
@@ -16,7 +17,7 @@ use crate::alloc::borrow::ToOwned;
 
 /// The address location of the root pointer.
 #[doc(hidden)]
-pub const ROOT_PTR_ADDR: usize = 0;
+pub const ROOT_PTR_ADDR: usize = 1;
 /// Maximum size of list collections
 #[doc(hidden)]
 pub const LIST_MAX_SIZE: usize = core::u16::MAX as usize;
@@ -28,6 +29,7 @@ pub struct NP_Buffer<'buffer> {
     /// Schema data used by this buffer
     memory: NP_Memory<'buffer>,
     cursor: NP_Cursor,
+    sortable: bool,
     backup_cursor: NP_Cursor
 }
 
@@ -45,23 +47,26 @@ pub struct NP_Size_Data {
 impl<'buffer> NP_Buffer<'buffer> {
 
     #[doc(hidden)]
-    pub fn _new(memory: NP_Memory<'buffer>) -> Result<Self, NP_Error> { // make new buffer
+    pub fn _new(memory: NP_Memory<'buffer>) -> Self { // make new buffer
 
+        let mut is_sortable: bool = false;
         // is the root a sortable tuple?  if so, create its children and vtables
         match memory.schema[0] {
             NP_Parsed_Schema::Tuple { sortable, .. } => {
                 if sortable {
-                    NP_Tuple::select(NP_Cursor::new(0, 0, 0), 0, true, &memory)?;
+                    NP_Tuple::select(NP_Cursor::new(ROOT_PTR_ADDR, 0, 0), 0, true, &memory).unwrap_or(None);
+                    is_sortable = true;
                 }
             },
             _ => {}
         };
 
-        Ok(NP_Buffer {
-            cursor: NP_Cursor::new(0, 0, 0),
+        NP_Buffer {
+            cursor: NP_Cursor::new(ROOT_PTR_ADDR, 0, 0),
             memory: memory,
-            backup_cursor: NP_Cursor::new(0, 0, 0)
-        })
+            sortable: is_sortable,
+            backup_cursor: NP_Cursor::new(ROOT_PTR_ADDR, 0, 0)
+        }
     }
 
 
@@ -118,13 +123,78 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// new_buffer.set(&[], "hello")?;
     /// // close buffer and get bytes
     /// let bytes: Vec<u8> = new_buffer.close();
-    /// assert_eq!([0, 2, 0, 5, 104, 101, 108, 108, 111].to_vec(), bytes);
+    /// assert_eq!([0, 0, 3, 0, 5, 104, 101, 108, 108, 111].to_vec(), bytes);
     /// 
     /// # Ok::<(), NP_Error>(()) 
     /// ```
     /// 
     pub fn close(self) -> Vec<u8> {
         self.memory.dump()
+    }
+
+    /// If the buffer is sortable, this provides only the sortable elements of the buffer.
+    /// There is typically 10 bytes or more in front of the buffer that are identical between all the sortable buffers for a given schema.
+    /// 
+    /// This calculates how many leading identical bytes there are and returns only the bytes following them.  This allows your sortable buffers to be only as large as they need to be.
+    /// 
+    /// This operation fails if the buffer is not sortable.
+    /// 
+    /// ```
+    /// use no_proto::error::NP_Error;
+    /// use no_proto::NP_Factory;
+    /// use no_proto::buffer::NP_Size_Data;
+    /// 
+    /// let factory: NP_Factory = NP_Factory::new(r#"{
+    ///    "type": "tuple",
+    ///    "sorted": true,
+    ///    "values": [
+    ///         {"type": "u8"},
+    ///         {"type": "string", "size": 6}
+    ///     ]
+    /// }"#)?;
+    /// 
+    /// let mut new_buffer = factory.empty_buffer(None);
+    /// // set initial value
+    /// new_buffer.set(&["0"], 55u8)?;
+    /// new_buffer.set(&["1"], "hello")?;
+    /// 
+    /// // the buffer with it's vtables take up 20 bytes!
+    /// assert_eq!(new_buffer.read_bytes().len(), 20usize);
+    /// 
+    /// // close buffer and get sortable bytes
+    /// let bytes: Vec<u8> = new_buffer.close_sortable()?;
+    /// // with close_sortable() we only get the bytes we care about!
+    /// assert_eq!([55, 104, 101, 108, 108, 111, 32].to_vec(), bytes);
+    /// 
+    /// // you can always re open the sortable buffers with this call
+    /// let new_buffer = factory.open_sortable_buffer(bytes)?;
+    /// assert_eq!(new_buffer.get(&["0"])?, Some(55u8));
+    /// assert_eq!(new_buffer.get(&["1"])?, Some("hello "));
+    /// 
+    /// # Ok::<(), NP_Error>(()) 
+    /// ```
+    /// 
+    pub fn close_sortable(self) -> Result<Vec<u8>, NP_Error> {
+        match &self.memory.schema[0] {
+            NP_Parsed_Schema::Tuple { values, sortable, .. } => {
+                if *sortable == false {
+                    Err(NP_Error::new("Attempted to close_sortable() on buffer that isn't sortable!"))
+                } else {
+                    let mut vtables = 1usize;
+                    let mut length = values.len();
+                    while length > 4 {
+                        vtables +=1;
+                        length -= 4;
+                    }
+                    let root_offset = ROOT_PTR_ADDR + 2 + (vtables * 10);
+
+                    let closed_vec = self.memory.dump();
+                    
+                    Ok(closed_vec[root_offset..].to_vec())
+                }
+            },
+            _ => Err(NP_Error::new("Attempted to close_sortable() on buffer that isn't sortable!"))
+        }
     }
 
     /// Read the bytes of the buffer immutably.  No touching!
@@ -165,7 +235,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// Move cursor position to root of buffer
     /// 
     pub fn cursor_to_root(&mut self) {
-        self.cursor = NP_Cursor::new(0, 0, 0);
+        self.cursor = NP_Cursor::new(ROOT_PTR_ADDR, 0, 0);
     }
 
     /// Used to set scalar values inside the buffer.
@@ -684,10 +754,22 @@ impl<'buffer> NP_Buffer<'buffer> {
     pub fn del(&mut self, path: &[&str]) -> Result<bool, NP_Error> {
 
         let value_cursor = self.select(self.cursor.clone(), false, path)?;
+        
         match value_cursor {
             Some(x) => {
-                // clear value address in buffer
-                x.get_value(&self.memory).set_addr_value(0);
+                if self.sortable {
+                    match &self.memory.schema[x.schema_addr] {
+                        NP_Parsed_Schema::Table { .. } => { return Ok(false) },
+                        NP_Parsed_Schema::Tuple { .. } => { return Ok(false) },
+                        NP_Parsed_Schema::List { .. } => { return Ok(false) },
+                        NP_Parsed_Schema::Map { .. } => { return Ok(false) },
+                        _ => NP_Cursor::set_default(x, &self.memory)?
+                    }
+                } else {
+                    // clear value address in buffer
+                    x.get_value(&self.memory).set_addr_value(0);
+                }
+
                 Ok(true)
             }
             None => Ok(false)
@@ -732,9 +814,9 @@ impl<'buffer> NP_Buffer<'buffer> {
                                 
                 // type does not match schema
                 if X::type_idx().1 != *self.memory.schema[x.schema_addr].get_type_key() {
-                    let mut err = "TypeError: Attempted to set value for type (".to_owned();
+                    let mut err = "TypeError: Attempted to get value for type (".to_owned();
                     err.push_str(X::type_idx().0);
-                    err.push_str(") into schema of type (");
+                    err.push_str(") for schema of type (");
                     err.push_str(self.memory.schema[x.schema_addr].get_type_data().0);
                     err.push_str(")\n");
                     return Err(NP_Error::new(err));
@@ -744,12 +826,12 @@ impl<'buffer> NP_Buffer<'buffer> {
                     Some(x) => {
                         Ok(Some(x))
                     },
-                    None => {
+                    None => { // no value found here, return default from schema
                         match X::schema_default(&self.memory.schema[x.schema_addr]) {
                             Some(y) => {
                                 Ok(Some(y))
                             },
-                            None => {
+                            None => { // no default in schema, no value to provide
                                 Ok(None)
                             }
                         }                        
@@ -782,16 +864,16 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// new_buffer.set(&[], "hello")?;
     /// // using 9 bytes
     /// assert_eq!(NP_Size_Data {
-    ///     current_buffer: 9,
-    ///     after_compaction: 9,
+    ///     current_buffer: 10,
+    ///     after_compaction: 10,
     ///     wasted_bytes: 0
     /// }, new_buffer.calc_bytes()?);
     /// // update the value
     /// new_buffer.set(&[], "hello, world")?;
     /// // now using 25 bytes, with 7 bytes of wasted space
     /// assert_eq!(NP_Size_Data {
-    ///     current_buffer: 23,
-    ///     after_compaction: 16,
+    ///     current_buffer: 24,
+    ///     after_compaction: 17,
     ///     wasted_bytes: 7
     /// }, new_buffer.calc_bytes()?);
     /// // compact to save space
@@ -805,8 +887,8 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// })?;
     /// // back down to 18 bytes with no wasted bytes
     /// assert_eq!(NP_Size_Data {
-    ///     current_buffer: 16,
-    ///     after_compaction: 16,
+    ///     current_buffer: 17,
+    ///     after_compaction: 17,
     ///     wasted_bytes: 0
     /// }, new_buffer.calc_bytes()?);
     /// 
@@ -845,24 +927,24 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// new_buffer.set(&[], "hello")?;
     /// // using 11 bytes
     /// assert_eq!(NP_Size_Data {
-    ///     current_buffer: 9,
-    ///     after_compaction: 9,
+    ///     current_buffer: 10,
+    ///     after_compaction: 10,
     ///     wasted_bytes: 0
     /// }, new_buffer.calc_bytes()?);
     /// // update the value
     /// new_buffer.set(&[], "hello, world")?;
     /// // now using 25 bytes, with 7 bytes of wasted bytes
     /// assert_eq!(NP_Size_Data {
-    ///     current_buffer: 23,
-    ///     after_compaction: 16,
+    ///     current_buffer: 24,
+    ///     after_compaction: 17,
     ///     wasted_bytes: 7
     /// }, new_buffer.calc_bytes()?);
     /// // compact to save space
     /// new_buffer.compact(None)?;
     /// // back down to 18 bytes with no wasted bytes
     /// assert_eq!(NP_Size_Data {
-    ///     current_buffer: 16,
-    ///     after_compaction: 16,
+    ///     current_buffer: 17,
+    ///     after_compaction: 17,
     ///     wasted_bytes: 0
     /// }, new_buffer.calc_bytes()?);
     /// 
@@ -876,15 +958,15 @@ impl<'buffer> NP_Buffer<'buffer> {
             None => self.memory.read_bytes().len()
         };
 
-        let old_root = NP_Cursor::new(0, 0, 0);
+        let old_root = NP_Cursor::new(ROOT_PTR_ADDR, 0, 0);
 
         let new_bytes = NP_Memory::new(Some(capacity), self.memory.schema);
-        let new_root  = NP_Cursor::new(0, 0, 0);
+        let new_root  = NP_Cursor::new(ROOT_PTR_ADDR, 0, 0);
 
         NP_Cursor::compact(old_root, &self.memory, new_root, &new_bytes)?;
 
-        self.cursor = NP_Cursor::new(0, 0, 0);
-        self.backup_cursor = NP_Cursor::new(0, 0, 0);
+        self.cursor = NP_Cursor::new(ROOT_PTR_ADDR, 0, 0);
+        self.backup_cursor = NP_Cursor::new(ROOT_PTR_ADDR, 0, 0);
 
         self.memory = new_bytes;
 
@@ -906,8 +988,8 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// let mut new_buffer = factory.empty_buffer(None);
     /// new_buffer.set(&[], "hello")?;
     /// assert_eq!(NP_Size_Data {
-    ///     current_buffer: 9,
-    ///     after_compaction: 9,
+    ///     current_buffer: 10,
+    ///     after_compaction: 10,
     ///     wasted_bytes: 0
     /// }, new_buffer.calc_bytes()?);
     /// 
@@ -916,8 +998,8 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// 
     pub fn calc_bytes<'bytes>(&self) -> Result<NP_Size_Data, NP_Error> {
 
-        let root = NP_Cursor::new(0, 0, 0);
-        let real_bytes = NP_Cursor::calc_size(&root, &self.memory)?;
+        let root = NP_Cursor::new(ROOT_PTR_ADDR, 0, 0);
+        let real_bytes = NP_Cursor::calc_size(&root, &self.memory)? + ROOT_PTR_ADDR;
         let total_size = self.memory.read_bytes().len();
         if total_size >= real_bytes {
             return Ok(NP_Size_Data {
@@ -971,7 +1053,7 @@ impl<'buffer> NP_Buffer<'buffer> {
                     match path[path_index].parse::<usize>() {
                         Ok(x) => {
                             if let Some(next) = NP_List::select(loop_cursor, x, make_path, &self.memory)? {
-                                loop_cursor = next.1.unwrap();
+                                loop_cursor = opt_err(next.1)?;
                                 path_index += 1;
                             } else {
                                 return Ok(None);
@@ -1056,18 +1138,18 @@ impl<'item> NP_Item<'item> {
         } else {
             match self.memory.schema[self.parent.schema_addr] {
                 NP_Parsed_Schema::List { .. } => {
-                    let item = NP_List::select(self.parent.clone(), self.index, true, self.memory)?.unwrap().1.unwrap();
+                    let item = opt_err(opt_err(NP_List::select(self.parent.clone(), self.index, true, self.memory)?)?.1)?;
                     X::set_value(item, self.memory, value)?;
                 }
                 NP_Parsed_Schema::Table { .. } => {
-                    let item = NP_Table::select(self.parent.clone(), self.key, true, self.memory)?.unwrap();
+                    let item = opt_err(NP_Table::select(self.parent.clone(), self.key, true, self.memory)?)?;
                     X::set_value(item, self.memory, value)?;
                 },
                 NP_Parsed_Schema::Tuple { .. } => {
-                    let item = NP_Tuple::select(self.parent.clone(), self.index, true, self.memory)?.unwrap();
+                    let item = opt_err(NP_Tuple::select(self.parent.clone(), self.index, true, self.memory)?)?;
                     X::set_value(item, self.memory, value)?;
                 }
-                _ => panic!()
+                _ => { }
             }
         }
 
@@ -1182,7 +1264,7 @@ impl<'it> Iterator for NP_Generic_Iterator<'it> {
                     None
                 }
             },
-            _ => panic!()
+            _ => { None }
         }
     }
 }

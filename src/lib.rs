@@ -20,12 +20,13 @@
 //! - Supports deep nesting of collection types
 //! - Easy and performant export to JSON.
 //! - [Thoroughly documented](https://docs.rs/no_proto/latest/no_proto/format/index.html) & simple data storage format
+//! - Panic/unwrap() free, this library will never cause a panic in your application.
 //! 
-//! NoProto allows you to store, read & mutate structured data with near zero overhead. It's like Protocol Buffers except buffers and schemas are dynamic at runtime instead of requiring compilation.  It's like JSON but faster, type safe and allows native types.
+//! NoProto allows you to store, read & mutate structured data with very little overhead. It's like Protocol Buffers except buffers and schemas are dynamic at runtime.  It's like JSON but way faster, type safe and supports native types.
+//! 
+//! Also unlike Protocol Buffers you can insert values in any order and values can later be removed or updated without rebuilding the whole buffer.
 //! 
 //! Byte-wise sorting comes in the box and is a first class operation. Two NoProto buffers can be compared at the byte level *without deserializing* and a correct ordering between the buffer's internal values will be the result.  This is extremely useful for storing ordered keys in databases. 
-//! 
-//! NoProto moves the cost of deserialization to the access methods instead of deserializing the entire object ahead of time (Incremental Deserialization). This makes it a perfect use case for things like database storage or file storage of structured data.
 //! 
 //! *Compared to Protocol Buffers*
 //! - Similar serialization & deserialization performance
@@ -102,7 +103,7 @@
 //! let user_bytes: Vec<u8> = user_buffer.close();
 //! 
 //! // open the buffer again
-//! let user_buffer = user_factory.open_buffer(user_bytes)?;
+//! let user_buffer = user_factory.open_buffer(user_bytes);
 //! 
 //! // get nested internal value, first tag from the tag list
 //! let tag = user_buffer.get::<&str>(&["tags", "0"])?;
@@ -119,17 +120,6 @@
 //! 
 //! // we can now save user_bytes to disk, 
 //! // send it over the network, or whatever else is needed with the data
-//! 
-//! // The schema can also be compiled into a byte array for more efficient schema parsing.
-//! let byte_schema: Vec<u8> = user_factory.compile_schema();
-//! 
-//! // The byte schema can be used just like JSON schema, but it's WAY faster to parse.
-//! let user_factory2 = NP_Factory::new_compiled(byte_schema);
-//! 
-//! // confirm the new byte schema works with existing buffers
-//! let user_buffer = user_factory2.open_buffer(user_bytes)?;
-//! let tag = user_buffer.get::<&str>(&["tags", "0"])?;
-//! assert_eq!(tag, Some("first tag"));
 //! 
 //! 
 //! # Ok::<(), NP_Error>(()) 
@@ -150,22 +140,22 @@
 //! 
 //! | Library            | Encode | Decode All | Decode 1 | Update 1 | Size | Size (Zlib) |
 //! |--------------------|--------|------------|----------|----------|------|-------------|
-//! | NoProto            | 100%   | 100%       | 100%     | 100%     | 283  | 226         |
-//! | FlatBuffers        | 180%   | 800%       | 1600%    | 8%       | 336  | 214         |
-//! | Protocol Buffers 2 | 99%    | 80%        | 7%       | 2%       | 220  | 163         |
-//! | MessagePack        | 12%    | 15%        | 1%       | 1%       | 431  | 245         |
-//! | JSON               | 65%    | 30%        | 2%       | 2%       | 673  | 246         |
-//! | BSON               | 1%     | 8%         | 1%       | 1%       | 600  | 279         |
+//! | NoProto            | 100%   | 100%       | 100%     | 100%     | 284  | 229         |
+//! | FlatBuffers        | 193%   | 1800%      | 1600%    | 16%      | 336  | 214         |
+//! | Protocol Buffers 2 | 103%   | 80%        | 7%       | 5%       | 220  | 163         |
+//! | MessagePack        | 13%    | 16%        | 1%       | 1%       | 431  | 245         |
+//! | JSON               | 68%    | 29%        | 3%       | 5%       | 673  | 246         |
+//! | BSON               | 9%     | 7%         | 1%       | 1%       | 600  | 279         |
 //! 
 //! 
-//! - **Encode**: Transfer a collection of data into a serialized form 1,000,000 times.
-//! - **Decode All**: Decode/Deserialize an object into all it's properties 1,000,000 times.
-//! - **Decode 1**: Decode/Deserialize one property of an object 1,000,000 times.
-//! - **Update 1**: Deserialize, update a single property, then serialize an object 1,000,000 times.
+//! - **Encode**: Transfer a collection of test data into a serialized Vec<u8>.
+//! - **Decode All**: Deserialize the test object from the Vec<u8> into all it's properties.
+//! - **Decode 1**: Deserialize the test object from the Vec<u8> into one of it's properties.
+//! - **Update 1**: Deserialize, update a single property, then serialize back into Vec<u8>.
 //! 
 //! Complete benchmark source code is available [here](https://github.com/only-cliches/NoProto/tree/master/bench).
 //! 
-//! In my opinion the benchmarks above make NoProto the clear winner if you ever plan to mutate or update your buffer data.  If buffer data can always be immutable and the fixed schemas aren't an issue, Flatbuffers is the better choice.
+//! In my opinion the benchmarks above make NoProto the clear winner if you ever plan to mutate or update your buffer data.  If buffer data can always be immutable and the fixed compiled schemas aren't an issue, Flatbuffers is the better choice.
 //! 
 //! I also think there's a strong argument here against using data without a schema.  The cost of an entirely flexible formats like JSON or BSON is crazy.  Putting schemas on your data not only increases your data hygiene but makes the storage of the data far more comapct while increasing the deserialization and serialization perfomrance substantially.
 //! 
@@ -222,7 +212,7 @@ use crate::schema::NP_Schema;
 use crate::json_flex::json_decode;
 use crate::error::NP_Error;
 use crate::memory::NP_Memory;
-use buffer::{NP_Buffer};
+use buffer::{NP_Buffer, ROOT_PTR_ADDR};
 use alloc::vec::Vec;
 use alloc::{borrow::ToOwned};
 use schema::NP_Parsed_Schema;
@@ -263,7 +253,7 @@ use schema::NP_Parsed_Schema;
 /// let user_vec:Vec<u8> = user_buffer.close();
 /// 
 /// // open existing buffer for reading
-/// let user_buffer_2 = user_factory.open_buffer(user_vec)?;
+/// let user_buffer_2 = user_factory.open_buffer(user_vec);
 /// 
 /// // read column value
 /// let name_column = user_buffer_2.get::<&str>(&["name"])?;
@@ -350,10 +340,81 @@ impl NP_Factory {
         self.schema.to_json()
     }
 
+    /// Open existing Vec<u8> sortable buffer that was closed with `.close_sortable()` 
+    /// 
+    /// There is typically 10 bytes or more in front of every sortable buffer that is identical between all sortable buffers for a given schema.
+    /// 
+    /// This method is used to open buffers that have had the leading identical bytes trimmed from them using `.close_sortale()`.
+    /// 
+    /// This operation fails if the buffer is not sortable.
+    /// 
+    /// ```
+    /// use no_proto::error::NP_Error;
+    /// use no_proto::NP_Factory;
+    /// use no_proto::buffer::NP_Size_Data;
+    /// 
+    /// let factory: NP_Factory = NP_Factory::new(r#"{
+    ///    "type": "tuple",
+    ///    "sorted": true,
+    ///    "values": [
+    ///         {"type": "u8"},
+    ///         {"type": "string", "size": 6}
+    ///     ]
+    /// }"#)?;
+    /// 
+    /// let mut new_buffer = factory.empty_buffer(None);
+    /// // set initial value
+    /// new_buffer.set(&["0"], 55u8)?;
+    /// new_buffer.set(&["1"], "hello")?;
+    /// 
+    /// // the buffer with it's vtables take up 20 bytes!
+    /// assert_eq!(new_buffer.read_bytes().len(), 20usize);
+    /// 
+    /// // close buffer and get sortable bytes
+    /// let bytes: Vec<u8> = new_buffer.close_sortable()?;
+    /// // with close_sortable() we only get the bytes we care about!
+    /// assert_eq!([55, 104, 101, 108, 108, 111, 32].to_vec(), bytes);
+    /// 
+    /// // you can always re open the sortable buffers with this call
+    /// let new_buffer = factory.open_sortable_buffer(bytes)?;
+    /// assert_eq!(new_buffer.get(&["0"])?, Some(55u8));
+    /// assert_eq!(new_buffer.get(&["1"])?, Some("hello "));
+    /// 
+    /// # Ok::<(), NP_Error>(()) 
+    /// ```
+    /// 
+    /// 
+    pub fn open_sortable_buffer<'buffer>(&'buffer self, bytes: Vec<u8>) -> Result<NP_Buffer<'buffer>, NP_Error> {
+        
+        match &self.schema.parsed[0] {
+            NP_Parsed_Schema::Tuple { values, sortable,  ..} => {
+                if *sortable == false {
+                    Err(NP_Error::new("Attempted to open sorted buffer when root wasn't sortable!"))
+                } else {
+                    let mut vtables = 1usize;
+                    let mut length = values.len();
+                    while length > 4 {
+                        vtables +=1;
+                        length -= 4;
+                    }
+                    // how many leading bytes are identical across all buffers with this schema
+                    let root_offset = ROOT_PTR_ADDR + 2 + (vtables * 10);
+
+                    let default_buffer = NP_Buffer::_new(NP_Memory::new(Some(root_offset + bytes.len()), &self.schema.parsed));
+                    let mut use_bytes = default_buffer.close()[0..root_offset].to_vec();
+                    use_bytes.extend_from_slice(&bytes[..]);
+
+                    Ok(NP_Buffer::_new(NP_Memory::existing(use_bytes, &self.schema.parsed)))
+                }
+            },
+            _ => return Err(NP_Error::new("Attempted to open sorted buffer when root wasn't tuple!"))
+        }
+    }
+
 
     /// Open existing Vec<u8> as buffer for this factory.  
     /// 
-    pub fn open_buffer<'buffer>(&'buffer self, bytes: Vec<u8>) -> Result<NP_Buffer<'buffer>, NP_Error> {
+    pub fn open_buffer<'buffer>(&'buffer self, bytes: Vec<u8>) -> NP_Buffer<'buffer> {
         NP_Buffer::_new(NP_Memory::existing(bytes, &self.schema.parsed))
     }
 
@@ -365,6 +426,6 @@ impl NP_Factory {
     /// You can change the address size through compaction after the buffer is created, so it's fine to start with a smaller address space and convert it to a larger one later as needed.  It's also possible to go the other way, you can convert larger address space down to a smaller one durring compaction.
     /// 
     pub fn empty_buffer<'buffer>(&'buffer self, capacity: Option<usize>) -> NP_Buffer<'buffer> {
-        NP_Buffer::_new(NP_Memory::new(capacity, &self.schema.parsed)).unwrap()
+        NP_Buffer::_new(NP_Memory::new(capacity, &self.schema.parsed))
     }
 }

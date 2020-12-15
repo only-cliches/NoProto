@@ -80,16 +80,16 @@ impl NP_UUID {
     /// Generates a UUID with a provided random number generator.
     /// This is the preferrable way to generate a ULID, if you can provide a better RNG function than the psudorandom one built into this library, you should.
     /// 
-    pub fn generate_with_rand<F>(random_fn: F) -> Self where F: Fn(u8, u8) -> u8 {
+    pub fn generate_with_rand<F>(random_fn: F) -> Self where F: Fn() -> u8 {
         let mut uuid = NP_UUID {
             value: [0; 16]
         };
 
         for x in 0..uuid.value.len() {
             if x == 6 {
-                uuid.value[x] = 64 + random_fn(0, 15) as u8;
+                uuid.value[x] = 64 + (random_fn() % 17) - 1;
             } else {
-                uuid.value[x] = random_fn(0, 255) as u8;
+                uuid.value[x] = random_fn();
             }
         }
 
@@ -107,7 +107,7 @@ impl NP_UUID {
                 result.push_str("-");
             }
             let byte = self.value[x] as u8;
-            write!(result, "{:02X}", byte).unwrap();
+            write!(result, "{:02X}", byte).unwrap_or(());
         }
 
         result
@@ -261,7 +261,7 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     assert_eq!(buffer.get::<&NP_UUID>(&[])?, None);
 
     buffer.compact(None)?;
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 2usize);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 3usize);
 
     Ok(())
 }
