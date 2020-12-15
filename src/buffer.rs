@@ -205,6 +205,8 @@ impl<'buffer> NP_Buffer<'buffer> {
 
     /// Move buffer cursor to new location.  Cursors can only be moved into children.  If you need to move up reset the cursor to root, then move back down to the desired level.
     /// 
+    /// This also creates objects/collections along the path as needed.  If you attempt to move into a path that doesn't exist, this method will return `false`.  Otherwise it will return `true` of the path requested exists or is something that can be made to exist.
+    /// 
     pub fn move_cursor(&mut self, path: &[&str]) -> Result<bool, NP_Error> {
 
         let value_cursor = self.select(self.cursor.clone(), true, path)?;
@@ -232,7 +234,7 @@ impl<'buffer> NP_Buffer<'buffer> {
         self.cursor = self.backup_cursor.clone();
     }
 
-    /// Move cursor position to root of buffer
+    /// Moves cursor position to root of buffer, the default.
     /// 
     pub fn cursor_to_root(&mut self) {
         self.cursor = NP_Cursor::new(ROOT_PTR_ADDR, 0, 0);

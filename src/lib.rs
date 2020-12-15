@@ -22,9 +22,7 @@
 //! - [Thoroughly documented](https://docs.rs/no_proto/latest/no_proto/format/index.html) & simple data storage format
 //! - Panic/unwrap() free, this library will never cause a panic in your application.
 //! 
-//! NoProto allows you to store, read & mutate structured data with very little overhead. It's like Protocol Buffers except buffers and schemas are dynamic at runtime.  It's like JSON but way faster, type safe and supports native types.
-//! 
-//! Also unlike Protocol Buffers you can insert values in any order and values can later be removed or updated without rebuilding the whole buffer.
+//! NoProto allows you to store, read & mutate structured data with very little overhead. It's like Protocol Buffers except schemas are dynamic at runtime and buffers are mutable.  It's like JSON but way faster, type safe and supports native types.  Also unlike Protocol Buffers you can insert values in any order and values can later be removed or updated without rebuilding the whole buffer.
 //! 
 //! Byte-wise sorting comes in the box and is a first class operation. Two NoProto buffers can be compared at the byte level *without deserializing* and a correct ordering between the buffer's internal values will be the result.  This is extremely useful for storing ordered keys in databases. 
 //! 

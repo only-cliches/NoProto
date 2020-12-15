@@ -27,6 +27,7 @@ Benchmarks can be ran with `cargo run --release`.
 ### v0.6.1
 3.4Ghz i5 2017 21.5" iMac with 32 GB RAM
 
+```
 ====== SIZE BENCHMARK ======
 NoProto:     size: 284b, zlib: 229b
 Flatbuffers: size: 336b, zlib: 214b
@@ -66,6 +67,7 @@ PBuffers:     7470ms 0.05
 MessagePack: 33735ms 0.01
 JSON:         8743ms 0.05
 BSON:        54590ms 0.01
+```
 
 ## Dec 13, 2020
 ### v0.6.0
