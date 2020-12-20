@@ -858,10 +858,10 @@ impl NP_Schema {
     }
 
     /// Parse a schema out of schema bytes
-    pub fn from_bytes(cache: Vec<NP_Parsed_Schema>, address: usize, bytes: &Vec<u8>) -> (bool, Vec<NP_Parsed_Schema>) {
+    pub fn from_bytes(mut cache: Vec<NP_Parsed_Schema>, address: usize, bytes: &Vec<u8>) -> (bool, Vec<NP_Parsed_Schema>) {
         let this_type = NP_TypeKeys::from(bytes[address]);
         match this_type {
-            NP_TypeKeys::None =>       { (false, Vec::new()) }
+            NP_TypeKeys::None =>       {  cache.push(NP_Parsed_Schema::None);  (false, cache) }
             NP_TypeKeys::Any =>        {    NP_Any::from_bytes_to_schema(cache, address, bytes) }
             NP_TypeKeys::UTF8String => { NP_String::from_bytes_to_schema(cache, address, bytes) }
             NP_TypeKeys::Bytes =>      {  NP_Bytes::from_bytes_to_schema(cache, address, bytes) }

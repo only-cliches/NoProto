@@ -26,9 +26,11 @@ pub const VTABLE_SIZE: usize = 4;
 #[doc(hidden)]
 pub const VTABLE_BYTES: usize = 10;
 
+
 /// Buffers contain the bytes of each object and allow you to perform reads, updates, deletes and compaction.
 /// 
 /// 
+#[derive(Debug)]
 pub struct NP_Buffer<'buffer> {
     /// Schema data used by this buffer
     memory: NP_Memory<'buffer>,
@@ -46,6 +48,17 @@ pub struct NP_Size_Data {
     pub after_compaction: usize,
     /// How many known wasted bytes in existing buffer
     pub wasted_bytes: usize
+}
+
+impl<'buffer> Clone for NP_Buffer<'buffer> {
+    fn clone(&self) -> Self {
+        Self {
+            memory: NP_Memory::existing(self.memory.read_bytes().clone(), self.memory.get_schema()),
+            cursor: self.cursor.clone(),
+            sortable: self.sortable,
+            backup_cursor: self.backup_cursor
+        }
+    }
 }
 
 impl<'buffer> NP_Buffer<'buffer> {
@@ -224,18 +237,6 @@ impl<'buffer> NP_Buffer<'buffer> {
         self.cursor = cursor;
 
         Ok(true)
-    }
-
-    /// Backup the current cursor's location
-    /// 
-    pub fn backup_cursor(&mut self) {
-        self.backup_cursor = self.cursor.clone();
-    }
-
-    /// Restore the backed up cursor location
-    /// 
-    pub fn restore_cursor(&mut self) {
-        self.cursor = self.backup_cursor.clone();
     }
 
     /// Moves cursor position to root of buffer, the default.

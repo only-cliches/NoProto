@@ -1,8 +1,10 @@
-# 0.6.2
+# 0.6.2 December 20, 2020
 - Removed hashmap as it didn't help performance enough to justify the extra code/complexity.
 - Some minor optimizations and code clean up.
-- Added RPC Capability.
+- Added RPC Capability, API and documentation.
 - Added `from_string` to UUID.
+- Updated benchmark format to be more clear.
+- Fixed some inaccuracies in compare table.
 
 # 0.6.1 December 15, 2020
 - Restored the first byte for later use.  Probably add `u32` address size again in the future.

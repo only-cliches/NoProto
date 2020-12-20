@@ -7,6 +7,7 @@ use alloc::vec::Vec;
 
 
 #[doc(hidden)]
+#[derive(Debug)]
 pub struct NP_Memory<'memory> {
     bytes: UnsafeCell<Vec<u8>>,
     pub schema: &'memory Vec<NP_Parsed_Schema>

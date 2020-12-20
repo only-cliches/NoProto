@@ -1,5 +1,294 @@
 //! Remote Procedure Call APIs
 //! 
+//! You can optionally omit all the RPC related code with `features = []` in your cargo.toml
+//! 
+//! The NoProto RPC framework builds on top of NoProto's format and Rust's conventions to provide a flexible, powerful and safe RPC protocol.
+//! 
+//! This RPC framework has *zero* transport code and is transport agnostic.  You can send bytes between the server/client using any method you'd like.
+//! 
+//! # RPC JSON Spec
+//! 
+//! Before you can send bytes between servers and clients, you must let NoProto know the shape and format of your endpoints, requests and responses.  Like schemas, RPC specs are written as JSON.
+//! 
+//! Any fields in your spec not required by the library will simply be ignored.
+//! 
+//! ## Required Fields
+//! 
+//! ### id, version
+//! The `id` property should be a V4 UUID you've generated yourself. This [website](https://www.uuidgenerator.net/version4) can help generate a UUID for you. The `version` property should be a semver string like `0.1.0` or `1.0.0` or `0.0.23`.
+//! 
+//! The `id` and `version` data is encoded in every request and response.  If you attempt to open a request or response that does not match the `version` and `id` of the specification you're using, the request/response will fail to open.
+//! 
+//! ### name
+//! The `name` property is the title for your specification.  Should be something appropriate like "Todo App RPC" or "User Account RPC".
+//! 
+//! ### author
+//! The `author` property is a string and can contain any value. You can put your name here, your companies name, your email, whatever you'd like.
+//! 
+//! ### spec
+//! Is an array of RPC specifications described below, this is the root of your specifications.  The array should be at property `spec`.
+//! 
+//! ## RPC Specifications
+//! 
+//! There are 4 different kinds of values allowed in the `spec` array.  They can be in any order and you can have as many of each type as you'd like.
+//! 
+//! 
+//! #### 1. Message
+//! RPC messages are named NoProto schemas.  They must have a `msg` property with the name of the schema, then a `type` property for the schema type.  The messages MUST be valid NoProto schemas.
+//! 
+//! ```text
+//! // Some valid messages
+//! {"msg": "user_id", "type": "u32"}
+//! 
+//! {"msg": "address", "type": "table", "columns": [
+//!     ["street", {"type": "string"}],
+//!     ["city", {"type": "string"}]
+//! ]}
+//! 
+//! {"msg": "tags", "type": "list", "of": {"type": "string"}}
+//! ```
+//! 
+//! #### 2. RPC Method
+//! Methods are named endpoints with arguments and responses.  The arguments and responses MUST reference messages.  They always contain a `rpc` property and an `fn` property which describes the endpoint arguments and return types.
+//! 
+//! RPC methods can have between 0 and 1 arguments and can return nothing, a value T, an option&#60;T&#62; or, Result&#60;T,E&#62;
+//! ```text
+//! // Some valid RPC methods
+//! {"rpc": "get_count", "fn": "() -> self::count"}
+//! 
+//! {"rpc": "get_user", "fn": "(self::user_id) -> Option<self::user>"}
+//! 
+//! {"rpc": "del_user", "fn": "(self::user_id) -> Result<(), self::error>"}
+//! 
+//! {"rpc": "add_one", "fn": "(self::add_arg) -> Result<self::add_arg, self::error>"}
+//! 
+//! {"rpc": "trigger_action", "fn": "() -> ()"}
+//! ```
+//! 
+//! #### 3. RPC Module
+//! You can create nested namespaces inside your specification that contain their own specification.  Namespaces require a `mod` property and `spec` property.
+//! 
+//! ```text
+//! // a valid RPC module
+//! {"mod": "user", "spec": [
+//!     {"msg": "user_id", "type": "u32"},
+//!     {"msg": "user_name", "type": "string"},
+//!     {"rpc": "get_username", "fn": "(self::user_id) -> Option<self::user_name>"}
+//! ]}
+//! ```
+//! 
+//! #### 4. Comments
+//! You can insert string comments anywhere in your spec.
+//! 
+//! ### RPC Namespaces & Modules
+//! 
+//! I'm sure you've noticed the `self` being used above in the function definitions.  You can create messages anywhere in your specification and they can be accessed by any RPC method in any namespace using the namespace syntax.
+//! 
+//! Methods can always access messages in their own namespace using `self`.  Otherwise, the top of the name space is `mod` and messages in other namespaces can be used by their names.  For example, let's say we had a message named `delete` inside the `user` RPC module and a further `modify` module inside that.  That message could be accessed by any RPC method with `mod::user::modify::delete`.
+//! 
+//! That might be confusing so here's an example RPC spec with some fancy namespacing.
+//! 
+//! ## Example RPC JSON SPEC
+//! 
+//! ```text
+//! {
+//!     "name": "TEST API",
+//!     "author": "Jeb Kermin",
+//!     "id": "cc419a66-9bbe-48db-ad1c-e0ffa2a2376f",
+//!     "version": "1.0.0",
+//!     "spec": [
+//!         {"msg": "Error", "type": "string" },
+//!         {"msg": "Count", "type": "u32" },
+//!         "this is a comment",
+//!         {"rpc": "get_count", "fn": "() -> self::Count"},
+//!         {"mod": "user", "spec": [
+//!             {"msg": "username", "type": "string"},
+//!             {"msg": "user_id", "type": "u32"},
+//!             {"rpc": "get_user_id", "fn": "(self::username) -> Option<self::user_id>"},
+//!             {"rpc": "del_user", "fn": "(self::user_id) -> Result<self::user_id, mod::Error>"},
+//!             {"mod": "admin", "spec": [
+//!                 {"rpc": "update_user", "fn": "(mod::user::user_id) -> Result<(), mod::Error>"}
+//!             ]}
+//!         ]}
+//!     ]
+//! }
+//! ```
+//! 
+//! 
+//! # Using the RPC Framework
+//! 
+//! ```rust
+//! use no_proto::rpc::{NP_RPC_Factory, NP_ResponseKinds, NP_RPC_Response, NP_RPC_Request};
+//! use no_proto::error::NP_Error;
+//! 
+//! // You can generate an RPC Factory with this method.
+//! // Like NoProto Factories, this RPC factory can be used to encode/decode any number of requests/responses.
+//! 
+//! let rpc_factory = NP_RPC_Factory::new(r#"{
+//!     "name": "Test API",
+//!     "author": "Jeb Kermin",
+//!     "id": "cc419a66-9bbe-48db-ad1c-e0ffa2a2376f",
+//!     "version": "1.0.0",
+//!     "spec": [
+//!         {"msg": "Error", "type": "string" },
+//!         {"msg": "Count", "type": "u32" },
+//!         {"rpc": "get_count", "fn": "() -> self::Count"},
+//!         {"mod": "user", "spec": [
+//!             {"msg": "username", "type": "string"},
+//!             {"msg": "user_id", "type": "u32"},
+//!             {"rpc": "get_user_id", "fn": "(self::username) -> Option<self::user_id>"},
+//!             {"rpc": "del_user", "fn": "(self::user_id) -> Result<self::user_id, mod::Error>"},
+//!         ]}
+//!     ]
+//! }"#)?;
+//! 
+//! // rpc_factory should be initilized on server and client using an identical JSON RPC SPEC
+//! // Both server and client can encode/decode responses and requests so the examples below are only a convention.
+//! 
+//! 
+//! 
+//! // SIMPLE EXAMPLE
+//! 
+//! // === CLIENT ===
+//! // generate request
+//! let get_count: NP_RPC_Request = rpc_factory.new_request("get_count")?;
+//! // close request (request has no arguments)
+//! let count_req_bytes: Vec<u8> = get_count.rpc_close();
+//!
+//! // === SEND count_req_bytes to SERVER ===
+//!
+//! // === SERVER ===
+//! // ingest request
+//! let a_request: NP_RPC_Request = rpc_factory.open_request(count_req_bytes)?;
+//! assert_eq!(a_request.rpc, "get_count");
+//! // generate a response
+//! let mut count_response: NP_RPC_Response = a_request.new_response()?;
+//! // set response data
+//! count_response.data.set(&[], 20u32)?;
+//! // set response kind
+//! count_response.kind = NP_ResponseKinds::Ok;
+//! // close response
+//! let respond_bytes = count_response.rpc_close()?;
+//!
+//! // === SEND respond_bytes to CLIENT ====
+//!
+//! // === CLIENT ===
+//! let count_response = rpc_factory.open_response(respond_bytes)?;
+//! // confirm our response matches the same request RPC we sent
+//! assert_eq!(count_response.rpc, "get_count");
+//! // confirm that we got data in the response
+//! assert_eq!(count_response.kind, NP_ResponseKinds::Ok);
+//! // confirm it's the same data the server sent
+//! assert_eq!(count_response.data.get(&[])?, Some(20u32));
+//! 
+//! 
+//! 
+//! // RESULT EXAMPLE
+//! 
+//! // === CLIENT ===
+//! // generate request
+//! let mut del_user: NP_RPC_Request = rpc_factory.new_request("user.del_user")?;
+//! del_user.data.set(&[], 50u32)?;
+//! let del_user_bytes: Vec<u8> = del_user.rpc_close();
+//!
+//! // === SEND del_user_bytes to SERVER ===
+//!
+//! // === SERVER ===
+//! // ingest request
+//! let a_request: NP_RPC_Request = rpc_factory.open_request(del_user_bytes)?;
+//! assert_eq!(a_request.rpc, "user.del_user");
+//! // generate a response
+//! let mut del_response: NP_RPC_Response = a_request.new_response()?;
+//! // set response as ok with data
+//! del_response.data.set(&[], 50u32)?;
+//! del_response.kind = NP_ResponseKinds::Ok;
+//! // close response
+//! let respond_bytes = del_response.rpc_close()?;
+//!
+//! // === SEND respond_bytes to CLIENT ====
+//!
+//! // === CLIENT ===
+//! let del_response = rpc_factory.open_response(respond_bytes)?;
+//! // confirm our response matches the same request RPC we sent
+//! assert_eq!(del_response.rpc, "user.del_user");
+//! // confirm that we got data in the response
+//! assert_eq!(del_response.kind, NP_ResponseKinds::Ok);
+//! // confirm it's the same data set on the server
+//! assert_eq!(del_response.data.get(&[])?, Some(50u32));
+//! 
+//! 
+//! 
+//! // RESULT EXAMPLE 2
+//! 
+//! // === CLIENT ===
+//! // generate request
+//! let mut del_user: NP_RPC_Request = rpc_factory.new_request("user.del_user")?;
+//! del_user.data.set(&[], 50u32)?;
+//! let del_user_bytes: Vec<u8> = del_user.rpc_close();
+//! 
+//! // === SEND del_user_bytes to SERVER ===
+//! 
+//! // === SERVER ===
+//! // ingest request
+//! let a_request: NP_RPC_Request = rpc_factory.open_request(del_user_bytes)?;
+//! assert_eq!(a_request.rpc, "user.del_user");
+//! // generate a response
+//! let mut del_response: NP_RPC_Response = a_request.new_response()?;
+//! // set response as error
+//! del_response.error.set(&[], "Can't find user.")?;
+//! del_response.kind = NP_ResponseKinds::Error;
+//! // close response
+//! let respond_bytes = del_response.rpc_close()?;
+//! 
+//! // === SEND respond_bytes to CLIENT ====
+//! 
+//! // === CLIENT ===
+//! let del_response = rpc_factory.open_response(respond_bytes)?;
+//! // confirm our response matches the same request RPC we sent
+//! assert_eq!(del_response.rpc, "user.del_user");
+//! // confirm we recieved error response
+//! assert_eq!(del_response.kind, NP_ResponseKinds::Error);
+//! // get the error information
+//! assert_eq!(del_response.error.get(&[])?, Some("Can't find user."));
+//! 
+//! 
+//! 
+//! // OPTION EXAMPLE
+//! 
+//! // === CLIENT ===
+//! // generate request
+//! let mut get_user: NP_RPC_Request = rpc_factory.new_request("user.get_user_id")?;
+//! get_user.data.set(&[], "username")?;
+//! let get_user_bytes: Vec<u8> = get_user.rpc_close();
+//! 
+//! // === SEND get_user_bytes to SERVER ===
+//! 
+//! // === SERVER ===
+//! // ingest request
+//! let a_request: NP_RPC_Request = rpc_factory.open_request(get_user_bytes)?;
+//! assert_eq!(a_request.rpc, "user.get_user_id");
+//! // generate a response
+//! let mut del_response: NP_RPC_Response = a_request.new_response()?;
+//! // set response as none
+//! del_response.kind = NP_ResponseKinds::None;
+//! // close response
+//! let respond_bytes = del_response.rpc_close()?;
+//! 
+//! // === SEND respond_bytes to CLIENT ====
+//! 
+//! // === CLIENT ===
+//! let del_response = rpc_factory.open_response(respond_bytes)?;
+//! // confirm our response matches the same request RPC we sent
+//! assert_eq!(del_response.rpc, "user.get_user_id");
+//! // confirm that we got data in the response
+//! assert_eq!(del_response.kind, NP_ResponseKinds::None);
+//! // with NONE response there is no data
+//! 
+//! # Ok::<(), NP_Error>(()) 
+//! ```
+//! 
+//! 
+//! 
 
 use crate::utils::opt_err;
 use crate::NP_Factory;
@@ -10,8 +299,10 @@ use alloc::string::String;
 use alloc::vec::Vec;
 use crate::{NP_JSON, buffer::NP_Buffer, error::NP_Error};
 
+
 /// The different kinds of rpc functions
 #[derive(Debug)]
+#[doc(hidden)]
 pub enum RPC_Fn_Kinds {
     /// Normal function, doesn't return result or option
     normal,
@@ -24,6 +315,7 @@ pub enum RPC_Fn_Kinds {
 /// RPC Specifications
 /// 
 #[derive(Debug)]
+#[doc(hidden)]
 pub enum NP_RPC_Spec {
     /// RPC Function
     RPC { 
@@ -34,11 +326,11 @@ pub enum NP_RPC_Spec {
         /// Full path (module_path::name)
         full_name: String,
         /// RPC Message argument address 
-        arg: usize, 
+        arg: Option<usize>, 
         /// RPC Message result address
-        result: usize, 
+        result: Option<usize>, 
         /// RPC message error address (f this is a result kind of function)
-        err: usize, 
+        err: Option<usize>, 
         /// The kind of function this is
         kind: RPC_Fn_Kinds 
     },
@@ -72,11 +364,14 @@ pub struct NP_RPC_Factory {
     /// ID + version
     pub id: [u8; 19],
     /// Specification for this factory
-    spec: NP_RPC_Specification
+    spec: NP_RPC_Specification,
+    /// blank buffer
+    empty: NP_Factory
 }
 
 /// RPC Specification
 #[derive(Debug)]
+#[doc(hidden)]
 pub struct NP_RPC_Specification {
     /// Specification for this factory
     pub specs: Vec<NP_RPC_Spec>,
@@ -103,11 +398,10 @@ impl NP_RPC_Factory {
 
         let parsed = json_decode(String::from(json_rcp_spec))?;
 
-
         let mut spec = NP_RPC_Specification { specs: Vec::new(), compiled: Vec::new() };
 
         NP_RPC_Factory::parse_json_msg("mod", &parsed, &mut spec)?;
-        NP_RPC_Factory::parse_json_rpc("", &parsed, &mut spec)?;
+        NP_RPC_Factory::parse_json_rpc("", "mod", &parsed, &mut spec)?;
 
         let version = String::from(match &parsed["version"] { NP_JSON::String(version) => { version }, _ => { "" } }).split(".").map(|s| s.parse::<u8>().unwrap_or(0)).collect::<Vec<u8>>();
         let author_str = match &parsed["author"] { NP_JSON::String(author) => { author }, _ => { "" } };
@@ -129,11 +423,12 @@ impl NP_RPC_Factory {
         id_bytes[17] = version[1];
         id_bytes[18] = version[2];
 
-        Ok(NP_RPC_Factory {
+        Ok(Self {
             name: String::from(name_str),
             author: String::from(author_str),
             id: id_bytes,
-            spec: spec
+            spec: spec,
+            empty: NP_Factory::new_compiled([0u8].to_vec())
         })
     }
 
@@ -179,7 +474,7 @@ impl NP_RPC_Factory {
     }
 
     /// Parse RPC methods
-    pub fn parse_json_rpc(module: &str, json: &NP_JSON, spec: &mut NP_RPC_Specification) -> Result<(), NP_Error> {
+    pub fn parse_json_rpc(module: &str, msg_module: &str, json: &NP_JSON, spec: &mut NP_RPC_Specification) -> Result<(), NP_Error> {
         match &json["spec"] {
             NP_JSON::Array(json_spec) => {
                 for jspec in json_spec.iter() {
@@ -187,15 +482,27 @@ impl NP_RPC_Factory {
                         NP_JSON::String(rpc_name) => {
                             match &jspec["fn"] {
                                 NP_JSON::String(fn_def) => {
-                                    let parsed_def = NP_RPC_Factory::method_string_parse(module, fn_def)?;
+                                    let parsed_def = NP_RPC_Factory::method_string_parse(msg_module, fn_def)?;
 
                                     spec.specs.push(NP_RPC_Spec::RPC { 
                                         name: rpc_name.clone(),
                                         module_path: String::from(module),
                                         full_name: if module == "" { String::from(rpc_name) } else { format!("{}.{}", module, rpc_name) } ,
-                                        arg: NP_RPC_Factory::find_msg(&parsed_def.arg, &spec)?,
-                                        result: NP_RPC_Factory::find_msg(&parsed_def.result, &spec)?,
-                                        err: NP_RPC_Factory::find_msg(&parsed_def.err, &spec)?,
+                                        arg: if parsed_def.arg.len() == 0 { 
+                                            None
+                                        } else {
+                                            Some(NP_RPC_Factory::find_msg(&parsed_def.arg, &spec)?)
+                                        },
+                                        result: if parsed_def.result.len() == 0 || parsed_def.result == "()" {
+                                            None
+                                        } else {
+                                            Some(NP_RPC_Factory::find_msg(&parsed_def.result, &spec)?)
+                                        },
+                                        err: if parsed_def.err.len() == 0 || parsed_def.err == "()" { 
+                                            None 
+                                        } else { 
+                                            Some(NP_RPC_Factory::find_msg(&parsed_def.err, &spec)?) 
+                                        },
                                         kind: parsed_def.kind 
                                     });
                                 },
@@ -210,7 +517,10 @@ impl NP_RPC_Factory {
                                         new_mod.push_str(".");
                                     }
                                     new_mod.push_str(mod_name);
-                                    NP_RPC_Factory::parse_json_rpc(&new_mod, &jspec, spec)?;
+                                    let mut new_msg_mod = String::from(msg_module);
+                                    new_msg_mod.push_str("::");
+                                    new_msg_mod.push_str(mod_name);
+                                    NP_RPC_Factory::parse_json_rpc(&new_mod, &new_msg_mod, &jspec, spec)?;
                                 },
                                 _ => {
                                  
@@ -227,8 +537,7 @@ impl NP_RPC_Factory {
     }
 
     fn find_msg(msg_name: &String, spec: &NP_RPC_Specification) -> Result<usize, NP_Error> {
-        if msg_name == "" { return Ok(0) }
-
+        if msg_name == "" { return Err(NP_Error::new("Missing message decleration in rpc method.")) }
         let mut idx = 0usize;
         for msg in &spec.specs {
             match msg {
@@ -254,6 +563,7 @@ impl NP_RPC_Factory {
     /// "(self::get) -> Result<self::get, self::error>"
     /// "(self::get) -> Option<self::get>"
     /// "(self::get) -> self::get"
+    /// "() -> self::get"
     /// 
     fn method_string_parse(module: &str, function_str: &str) -> Result<Parsed_Fn, NP_Error> {
         let fn_kind = {
@@ -326,9 +636,15 @@ impl NP_RPC_Factory {
                             id: self.id,
                             spec: &self.spec,
                             rpc: full_name,
-                            data: match &self.spec.specs[*arg] {
-                                NP_RPC_Spec::MSG { factory, .. } => factory.empty_buffer(None),
-                                _ => return Err(NP_Error::new("unreachable"))
+                            empty: self.empty.empty_buffer(None),
+                            data: match *arg {
+                                Some(arg) => {
+                                    match &self.spec.specs[arg] {
+                                        NP_RPC_Spec::MSG { factory, .. } => factory.empty_buffer(None),
+                                        _ => return Err(NP_Error::new("unreachable"))
+                                    }
+                                },
+                                None => self.empty.empty_buffer(None)
                             }
                         })
                     }
@@ -366,9 +682,15 @@ impl NP_RPC_Factory {
                     id: self.id,
                     spec: &self.spec,
                     rpc: full_name,
-                    data: match &self.spec.specs[*arg] {
-                        NP_RPC_Spec::MSG { factory, .. } => factory.open_buffer(bytes[22..].to_vec()),
-                        _ => return Err(NP_Error::new("unreachable"))
+                    empty: self.empty.empty_buffer(None),
+                    data: match *arg {
+                        Some(arg) => {
+                            match &self.spec.specs[arg] {
+                                NP_RPC_Spec::MSG { factory, .. } => factory.open_buffer(bytes[22..].to_vec()),
+                                _ => return Err(NP_Error::new("unreachable"))
+                            }
+                        },
+                        None => self.empty.empty_buffer(None)
                     }
                 })
             },
@@ -387,14 +709,26 @@ impl NP_RPC_Factory {
                         return Ok(NP_RPC_Response {
                             rpc_addr: idx,
                             rpc: full_name,
+                            kind: NP_ResponseKinds::None,
                             id: self.id,
-                            data: match &self.spec.specs[*result] {
-                                NP_RPC_Spec::MSG { factory, .. } => factory.empty_buffer(None),
-                                _ => return Err(NP_Error::new("unreachable"))
+                            has_err: *err != Option::None,
+                            data: match *result {
+                                Some(result) => {
+                                    match &self.spec.specs[result] {
+                                        NP_RPC_Spec::MSG { factory, .. } => factory.empty_buffer(None),
+                                        _ => return Err(NP_Error::new("unreachable"))
+                                    }
+                                },
+                                None => self.empty.empty_buffer(None)
                             },
-                            error: match &self.spec.specs[*err] {
-                                NP_RPC_Spec::MSG { factory, .. } => factory.empty_buffer(None),
-                                _ => return Err(NP_Error::new("unreachable"))
+                            error: match *err {
+                                Some(err) => {
+                                    match &self.spec.specs[err] {
+                                        NP_RPC_Spec::MSG { factory, .. } => factory.empty_buffer(None),
+                                        _ => return Err(NP_Error::new("unreachable"))
+                                    }
+                                },
+                                None => self.empty.empty_buffer(None)
                             }
                         })
                     }
@@ -409,30 +743,106 @@ impl NP_RPC_Factory {
 
     /// Open a response.  The response spec and version must match the current spec and version of this factory.
     /// 
-    pub fn open_response(&self, bytes: Vec<u8>) -> Result<Option<NP_RPC_Response>, NP_Error> {
-        todo!()
-    }
+    pub fn open_response(&self, bytes: Vec<u8>) -> Result<NP_RPC_Response, NP_Error> {
+        // first 19 bytes are id + version
+        let id_bytes = &bytes[..19];
+        if id_bytes != self.id {
+            return Err(NP_Error::new("API ID or Version mismatch."))
+        }
 
-    /// Open a response that is a result type.  The response spec and version must match the current spec and version of this factory.
-    /// 
-    pub fn open_response_result(&self, bytes: Vec<u8>) -> Result<Result<NP_RPC_Response, NP_RPC_Response>, NP_Error> {
-        todo!()
-    }
+        // next 2 bytes is rpc address
+        let rpc_addr = u16::from_be_bytes(unsafe { *(&bytes[19..21] as *const [u8] as *const [u8; 2]) }) as usize;
 
+        // next 1 byte is request/response byte
+        match RPC_Type::from(bytes[21]) {
+            RPC_Type::Response => { },
+            _ => return Err(NP_Error::new("Attempted to open non response buffer with response method."))
+        };
+
+        match NP_ResponseKinds::from(bytes[22]) {
+            NP_ResponseKinds::None => {
+                match &self.spec.specs[rpc_addr] {
+                    NP_RPC_Spec::RPC { full_name, err, .. } => {
+                        Ok(NP_RPC_Response {
+                            rpc_addr,
+                            id: self.id,
+                            kind: NP_ResponseKinds::None,
+                            has_err: *err != Option::None,
+                            rpc: full_name,
+                            data: self.empty.empty_buffer(None),
+                            error: self.empty.empty_buffer(None)
+                        })
+                    },
+                    _ => return Err(NP_Error::new("Can't find associated RPC Method."))
+                }
+            },
+            NP_ResponseKinds::Ok => {
+                match &self.spec.specs[rpc_addr] {
+                    NP_RPC_Spec::RPC { full_name, result, err, .. } => {
+                        Ok(NP_RPC_Response {
+                            rpc_addr,
+                            id: self.id,
+                            kind: NP_ResponseKinds::Ok,
+                            has_err: *err != Option::None,
+                            rpc: full_name,
+                            data: match *result {
+                                Some(result) => {
+                                    match &self.spec.specs[result] {
+                                        NP_RPC_Spec::MSG { factory, .. } => factory.open_buffer(bytes[23..].to_vec()),
+                                        _ => return Err(NP_Error::new("unreachable"))
+                                    }
+                                },
+                                None => self.empty.empty_buffer(None)
+                            },
+                            error: self.empty.empty_buffer(None)
+                        })
+                    },
+                    _ => return Err(NP_Error::new("Can't find associated RPC Method."))
+                }
+            },
+            NP_ResponseKinds::Error => {
+                match &self.spec.specs[rpc_addr] {
+                    NP_RPC_Spec::RPC { full_name, err, .. } => {
+                        Ok(NP_RPC_Response {
+                            rpc_addr,
+                            id: self.id,
+                            kind: NP_ResponseKinds::Error,
+                            rpc: full_name,
+                            has_err: *err != Option::None,
+                            data: self.empty.empty_buffer(None),
+                            error: match *err {
+                                Some(err) => {
+                                    match &self.spec.specs[err] {
+                                        NP_RPC_Spec::MSG { factory, .. } => factory.open_buffer(bytes[23..].to_vec()),
+                                        _ => return Err(NP_Error::new("unreachable"))
+                                    }
+                                },
+                                None => return Err(NP_Error::new("Got error result on RPC method with no error type."))
+                            }
+                        })
+                    },
+                    _ => return Err(NP_Error::new("Can't find associated RPC Method."))
+                }
+            }
+        }
+    }
 }
 
-#[derive(Debug)]
+/// The different kinds of responses
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
-#[allow(missing_docs)]
-pub enum ResponseType {
-    OKorSome,
+pub enum NP_ResponseKinds {
+    /// Ok response is the default 
+    Ok,
+    /// Response contains an error
     Error,
+    /// Response doesn't contain a value
     None
 }
 
-impl From<u8> for ResponseType {
+impl From<u8> for NP_ResponseKinds {
     fn from(value: u8) -> Self {
-        if value > 2 { return ResponseType::OKorSome; }
+        if value > 2 { return NP_ResponseKinds::Ok; }
         unsafe { core::mem::transmute(value) }
     }
 }
@@ -440,6 +850,7 @@ impl From<u8> for ResponseType {
 #[derive(Debug)]
 #[repr(u8)]
 #[allow(missing_docs)]
+#[doc(hidden)]
 pub enum RPC_Type {
     None,
     Request,
@@ -464,25 +875,38 @@ pub struct NP_RPC_Request<'request> {
     /// the name of the rpc function
     pub rpc: &'request str,
     /// the request data
-    pub data: NP_Buffer<'request>
+    pub data: NP_Buffer<'request>,
+    empty: NP_Buffer<'request>
 }
 
 impl<'request> NP_RPC_Request<'request> {
     /// Get empty response for this request
-    pub fn get_response(&self) -> Result<NP_RPC_Response, NP_Error> {
+    pub fn new_response(&self) -> Result<NP_RPC_Response, NP_Error> {
         match &self.spec.specs[self.rpc_addr] {
             NP_RPC_Spec::RPC { full_name, result, err, .. } => {
                 return Ok(NP_RPC_Response {
                     rpc_addr: self.rpc_addr,
+                    kind: NP_ResponseKinds::None,
                     rpc: full_name,
+                    has_err: *err != Option::None,
                     id: self.id,
-                    data: match &self.spec.specs[*result] {
-                        NP_RPC_Spec::MSG { factory, .. } => factory.empty_buffer(None),
-                        _ => return Err(NP_Error::new("unreachable"))
+                    data: match *result {
+                        Some(result) => {
+                            match &self.spec.specs[result] {
+                                NP_RPC_Spec::MSG { factory, .. } => factory.empty_buffer(None),
+                                _ => return Err(NP_Error::new("unreachable"))
+                            }
+                        },
+                        None => self.empty.clone()
                     },
-                    error: match &self.spec.specs[*err] {
-                        NP_RPC_Spec::MSG { factory, .. } => factory.empty_buffer(None),
-                        _ => return Err(NP_Error::new("unreachable"))
+                    error: match *err {
+                        Some(err) => {
+                            match &self.spec.specs[err] {
+                                NP_RPC_Spec::MSG { factory, .. } => factory.empty_buffer(None),
+                                _ => return Err(NP_Error::new("unreachable"))
+                            }
+                        },
+                        None => self.empty.clone()
                     }
                 })
             },
@@ -509,6 +933,10 @@ pub struct NP_RPC_Response<'response> {
     rpc_addr: usize,
     /// ID of API 
     id: [u8; 19],
+    /// error message is set
+    has_err: bool,
+    /// what kind of response is this?
+    pub kind: NP_ResponseKinds,
     /// the name of the rpc function
     pub rpc: &'response str,
     /// the data of this response
@@ -520,39 +948,219 @@ pub struct NP_RPC_Response<'response> {
 
 
 impl<'request> NP_RPC_Response<'request> {
-    /// Close this response as Ok() or Some()
-    pub fn rpc_close(self) -> Vec<u8> {
+    /// Close this response
+    /// 
+    /// The only failure condition is if you set the `NP_ResponseKinds` to `Error` but didn't have an error type declared in the rpc method.
+    /// 
+    pub fn rpc_close(self) -> Result<Vec<u8>, NP_Error> {
         let mut response_bytes: Vec<u8> = Vec::with_capacity(self.data.read_bytes().len() + 19 + 4);
 
         response_bytes.extend_from_slice(&self.id);
         response_bytes.extend_from_slice(&(self.rpc_addr as u16).to_be_bytes());
         response_bytes.push(RPC_Type::Response as u8);
-        response_bytes.push(ResponseType::OKorSome as u8);
-        response_bytes.extend(self.data.close());
+        response_bytes.push(self.kind as u8);
+        match &self.kind {
+            NP_ResponseKinds::Ok => {
+                response_bytes.extend(self.data.close());
+            },
+            NP_ResponseKinds::None => { },
+            NP_ResponseKinds::Error => {
+                if self.has_err {
+                    response_bytes.extend(self.error.close());
+                } else {
+                    return Err(NP_Error::new("Attempted to close response as error type without error message defined in rpc method."))
+                }
+            }
+        }
 
-        response_bytes
+        Ok(response_bytes)
     }
-    /// Close this response as Err()
-    pub fn rpc_close_error(self) -> Vec<u8> {
-        let mut response_bytes: Vec<u8> = Vec::with_capacity(self.data.read_bytes().len() + 19 + 4);
+}
 
-        response_bytes.extend_from_slice(&self.id);
-        response_bytes.extend_from_slice(&(self.rpc_addr as u16).to_be_bytes());
-        response_bytes.push(RPC_Type::Response as u8);
-        response_bytes.push(ResponseType::Error as u8);
-        response_bytes.extend(self.error.close());
 
-        response_bytes
-    }
-    /// Close this response as None()
-    pub fn rpc_close_none(self) -> Vec<u8> {
-        let mut response_bytes: Vec<u8> = Vec::with_capacity(self.data.read_bytes().len() + 19 + 4);
+#[test]
+fn rpc_test() -> Result<(), NP_Error> {
+    let rpc_factory = NP_RPC_Factory::new(r#"{
+        "name": "test api",
+        "description": "",
+        "author": "Scott Lott",
+        "id": "cc419a66-9bbe-48db-ad1c-e0ffa2a2376f",
+        "version": "1.0.0",
+        "spec": [
+            {"msg": "Error", "type": "string" },
+            {"msg": "Count", "type": "u32" },
+            {"rpc": "get_count", "fn": "() -> self::Count"},
+            {"mod": "user", "spec": [
+                {"msg": "username", "type": "string"},
+                {"msg": "user_id", "type": "u32"},
+                {"rpc": "get_user_id", "fn": "(self::username) -> Option<self::user_id>"},
+                {"rpc": "del_user", "fn": "(self::user_id) -> Result<self::user_id, mod::Error>"},
+            ]}
+        ]
+    }"#)?;
 
-        response_bytes.extend_from_slice(&self.id);
-        response_bytes.extend_from_slice(&(self.rpc_addr as u16).to_be_bytes());
-        response_bytes.push(RPC_Type::Response as u8);
-        response_bytes.push(ResponseType::None as u8);
- 
-        response_bytes
-    }
+    // === CLIENT ===
+    // generate request
+    let get_count: NP_RPC_Request = rpc_factory.new_request("get_count")?;
+    // close request
+    let count_req_bytes: Vec<u8> = get_count.rpc_close();
+
+    // === SEND count_req_bytes to SERVER ===
+
+    // === SERVER ===
+    // ingest request
+    let a_request: NP_RPC_Request = rpc_factory.open_request(count_req_bytes)?;
+    assert_eq!(a_request.rpc, "get_count");
+    // generate a response
+    let mut count_response: NP_RPC_Response = a_request.new_response()?;
+    // set response data
+    count_response.data.set(&[], 20u32)?;
+    // set response kind
+    count_response.kind = NP_ResponseKinds::Ok;
+    // close response
+    let respond_bytes = count_response.rpc_close()?;
+
+    // === SEND respond_bytes to CLIENT ====
+
+    // === CLIENT ===
+    let count_response = rpc_factory.open_response(respond_bytes)?;
+    // confirm our response matches the same request RPC we sent
+    assert_eq!(count_response.rpc, "get_count");
+    // confirm that we got data in the response
+    assert_eq!(count_response.kind, NP_ResponseKinds::Ok);
+    // confirm it's the same data the server sent
+    assert_eq!(count_response.data.get(&[])?, Some(20u32));
+
+
+    // Now do a result request with error
+
+    // === CLIENT ===
+    // generate request
+    let mut del_user: NP_RPC_Request = rpc_factory.new_request("user.del_user")?;
+    del_user.data.set(&[], 50u32)?;
+    let del_user_bytes: Vec<u8> = del_user.rpc_close();
+
+    // === SEND del_user_bytes to SERVER ===
+
+    // === SERVER ===
+    // ingest request
+    let a_request: NP_RPC_Request = rpc_factory.open_request(del_user_bytes)?;
+    assert_eq!(a_request.rpc, "user.del_user");
+    // generate a response
+    let mut del_response: NP_RPC_Response = a_request.new_response()?;
+    // set response as error
+    del_response.error.set(&[], "Can't find user.")?;
+    del_response.kind = NP_ResponseKinds::Error;
+    // close response
+    let respond_bytes = del_response.rpc_close()?;
+
+    // === SEND respond_bytes to CLIENT ====
+
+    // === CLIENT ===
+    let del_response = rpc_factory.open_response(respond_bytes)?;
+    // confirm our response matches the same request RPC we sent
+    assert_eq!(del_response.rpc, "user.del_user");
+    // confirm we recieved error response
+    assert_eq!(del_response.kind, NP_ResponseKinds::Error);
+    // get the error information
+    assert_eq!(del_response.error.get(&[])?, Some("Can't find user."));
+
+    // Now do a result request with an ok return
+
+    // === CLIENT ===
+    // generate request
+    let mut del_user: NP_RPC_Request = rpc_factory.new_request("user.del_user")?;
+    del_user.data.set(&[], 50u32)?;
+    let del_user_bytes: Vec<u8> = del_user.rpc_close();
+
+    // === SEND del_user_bytes to SERVER ===
+
+    // === SERVER ===
+    // ingest request
+    let a_request: NP_RPC_Request = rpc_factory.open_request(del_user_bytes)?;
+    assert_eq!(a_request.rpc, "user.del_user");
+    // generate a response
+    let mut del_response: NP_RPC_Response = a_request.new_response()?;
+    // set response as error
+    del_response.data.set(&[], 50u32)?;
+    del_response.kind = NP_ResponseKinds::Ok;
+    // close response
+    let respond_bytes = del_response.rpc_close()?;
+
+    // === SEND respond_bytes to CLIENT ====
+
+    // === CLIENT ===
+    let del_response = rpc_factory.open_response(respond_bytes)?;
+    // confirm our response matches the same request RPC we sent
+    assert_eq!(del_response.rpc, "user.del_user");
+    // confirm that we got data in the response
+    assert_eq!(del_response.kind, NP_ResponseKinds::Ok);
+    // confirm it's the same data set on the server
+    assert_eq!(del_response.data.get(&[])?, Some(50u32));
+
+    // Now do an option request with an ok return
+
+    // === CLIENT ===
+    // generate request
+    let mut get_user: NP_RPC_Request = rpc_factory.new_request("user.get_user_id")?;
+    get_user.data.set(&[], "username")?;
+    let get_user_bytes: Vec<u8> = get_user.rpc_close();
+
+    // === SEND get_user_bytes to SERVER ===
+
+    // === SERVER ===
+    // ingest request
+    let a_request: NP_RPC_Request = rpc_factory.open_request(get_user_bytes)?;
+    assert_eq!(a_request.rpc, "user.get_user_id");
+    // generate a response
+    let mut del_response: NP_RPC_Response = a_request.new_response()?;
+    // set response as ok with data
+    del_response.data.set(&[], 50u32)?;
+    del_response.kind = NP_ResponseKinds::Ok;
+    // close response
+    let respond_bytes = del_response.rpc_close()?;
+
+    // === SEND respond_bytes to CLIENT ====
+
+    // === CLIENT ===
+    let del_response = rpc_factory.open_response(respond_bytes)?;
+    // confirm our response matches the same request RPC we sent
+    assert_eq!(del_response.rpc, "user.get_user_id");
+    // confirm that we got data in the response
+    assert_eq!(del_response.kind, NP_ResponseKinds::Ok);
+    // confirm it's the same data set on the server
+    assert_eq!(del_response.data.get(&[])?, Some(50u32));
+
+    // Now do an option request with a none return
+
+    // === CLIENT ===
+    // generate request
+    let mut get_user: NP_RPC_Request = rpc_factory.new_request("user.get_user_id")?;
+    get_user.data.set(&[], "username")?;
+    let get_user_bytes: Vec<u8> = get_user.rpc_close();
+
+    // === SEND get_user_bytes to SERVER ===
+
+    // === SERVER ===
+    // ingest request
+    let a_request: NP_RPC_Request = rpc_factory.open_request(get_user_bytes)?;
+    assert_eq!(a_request.rpc, "user.get_user_id");
+    // generate a response
+    let mut del_response: NP_RPC_Response = a_request.new_response()?;
+    // set response as none
+    del_response.kind = NP_ResponseKinds::None;
+    // close response
+    let respond_bytes = del_response.rpc_close()?;
+
+    // === SEND respond_bytes to CLIENT ====
+
+    // === CLIENT ===
+    let del_response = rpc_factory.open_response(respond_bytes)?;
+    // confirm our response matches the same request RPC we sent
+    assert_eq!(del_response.rpc, "user.get_user_id");
+    // confirm that we got data in the response
+    assert_eq!(del_response.kind, NP_ResponseKinds::None);
+    // with NONE response there is no data
+
+    Ok(())
 }

@@ -17,6 +17,7 @@ Performance of Protocol Buffers with flexibility of JSON
 - Easy and performant export to JSON.
 - [Thoroughly documented](https://docs.rs/no_proto/latest/no_proto/format/index.html) & simple data storage format
 - Panic/unwrap() free, this library will never cause a panic in your application.
+- Simple, powerful transport agnostic [RPC Framework](https://docs.rs/no_proto/latest/no_proto/rpc/index.html).
 
 NoProto allows you to store, read & mutate structured data with very little overhead. It's like Protocol Buffers except schemas are dynamic at runtime and buffers are mutable.  It's like JSON but way faster, type safe and supports native types.  Also unlike Protocol Buffers you can insert values in any order and values can later be removed or updated without rebuilding the whole buffer.
 
@@ -44,9 +45,9 @@ Byte-wise sorting comes in the box and is a first class operation. Two NoProto b
 
 | Format           | Zero-Copy | Size Limit | Mutable | Schemas | Language Agnostic | No Compiling    | Byte-wise Sorting |
 |------------------|-----------|------------|---------|---------|-------------------|-----------------|-------------------|
-| **NoProto**      | ✓         | ~16KB      | ✓       | ✓       | ✓                 | ✓               | ✓                 |
+| **NoProto**      | ✓         | ~64KB      | ✓       | ✓       | ✓                 | ✓               | ✓                 |
 | JSON             | 𐄂         | Unlimited  | ✓       | 𐄂       | ✓                 | ✓               | 𐄂                 |
-| BSON             | 𐄂         | ~16KB      | ✓       | 𐄂       | ✓                 | ✓               | 𐄂                 |
+| BSON             | 𐄂         | ~16MB      | ✓       | 𐄂       | ✓                 | ✓               | 𐄂                 |
 | MessagePack      | 𐄂         | Unlimited  | ✓       | 𐄂       | ✓                 | ✓               | 𐄂                 |
 | FlatBuffers      | ✓         | ~2GB       | 𐄂       | ✓       | ✓                 | 𐄂               | 𐄂                 |
 | Protocol Buffers | 𐄂         | ~2GB       | 𐄂       | ✓       | ✓                 | 𐄂               | 𐄂                 |
@@ -109,13 +110,17 @@ let user_bytes: Vec<u8> = user_buffer.close();
 
 // we can now save user_bytes to disk, 
 // send it over the network, or whatever else is needed with the data
+
+
+# Ok::<(), NP_Error>(()) 
 ```
 
 ## Guided Learning / Next Steps:
 1. [`Schemas`](https://docs.rs/no_proto/latest/no_proto/schema/index.html) - Learn how to build & work with schemas.
 2. [`Factories`](https://docs.rs/no_proto/latest/no_proto/struct.NP_Factory.html) - Parsing schemas into something you can work with.
 3. [`Buffers`](https://docs.rs/no_proto/latest/no_proto/buffer/struct.NP_Buffer.html) - How to create, update & compact buffers/data.
-4. [`Data & Schema Format`](https://docs.rs/no_proto/latest/no_proto/format/index.html) - Learn how data is saved into the buffer.
+4. [`RPC Framework`](https://docs.rs/no_proto/latest/no_proto/rpc/index.html) - How to use the RPC Framework APIs.
+5. [`Data & Schema Format`](https://docs.rs/no_proto/latest/no_proto/format/index.html) - Learn how data is saved into the buffer.
 
 ## Benchmarks
 While it's difficult to properly benchmark libraries like these in a fair way, I've made an attempt in the graph below.  These benchmarks are available in the `bench` folder and you can easily run them yourself with `cargo run --release`. 
@@ -129,7 +134,7 @@ The format and data used in the benchmarks were taken from the `flatbuffers` ben
 | NoProto            | 272    | 375        | 5051     | 4098     | 284          | 229         |
 | Protocol Buffers 2 | 266    | 365        | 366      | 160      | 220          | 163         |
 | MessagePack        | 33     | 63         | 68       | 31       | 431          | 245         |
-| JSON               | 186    | 109        | 141      | 115      | 673          | 246         |
+| JSON               | 186    | 127        | 141      | 115      | 673          | 246         |
 | BSON               | 28     | 28         | 30       | 22       | 600          | 279         |
 
 
