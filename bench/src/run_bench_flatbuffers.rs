@@ -42,7 +42,7 @@ impl FlatBufferBench {
         }
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
-        println!("Flatbuffers: {:>5.2}ms {:.2}", time.as_millis(), (base as f64 / time.as_micros() as f64));       
+        println!("Flatbuffers: {:>9.0} ops/ms {:.2}", LOOPS as f64 / time.as_millis() as f64, (base as f64 / time.as_micros() as f64));  
     }
 
     #[inline(always)]
@@ -112,7 +112,7 @@ impl FlatBufferBench {
         }
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
-        println!("Flatbuffers: {:>5.2}ms {:.2}", time.as_millis(), (base as f64 / time.as_micros() as f64));     
+        println!("Flatbuffers: {:>9.0} ops/ms {:.2}", LOOPS as f64 / time.as_millis() as f64, (base as f64 / time.as_micros() as f64));
     }
 
     pub fn decode_one_bench(base: u128)  {
@@ -126,7 +126,7 @@ impl FlatBufferBench {
         }
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
-        println!("Flatbuffers: {:>5.2}ms {:.2}", time.as_millis(), (base as f64 / time.as_micros() as f64));    
+        println!("Flatbuffers: {:>9.0} ops/ms {:.2}", LOOPS as f64 / time.as_millis() as f64, (base as f64 / time.as_micros() as f64));
 
     }
 
@@ -167,7 +167,7 @@ impl FlatBufferBench {
         }
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
-        println!("Flatbuffers: {:>5.2}ms {:.2}", time.as_millis(), (base as f64 / time.as_micros() as f64));   
+        println!("Flatbuffers: {:>9.0} ops/ms {:.2}", LOOPS as f64 / time.as_millis() as f64, (base as f64 / time.as_micros() as f64));
 
     }
 }

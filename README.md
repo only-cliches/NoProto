@@ -18,9 +18,9 @@ Performance of Protocol Buffers with flexibility of JSON
 - [Thoroughly documented](https://docs.rs/no_proto/latest/no_proto/format/index.html) & simple data storage format
 - Panic/unwrap() free, this library will never cause a panic in your application.
 
-NoProto allows you to store, read & mutate structured data with very little overhead. It's like Protocol Buffers except buffers and schemas are dynamic at runtime.  It's like JSON but way faster, type safe and supports native types.
+NoProto allows you to store, read & mutate structured data with very little overhead. It's like Protocol Buffers except schemas are dynamic at runtime and buffers are mutable.  It's like JSON but way faster, type safe and supports native types.  Also unlike Protocol Buffers you can insert values in any order and values can later be removed or updated without rebuilding the whole buffer.
 
-Also unlike Protocol Buffers you can insert values in any order and values can later be removed or updated without rebuilding the whole buffer.
+Like Protocol Buffers schemas are seperate from the data buffers and are required to read, create or update data buffers.
 
 Byte-wise sorting comes in the box and is a first class operation. Two NoProto buffers can be compared at the byte level *without deserializing* and a correct ordering between the buffer's internal values will be the result.  This is extremely useful for storing ordered keys in databases. 
 
@@ -42,12 +42,6 @@ Byte-wise sorting comes in the box and is a first class operation. Two NoProto b
 - Supports raw bytes & other native types
 
 
-*Compared to Serde*
-- Supports byte-wise sorting
-- Objects & schemas are dynamic at runtime
-- Deserializtion is zero copy
-- Language agnostic
-
 | Format           | Zero-Copy | Size Limit | Mutable | Schemas | Language Agnostic | No Compiling    | Byte-wise Sorting |
 |------------------|-----------|------------|---------|---------|-------------------|-----------------|-------------------|
 | **NoProto**      | ✓         | ~16KB      | ✓       | ✓       | ✓                 | ✓               | ✓                 |
@@ -57,7 +51,6 @@ Byte-wise sorting comes in the box and is a first class operation. Two NoProto b
 | FlatBuffers      | ✓         | ~2GB       | 𐄂       | ✓       | ✓                 | 𐄂               | 𐄂                 |
 | Protocol Buffers | 𐄂         | ~2GB       | 𐄂       | ✓       | ✓                 | 𐄂               | 𐄂                 |
 | Cap'N Proto      | ✓         | 2^64 Bytes | 𐄂       | ✓       | ✓                 | 𐄂               | 𐄂                 |
-| Serde            | 𐄂         | ?          | 𐄂       | ✓       | 𐄂                 | 𐄂               | 𐄂                 |
 | Veriform         | 𐄂         | ?          | 𐄂       | 𐄂       | 𐄂                 | 𐄂               | 𐄂                 |
 
 
@@ -122,29 +115,28 @@ let user_bytes: Vec<u8> = user_buffer.close();
 1. [`Schemas`](https://docs.rs/no_proto/latest/no_proto/schema/index.html) - Learn how to build & work with schemas.
 2. [`Factories`](https://docs.rs/no_proto/latest/no_proto/struct.NP_Factory.html) - Parsing schemas into something you can work with.
 3. [`Buffers`](https://docs.rs/no_proto/latest/no_proto/buffer/struct.NP_Buffer.html) - How to create, update & compact buffers/data.
-4. [`Data Format`](https://docs.rs/no_proto/latest/no_proto/format/index.html) - Learn how data is saved into the buffer.
+4. [`Data & Schema Format`](https://docs.rs/no_proto/latest/no_proto/format/index.html) - Learn how data is saved into the buffer.
 
 ## Benchmarks
 While it's difficult to properly benchmark libraries like these in a fair way, I've made an attempt in the graph below.  These benchmarks are available in the `bench` folder and you can easily run them yourself with `cargo run --release`. 
 
 The format and data used in the benchmarks were taken from the `flatbuffers` benchmarks github repo.  You should always benchmark/test your own use case for each library before making any decisions on what to use.
 
-**Legend**: Higher % is better, 200% means the competing library did the same task as NoProto in half the time, 50% means it took twice as long.
+**Legend**: Ops / Millisecond, higher is better
 
-| Library            | Encode | Decode All | Decode 1 | Update 1 | Size | Size (Zlib) |
-|--------------------|--------|------------|----------|----------|------|-------------|
-| NoProto            | 100%   | 100%       | 100%     | 100%     | 284  | 229         |
-| FlatBuffers        | 193%   | 1800%      | 1600%    | 16%      | 336  | 214         |
-| Protocol Buffers 2 | 103%   | 80%        | 7%       | 5%       | 220  | 163         |
-| MessagePack        | 13%    | 16%        | 1%       | 1%       | 431  | 245         |
-| JSON               | 68%    | 29%        | 3%       | 5%       | 673  | 246         |
-| BSON               | 9%     | 7%         | 1%       | 1%       | 600  | 279         |
+| Library            | Encode | Decode All | Decode 1 | Update 1 | Size (bytes) | Size (Zlib) |
+|--------------------|--------|------------|----------|----------|--------------|-------------|
+| NoProto            | 272    | 375        | 5051     | 4098     | 284          | 229         |
+| Protocol Buffers 2 | 266    | 365        | 366      | 160      | 220          | 163         |
+| MessagePack        | 33     | 63         | 68       | 31       | 431          | 245         |
+| JSON               | 186    | 109        | 141      | 115      | 673          | 246         |
+| BSON               | 28     | 28         | 30       | 22       | 600          | 279         |
 
 
-- **Encode**: Transfer a collection of test data into a serialized Vec<u8>.
-- **Decode All**: Deserialize the test object from the Vec<u8> into all it's properties.
-- **Decode 1**: Deserialize the test object from the Vec<u8> into one of it's properties.
-- **Update 1**: Deserialize, update a single property, then serialize back into Vec<u8>.
+- **Encode**: Transfer a collection of test data into a serialized `Vec<u8>`.
+- **Decode All**: Deserialize the test object from the `Vec<u8>` into all it's properties.
+- **Decode 1**: Deserialize the test object from the `Vec<u8>` into one of it's properties.
+- **Update 1**: Deserialize, update a single property, then serialize back into `Vec<u8>`.
 
 Complete benchmark source code is available [here](https://github.com/only-cliches/NoProto/tree/master/bench).
 

@@ -1,6 +1,7 @@
 //! Top level abstraction for buffer objects
 
-use crate::utils::opt_err;
+use alloc::prelude::v1::Box;
+use crate::{utils::opt_err};
 use crate::collection::tuple::NP_Tuple;
 
 use crate::{pointer::{NP_Scalar}};
@@ -21,6 +22,10 @@ pub const ROOT_PTR_ADDR: usize = 1;
 /// Maximum size of list collections
 #[doc(hidden)]
 pub const LIST_MAX_SIZE: usize = core::u16::MAX as usize;
+#[doc(hidden)]
+pub const VTABLE_SIZE: usize = 4;
+#[doc(hidden)]
+pub const VTABLE_BYTES: usize = 10;
 
 /// Buffers contain the bytes of each object and allow you to perform reads, updates, deletes and compaction.
 /// 
@@ -175,7 +180,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// ```
     /// 
     pub fn close_sortable(self) -> Result<Vec<u8>, NP_Error> {
-        match &self.memory.schema[0] {
+        match &self.memory.get_schema()[0] {
             NP_Parsed_Schema::Tuple { values, sortable, .. } => {
                 if *sortable == false {
                     Err(NP_Error::new("Attempted to close_sortable() on buffer that isn't sortable!"))
@@ -276,11 +281,11 @@ impl<'buffer> NP_Buffer<'buffer> {
             Some(x) => {
 
                 // type does not match schema
-                if X::type_idx().1 != *self.memory.schema[x.schema_addr].get_type_key() {
+                if X::type_idx().1 != *self.memory.get_schema()[x.schema_addr].get_type_key() {
                     let mut err = "TypeError: Attempted to set value for type (".to_owned();
                     err.push_str(X::type_idx().0);
                     err.push_str(") into schema of type (");
-                    err.push_str(self.memory.schema[x.schema_addr].get_type_data().0);
+                    err.push_str(self.memory.get_schema()[x.schema_addr].get_type_data().0);
                     err.push_str(")\n");
                     return Err(NP_Error::new(err));
                 }
@@ -511,17 +516,17 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// # Ok::<(), NP_Error>(()) 
     /// ```
     /// 
-    pub fn list_push<X>(&mut self, path: &[&str], value: X) -> Result<Option<u16>, NP_Error> where X: NP_Value<'buffer> + NP_Scalar {
+    pub fn list_push<X: 'buffer>(&mut self, path: &[&str], value: X) -> Result<Option<u16>, NP_Error> where X: NP_Value<'buffer> + NP_Scalar {
 
         let list_cursor = if path.len() == 0 { self.cursor.clone() } else { match self.select(self.cursor.clone(), true, path)? {
             Some(x) => x,
             None => return Ok(None)
         }};
 
-        match self.memory.schema[list_cursor.schema_addr] {
+        match self.memory.get_schema()[list_cursor.schema_addr] {
             NP_Parsed_Schema::List { of, .. } => {
 
-                let of_schema = &self.memory.schema[of];
+                let of_schema = &self.memory.get_schema()[of];
 
                 // type does not match schema
                 if X::type_idx().1 != *of_schema.get_type_key() {
@@ -668,7 +673,7 @@ impl<'buffer> NP_Buffer<'buffer> {
         let addr_value = found_cursor.get_value(&self.memory).get_addr_value();
 
 
-        match &self.memory.schema[found_cursor.schema_addr] {
+        match &self.memory.get_schema()[found_cursor.schema_addr] {
             NP_Parsed_Schema::List { of, .. } => {
                 if addr_value == 0 {
                     return Ok(None);
@@ -689,11 +694,13 @@ impl<'buffer> NP_Buffer<'buffer> {
                     return Ok(None);
                 }
                 let mut count = 0usize;
-                let mut map_iter = NP_Map::new_iter(&found_cursor, &self.memory);
+                {
+                    let mut map_iter = NP_Map::new_iter(&found_cursor, &self.memory);
 
-                // key is maybe in map
-                while let Some((_ikey, _item)) = map_iter.step_iter(&self.memory) {
-                    count += 1;
+                    // key is maybe in map
+                    while let Some((_ikey, _item)) = map_iter.step_iter(&self.memory) {
+                        count += 1;
+                    }
                 }
 
                 Ok(Some(count))
@@ -760,7 +767,7 @@ impl<'buffer> NP_Buffer<'buffer> {
         match value_cursor {
             Some(x) => {
                 if self.sortable {
-                    match &self.memory.schema[x.schema_addr] {
+                    match &self.memory.get_schema()[x.schema_addr] {
                         NP_Parsed_Schema::Table { .. } => { return Ok(false) },
                         NP_Parsed_Schema::Tuple { .. } => { return Ok(false) },
                         NP_Parsed_Schema::List { .. } => { return Ok(false) },
@@ -815,11 +822,11 @@ impl<'buffer> NP_Buffer<'buffer> {
             Some(x) => {
                                 
                 // type does not match schema
-                if X::type_idx().1 != *self.memory.schema[x.schema_addr].get_type_key() {
+                if X::type_idx().1 != *self.memory.get_schema()[x.schema_addr].get_type_key() {
                     let mut err = "TypeError: Attempted to get value for type (".to_owned();
                     err.push_str(X::type_idx().0);
                     err.push_str(") for schema of type (");
-                    err.push_str(self.memory.schema[x.schema_addr].get_type_data().0);
+                    err.push_str(self.memory.get_schema()[x.schema_addr].get_type_data().0);
                     err.push_str(")\n");
                     return Err(NP_Error::new(err));
                 }
@@ -829,7 +836,7 @@ impl<'buffer> NP_Buffer<'buffer> {
                         Ok(Some(x))
                     },
                     None => { // no value found here, return default from schema
-                        match X::schema_default(&self.memory.schema[x.schema_addr]) {
+                        match X::schema_default(&self.memory.get_schema()[x.schema_addr]) {
                             Some(y) => {
                                 Ok(Some(y))
                             },
@@ -1027,7 +1034,7 @@ impl<'buffer> NP_Buffer<'buffer> {
             }
 
             // now select into collections
-            match &self.memory.schema[loop_cursor.schema_addr] {
+            match &self.memory.get_schema()[loop_cursor.schema_addr] {
                 NP_Parsed_Schema::Table {  .. } => {
                     if let Some(next) = NP_Table::select(loop_cursor, path[path_index], make_path, &self.memory)? {
                         loop_cursor = next;
@@ -1083,8 +1090,6 @@ impl<'buffer> NP_Buffer<'buffer> {
     }
 }
 
-
-
 /// NP Item
 pub struct NP_Item<'item> {
     /// index of this value
@@ -1118,7 +1123,7 @@ impl<'item> NP_Item<'item> {
                     Ok(Some(x))
                 },
                 None => {
-                    match X::schema_default(&self.memory.schema[cursor.schema_addr]) {
+                    match X::schema_default(&self.memory.get_schema()[cursor.schema_addr]) {
                         Some(y) => {
                             Ok(Some(y))
                         },
@@ -1138,7 +1143,8 @@ impl<'item> NP_Item<'item> {
         if let Some(cursor) = self.cursor {
             X::set_value(cursor.clone(), self.memory, value)?;
         } else {
-            match self.memory.schema[self.parent.schema_addr] {
+            match self.memory.get_schema()[self.parent.schema_addr] {
+                // maps don't let you select values that don't exist in the buffer yet
                 NP_Parsed_Schema::List { .. } => {
                     let item = opt_err(opt_err(NP_List::select(self.parent.clone(), self.index, true, self.memory)?)?.1)?;
                     X::set_value(item, self.memory, value)?;
@@ -1170,6 +1176,8 @@ impl<'item> NP_Item<'item> {
     }
 }
 
+
+
 /// Iterator Enum
 #[derive(Debug)]
 #[doc(hidden)]
@@ -1189,7 +1197,7 @@ pub enum NP_Iterator_Collection<'col> {
 #[allow(missing_docs)]
 impl<'col> NP_Iterator_Collection<'col> {
     pub fn new(cursor: NP_Cursor, memory: &'col NP_Memory) -> Result<Self, NP_Error> {
-        match memory.schema[cursor.schema_addr] {
+        match memory.get_schema()[cursor.schema_addr] {
             NP_Parsed_Schema::Table { .. } => {
                 let table = NP_Table::new_iter(&cursor, memory);
                 Ok(NP_Iterator_Collection::Table(table))

@@ -25,7 +25,7 @@ use alloc::vec::Vec;
 use crate::json_flex::{JSMAP, NP_JSON};
 use crate::schema::{NP_TypeKeys};
 use crate::{pointer::NP_Value, error::NP_Error};
-use core::{fmt::{Debug, Formatter}, hint::unreachable_unchecked};
+use core::{fmt::{Debug, Formatter}};
 
 use alloc::boxed::Box;
 use alloc::borrow::ToOwned;

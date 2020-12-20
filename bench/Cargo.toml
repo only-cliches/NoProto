@@ -16,6 +16,7 @@ no_proto = { path = "../" }
 protobuf = "2.18.1"
 # no_proto = "0.4.2"
 rand = "0.7.3"
+rmp = "0.8.9"
 
 
 [target.x86_64-apple-darwin]

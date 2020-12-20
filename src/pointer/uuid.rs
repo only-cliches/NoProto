@@ -21,6 +21,7 @@
 //! ```
 //! 
 
+use core::str::from_utf8_unchecked;
 use alloc::prelude::v1::Box;
 use crate::pointer::NP_Scalar;
 use crate::{memory::NP_Memory, schema::{NP_Parsed_Schema}};
@@ -94,6 +95,24 @@ impl NP_UUID {
         }
 
         uuid
+    }// 503 760 4833
+
+    /// Convert a string UUID into it's byte values
+    /// 
+    pub fn from_string(uuid: &str) -> NP_UUID {
+        let cleaned: String = String::from(uuid).replace("-", "");
+
+        let mut value: [u8; 16] = [0; 16];
+
+        for x in 0..16usize {
+            let step = x * 2;
+            match u8::from_str_radix(&cleaned[step..(step + 2)], 16) {
+                Ok(byte) => { value[x] = byte },
+                _ => {}
+            }
+        }
+
+        NP_UUID { value }
     }
 
     /// Generates a stringified version of the UUID.

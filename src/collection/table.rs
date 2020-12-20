@@ -1,4 +1,4 @@
-use crate::{hashmap::NP_HashMap};
+use crate::buffer::{VTABLE_BYTES, VTABLE_SIZE};
 use alloc::string::String;
 use crate::pointer::{NP_Vtable};
 use crate::{pointer::{NP_Cursor}, schema::{NP_Parsed_Schema, NP_Schema_Addr}};
@@ -8,7 +8,7 @@ use alloc::string::ToString;
 use alloc::vec::Vec;
 use alloc::boxed::Box;
 use alloc::borrow::ToOwned;
-use core::{result::Result, hint::unreachable_unchecked};
+use core::{result::Result};
 
 /// The data type for tables in NoProto buffers.
 /// 
@@ -27,13 +27,14 @@ impl<'table> NP_Table<'table> {
 
     #[inline(always)]
     pub fn select(mut table_cursor: NP_Cursor, key: &str, make_path: bool, memory: &NP_Memory) -> Result<Option<NP_Cursor>, NP_Error> {
-        match &memory.schema[table_cursor.schema_addr] {
-            NP_Parsed_Schema::Table { columns, columns_mapped, .. } => {
-                match columns_mapped.get(key) {
+        match &memory.get_schema()[table_cursor.schema_addr] {
+            NP_Parsed_Schema::Table { columns, .. } => {
+
+                match columns.iter().position(|val| { val.1 == key }) {
                     Some(x) => {
 
-                        let v_table =  *x / 4; // which vtable
-                        let v_table_idx = *x % 4; // which index on the selected vtable
+                        let v_table =  x / VTABLE_SIZE; // which vtable
+                        let v_table_idx = x % VTABLE_SIZE; // which index on the selected vtable
 
                         let mut table_value = table_cursor.get_value(memory);
 
@@ -65,7 +66,7 @@ impl<'table> NP_Table<'table> {
 
                         let item_address = vtable_address + (v_table_idx * 2);
 
-                        Ok(Some(NP_Cursor::new(item_address, columns[*x].2, table_cursor.schema_addr)))
+                        Ok(Some(NP_Cursor::new(item_address, columns[x].2, table_cursor.schema_addr)))
                     },
                     None => Ok(None)
                 }
@@ -77,7 +78,7 @@ impl<'table> NP_Table<'table> {
     #[inline(always)]
     pub fn make_first_vtable<'make>(table_cursor: NP_Cursor, memory: &'make NP_Memory) -> Result<NP_Cursor, NP_Error> {
 
-        let first_vtable_addr = memory.malloc_borrow(&[0u8; 10])?;
+        let first_vtable_addr = memory.malloc_borrow(&[0u8; VTABLE_BYTES])?;
         
         let table_value = table_cursor.get_value(memory);
         table_value.set_addr_value(first_vtable_addr as u16);
@@ -88,7 +89,7 @@ impl<'table> NP_Table<'table> {
     #[inline(always)]
     pub fn make_next_vtable<'make>(prev_vtable: &'make mut NP_Vtable, memory: &'make NP_Memory) -> Result<usize, NP_Error> {
 
-        let vtable_addr = memory.malloc_borrow(&[0u8; 10])?;
+        let vtable_addr = memory.malloc_borrow(&[0u8; VTABLE_BYTES])?;
         
         prev_vtable.set_next(vtable_addr as u16);
 
@@ -127,15 +128,15 @@ impl<'table> NP_Table<'table> {
     #[inline(always)]
     pub fn step_iter(&mut self, memory: &'table NP_Memory) -> Option<(usize, &'table str, Option<NP_Cursor>)> {
 
-        match &memory.schema[self.table.schema_addr] {
+        match &memory.get_schema()[self.table.schema_addr] {
             NP_Parsed_Schema::Table { columns, .. } => {
 
                 if columns.len() <= self.index {
                     return None;
                 }
 
-                let v_table =  self.index / 4; // which vtable
-                let v_table_idx = self.index % 4; // which index on the selected vtable
+                let v_table =  self.index / VTABLE_SIZE; // which vtable
+                let v_table_idx = self.index % VTABLE_SIZE; // which index on the selected vtable
 
                 if self.v_table_index > v_table {
                     self.v_table_index = v_table;
@@ -184,7 +185,7 @@ impl<'value> NP_Value<'value> for NP_Table<'value> {
         schema.push(NP_Parsed_Schema::Table {
             i: NP_TypeKeys::Table,
             sortable: false,
-            columns_mapped: NP_HashMap::new(),
+            // columns_mapped: Vec::new(),
             columns: Vec::new()
         });
 
@@ -192,7 +193,7 @@ impl<'value> NP_Value<'value> for NP_Table<'value> {
 
         let mut offset = address + 2;
 
-        let mut hash_map = NP_HashMap::new();
+        let mut hash_map = Vec::new();
 
         for x in 0..column_len as usize {
             let col_name_len = bytes[offset] as usize;
@@ -210,13 +211,16 @@ impl<'value> NP_Value<'value> for NP_Table<'value> {
             let (_, schema) = NP_Schema::from_bytes(schema_parsed, offset + 2, bytes);
             schema_parsed = schema;
             parsed_columns.push((x as u8, col_name.to_string(), column_addr));
-            hash_map.insert(col_name, x).unwrap_or_default();
+            // hash_map.insert(col_name, x).unwrap_or_default();
+            hash_map.push(col_name.to_string());
             offset += schema_size + 2;
         }
 
+        // hash_map.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+
         schema_parsed[table_schema_addr] = NP_Parsed_Schema::Table {
             i: NP_TypeKeys::Table,
-            columns_mapped: hash_map,
+            // columns_mapped: hash_map,
             sortable: false,
             columns: parsed_columns
         };
@@ -313,7 +317,7 @@ impl<'value> NP_Value<'value> for NP_Table<'value> {
         let mut last_vtable_idx = 0usize;
 
         let c: Vec<(u8, String, usize)>;
-        let col_schemas = match &from_memory.schema[from_cursor.schema_addr] {
+        let col_schemas = match &from_memory.get_schema()[from_cursor.schema_addr] {
             NP_Parsed_Schema::Table { columns, .. } => {
                 columns
             },
@@ -325,8 +329,8 @@ impl<'value> NP_Value<'value> for NP_Table<'value> {
         while let Some((idx, _key, item)) = table.step_iter(from_memory) {
            if let Some(real) = item {
 
-                let v_table =  idx / 4; // which vtable
-                let v_table_idx = idx % 4; // which index on the selected vtable
+                let v_table =  idx / VTABLE_SIZE; // which vtable
+                let v_table_idx = idx % VTABLE_SIZE; // which index on the selected vtable
                 
                 if last_vtable_idx < v_table {
                     let vtable_data = Self::get_vtable(last_real_vtable, to_memory);
@@ -352,10 +356,10 @@ impl<'value> NP_Value<'value> for NP_Table<'value> {
             i: NP_TypeKeys::Table,
             sortable: false,
             columns: Vec::new(),
-            columns_mapped: NP_HashMap::new()
+           //  columns_mapped: Vec::new()
         });
 
-        let mut columns_mapped = NP_HashMap::new();
+        let mut columns_mapped = Vec::new();
 
         let mut columns: Vec<(u8, String, NP_Schema_Addr)> = Vec::new();
 
@@ -379,7 +383,8 @@ impl<'value> NP_Value<'value> for NP_Table<'value> {
                     columns.push((x, column_name.clone(), column_schema_addr));
                     let (_is_sortable, column_type, schema_p) = NP_Schema::from_json(schema_parsed, &Box::new(col[1].clone()))?;
                     schema_parsed = schema_p;
-                    columns_mapped.insert(column_name.as_str(), x as usize)?;
+                    // columns_mapped.insert(column_name.as_str(), x as usize)?;
+                    columns_mapped.push(column_name.to_string());
                     column_data.push((column_name, column_type));
                     x += 1;
                 }
@@ -389,11 +394,13 @@ impl<'value> NP_Value<'value> for NP_Table<'value> {
             }
         }
 
+        // columns_mapped.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+
         schema_parsed[schema_table_addr] = NP_Parsed_Schema::Table {
             i: NP_TypeKeys::Table,
             sortable: false,
             columns: columns,
-            columns_mapped
+            // columns_mapped
         };
 
         if column_data.len() > 255 {

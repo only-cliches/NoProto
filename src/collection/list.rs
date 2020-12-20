@@ -5,7 +5,6 @@ use crate::{error::NP_Error, json_flex::{JSMAP, NP_JSON}, memory::{NP_Memory}, p
 use alloc::borrow::ToOwned;
 use alloc::boxed::Box;
 use alloc::{vec::*};
-use core::{hint::unreachable_unchecked};
 use alloc::string::ToString;
 
 #[doc(hidden)]
@@ -40,7 +39,7 @@ impl NP_List {
 
         if index > 255 { return Ok(None) }
 
-        let schema_of = match memory.schema[list_cursor.schema_addr] {
+        let schema_of = match memory.get_schema()[list_cursor.schema_addr] {
             NP_Parsed_Schema::List { of, .. } => of,
             _ => 0
         };
@@ -178,7 +177,7 @@ impl NP_List {
 
         let list_addr = value.get_addr_value() as usize;
 
-        let schema_of = match memory.schema[list_cursor.schema_addr] {
+        let schema_of = match memory.get_schema()[list_cursor.schema_addr] {
             NP_Parsed_Schema::List { of, .. } => of,
             _ => 0
         };
@@ -285,7 +284,7 @@ impl NP_List {
             Self::make_list(&list_cursor, memory)?;
         }
 
-        match memory.schema[list_cursor.schema_addr] {
+        match memory.get_schema()[list_cursor.schema_addr] {
             NP_Parsed_Schema::List {  of, .. } => {
 
                 let mut new_index: usize = index.unwrap_or(0);

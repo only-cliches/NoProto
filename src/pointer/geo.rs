@@ -27,7 +27,7 @@ use crate::utils::to_unsigned;
 use crate::json_flex::{JSMAP, NP_JSON};
 use crate::schema::{NP_Schema, NP_TypeKeys};
 use crate::{pointer::NP_Value, error::NP_Error};
-use core::{fmt::{Debug}, hint::unreachable_unchecked};
+use core::{fmt::{Debug}};
 use core::convert::TryInto;
 
 use alloc::boxed::Box;

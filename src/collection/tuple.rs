@@ -1,7 +1,6 @@
 use alloc::string::String;
-use crate::utils::opt_err;
+use crate::{buffer::{VTABLE_BYTES, VTABLE_SIZE}, utils::opt_err};
 use crate::{ pointer::NP_Vtable};
-use core::hint::unreachable_unchecked;
 
 use crate::{json_flex::JSMAP, pointer::{NP_Cursor}};
 use crate::pointer::{NP_Value};
@@ -30,7 +29,7 @@ impl<'tuple> NP_Tuple<'tuple> {
 
     #[inline(always)]
     pub fn select(mut tuple_cursor: NP_Cursor, index: usize, make_path: bool, memory: &NP_Memory) -> Result<Option<NP_Cursor>, NP_Error> {
-        match &memory.schema[tuple_cursor.schema_addr] {
+        match &memory.get_schema()[tuple_cursor.schema_addr] {
             NP_Parsed_Schema::Tuple { values, .. } => {
 
                 if index >= values.len() {
@@ -39,8 +38,8 @@ impl<'tuple> NP_Tuple<'tuple> {
         
                 let column_schema_data = values[index];
 
-                let v_table =  index / 4; // which vtable
-                let v_table_idx = index % 4; // which index on the selected vtable
+                let v_table =  index / VTABLE_SIZE; // which vtable
+                let v_table_idx = index % VTABLE_SIZE; // which index on the selected vtable
 
                 let mut table_value = tuple_cursor.get_value(memory);
                 if table_value.get_addr_value() == 0 {
@@ -77,24 +76,25 @@ impl<'tuple> NP_Tuple<'tuple> {
         }
     }
 
+    #[inline(always)]
     pub fn make_first_vtable<'make>(table_cursor: NP_Cursor, memory: &'make NP_Memory) -> Result<NP_Cursor, NP_Error> {
 
-        let first_vtable_addr = memory.malloc_borrow(&[0u8; 10])?;
+        let first_vtable_addr = memory.malloc_borrow(&[0u8; VTABLE_BYTES])?;
         
         let table_value = table_cursor.get_value(memory);
         table_value.set_addr_value(first_vtable_addr as u16);
 
 
-        match &memory.schema[table_cursor.schema_addr] {
+        match &memory.get_schema()[table_cursor.schema_addr] {
             NP_Parsed_Schema::Tuple { values, sortable, .. } => {
                 if *sortable {
                     // make all the vtables we'll need forever
-                    let mut v_table_capacity = 4usize;
+                    let mut v_table_capacity = VTABLE_SIZE;
                     let mut vtable = Self::get_vtable(first_vtable_addr, memory);
                     while v_table_capacity < values.len() {
                         let next_addr = Self::make_next_vtable(vtable, memory)?;
                         vtable = Self::get_vtable(next_addr, memory);
-                        v_table_capacity += 4;
+                        v_table_capacity += VTABLE_SIZE;
                     }
 
                     // set default values for everything
@@ -111,9 +111,10 @@ impl<'tuple> NP_Tuple<'tuple> {
         Ok(table_cursor)
     }
 
+    #[inline(always)]
     pub fn make_next_vtable<'make>(prev_vtable: &'make mut NP_Vtable, memory: &'make NP_Memory) -> Result<usize, NP_Error> {
 
-        let vtable_addr = memory.malloc_borrow(&[0u8; 10])?;
+        let vtable_addr = memory.malloc_borrow(&[0u8; VTABLE_BYTES])?;
         
         prev_vtable.set_next(vtable_addr as u16);
 
@@ -150,15 +151,15 @@ impl<'tuple> NP_Tuple<'tuple> {
 
     pub fn step_iter(&mut self, memory: &'tuple NP_Memory) -> Option<(usize, Option<NP_Cursor>)> {
 
-        match &memory.schema[self.table.schema_addr] {
+        match &memory.get_schema()[self.table.schema_addr] {
             NP_Parsed_Schema::Tuple { values, .. } => {
 
                 if values.len() <= self.index {
                     return None;
                 }
 
-                let v_table =  self.index / 4; // which vtable
-                let v_table_idx = self.index % 4; // which index on the selected vtable
+                let v_table =  self.index / VTABLE_SIZE; // which vtable
+                let v_table_idx = self.index % VTABLE_SIZE; // which index on the selected vtable
 
                 if self.v_table_index > v_table {
                     self.v_table_index = v_table;
@@ -291,7 +292,7 @@ impl<'value> NP_Value<'value> for NP_Tuple<'value> {
         let mut last_vtable_idx = 0usize;
 
         let c: Vec<(u8, String, usize)>;
-        let col_schemas = match &from_memory.schema[from_cursor.schema_addr] {
+        let col_schemas = match &from_memory.get_schema()[from_cursor.schema_addr] {
             NP_Parsed_Schema::Table { columns, .. } => {
                 columns
             },
@@ -303,8 +304,8 @@ impl<'value> NP_Value<'value> for NP_Tuple<'value> {
         while let Some((idx, item)) = table.step_iter(from_memory) {
             if let Some(real) = item {
 
-                let v_table =  idx / 4; // which vtable
-                let v_table_idx = idx % 4; // which index on the selected vtable
+                let v_table =  idx / VTABLE_SIZE; // which vtable
+                let v_table_idx = idx % VTABLE_SIZE; // which index on the selected vtable
                 
                 if last_vtable_idx < v_table {
                     let vtable_data = Self::get_vtable(last_real_vtable, to_memory);

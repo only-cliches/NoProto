@@ -1,5 +1,5 @@
 use alloc::string::String;
-use crate::{pointer::NP_Map_Bytes, utils::opt_err};
+use crate::{pointer::NP_Map_Bytes};
 use crate::pointer::NP_Cursor;
 use crate::{json_flex::JSMAP};
 use crate::pointer::{NP_Value};
@@ -9,13 +9,18 @@ use alloc::string::ToString;
 use alloc::vec::Vec;
 use alloc::boxed::Box;
 use alloc::borrow::ToOwned;
-use core::{hint::unreachable_unchecked};
 
 #[doc(hidden)]
 #[derive(Debug, Clone, Copy)]
 struct Map_Item<'item> {
     key: &'item str,
     buff_addr: usize
+}
+
+impl<'item> Map_Item<'item> {
+    pub fn new(key: &'item str, buff_addr: usize) -> Self {
+        Self { key, buff_addr}
+    }
 }
 
 /// The map type.
@@ -64,7 +69,7 @@ impl<'map> NP_Map<'map> {
     #[inline(always)]
     pub fn new_iter(map_cursor: &NP_Cursor, memory: &'map NP_Memory) -> Self {
 
-        let value_of = match memory.schema[map_cursor.schema_addr] {
+        let value_of = match memory.get_schema()[map_cursor.schema_addr] {
             NP_Parsed_Schema::Map { value, .. } => value,
             _ => 0
         };
@@ -85,10 +90,7 @@ impl<'map> NP_Map<'map> {
 
         Self {
             current: None,
-            head: Some(Map_Item {
-                key: head_cursor_value.get_key(memory),
-                buff_addr: head_cursor.buff_addr 
-            }),
+            head: Some(Map_Item::new(head_cursor_value.get_key(memory), head_cursor.buff_addr )),
             map: map_cursor.clone(),
             value_of
         }
@@ -130,7 +132,7 @@ impl<'map> NP_Map<'map> {
     #[inline(always)]
     pub fn insert(map_cursor: &NP_Cursor, memory: &NP_Memory, key: &str) -> Result<NP_Cursor, NP_Error> {
 
-        let value_of = match memory.schema[map_cursor.schema_addr] {
+        let value_of = match memory.get_schema()[map_cursor.schema_addr] {
             NP_Parsed_Schema::Map { value, .. } => value,
             _ => 0
         };

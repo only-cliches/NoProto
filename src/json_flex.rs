@@ -44,7 +44,7 @@ use core::ops::Index;
 use crate::{error::NP_Error};
 
 /// The JSON representation of a JS Map
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct JSMAP {
     /// The vec of values in the map
     pub values: Vec<(String, NP_JSON)>
@@ -104,7 +104,7 @@ impl JSMAP {
 }
 
 /// Represents an JSON value
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum NP_JSON {
     /// String JSON type
     String(String), 

@@ -31,7 +31,7 @@ impl JSONBench {
         }
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
-        println!("JSON:        {:>5.2}ms {:.2}", time.as_millis(), (base as f64 / time.as_micros() as f64));  
+        println!("JSON:        {:>9.0} ops/ms {:.2}", LOOPS as f64 / time.as_millis() as f64, (base as f64 / time.as_micros() as f64));
     }
 
     #[inline(always)]
@@ -82,7 +82,7 @@ impl JSONBench {
         }
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
-        println!("JSON:        {:>5.2}ms {:.2}", time.as_millis(), (base as f64 / time.as_micros() as f64));   
+        println!("JSON:        {:>9.0} ops/ms {:.2}", LOOPS as f64 / time.as_millis() as f64, (base as f64 / time.as_micros() as f64));
 
     }
 
@@ -97,7 +97,7 @@ impl JSONBench {
         }
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
-        println!("JSON:        {:>5.2}ms {:.2}", time.as_millis(), (base as f64 / time.as_micros() as f64));  
+        println!("JSON:        {:>9.0} ops/ms {:.2}", LOOPS as f64 / time.as_millis() as f64, (base as f64 / time.as_micros() as f64));
     }
 
     pub fn decode_bench(base: u128)  {
@@ -119,20 +119,22 @@ impl JSONBench {
                     assert_eq!(foobar["name"], JsonValue::String(String::from("Hello, World!")));
                     assert_eq!(foobar["rating"].as_f64().unwrap(), 3.1415432432445543543 + (x as f64));
                     assert_eq!(foobar["postfix"], JsonValue::String(String::from("!")));
-                    assert_eq!(foobar["sibling"]["time"].as_f64().unwrap(), 123456f64 + (x as f64));
-                    assert_eq!(foobar["sibling"]["ratio"].as_f64().unwrap(), 3.14159);
-                    assert_eq!(foobar["sibling"]["size"].as_f64().unwrap(), 10000f64 + (x as f64));
-                    assert_eq!(foobar["sibling"]["parent"]["id"].as_f64().unwrap(), 12370766946607417000.0f64);
-                    assert_eq!(foobar["sibling"]["parent"]["count"].as_f64().unwrap(), 1000f64 + (x as f64));
-                    assert_eq!(foobar["sibling"]["parent"]["prefix"], JsonValue::String(String::from("@")));
-                    assert_eq!(foobar["sibling"]["parent"]["length"].as_f64().unwrap(), 10000f64 + (x as f64));
+                    let sibling = &foobar["sibling"];
+                    assert_eq!(sibling["time"].as_f64().unwrap(), 123456f64 + (x as f64));
+                    assert_eq!(sibling["ratio"].as_f64().unwrap(), 3.14159);
+                    assert_eq!(sibling["size"].as_f64().unwrap(), 10000f64 + (x as f64));
+                    let parent = &sibling["parent"];
+                    assert_eq!(parent["id"].as_f64().unwrap(), 12370766946607417000.0f64);
+                    assert_eq!(parent["count"].as_f64().unwrap(), 1000f64 + (x as f64));
+                    assert_eq!(parent["prefix"], JsonValue::String(String::from("@")));
+                    assert_eq!(parent["length"].as_f64().unwrap(), 10000f64 + (x as f64));
                 });
             }
             assert!(loops == 3);
         }
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
-        println!("JSON:        {:>5.2}ms {:.2}", time.as_millis(), (base as f64 / time.as_micros() as f64));     
+        println!("JSON:        {:>9.0} ops/ms {:.2}", LOOPS as f64 / time.as_millis() as f64, (base as f64 / time.as_micros() as f64));
 
     }
 }

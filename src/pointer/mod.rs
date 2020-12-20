@@ -247,7 +247,7 @@ pub struct NP_Cursor {
     pub parent_schema_addr: usize
 }
 
-impl NP_Cursor {
+impl<'cursor> NP_Cursor {
 
     /// Create a new cursor
     pub fn new(buff_addr: usize, schema_addr: usize, parent_schema_addr: usize) -> Self {
@@ -266,7 +266,7 @@ impl NP_Cursor {
         if self.buff_addr == ROOT_PTR_ADDR || self.buff_addr > memory.read_bytes().len() {
             unsafe { &mut *(ptr.add(ROOT_PTR_ADDR) as *mut NP_Pointer_Scalar) }
         } else {
-            match memory.schema[self.parent_schema_addr] {
+            match memory.get_schema()[self.parent_schema_addr] {
                 NP_Parsed_Schema::List { .. } => {
                     unsafe { &mut *(ptr.add(self.buff_addr) as *mut NP_Pointer_List_Item) }
                 },
@@ -285,7 +285,7 @@ impl NP_Cursor {
     /// 
     pub fn json_encode(cursor: &NP_Cursor, memory: &NP_Memory) -> NP_JSON {
 
-        match memory.schema[cursor.schema_addr].get_type_key() {
+        match memory.get_schema()[cursor.schema_addr].get_type_key() {
             NP_TypeKeys::None           => { NP_JSON::Null },
             NP_TypeKeys::Any            => { NP_JSON::Null },
             NP_TypeKeys::UTF8String     => { NP_String::to_json(cursor, memory) },
@@ -319,7 +319,7 @@ impl NP_Cursor {
     /// 
     pub fn compact(from_cursor: NP_Cursor, from_memory: &NP_Memory, to_cursor: NP_Cursor, to_memory: &NP_Memory) -> Result<NP_Cursor, NP_Error> {
 
-        match from_memory.schema[from_cursor.schema_addr].get_type_key() {
+        match from_memory.get_schema()[from_cursor.schema_addr].get_type_key() {
             NP_TypeKeys::Any           => { Ok(to_cursor) }
             NP_TypeKeys::UTF8String    => { NP_String::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
             NP_TypeKeys::Bytes         => {  NP_Bytes::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
@@ -352,7 +352,7 @@ impl NP_Cursor {
     /// 
     pub fn set_default(cursor: NP_Cursor, memory: &NP_Memory) -> Result<(), NP_Error> {
 
-        match memory.schema[cursor.schema_addr].get_type_key() {
+        match memory.get_schema()[cursor.schema_addr].get_type_key() {
             NP_TypeKeys::None        => { return Err(NP_Error::new("unreachable")); },
             NP_TypeKeys::Any         => { return Err(NP_Error::new("unreachable")); },
             NP_TypeKeys::Table       => { return Err(NP_Error::new("unreachable")); },
@@ -398,7 +398,7 @@ impl NP_Cursor {
         }
 
         // get the size of the value based on schema
-        let type_size = match memory.schema[cursor.schema_addr].get_type_key() {
+        let type_size = match memory.get_schema()[cursor.schema_addr].get_type_key() {
             NP_TypeKeys::None         => { Ok(0) },
             NP_TypeKeys::Any          => { Ok(0) },
             NP_TypeKeys::UTF8String   => { NP_String::get_size(cursor, memory) },

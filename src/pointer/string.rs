@@ -18,8 +18,6 @@
 
 use alloc::string::String;
 use alloc::prelude::v1::Box;
-use core::hint::unreachable_unchecked;
-
 use crate::{error::NP_Error, schema::String_Case};
 use crate::{
     json_flex::JSMAP,

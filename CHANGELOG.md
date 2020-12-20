@@ -1,3 +1,9 @@
+# 0.6.2
+- Removed hashmap as it didn't help performance enough to justify the extra code/complexity.
+- Some minor optimizations and code clean up.
+- Added RPC Capability.
+- Added `from_string` to UUID.
+
 # 0.6.1 December 15, 2020
 - Restored the first byte for later use.  Probably add `u32` address size again in the future.
 - The format should now be considered stable, won't be making any further changes to it.

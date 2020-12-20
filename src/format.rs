@@ -85,7 +85,7 @@
 //! 
 //! Each vtable can address up to 4 columns, so if there are 30 columns in a schema there may be as many as 8 vtables in the buffer: `30 / 4 = 7.5`
 //! 
-//! Vtables are created as needed,  For example if there are 100 columns in the schema but the client only ever sets values to the first 4 columns  there will only ever be 1 vtable in the buffer.
+//! Vtables are created as needed,  For example if there are 100 columns in the schema but the client only ever sets values to the first 4 columns there will only ever be 1 vtable in the buffer.
 //! 
 //! 
 //! ```
@@ -274,7 +274,7 @@
 //! 
 //! Option values are stored as a single `u8` value.  The value should represent the zero based location in the choice set.
 //! 
-//! For example if the schema has `choices: ["red", "blue", "yellow"]` and the user selects `yellow`, this value should `2`.
+//! For example if the schema has `choices: ["red", "blue", "yellow"]` and the user selects `yellow`, this value should be `2`.
 //! 
 //! ```
 //! use no_proto::error::NP_Error;
@@ -377,6 +377,8 @@
 //! <br/>
 //! geo16: ....
 //! 
+//! This process is reversed when the client requests the geo data from the buffer.
+//! 
 //! ```
 //! use no_proto::error::NP_Error;
 //! use no_proto::NP_Factory;
@@ -424,7 +426,7 @@
 //! 
 //! ### bytes, string (Scalar)
 //! 
-//! If there is a `size` property in the schema, store the provided data and pad the remainder of the space with zeros.
+//! If there is a `size` property in the schema, store the provided data and pad the remainder of the space with zeros (for bytes) or 32 (for strings).
 //! 
 //! If the provided data is too large, truncate it.
 //! 
@@ -591,8 +593,8 @@
 //!
 //! assert_eq!(vec![15, 2], factory.compile_schema());
 //! 
-//! // [       15,               2]
-//! // [data type, default is true]  
+//! // [       15,                2]
+//! // [data type, default is false]  
 //! 
 //! 
 //! let factory: NP_Factory = NP_Factory::new(r#"{

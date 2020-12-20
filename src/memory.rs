@@ -17,16 +17,21 @@ pub struct NP_Memory<'memory> {
 #[doc(hidden)]
 impl<'memory> NP_Memory<'memory> {
 
+    #[inline(always)]
+    pub fn get_schema(&self) -> &'memory Vec<NP_Parsed_Schema> {
+        self.schema
+    }
 
+    #[inline(always)]
     pub fn existing(bytes: Vec<u8>, schema: &'memory Vec<NP_Parsed_Schema>) -> Self {
 
-        NP_Memory {
+        Self {
             bytes: UnsafeCell::new(bytes),
             schema: schema
         }
     }
 
-
+    #[inline(always)]
     pub fn new(capacity: Option<usize>, schema: &'memory Vec<NP_Parsed_Schema>) -> Self {
         let use_size = match capacity {
             Some(x) => x,
@@ -44,6 +49,7 @@ impl<'memory> NP_Memory<'memory> {
         }
     }
 
+    #[inline(always)]
     pub fn malloc_borrow(&self, bytes: &[u8])  -> Result<usize, NP_Error> {
         let self_bytes = unsafe { &mut *self.bytes.get() };
 
@@ -58,6 +64,7 @@ impl<'memory> NP_Memory<'memory> {
         Ok(location)
     }
 
+    #[inline(always)]
     pub fn malloc(&self, bytes: Vec<u8>) -> Result<usize, NP_Error> {
         self.malloc_borrow(&bytes)
     }

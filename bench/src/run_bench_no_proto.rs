@@ -32,7 +32,7 @@ impl NoProtoBench {
         }
     
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
-        println!("NoProto:     {:>5.2}ms 1.00", time.as_millis());
+        println!("NoProto:     {:>9.0} ops/ms 1.00", LOOPS as f64 / time.as_millis() as f64);  
 
         Ok(time.as_micros())
     }
@@ -53,7 +53,7 @@ impl NoProtoBench {
         }
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
-        println!("NoProto:     {:>5.2}ms 1.00", time.as_millis());
+        println!("NoProto:     {:>9.0} ops/ms 1.00", LOOPS as f64 / time.as_millis() as f64);  
 
         Ok(time.as_micros())
     }
@@ -100,7 +100,7 @@ impl NoProtoBench {
         }
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
-        println!("NoProto:     {:>5.2}ms 1.00", time.as_millis());
+        println!("NoProto:     {:>9.0} ops/ms 1.00", LOOPS as f64 / time.as_millis() as f64);  
 
         Ok(time.as_micros())
     }
@@ -117,8 +117,10 @@ impl NoProtoBench {
             assert_eq!(new_buff.get(&["location"])?, Some("https://arstechnica.com"));
             assert_eq!(new_buff.get(&["fruit"])?, Some(2u8));
 
+            let mut loops = 0;
+
             for x in 0..3 {
-    
+                loops += 1;
                 new_buff.cursor_to_root();
                 new_buff.move_cursor(&["list", x.to_string().as_str()])?;
                 assert_eq!(new_buff.get(&["name"])?, Some("Hello, world!"));
@@ -137,11 +139,13 @@ impl NoProtoBench {
                 assert_eq!(new_buff.get(&["length"])?, Some(1000000 + (x as u32)));
                 
             }
+
+            assert!(loops == 3);
             
         }
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
-        println!("NoProto:     {:>5.2}ms 1.00", time.as_millis());
+        println!("NoProto:     {:>9.0} ops/ms 1.00", LOOPS as f64 / time.as_millis() as f64);  
 
         Ok(time.as_micros())
     }

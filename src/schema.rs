@@ -163,7 +163,7 @@
 //! - **Compaction**: Columns without values will be removed from the buffer durring compaction.  If a column never had a value set it's using *zero* space in the buffer.
 //! - **Schema Mutations**: The ordering of items in the `columns` property must always remain the same.  It's safe to add new columns to the bottom of the column list or rename columns, but never to remove columns.  Column types cannot be changed safely.  If you need to depreciate a column, set it's name to an empty string. 
 //! 
-//! Table schemas have a single required property called `columns`.  The `columns` property is an array of arrays that represent all possible columns in the table and their data types.  Any type can be used in columns, including other tables.
+//! Table schemas have a single required property called `columns`.  The `columns` property is an array of arrays that represent all possible columns in the table and their data types.  Any type can be used in columns, including other tables.  Tables cannot have more than 255 columns, and the colum names cannot be longer than 255 UTF8 bytes.
 //! 
 //! Tables do not store the column names in the buffer, only the column index, so this is a very efficient way to store associated data.
 //! 
@@ -187,9 +187,6 @@
 //! }
 //! ```
 //! 
-//! More Details:
-//! - [Using NP_Table data type](../collection/table/struct.NP_Table.html)
-//! 
 //! ## list
 //! Lists represent a dynamically sized list of items.  The type for every item in the list is identical and the order of entries is mainted in the buffer.  Lists do not have to contain contiguous entries, gaps can safely and efficiently be stored.
 //! 
@@ -197,7 +194,7 @@
 //! - **Compaction**: Indexes that have had their value cleared will be removed from the buffer.  If a specific index never had a value, it occupies *zero* space.
 //! - **Schema Mutations**: None
 //! 
-//! Lists have a single required property in the schema, `of`.  The `of` property contains another schema for the type of data contained in the list.  Any type is supported, including another list.  Tables cannot have more than 255 columns, and the colum names cannot be longer than 255 UTF8 bytes.
+//! Lists have a single required property in the schema, `of`.  The `of` property contains another schema for the type of data contained in the list.  Any type is supported, including another list.  
 //! 
 //! The more items you have in a list, the slower it will be to seek to values towards the end of the list or loop through the list.
 //! 
@@ -218,21 +215,19 @@
 //! }
 //! ```
 //! 
-//! More Details:
-//! - [Using NP_List data type](../collection/list/struct.NP_List.html)
 //! 
 //! ## map
-//! A map is a dynamically sized list of items where each key is a Vec<u8>.  Every value of a map has the same type.
+//! A map is a dynamically sized list of items where each key is a `&str`.  Every value of a map has the same type.
 //! 
 //! - **Bytewise Sorting**: Unsupported
 //! - **Compaction**: Keys without values are removed from the buffer
 //! - **Schema Mutations**: None
 //! 
-//! Maps have a single required property in the schema, `value`. The property is used to describe the schema of the values for the map.  Keys are always `String`.  Values can be any schema type, including another map.
+//! Maps have a single required property in the schema, `value`. The property is used to describe the schema of the values for the map.  Values can be any schema type, including another map.
 //! 
 //! If you expect to have fixed, predictable keys then use a `table` type instead.  Maps are less efficient than tables because keys are stored in the buffer.  
 //! 
-//! The more items you have in a map, the slower it will be to seek to values or loop through the map.  
+//! The more items you have in a map, the slower it will be to seek to values or loop through the map.  Tables are far more performant for seeking to values.
 //! 
 //! ```json
 //! // a map where every value is a string
@@ -244,8 +239,6 @@
 //! }
 //! ```
 //! 
-//! More Details:
-//! - [Using NP_Map data type](../collection/map/struct.NP_Map.html)
 //! 
 //! ## tuple
 //! A tuple is a fixed size list of items.  Each item has it's own type and index.  Tuples support up to 255 items.
@@ -257,9 +250,9 @@
 //! Tuples have a single required property in the schema called `values`.  It's an array of schemas that represnt the tuple values.  Any schema is allowed, including other Tuples.
 //! 
 //! **Sorting**<br/>
-//! You can use tuples to support bytewise sorting across a list of items.  By setting the `sorted` property to `true` you enable a strict mode for the tuple that enables bytewise sorting.  When `sorted` is enabled only scalar values that support sorting are allowed in the schema.  For example, strings/bytes types can only be fixed size.
+//! You can use tuples to support compound bytewise sorting across multiple values of different types.  By setting the `sorted` property to `true` you enable a strict mode for the tuple that enables sorting features.  When `sorted` is enabled only scalar values that support sorting are allowed in the schema.  For example, strings/bytes types can only be fixed size.
 //! 
-//! When `sorted` is true the order of values is gauranteed to be constant across buffers, allowing compound bytewise sorting.
+//! When `sorted` is true the order of values is gauranteed to be constant in every buffer and all buffers will be identical in size.
 //! 
 //! ```json
 //! {
@@ -282,9 +275,7 @@
 //!     ]
 //! }
 //! ```
-//! 
-//! More Details:
-//! - [Using NP_Tuple data type](../collection/tuple/struct.NP_Tuple.html) 
+//!
 //! 
 //! 
 //! ## string
@@ -294,7 +285,7 @@
 //! - **Compaction**: If `size` property is set, compaction cannot reclaim space.  Otherwise it will reclaim space unless all updates have been identical in length.
 //! - **Schema Mutations**: If the `size` property is set it's safe to make it smaller, but not larger (this may cause existing string values to truncate, though).  If the field is being used for bytewise sorting, no mutation is safe.
 //! 
-//!
+//! The `size` property provides a way to have fixed size strings in your buffers.  If a provided string is larger than the `size` property it will be truncated.  Smaller strings will be padded with white space.
 //! 
 //! ```json
 //! {
@@ -321,6 +312,8 @@
 //! - **Bytewise Sorting**: Supported only if `size` property is set in schema.
 //! - **Compaction**: If `size` property is set, compaction cannot reclaim space.  Otherwise it will reclaim space unless all updates have been identical in length.
 //! - **Schema Mutations**: If the `size` property is set it's safe to make it smaller, but not larger (this may cause existing bytes values to truncate, though).  If the field is being used for bytewise sorting, no mutation is safe.
+//! 
+//! The `size` property provides a way to have fixed size `&[u8]` in your buffers.  If a provided byte slice is larger than the `size` property it will be truncated.  Smaller byte slices will be padded with zeros.
 //! 
 //! ```json
 //! {
@@ -568,7 +561,7 @@
 
 use alloc::string::String;
 use core::{fmt::Debug};
-use crate::{hashmap::NP_HashMap, json_flex::NP_JSON, pointer::{string::NP_String, ulid::_NP_ULID, uuid::_NP_UUID}};
+use crate::{json_flex::NP_JSON, pointer::{string::NP_String, ulid::_NP_ULID, uuid::_NP_UUID}};
 use crate::pointer::any::NP_Any;
 use crate::pointer::date::NP_Date;
 use crate::pointer::geo::NP_Geo;
@@ -698,7 +691,7 @@ pub enum NP_Parsed_Schema {
     Enum       { sortable: bool, i:NP_TypeKeys, default: Option<NP_Enum>, choices: Vec<NP_Enum> },
     Uuid       { sortable: bool, i:NP_TypeKeys },
     Ulid       { sortable: bool, i:NP_TypeKeys },
-    Table      { sortable: bool, i:NP_TypeKeys, columns: Vec<(u8, String, NP_Schema_Addr)>, columns_mapped: NP_HashMap },
+    Table      { sortable: bool, i:NP_TypeKeys, columns: Vec<(u8, String, NP_Schema_Addr)> },
     Map        { sortable: bool, i:NP_TypeKeys, value: NP_Schema_Addr}, 
     List       { sortable: bool, i:NP_TypeKeys, of: NP_Schema_Addr },
     Tuple      { sortable: bool, i:NP_TypeKeys, values: Vec<NP_Schema_Addr>}

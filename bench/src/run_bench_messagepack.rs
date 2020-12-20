@@ -34,7 +34,7 @@ impl MessagePackBench {
         }
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
-        println!("MessagePack: {:>5.2}ms {:.2}", time.as_millis(), (base as f64 / time.as_micros() as f64));      
+        println!("MessagePack: {:>9.0} ops/ms {:.2}", LOOPS as f64 / time.as_millis() as f64, (base as f64 / time.as_micros() as f64));    
     }
 
     #[inline(always)]
@@ -103,7 +103,7 @@ impl MessagePackBench {
         }
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
-        println!("MessagePack: {:>5.2}ms {:.2}", time.as_millis(), (base as f64 / time.as_micros() as f64));   
+        println!("MessagePack: {:>9.0} ops/ms {:.2}", LOOPS as f64 / time.as_millis() as f64, (base as f64 / time.as_micros() as f64));
 
     }
 
@@ -127,7 +127,7 @@ impl MessagePackBench {
         }
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
-        println!("MessagePack: {:>5.2}ms {:.2}", time.as_millis(), (base as f64 / time.as_micros() as f64));      
+        println!("MessagePack: {:>9.0} ops/ms {:.2}", LOOPS as f64 / time.as_millis() as f64, (base as f64 / time.as_micros() as f64));    
 
     }
 
@@ -201,7 +201,7 @@ impl MessagePackBench {
         }
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
-        println!("MessagePack: {:>5.2}ms {:.2}", time.as_millis(), (base as f64 / time.as_micros() as f64));   
+        println!("MessagePack: {:>9.0} ops/ms {:.2}", LOOPS as f64 / time.as_millis() as f64, (base as f64 / time.as_micros() as f64));
 
     }
 }

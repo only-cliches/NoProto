@@ -21,7 +21,6 @@
 use crate::{json_flex::JSMAP, schema::{NP_Parsed_Schema}};
 use crate::error::NP_Error;
 use crate::{schema::{NP_TypeKeys}, pointer::NP_Value, json_flex::NP_JSON};
-use core::hint::unreachable_unchecked;
 
 use alloc::vec::Vec;
 use alloc::boxed::Box;

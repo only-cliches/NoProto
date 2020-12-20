@@ -10,13 +10,13 @@ The example object is encoded once, and it's size in bytes is recorded as well a
 ### Encode Benchmark
 The example object is encoded/serialized into the format supported by the various libraries.  Specifically, the benchmark measures how long it takes to get an owned `Vec<u8>` out of the library.
 
-### Decode Benchmark
+### Decode All Benchmark
 A single object is encoded, then the library decodes that object into it's parts 1,000,000 times.  Copying of the original buffer is only perfomed if it's needed by the library to complete decoding.  This measures how long it takes to go from a `Vec<u8>` to a shared immutable reference to all properties/values in the object.
 
 ### Decode One Benchmark
 A single object is encoded, then the library decodes a single property of that object 1,000,000 times.  Copying of the original buffer is only perfomed if it's needed by the library to complete decoding.  This measures how long it takes to go from a `Vec<u8>` to a shared immutable reference of a single value in the object.
 
-### Update Benchmark
+### Update One Benchmark
 A single object is encoded, then the library should decode, update one property on the object then re encode the object 1,000,000 times.  The benchmark measures how long it takes to get from a deserialized buffer into another deserialized buffer with a single update performed in the new buffer.
 
 Benchmarks can be ran with `cargo run --release`.
@@ -28,45 +28,40 @@ Benchmarks can be ran with `cargo run --release`.
 3.4Ghz i5 2017 21.5" iMac with 32 GB RAM
 
 ```
-====== SIZE BENCHMARK ======
+========= SIZE BENCHMARK =========
 NoProto:     size: 284b, zlib: 229b
-Flatbuffers: size: 336b, zlib: 214b
 PBuffers:    size: 220b, zlib: 163b
 MessagePack: size: 431b, zlib: 245b
 JSON:        size: 673b, zlib: 246b
 BSON:        size: 600b, zlib: 279b
 
-====== ENCODE BENCHMARK ======
-NoProto:      3636ms 1.00
-Flatbuffers:  1884ms 1.93
-PBuffers:     3522ms 1.03
-MessagePack: 29052ms 0.13
-JSON:         5319ms 0.68
-BSON:        39693ms 0.09
+======== ENCODE BENCHMARK ========
+NoProto:           272 ops/ms 1.00
+PBuffers:          266 ops/ms 0.98
+MessagePack:        33 ops/ms 0.12
+JSON:              186 ops/ms 0.68
+BSON:               28 ops/ms 0.10
 
-====== DECODE BENCHMARK ======
-NoProto:      2664ms 1.00
-Flatbuffers:   150ms 17.66
-PBuffers:     3316ms 0.80
-MessagePack: 16770ms 0.16
-JSON:         9237ms 0.29
-BSON:        36965ms 0.07
+======== DECODE BENCHMARK ========
+NoProto:           375 ops/ms 1.00
+PBuffers:          365 ops/ms 0.97
+MessagePack:        63 ops/ms 0.17
+JSON:              127 ops/ms 0.29
+BSON:               28 ops/ms 0.07
 
 ====== DECODE ONE BENCHMARK ======
-NoProto:       200ms 1.00
-Flatbuffers:    12ms 16.39
-PBuffers:     2794ms 0.07
-MessagePack: 16332ms 0.01
-JSON:         7015ms 0.03
-BSON:        34030ms 0.01
+NoProto:          5051 ops/ms 1.00
+PBuffers:          366 ops/ms 0.07
+MessagePack:        68 ops/ms 0.01
+JSON:              153 ops/ms 0.03
+BSON:               30 ops/ms 0.01
 
 ====== UPDATE ONE BENCHMARK ======
-NoProto:       406ms 1.00
-Flatbuffers:  2575ms 0.16
-PBuffers:     7470ms 0.05
-MessagePack: 33735ms 0.01
-JSON:         8743ms 0.05
-BSON:        54590ms 0.01
+NoProto:          4098 ops/ms 1.00
+PBuffers:          160 ops/ms 0.04
+MessagePack:        31 ops/ms 0.01
+JSON:              115 ops/ms 0.03
+BSON:               22 ops/ms 0.01
 ```
 
 ## Dec 13, 2020
