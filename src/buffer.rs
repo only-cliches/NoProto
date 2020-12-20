@@ -1,6 +1,5 @@
 //! Top level abstraction for buffer objects
 
-use alloc::prelude::v1::Box;
 use crate::{utils::opt_err};
 use crate::collection::tuple::NP_Tuple;
 

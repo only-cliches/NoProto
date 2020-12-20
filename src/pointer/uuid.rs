@@ -21,7 +21,6 @@
 //! ```
 //! 
 
-use core::str::from_utf8_unchecked;
 use alloc::prelude::v1::Box;
 use crate::pointer::NP_Scalar;
 use crate::{memory::NP_Memory, schema::{NP_Parsed_Schema}};

@@ -338,13 +338,42 @@ impl NP_RPC_Factory {
             idx +=1;
         }
 
-        Err(NP_Error::new("Cannot find request!"))
+        Err(NP_Error::new("Cannot find request."))
     }
 
     /// Open a request.  The request spec and version must match the current spec and version of this factory.
     /// 
     pub fn open_request(&self, bytes: Vec<u8>) -> Result<NP_RPC_Request, NP_Error> {
-        todo!()
+        // first 19 bytes are id + version
+        let id_bytes = &bytes[..19];
+        if id_bytes != self.id {
+            return Err(NP_Error::new("API ID or Version mismatch."))
+        }
+
+        // next 2 bytes is rpc address
+        let rpc_addr = u16::from_be_bytes(unsafe { *(&bytes[19..21] as *const [u8] as *const [u8; 2]) }) as usize;
+
+        // next 1 byte is request/response byte
+        match RPC_Type::from(bytes[21]) {
+            RPC_Type::Request => { },
+            _ => return Err(NP_Error::new("Attempted to open non request buffer with request method."))
+        };
+
+        match &self.spec.specs[rpc_addr] {
+            NP_RPC_Spec::RPC { full_name, arg,  .. } => {
+                Ok(NP_RPC_Request {
+                    rpc_addr,
+                    id: self.id,
+                    spec: &self.spec,
+                    rpc: full_name,
+                    data: match &self.spec.specs[*arg] {
+                        NP_RPC_Spec::MSG { factory, .. } => factory.open_buffer(bytes[22..].to_vec()),
+                        _ => return Err(NP_Error::new("unreachable"))
+                    }
+                })
+            },
+            _ => return Err(NP_Error::new("Can't find associated RPC Method."))
+        }
     }
 
     /// Generate a new response object for a given rpc function
