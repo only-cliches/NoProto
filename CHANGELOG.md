@@ -1,3 +1,7 @@
+# 0.6.3 
+- Restored hashmap code for faster RPC lookups.
+- 
+
 # 0.6.2 December 20, 2020
 - Removed hashmap as it didn't help performance enough to justify the extra code/complexity.
 - Some minor optimizations and code clean up.

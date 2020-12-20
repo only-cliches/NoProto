@@ -6,6 +6,8 @@
 //! 
 //! This RPC framework has *zero* transport code and is transport agnostic.  You can send bytes between the server/client using any method you'd like.
 //! 
+//! It's also possible to send messages in either direction, the Client & Server both have the ability to encode/decode requests and responses.
+//! 
 //! # RPC JSON Spec
 //! 
 //! Before you can send bytes between servers and clients, you must let NoProto know the shape and format of your endpoints, requests and responses.  Like schemas, RPC specs are written as JSON.
@@ -290,7 +292,7 @@
 //! 
 //! 
 
-use crate::utils::opt_err;
+use crate::{hashmap::NP_HashMap, utils::opt_err};
 use crate::NP_Factory;
 use crate::NP_Schema;
 use alloc::prelude::v1::Box;
@@ -301,8 +303,9 @@ use crate::{NP_JSON, buffer::NP_Buffer, error::NP_Error};
 
 
 /// The different kinds of rpc functions
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[doc(hidden)]
+#[repr(u8)]
 pub enum RPC_Fn_Kinds {
     /// Normal function, doesn't return result or option
     normal,
@@ -344,13 +347,6 @@ pub enum NP_RPC_Spec {
         full_name: String,
         /// Factory for this message
         factory: NP_Factory
-    },
-    /// RPC Module
-    MOD { 
-        /// Module name
-        name: String, 
-        /// Module path
-        module_path: String 
     }
 }
 
@@ -365,6 +361,7 @@ pub struct NP_RPC_Factory {
     pub id: [u8; 19],
     /// Specification for this factory
     spec: NP_RPC_Specification,
+    method_hash: NP_HashMap,
     /// blank buffer
     empty: NP_Factory
 }
@@ -376,7 +373,10 @@ pub struct NP_RPC_Specification {
     /// Specification for this factory
     pub specs: Vec<NP_RPC_Spec>,
     /// Compiled spec
-    pub compiled: Vec<u8>
+    pub compiled: Vec<u8>,
+    owned_strings: Vec<String>,
+    /// Message HashMap
+    message_hash: NP_HashMap
 }
 
 struct Parsed_Fn {
@@ -398,11 +398,6 @@ impl NP_RPC_Factory {
 
         let parsed = json_decode(String::from(json_rcp_spec))?;
 
-        let mut spec = NP_RPC_Specification { specs: Vec::new(), compiled: Vec::new() };
-
-        NP_RPC_Factory::parse_json_msg("mod", &parsed, &mut spec)?;
-        NP_RPC_Factory::parse_json_rpc("", "mod", &parsed, &mut spec)?;
-
         let version = String::from(match &parsed["version"] { NP_JSON::String(version) => { version }, _ => { "" } }).split(".").map(|s| s.parse::<u8>().unwrap_or(0)).collect::<Vec<u8>>();
         let author_str = match &parsed["author"] { NP_JSON::String(author) => { author }, _ => { "" } };
         let id_str = String::from(match &parsed["id"] { NP_JSON::String(id) => { id }, _ => { "" } }).replace("-", "");
@@ -423,9 +418,49 @@ impl NP_RPC_Factory {
         id_bytes[17] = version[1];
         id_bytes[18] = version[2];
 
+        let mut spec = NP_RPC_Specification { specs: Vec::with_capacity(1024), compiled: Vec::with_capacity(1024), message_hash: NP_HashMap::new(), owned_strings: Vec::with_capacity(1024) };
+
+        // first 2 bytes contains the offset of the first rpc method
+        spec.compiled.extend_from_slice(&0u16.to_be_bytes());
+
+        if name_str.len() > core::u16::MAX as usize {
+            return Err(NP_Error::new("API name cannot be longer than 2^16 UTF8 bytes"));
+        }
+        
+        // next bytes are name
+        spec.compiled.extend_from_slice(&(name_str.len() as u16).to_be_bytes());
+        spec.compiled.extend_from_slice(&name_str.as_bytes());
+
+        // next 19 bytes are version
+        spec.compiled.extend_from_slice(&id_bytes);
+
+        // now the messages
+        NP_RPC_Factory::parse_json_msg("mod", &parsed, &mut spec)?;
+        if spec.compiled.len() > core::u16::MAX as usize {
+            return Err(NP_Error::new("Too many messages in spec, can't compile."))
+        }
+        // set first 2 bytes to correct offset after we've inserted all messages
+        for (x, b) in (spec.compiled.len() as u16).to_be_bytes().iter().enumerate() {
+            spec.compiled[x] = *b;
+        }
+        // and finally the methods
+        NP_RPC_Factory::parse_json_rpc("", "mod", &parsed, &mut spec)?;
+
+        let mut method_hash: NP_HashMap = NP_HashMap::new();
+
+        for (idx, one_spec) in spec.specs.iter().enumerate() {
+            match one_spec {
+                NP_RPC_Spec::RPC { full_name, .. } => {
+                    method_hash.insert(full_name, idx)?;
+                },
+                _ => {}
+            }
+        }
+
         Ok(Self {
             name: String::from(name_str),
             author: String::from(author_str),
+            method_hash,
             id: id_bytes,
             spec: spec,
             empty: NP_Factory::new_compiled([0u8].to_vec())
@@ -433,7 +468,7 @@ impl NP_RPC_Factory {
     }
 
     /// Parse RPC messages
-    pub fn parse_json_msg(module: &str, json: &NP_JSON, spec: &mut NP_RPC_Specification) -> Result<(), NP_Error> {
+    fn parse_json_msg(module: &str, json: &NP_JSON, spec: &mut NP_RPC_Specification) -> Result<(), NP_Error> {
         match &json["spec"] {
             NP_JSON::Array(json_spec) => {
                 for jspec in json_spec.iter() {
@@ -444,10 +479,19 @@ impl NP_RPC_Factory {
                                 schema: NP_Schema { is_sortable: schema.0, parsed: schema.2 },
                                 schema_bytes: schema.1
                             };
+                            let full_name = format!("{}::{}", module, msg_name);
+
+                            // insert this message address
+                            spec.message_hash.insert(&full_name, spec.compiled.len())?;
+
+                            let schema = factory.compile_schema();
+                            spec.compiled.extend_from_slice(&(schema.len() as u16).to_be_bytes());
+                            spec.compiled.extend(schema);
+
                             spec.specs.push(NP_RPC_Spec::MSG { 
                                 name: msg_name.clone(), 
                                 module_path: String::from(module), 
-                                full_name: format!("{}::{}", module, msg_name), 
+                                full_name, 
                                 factory: factory 
                             });
                         },
@@ -474,7 +518,7 @@ impl NP_RPC_Factory {
     }
 
     /// Parse RPC methods
-    pub fn parse_json_rpc(module: &str, msg_module: &str, json: &NP_JSON, spec: &mut NP_RPC_Specification) -> Result<(), NP_Error> {
+    fn parse_json_rpc(module: &str, msg_module: &str, json: &NP_JSON, spec: &mut NP_RPC_Specification) -> Result<(), NP_Error> {
         match &json["spec"] {
             NP_JSON::Array(json_spec) => {
                 for jspec in json_spec.iter() {
@@ -484,10 +528,41 @@ impl NP_RPC_Factory {
                                 NP_JSON::String(fn_def) => {
                                     let parsed_def = NP_RPC_Factory::method_string_parse(msg_module, fn_def)?;
 
+                                    let full_name = if module == "" { String::from(rpc_name) } else { format!("{}.{}", module, rpc_name) };
+
+                                    // compile the RPC spec
+                                    spec.compiled.extend_from_slice(&(full_name.len() as u16).to_be_bytes());
+                                    spec.compiled.extend_from_slice(&full_name.as_bytes());
+                                    spec.compiled.push(parsed_def.kind as u8);
+
+                                    if parsed_def.arg.len() == 0 { 
+                                        spec.compiled.extend_from_slice(&0u16.to_be_bytes());
+                                    } else {
+                                        let arg_addr = opt_err(spec.message_hash.get(&parsed_def.arg))?;
+                                        spec.compiled.extend_from_slice(&(*arg_addr as u16).to_be_bytes());                                        
+                                    }
+
+                                    if parsed_def.result.len() == 0 || parsed_def.result == "()" {
+                                        spec.compiled.extend_from_slice(&0u16.to_be_bytes());
+                                    } else {
+                                        let result_addr = opt_err(spec.message_hash.get(&parsed_def.result))?;
+                                        spec.compiled.extend_from_slice(&(*result_addr as u16).to_be_bytes());      
+                                    }
+
+                                    if parsed_def.kind == RPC_Fn_Kinds::result {
+                                        if parsed_def.err.len() == 0 || parsed_def.err == "()" { 
+                                            spec.compiled.extend_from_slice(&0u16.to_be_bytes());
+                                        } else { 
+                                            let err_addr = opt_err(spec.message_hash.get(&parsed_def.err))?;
+                                            spec.compiled.extend_from_slice(&(*err_addr as u16).to_be_bytes());   
+                                        }                                        
+                                    }
+
+                                    // provide struct data
                                     spec.specs.push(NP_RPC_Spec::RPC { 
                                         name: rpc_name.clone(),
                                         module_path: String::from(module),
-                                        full_name: if module == "" { String::from(rpc_name) } else { format!("{}.{}", module, rpc_name) } ,
+                                        full_name,
                                         arg: if parsed_def.arg.len() == 0 { 
                                             None
                                         } else {
@@ -536,6 +611,8 @@ impl NP_RPC_Factory {
         Ok(())
     }
 
+    /// Find a particular message in the spec vec
+    /// 
     fn find_msg(msg_name: &String, spec: &NP_RPC_Specification) -> Result<usize, NP_Error> {
         if msg_name == "" { return Err(NP_Error::new("Missing message decleration in rpc method.")) }
         let mut idx = 0usize;
@@ -564,6 +641,7 @@ impl NP_RPC_Factory {
     /// "(self::get) -> Option<self::get>"
     /// "(self::get) -> self::get"
     /// "() -> self::get"
+    /// "() => ()"
     /// 
     fn method_string_parse(module: &str, function_str: &str) -> Result<Parsed_Fn, NP_Error> {
         let fn_kind = {
@@ -609,30 +687,23 @@ impl NP_RPC_Factory {
     pub fn new_compiled(bytes_rpc_spec: Vec<u8>) -> Result<Self, NP_Error>  {
         todo!()
     }
-
+*/
     /// Get a copy of the compiled byte array spec
     /// 
     pub fn compile_schema(&self) -> Vec<u8> {
-        // self.spec.compiled.clone()
-        todo!()
+        self.spec.compiled.clone()
     }
 
-    /// Export the spec of this factory to JSON.
-    /// 
-    pub fn export_spec(&self) -> Result<NP_JSON, NP_Error> {
-        todo!()
-    }
-*/
     /// Generate a new request object for a given rpc function
     /// 
     pub fn new_request(&self, rpc_name: &str) -> Result<NP_RPC_Request, NP_Error> {
-        let mut idx = 0usize;
-        for spec in &self.spec.specs {
-            match spec {
-                NP_RPC_Spec::RPC { full_name, arg,   .. } => {
-                    if full_name == rpc_name {
+
+        match self.method_hash.get(rpc_name) {
+            Some(idx) => {
+                match &self.spec.specs[*idx] {
+                    NP_RPC_Spec::RPC { full_name, arg,   .. } => {
                         return Ok(NP_RPC_Request {
-                            rpc_addr: idx,
+                            rpc_addr: *idx,
                             id: self.id,
                             spec: &self.spec,
                             rpc: full_name,
@@ -647,14 +718,12 @@ impl NP_RPC_Factory {
                                 None => self.empty.empty_buffer(None)
                             }
                         })
-                    }
-                },
-                _ => { }
-            }
-            idx +=1;
+                    },
+                    _ => Err(NP_Error::new("Cannot find request."))
+                }
+            },
+            None => Err(NP_Error::new("Cannot find request."))
         }
-
-        Err(NP_Error::new("Cannot find request."))
     }
 
     /// Open a request.  The request spec and version must match the current spec and version of this factory.
@@ -701,13 +770,12 @@ impl NP_RPC_Factory {
     /// Generate a new response object for a given rpc function
     /// 
     pub fn new_response(&self, rpc_name: &str) -> Result<NP_RPC_Response, NP_Error> {
-        let mut idx = 0usize;
-        for spec in &self.spec.specs {
-            match spec {
-                NP_RPC_Spec::RPC { full_name, result, err,   .. } => {
-                    if full_name == rpc_name {
+        match self.method_hash.get(rpc_name) {
+            Some(idx) => {
+                match &self.spec.specs[*idx] {
+                    NP_RPC_Spec::RPC { full_name, result, err,   .. } => {
                         return Ok(NP_RPC_Response {
-                            rpc_addr: idx,
+                            rpc_addr: *idx,
                             rpc: full_name,
                             kind: NP_ResponseKinds::None,
                             id: self.id,
@@ -731,14 +799,13 @@ impl NP_RPC_Factory {
                                 None => self.empty.empty_buffer(None)
                             }
                         })
-                    }
-                },
-                _ => { }
-            }
-            idx +=1;
+                    },
+                    _ => Err(NP_Error::new("Cannot find response!"))
+                }
+            },
+            None => Err(NP_Error::new("Cannot find response!"))
         }
 
-        Err(NP_Error::new("Cannot find response!"))
     }
 
     /// Open a response.  The response spec and version must match the current spec and version of this factory.

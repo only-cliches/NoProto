@@ -150,7 +150,7 @@ In my opinion the benchmarks above make NoProto the clear winner if you ever pla
 I also think there's a strong argument here against using data without a schema.  The cost of an entirely flexible formats like JSON or BSON is crazy.  Putting schemas on your data not only increases your data hygiene but makes the storage of the data far more comapct while increasing the deserialization and serialization perfomrance substantially.
 
 #### Limitations
-- Buffers cannot be larger than 2^16 bytes (~16kb).
+- Buffers cannot be larger than 2^16 bytes (~64kb).
 - Collections (Lists, Maps, Tuples & Tables) cannot have more than 255 immediate child items.
 - Enum/Option types are limited to 255 choices and choice strings cannot be larger than 255 bytes.
 - Tables are limited to 255 columns and column names cannot be larger than 255 bytes.
