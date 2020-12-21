@@ -1,4 +1,4 @@
-## Simple & Performant Zero-Copy Serialization
+## Simple & Performant Serialization with RPC
 Performance of Protocol Buffers with flexibility of JSON
 
 [Github](https://github.com/ClickSimply/NoProto) | [Crates.io](https://crates.io/crates/no_proto) | [Documentation](https://docs.rs/no_proto)
@@ -110,9 +110,6 @@ let user_bytes: Vec<u8> = user_buffer.close();
 
 // we can now save user_bytes to disk, 
 // send it over the network, or whatever else is needed with the data
-
-
-# Ok::<(), NP_Error>(()) 
 ```
 
 ## Guided Learning / Next Steps:
