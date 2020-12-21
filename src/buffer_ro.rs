@@ -1,4 +1,7 @@
-//! Top level abstraction for buffer objects
+//! Top level abstraction for buffer objects (read only)
+//! 
+//! 
+//! 
 
 use crate::NP_Size_Data;
 use crate::{NP_Memory_Writable, buffer::NP_Buffer};
@@ -36,16 +39,14 @@ pub const VTABLE_BYTES: usize = 10;
 pub struct NP_Buffer_RO<'buffer> {
     /// Schema data used by this buffer
     memory: NP_Memory_ReadOnly<'buffer>,
-    cursor: NP_Cursor,
-    sortable: bool
+    cursor: NP_Cursor
 }
 
 impl<'buffer> Clone for NP_Buffer_RO<'buffer> {
     fn clone(&self) -> Self {
         Self {
             memory: self.memory.clone(),
-            cursor: self.cursor.clone(),
-            sortable: self.sortable
+            cursor: self.cursor.clone()
         }
     }
 }
@@ -55,28 +56,16 @@ impl<'buffer> NP_Buffer_RO<'buffer> {
     #[doc(hidden)]
     pub fn _new(memory: NP_Memory_ReadOnly<'buffer>) -> Self { // make new buffer
 
-        let mut is_sortable: bool = false;
-        // is the root a sortable tuple?  if so, create its children and vtables
-        match memory.get_schema()[0] {
-            NP_Parsed_Schema::Tuple { sortable, .. } => {
-                if sortable {
-                    is_sortable = true;
-                }
-            },
-            _ => {}
-        };
-
         NP_Buffer_RO {
             cursor: NP_Cursor::new(memory.root, 0, 0),
-            memory: memory,
-            sortable: is_sortable
+            memory: memory
         }
     }
 
     /// Copy this read only buffer into a writable one
     /// 
     pub fn get_writable(&self) -> NP_Buffer {
-        NP_Buffer::_new(NP_Memory_Writable::existing(self.read_bytes().to_vec(), self.memory.get_schema(), self.memory.get_root()))
+        NP_Buffer::_new(NP_Memory_Writable::existing(self.read_bytes().to_vec(), self.memory.get_schemas(), self.memory.get_root()))
     }
 
     /// Copy an object at the provided path and all it's children into JSON.
@@ -187,7 +176,7 @@ impl<'buffer> NP_Buffer_RO<'buffer> {
     /// ```
     /// 
     pub fn close_sortable(self) -> Result<Vec<u8>, NP_Error> {
-        match &self.memory.get_schema()[0] {
+        match &self.memory.get_schema(0) {
             NP_Parsed_Schema::Tuple { values, sortable, .. } => {
                 if *sortable == false {
                     Err(NP_Error::new("Attempted to close_sortable() on buffer that isn't sortable!"))
@@ -217,7 +206,7 @@ impl<'buffer> NP_Buffer_RO<'buffer> {
 
     /// Move buffer cursor to new location.  Cursors can only be moved into children.  If you need to move up reset the cursor to root, then move back down to the desired level.
     /// 
-    /// This also creates objects/collections along the path as needed.  If you attempt to move into a path that doesn't exist, this method will return `false`.  Otherwise it will return `true` of the path requested exists or is something that can be made to exist.
+    /// If you attempt to move into a path that doesn't exist, this method will return `false`. 
     /// 
     pub fn move_cursor(&mut self, path: &[&str]) -> Result<bool, NP_Error> {
 
@@ -530,7 +519,7 @@ impl<'buffer> NP_Buffer_RO<'buffer> {
         let addr_value = found_cursor.get_value(&self.memory).get_addr_value();
 
 
-        match &self.memory.get_schema()[found_cursor.schema_addr] {
+        match &self.memory.get_schema(found_cursor.schema_addr) {
             NP_Parsed_Schema::List { of, .. } => {
                 if addr_value == 0 {
                     return Ok(None);
@@ -630,11 +619,11 @@ impl<'buffer> NP_Buffer_RO<'buffer> {
             Some(x) => {
                                 
                 // type does not match schema
-                if X::type_idx().1 != *self.memory.get_schema()[x.schema_addr].get_type_key() {
+                if X::type_idx().1 != *self.memory.get_schema(x.schema_addr).get_type_key() {
                     let mut err = "TypeError: Attempted to get value for type (".to_owned();
                     err.push_str(X::type_idx().0);
                     err.push_str(") for schema of type (");
-                    err.push_str(self.memory.get_schema()[x.schema_addr].get_type_data().0);
+                    err.push_str(self.memory.get_schema(x.schema_addr).get_type_data().0);
                     err.push_str(")\n");
                     return Err(NP_Error::new(err));
                 }
@@ -644,7 +633,7 @@ impl<'buffer> NP_Buffer_RO<'buffer> {
                         Ok(Some(x))
                     },
                     None => { // no value found here, return default from schema
-                        match X::schema_default(&self.memory.get_schema()[x.schema_addr]) {
+                        match X::schema_default(&self.memory.get_schema(x.schema_addr)) {
                             Some(y) => {
                                 Ok(Some(y))
                             },
@@ -661,11 +650,14 @@ impl<'buffer> NP_Buffer_RO<'buffer> {
 
     /// This performs a compaction if the closure provided as the second argument returns `true`.
     /// Compaction is a pretty expensive operation (requires full copy of the whole buffer) so should be done sparingly.
+    /// 
+    /// For read only buffers the compaction method compacts into a writable buffer.
+    /// 
     /// The closure is provided an argument that contains the original size of the buffer, how many bytes could be saved by compaction, and how large the new buffer would be after compaction.  The closure should return `true` to perform compaction, `false` otherwise.
     /// 
     /// The first argument, new_capacity, is the capacity of the underlying Vec<u8> that we'll be copying the data into.  The default is the size of the old buffer.
     /// 
-    /// **WARNING** Your cursor location and backup will be reset to the root.
+    /// **WARNING** Your cursor location will be reset to the root.
     /// 
     /// 
     pub fn maybe_compact<F>(&mut self, new_capacity: Option<usize>, mut callback: F) -> Result<NP_Buffer, NP_Error> where F: FnMut(NP_Size_Data) -> bool {
@@ -682,9 +674,11 @@ impl<'buffer> NP_Buffer_RO<'buffer> {
     /// Compacts a buffer to remove an unused bytes or free space after a mutation.
     /// This is a pretty expensive operation (requires full copy of the whole buffer) so should be done sparingly.
     /// 
+    /// For read only buffers the compaction method compacts into a writable buffer.
+    /// 
     /// The first argument, new_capacity, is the capacity of the underlying Vec<u8> that we'll be copying the data into.  The default is the size of the old buffer.
     /// 
-    /// **WARNING** Your cursor location and backup will be reset to the root.
+    /// **WARNING** Your cursor location will be reset to the root.
     /// 
     /// 
     pub fn compact<'compact>(&mut self, new_capacity: Option<usize>) -> Result<NP_Buffer, NP_Error> {
@@ -747,6 +741,7 @@ impl<'buffer> NP_Buffer_RO<'buffer> {
         }
     }
 
+
     fn select(&self, cursor: NP_Cursor, path: &[&str]) -> Result<Option<NP_Cursor>, NP_Error> {
 
         let mut loop_cursor = cursor;
@@ -760,19 +755,19 @@ impl<'buffer> NP_Buffer_RO<'buffer> {
             }
 
             // now select into collections
-            match &self.memory.get_schema()[loop_cursor.schema_addr] {
-                NP_Parsed_Schema::Table {  .. } => {
-                    if let Some(next) = NP_Table::select(loop_cursor, path[path_index], false, &self.memory)? {
+            match &self.memory.get_schema(loop_cursor.schema_addr) {
+                NP_Parsed_Schema::Table { columns, .. } => {
+                    if let Some(next) = NP_Table::select(loop_cursor, columns, path[path_index], false, &self.memory)? {
                         loop_cursor = next;
                         path_index += 1;
                     } else {
                         return Ok(None);
                     }
                 },
-                NP_Parsed_Schema::Tuple { .. } => {
+                NP_Parsed_Schema::Tuple { values, .. } => {
                     match path[path_index].parse::<usize>() {
                         Ok(x) => {
-                            if let Some(next) = NP_Tuple::select(loop_cursor, x, false, &self.memory)? {
+                            if let Some(next) = NP_Tuple::select(loop_cursor, values, x, false, &self.memory)? {
                                 loop_cursor = next;
                                 path_index += 1;
                             } else {
@@ -848,7 +843,7 @@ impl<'item> NP_Item<'item> {
                     Ok(Some(x))
                 },
                 None => {
-                    match X::schema_default(&self.memory.get_schema()[cursor.schema_addr]) {
+                    match X::schema_default(&self.memory.get_schema(cursor.schema_addr)) {
                         Some(y) => {
                             Ok(Some(y))
                         },
@@ -885,7 +880,7 @@ pub enum NP_Iterator_Collection<'col> {
 #[allow(missing_docs)]
 impl<'col> NP_Iterator_Collection<'col> {
     pub fn new<M: NP_Memory>(cursor: NP_Cursor, memory: &'col M) -> Result<Self, NP_Error> {
-        match memory.get_schema()[cursor.schema_addr] {
+        match &memory.get_schema(cursor.schema_addr) {
             NP_Parsed_Schema::Table { .. } => {
                 let table = NP_Table::new_iter(&cursor, memory);
                 Ok(NP_Iterator_Collection::Table(table))

@@ -39,8 +39,8 @@ impl NP_List {
 
         if index > 255 { return Ok(None) }
 
-        let schema_of = match memory.get_schema()[list_cursor.schema_addr] {
-            NP_Parsed_Schema::List { of, .. } => of,
+        let schema_of = match memory.get_schema(list_cursor.schema_addr) {
+            NP_Parsed_Schema::List { of, .. } => *of,
             _ => 0
         };
 
@@ -177,8 +177,8 @@ impl NP_List {
 
         let list_addr = value.get_addr_value() as usize;
 
-        let schema_of = match memory.get_schema()[list_cursor.schema_addr] {
-            NP_Parsed_Schema::List { of, .. } => of,
+        let schema_of = match memory.get_schema(list_cursor.schema_addr) {
+            NP_Parsed_Schema::List { of, .. } => *of,
             _ => 0
         };
 
@@ -284,7 +284,7 @@ impl NP_List {
             Self::make_list(&list_cursor, memory)?;
         }
 
-        match memory.get_schema()[list_cursor.schema_addr] {
+        match memory.get_schema(list_cursor.schema_addr) {
             NP_Parsed_Schema::List {  of, .. } => {
 
                 let mut new_index: usize = index.unwrap_or(0);
@@ -293,7 +293,7 @@ impl NP_List {
 
                 let list_data = Self::get_list(list_value.get_addr_value() as usize, memory);
 
-                let new_cursor = NP_Cursor::new(new_item_addr, of, list_cursor.schema_addr);
+                let new_cursor = NP_Cursor::new(new_item_addr, *of, list_cursor.schema_addr);
                 let new_cursor_value = new_cursor.get_value(memory);
                 
 
@@ -305,7 +305,7 @@ impl NP_List {
                     }
                     new_cursor_value.set_index(new_index as u8)
                 } else { // list has items
-                    let old_tail = NP_Cursor::new(list_data.get_tail() as usize, of, list_cursor.schema_addr);
+                    let old_tail = NP_Cursor::new(list_data.get_tail() as usize, *of, list_cursor.schema_addr);
                     let old_tail_value = old_tail.get_value(memory);
                     old_tail_value.set_next_addr(new_item_addr as u16);
                     new_index = if let Some(idx) = index {

@@ -90,8 +90,8 @@ impl<'value> NP_Value<'value> for &'value [u8] {
     
         let mut write_bytes = memory.write_bytes();
     
-        let size = match memory.get_schema()[cursor.schema_addr] {
-            NP_Parsed_Schema::Bytes { size, .. } => size,
+        let size = match memory.get_schema(cursor.schema_addr) {
+            NP_Parsed_Schema::Bytes { size, .. } => *size,
             _ => 0
         };
     
@@ -189,18 +189,18 @@ impl<'value> NP_Value<'value> for &'value [u8] {
             return Ok(None);
         }
 
-        match memory.get_schema()[cursor.schema_addr] {
+        match memory.get_schema(cursor.schema_addr) {
             NP_Parsed_Schema::Bytes {
                 i: _,
                 sortable: _,
                 default: _,
                 size,
             } => {
-                if size > 0 {
+                if *size > 0 {
                     // fixed size
 
                     // get bytes
-                    let bytes = &memory.read_bytes()[(value_addr)..(value_addr + (size as usize))];
+                    let bytes = &memory.read_bytes()[(value_addr)..(value_addr + (*size as usize))];
 
                     return Ok(Some(bytes));
                 } else {
@@ -233,7 +233,7 @@ impl<'value> NP_Value<'value> for &'value [u8] {
                     },
                     None => {
 
-                        match &memory.get_schema()[cursor.schema_addr] {
+                        match &memory.get_schema(cursor.schema_addr) {
                             NP_Parsed_Schema::Bytes { default, .. } => {
                                 match default {
                                     Some(x) => {
@@ -266,11 +266,11 @@ impl<'value> NP_Value<'value> for &'value [u8] {
             return Ok(0);
         }
 
-        match memory.get_schema()[cursor.schema_addr] {
+        match memory.get_schema(cursor.schema_addr) {
             NP_Parsed_Schema::Bytes { size, .. } => {
                 // fixed size
-                if size > 0 {
-                    return Ok(size as usize);
+                if *size > 0 {
+                    return Ok(*size as usize);
                 }
 
                 // dynamic size

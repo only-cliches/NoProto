@@ -35,16 +35,14 @@ pub const VTABLE_BYTES: usize = 10;
 pub struct NP_Buffer<'buffer> {
     /// Schema data used by this buffer
     memory: NP_Memory_Writable<'buffer>,
-    cursor: NP_Cursor,
-    sortable: bool
+    cursor: NP_Cursor
 }
 
 impl<'buffer> Clone for NP_Buffer<'buffer> {
     fn clone(&self) -> Self {
         Self {
             memory: self.memory.clone(),
-            cursor: self.cursor.clone(),
-            sortable: self.sortable
+            cursor: self.cursor.clone()
         }
     }
 }
@@ -54,13 +52,11 @@ impl<'buffer> NP_Buffer<'buffer> {
     #[doc(hidden)]
     pub fn _new(memory: NP_Memory_Writable<'buffer>) -> Self { // make new buffer
 
-        let mut is_sortable: bool = false;
         // is the root a sortable tuple?  if so, create its children and vtables
-        match memory.get_schema()[0] {
-            NP_Parsed_Schema::Tuple { sortable, .. } => {
-                if sortable {
-                    NP_Tuple::select(NP_Cursor::new(memory.root, 0, 0), 0, true, &memory).unwrap_or(None);
-                    is_sortable = true;
+        match memory.get_schema(0) {
+            NP_Parsed_Schema::Tuple { sortable, values, .. } => {
+                if *sortable {
+                    NP_Tuple::select(NP_Cursor::new(memory.root, 0, 0), values,  0, true, &memory).unwrap_or(None);
                 }
             },
             _ => {}
@@ -68,8 +64,7 @@ impl<'buffer> NP_Buffer<'buffer> {
 
         NP_Buffer {
             cursor: NP_Cursor::new(memory.root, 0, 0),
-            memory: memory,
-            sortable: is_sortable
+            memory: memory
         }
     }
 
@@ -178,7 +173,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// ```
     /// 
     pub fn close_sortable(self) -> Result<Vec<u8>, NP_Error> {
-        match &self.memory.get_schema()[0] {
+        match &self.memory.get_schema(0) {
             NP_Parsed_Schema::Tuple { values, sortable, .. } => {
                 if *sortable == false {
                     Err(NP_Error::new("Attempted to close_sortable() on buffer that isn't sortable!"))
@@ -267,11 +262,11 @@ impl<'buffer> NP_Buffer<'buffer> {
             Some(x) => {
 
                 // type does not match schema
-                if X::type_idx().1 != *self.memory.get_schema()[x.schema_addr].get_type_key() {
+                if X::type_idx().1 != *self.memory.get_schema(x.schema_addr).get_type_key() {
                     let mut err = "TypeError: Attempted to set value for type (".to_owned();
                     err.push_str(X::type_idx().0);
                     err.push_str(") into schema of type (");
-                    err.push_str(self.memory.get_schema()[x.schema_addr].get_type_data().0);
+                    err.push_str(self.memory.get_schema(x.schema_addr).get_type_data().0);
                     err.push_str(")\n");
                     return Err(NP_Error::new(err));
                 }
@@ -509,10 +504,10 @@ impl<'buffer> NP_Buffer<'buffer> {
             None => return Ok(None)
         }};
 
-        match self.memory.get_schema()[list_cursor.schema_addr] {
+        match &self.memory.get_schema(list_cursor.schema_addr) {
             NP_Parsed_Schema::List { of, .. } => {
 
-                let of_schema = &self.memory.get_schema()[of];
+                let of_schema = &self.memory.get_schema(*of);
 
                 // type does not match schema
                 if X::type_idx().1 != *of_schema.get_type_key() {
@@ -659,7 +654,7 @@ impl<'buffer> NP_Buffer<'buffer> {
         let addr_value = found_cursor.get_value(&self.memory).get_addr_value();
 
 
-        match &self.memory.get_schema()[found_cursor.schema_addr] {
+        match &self.memory.get_schema(found_cursor.schema_addr) {
             NP_Parsed_Schema::List { of, .. } => {
                 if addr_value == 0 {
                     return Ok(None);
@@ -749,11 +744,16 @@ impl<'buffer> NP_Buffer<'buffer> {
     pub fn del(&mut self, path: &[&str]) -> Result<bool, NP_Error> {
 
         let value_cursor = self.select(self.cursor.clone(), false, path)?;
+
+        let is_sortable = match &self.memory.get_schema(0) {
+            NP_Parsed_Schema::Tuple { sortable , ..} => *sortable,
+            _ => false
+        };
         
         match value_cursor {
             Some(x) => {
-                if self.sortable {
-                    match &self.memory.get_schema()[x.schema_addr] {
+                if is_sortable {
+                    match &self.memory.get_schema(x.schema_addr) {
                         NP_Parsed_Schema::Table { .. } => { return Ok(false) },
                         NP_Parsed_Schema::Tuple { .. } => { return Ok(false) },
                         NP_Parsed_Schema::List { .. } => { return Ok(false) },
@@ -808,11 +808,11 @@ impl<'buffer> NP_Buffer<'buffer> {
             Some(x) => {
                                 
                 // type does not match schema
-                if X::type_idx().1 != *self.memory.get_schema()[x.schema_addr].get_type_key() {
+                if X::type_idx().1 != *self.memory.get_schema(x.schema_addr).get_type_key() {
                     let mut err = "TypeError: Attempted to get value for type (".to_owned();
                     err.push_str(X::type_idx().0);
                     err.push_str(") for schema of type (");
-                    err.push_str(self.memory.get_schema()[x.schema_addr].get_type_data().0);
+                    err.push_str(self.memory.get_schema(x.schema_addr).get_type_data().0);
                     err.push_str(")\n");
                     return Err(NP_Error::new(err));
                 }
@@ -822,7 +822,7 @@ impl<'buffer> NP_Buffer<'buffer> {
                         Ok(Some(x))
                     },
                     None => { // no value found here, return default from schema
-                        match X::schema_default(&self.memory.get_schema()[x.schema_addr]) {
+                        match X::schema_default(&self.memory.get_schema(x.schema_addr)) {
                             Some(y) => {
                                 Ok(Some(y))
                             },
@@ -1006,6 +1006,7 @@ impl<'buffer> NP_Buffer<'buffer> {
         }
     }
 
+
     fn select(&self, cursor: NP_Cursor, make_path: bool, path: &[&str]) -> Result<Option<NP_Cursor>, NP_Error> {
 
         let mut loop_cursor = cursor;
@@ -1019,19 +1020,19 @@ impl<'buffer> NP_Buffer<'buffer> {
             }
 
             // now select into collections
-            match &self.memory.get_schema()[loop_cursor.schema_addr] {
-                NP_Parsed_Schema::Table {  .. } => {
-                    if let Some(next) = NP_Table::select(loop_cursor, path[path_index], make_path, &self.memory)? {
+            match &self.memory.get_schema(loop_cursor.schema_addr) {
+                NP_Parsed_Schema::Table { columns, .. } => {
+                    if let Some(next) = NP_Table::select(loop_cursor, columns, path[path_index], make_path, &self.memory)? {
                         loop_cursor = next;
                         path_index += 1;
                     } else {
                         return Ok(None);
                     }
                 },
-                NP_Parsed_Schema::Tuple { .. } => {
+                NP_Parsed_Schema::Tuple { values, .. } => {
                     match path[path_index].parse::<usize>() {
                         Ok(x) => {
-                            if let Some(next) = NP_Tuple::select(loop_cursor, x, make_path, &self.memory)? {
+                            if let Some(next) = NP_Tuple::select(loop_cursor, values, x, make_path, &self.memory)? {
                                 loop_cursor = next;
                                 path_index += 1;
                             } else {
@@ -1108,7 +1109,7 @@ impl<'item> NP_Item<'item> {
                     Ok(Some(x))
                 },
                 None => {
-                    match X::schema_default(&self.memory.get_schema()[cursor.schema_addr]) {
+                    match X::schema_default(&self.memory.get_schema(cursor.schema_addr)) {
                         Some(y) => {
                             Ok(Some(y))
                         },
@@ -1128,18 +1129,18 @@ impl<'item> NP_Item<'item> {
         if let Some(cursor) = self.cursor {
             X::set_value(cursor.clone(), self.memory, value)?;
         } else {
-            match self.memory.get_schema()[self.parent.schema_addr] {
+            match self.memory.get_schema(self.parent.schema_addr) {
                 // maps don't let you select values that don't exist in the buffer yet
                 NP_Parsed_Schema::List { .. } => {
                     let item = opt_err(opt_err(NP_List::select(self.parent.clone(), self.index, true, self.memory)?)?.1)?;
                     X::set_value(item, self.memory, value)?;
                 }
-                NP_Parsed_Schema::Table { .. } => {
-                    let item = opt_err(NP_Table::select(self.parent.clone(), self.key, true, self.memory)?)?;
+                NP_Parsed_Schema::Table { columns, .. } => {
+                    let item = opt_err(NP_Table::select(self.parent.clone(), columns, self.key, true, self.memory)?)?;
                     X::set_value(item, self.memory, value)?;
                 },
-                NP_Parsed_Schema::Tuple { .. } => {
-                    let item = opt_err(NP_Tuple::select(self.parent.clone(), self.index, true, self.memory)?)?;
+                NP_Parsed_Schema::Tuple { values, .. } => {
+                    let item = opt_err(NP_Tuple::select(self.parent.clone(), values, self.index, true, self.memory)?)?;
                     X::set_value(item, self.memory, value)?;
                 }
                 _ => { }
@@ -1182,7 +1183,7 @@ pub enum NP_Iterator_Collection<'col> {
 #[allow(missing_docs)]
 impl<'col> NP_Iterator_Collection<'col> {
     pub fn new<M: NP_Memory>(cursor: NP_Cursor, memory: &'col M) -> Result<Self, NP_Error> {
-        match memory.get_schema()[cursor.schema_addr] {
+        match memory.get_schema(cursor.schema_addr) {
             NP_Parsed_Schema::Table { .. } => {
                 let table = NP_Table::new_iter(&cursor, memory);
                 Ok(NP_Iterator_Collection::Table(table))

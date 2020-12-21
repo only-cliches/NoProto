@@ -12,7 +12,8 @@ use alloc::vec::Vec;
 pub trait NP_Memory {
     fn is_mutable(&self) -> bool;
     fn get_root(&self) -> usize;
-    fn get_schema(&self) -> &Vec<NP_Parsed_Schema>;
+    fn get_schemas(&self) -> &Vec<NP_Parsed_Schema>;
+    fn get_schema(&self, idx: usize) -> &NP_Parsed_Schema;
     fn malloc_borrow(&self, bytes: &[u8])  -> Result<usize, NP_Error>;
     fn malloc(&self, bytes: Vec<u8>) -> Result<usize, NP_Error>;
     fn read_bytes(&self) -> &[u8];
@@ -89,8 +90,13 @@ impl<'memory> NP_Memory for NP_Memory_Writable<'memory> {
     }
 
     #[inline(always)]
-    fn get_schema(&self) -> &Vec<NP_Parsed_Schema> {
+    fn get_schemas(&self) -> &Vec<NP_Parsed_Schema> {
         self.schema
+    }
+
+    #[inline(always)]
+    fn get_schema(&self, idx: usize) -> &NP_Parsed_Schema {
+        &self.schema[idx]
     }
 
     #[inline(always)]
@@ -281,8 +287,13 @@ impl<'memory> NP_Memory for NP_Memory_ReadOnly<'memory> {
     }
 
     #[inline(always)]
-    fn get_schema(&self) -> &Vec<NP_Parsed_Schema> {
+    fn get_schemas(&self) -> &Vec<NP_Parsed_Schema> {
         self.schema
+    }
+
+    #[inline(always)]
+    fn get_schema(&self, idx: usize) -> &NP_Parsed_Schema {
+        &self.schema[idx]
     }
 
     #[inline(always)]

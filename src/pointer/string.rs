@@ -125,13 +125,13 @@ impl<'value> NP_Value<'value> for &'value str {
             return Ok(None);
         }
 
-        match memory.get_schema()[cursor.schema_addr] {
+        match memory.get_schema(cursor.schema_addr) {
             NP_Parsed_Schema::UTF8String { size, .. } => {
-                if size > 0 {
+                if *size > 0 {
                     // fixed size
 
                     // get bytes
-                    let bytes = &memory.read_bytes()[(value_addr)..(value_addr + (size as usize))];
+                    let bytes = &memory.read_bytes()[(value_addr)..(value_addr + (*size as usize))];
 
                     return Ok(Some(unsafe { str::from_utf8_unchecked(bytes) }));
                 } else {
@@ -169,11 +169,11 @@ impl<'value> NP_Value<'value> for &'value str {
             return Ok(0);
         }
 
-        match memory.get_schema()[cursor.schema_addr] {
+        match memory.get_schema(cursor.schema_addr) {
             NP_Parsed_Schema::UTF8String { size, .. } => {
                 // fixed size
-                if size > 0 {
-                    return Ok(size as usize);
+                if *size > 0 {
+                    return Ok(*size as usize);
                 }
 
                 // dynamic size
@@ -285,7 +285,7 @@ impl<'value> NP_Value<'value> for &'value str {
             Ok(x) => match x {
                 Some(y) => NP_JSON::String(y.to_string()),
                 None => {
-                    match &memory.get_schema()[cursor.schema_addr] {
+                    match &memory.get_schema(cursor.schema_addr) {
                         NP_Parsed_Schema::UTF8String { default, .. } => match default {
                             Some(x) => NP_JSON::String(x.to_string()),
                             None => NP_JSON::Null,
@@ -302,8 +302,8 @@ impl<'value> NP_Value<'value> for &'value str {
 
         let c_value = cursor.get_value(memory);
 
-        let (size, case) = match memory.get_schema()[cursor.schema_addr] {
-            NP_Parsed_Schema::UTF8String { size, case, .. } => (size, case),
+        let (size, case) = match memory.get_schema(cursor.schema_addr) {
+            NP_Parsed_Schema::UTF8String { size, case, .. } => (*size, *case),
             _ => (0, String_Case::None)
         };
 

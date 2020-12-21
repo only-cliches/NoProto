@@ -69,8 +69,8 @@ impl<'map> NP_Map<'map> {
     #[inline(always)]
     pub fn new_iter<M: NP_Memory>(map_cursor: &NP_Cursor, memory: &'map M) -> Self {
 
-        let value_of = match memory.get_schema()[map_cursor.schema_addr] {
-            NP_Parsed_Schema::Map { value, .. } => value,
+        let value_of = match memory.get_schema(map_cursor.schema_addr) {
+            NP_Parsed_Schema::Map { value, .. } => *value,
             _ => 0
         };
 
@@ -132,8 +132,8 @@ impl<'map> NP_Map<'map> {
     #[inline(always)]
     pub fn insert<M: NP_Memory>(map_cursor: &NP_Cursor, memory: &M, key: &str) -> Result<NP_Cursor, NP_Error> {
 
-        let value_of = match memory.get_schema()[map_cursor.schema_addr] {
-            NP_Parsed_Schema::Map { value, .. } => value,
+        let value_of = match memory.get_schema(map_cursor.schema_addr) {
+            NP_Parsed_Schema::Map { value, .. } => *value,
             _ => 0
         };
 

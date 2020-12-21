@@ -135,10 +135,10 @@ impl<'value> NP_Value<'value> for bool {
                         }
                     },
                     None => {                        
-                        match memory.get_schema()[cursor.schema_addr] {
+                        match memory.get_schema(cursor.schema_addr) {
                             NP_Parsed_Schema::Boolean { i: _, sortable: _, default} => {
                                 if let Some(d) = default {
-                                    if d == true {
+                                    if *d == true {
                                         NP_JSON::True
                                     } else {
                                         NP_JSON::False

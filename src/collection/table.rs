@@ -26,52 +26,49 @@ pub struct NP_Table<'table> {
 impl<'table> NP_Table<'table> {
 
     #[inline(always)]
-    pub fn select<M: NP_Memory>(mut table_cursor: NP_Cursor, key: &str, make_path: bool, memory: &M) -> Result<Option<NP_Cursor>, NP_Error> {
-        match &memory.get_schema()[table_cursor.schema_addr] {
-            NP_Parsed_Schema::Table { columns, .. } => {
+    pub fn select<M: NP_Memory>(mut table_cursor: NP_Cursor, columns: &Vec<(u8, String, usize)>,  key: &str, make_path: bool, memory: &M) -> Result<Option<NP_Cursor>, NP_Error> {
+       
+        match columns.iter().position(|val| { val.1 == key }) {
+            Some(x) => {
 
-                match columns.iter().position(|val| { val.1 == key }) {
-                    Some(x) => {
+                let v_table =  x / VTABLE_SIZE; // which vtable
+                let v_table_idx = x % VTABLE_SIZE; // which index on the selected vtable
 
-                        let v_table =  x / VTABLE_SIZE; // which vtable
-                        let v_table_idx = x % VTABLE_SIZE; // which index on the selected vtable
+                let mut table_value = table_cursor.get_value(memory);
 
-                        let mut table_value = table_cursor.get_value(memory);
-
-                        if table_value.get_addr_value() == 0 {
-                            if make_path {
-                                table_cursor = Self::make_first_vtable(table_cursor, memory)?;
-                            } else {
-                                return Ok(None);
-                            }
-                        }
+                if table_value.get_addr_value() == 0 {
+                    if make_path {
+                        table_cursor = Self::make_first_vtable(table_cursor, memory)?;
 
                         table_value = table_cursor.get_value(memory);
+                    } else {
+                        return Ok(None);
+                    }
+                }
 
-                        let mut seek_vtable = 0usize;
-                        let mut vtable_address = table_value.get_addr_value() as usize;
- 
-                        while seek_vtable < v_table {
-                            let this_vtable = Self::get_vtable(vtable_address, memory);
-                            let next_vtable = this_vtable.get_next();
+                let mut seek_vtable = 0usize;
+                let mut vtable_address = table_value.get_addr_value() as usize;
 
-                            if next_vtable == 0 {
-                                vtable_address = Self::make_next_vtable(this_vtable, memory)?;
-                            } else {
-                                vtable_address = next_vtable as usize;
-                            }
+                if v_table > 0 {
+                    while seek_vtable < v_table {
+                        let this_vtable = Self::get_vtable(vtable_address, memory);
+                        let next_vtable = this_vtable.get_next();
 
-                            seek_vtable += 1;
+                        if next_vtable == 0 {
+                            vtable_address = Self::make_next_vtable(this_vtable, memory)?;
+                        } else {
+                            vtable_address = next_vtable as usize;
                         }
 
-                        let item_address = vtable_address + (v_table_idx * 2);
-
-                        Ok(Some(NP_Cursor::new(item_address, columns[x].2, table_cursor.schema_addr)))
-                    },
-                    None => Ok(None)
+                        seek_vtable += 1;
+                    }
                 }
+
+                let item_address = vtable_address + (v_table_idx * 2);
+
+                Ok(Some(NP_Cursor::new(item_address, columns[x].2, table_cursor.schema_addr)))
             },
-            _ => Err(NP_Error::new("unreachable"))
+            None => Ok(None)
         }
     }
 
@@ -128,7 +125,7 @@ impl<'table> NP_Table<'table> {
     #[inline(always)]
     pub fn step_iter<M: NP_Memory>(&mut self, memory: &'table M) -> Option<(usize, &'table str, Option<NP_Cursor>)> {
 
-        match &memory.get_schema()[self.table.schema_addr] {
+        match &memory.get_schema(self.table.schema_addr) {
             NP_Parsed_Schema::Table { columns, .. } => {
 
                 if columns.len() <= self.index {
@@ -317,7 +314,7 @@ impl<'value> NP_Value<'value> for NP_Table<'value> {
         let mut last_vtable_idx = 0usize;
 
         let c: Vec<(u8, String, usize)>;
-        let col_schemas = match &from_memory.get_schema()[from_cursor.schema_addr] {
+        let col_schemas = match &from_memory.get_schema(from_cursor.schema_addr) {
             NP_Parsed_Schema::Table { columns, .. } => {
                 columns
             },

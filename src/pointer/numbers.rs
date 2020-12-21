@@ -175,7 +175,7 @@ macro_rules! noproto_number {
                                 }
                             },
                             None => {
-                                let schema = &memory.get_schema()[cursor.schema_addr];
+                                let schema = &memory.get_schema(cursor.schema_addr);
                                 match <$t>::schema_default(&schema) {
                                     Some(v) => {
                                         match $numType {

@@ -131,7 +131,7 @@ impl<'value> NP_Value<'value> for NP_Enum {
 
         let c_value = cursor.get_value(memory);
 
-        match &memory.get_schema()[cursor.schema_addr] {
+        match &memory.get_schema(cursor.schema_addr) {
             NP_Parsed_Schema::Enum { i: _, choices, default: _, sortable: _} => {
 
                 let mut value_num: i32 = -1;
@@ -185,7 +185,7 @@ impl<'value> NP_Value<'value> for NP_Enum {
             return Ok(None);
         }
   
-        match &memory.get_schema()[cursor.schema_addr] {
+        match &memory.get_schema(cursor.schema_addr) {
             NP_Parsed_Schema::Enum { i: _, choices, default: _, sortable: _} => {
                 Ok(match memory.get_1_byte(value_addr) {
                     Some(x) => {
@@ -215,7 +215,7 @@ impl<'value> NP_Value<'value> for NP_Enum {
                                 NP_JSON::String(str_value.to_string())
                             },
                             NP_Enum::None => {
-                                match &memory.get_schema()[cursor.schema_addr] {
+                                match &memory.get_schema(cursor.schema_addr) {
                                     NP_Parsed_Schema::Enum { i: _, choices: _, default, sortable: _} => {
                                         if let Some(d) = default {
                                             match d {
@@ -236,7 +236,7 @@ impl<'value> NP_Value<'value> for NP_Enum {
                         }
                     },
                     None => {
-                        match &memory.get_schema()[cursor.schema_addr] {
+                        match &memory.get_schema(cursor.schema_addr) {
                             NP_Parsed_Schema::Enum { i: _, choices: _, default, sortable: _} => {
                                 if let Some(d) = default {
                                     match d {

@@ -1,3 +1,6 @@
+# 0.7.1 
+- Minor performance improvements.
+
 # 0.7.0 December 20, 2020
 - Added `open_buffer_ro` method to open buffers as read only.
 - Moved `NP_Memory` into a trait system to allow read only buffers.

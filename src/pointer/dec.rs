@@ -712,9 +712,9 @@ impl<'value> NP_Value<'value> for NP_Dec {
 
         let mut value_address = c_value.get_addr_value() as usize;
 
-        let exp = match memory.get_schema()[cursor.schema_addr] {
+        let exp = match memory.get_schema(cursor.schema_addr) {
             NP_Parsed_Schema::Decimal { i: _, sortable: _, default: _, exp} => {
-                exp
+                *exp
             },
             _ => 0
         };
@@ -764,9 +764,9 @@ impl<'value> NP_Value<'value> for NP_Dec {
             return Ok(None);
         }
 
-        let exp = match memory.get_schema()[cursor.schema_addr] {
+        let exp = match memory.get_schema(cursor.schema_addr) {
             NP_Parsed_Schema::Decimal { i: _, sortable: _, default: _, exp} => {
-                exp
+                *exp
             },
             _ => 0
         };
@@ -784,9 +784,9 @@ impl<'value> NP_Value<'value> for NP_Dec {
 
     fn to_json<M: NP_Memory>(cursor: &NP_Cursor, memory: &'value M) -> NP_JSON {
 
-        let exp = match memory.get_schema()[cursor.schema_addr] {
+        let exp = match memory.get_schema(cursor.schema_addr) {
             NP_Parsed_Schema::Decimal { exp, .. } => {
-                exp
+                *exp
             },
             _ => 0
         };
@@ -804,13 +804,13 @@ impl<'value> NP_Value<'value> for NP_Dec {
                         NP_JSON::Dictionary(object)
                     },
                     None => {
-                        match memory.get_schema()[cursor.schema_addr] {
+                        match memory.get_schema(cursor.schema_addr) {
                             NP_Parsed_Schema::Decimal { i: _, sortable: _, default, exp} => {
                                 if let Some(d) = default {
                                     let mut object = JSMAP::new();
 
                                     object.insert("num".to_owned(), NP_JSON::Integer(d.num.clone()));
-                                    object.insert("exp".to_owned(), NP_JSON::Integer(exp as i64));
+                                    object.insert("exp".to_owned(), NP_JSON::Integer(*exp as i64));
                                     
                                     NP_JSON::Dictionary(object)
                                 } else {

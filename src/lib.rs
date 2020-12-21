@@ -142,10 +142,10 @@
 //! | BSON               | 28     | 34         | 35       | 26       | 600          | 279         |
 //! 
 //! 
-//! - **Encode**: Transfer a collection of test data into a serialized `Vec<u8>`.
-//! - **Decode All**: Deserialize the test object from the `Vec<u8>` into all it's properties.
-//! - **Decode 1**: Deserialize the test object from the `Vec<u8>` into one of it's properties.
-//! - **Update 1**: Deserialize, update a single property, then serialize back into `Vec<u8>`.
+//! - **Encode**: Transfer a collection of 33 fields of test data into a serialized `Vec<u8>`.
+//! - **Decode All**: Deserialize the test object from the `Vec<u8>` into all 33 fields.
+//! - **Decode 1**: Deserialize the test object from the `Vec<u8>` into one field.
+//! - **Update 1**: Deserialize, update a single field, then serialize back into `Vec<u8>`.
 //! 
 //! Complete benchmark source code is available [here](https://github.com/only-cliches/NoProto/tree/master/bench).
 //! 

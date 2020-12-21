@@ -28,52 +28,50 @@ impl<'tuple> NP_Tuple<'tuple> {
 
 
     #[inline(always)]
-    pub fn select<M: NP_Memory>(mut tuple_cursor: NP_Cursor, index: usize, make_path: bool, memory: &M) -> Result<Option<NP_Cursor>, NP_Error> {
-        match &memory.get_schema()[tuple_cursor.schema_addr] {
-            NP_Parsed_Schema::Tuple { values, .. } => {
+    pub fn select<M: NP_Memory>(mut tuple_cursor: NP_Cursor, values: &Vec<usize>, index: usize, make_path: bool, memory: &M) -> Result<Option<NP_Cursor>, NP_Error> {
 
-                if index >= values.len() {
-                    return Ok(None)
-                }
-        
-                let column_schema_data = values[index];
-
-                let v_table =  index / VTABLE_SIZE; // which vtable
-                let v_table_idx = index % VTABLE_SIZE; // which index on the selected vtable
-
-                let mut table_value = tuple_cursor.get_value(memory);
-                if table_value.get_addr_value() == 0 {
-                    if make_path {
-                        tuple_cursor = Self::make_first_vtable(tuple_cursor, memory)?;
-                    } else {
-                        return Ok(None);
-                    }
-                }
-                table_value = tuple_cursor.get_value(memory);
-
-                let mut seek_vtable = 0usize;
-                let mut vtable_address = table_value.get_addr_value() as usize;
-
-                while seek_vtable < v_table {
-                    let this_vtable = Self::get_vtable(vtable_address, memory);
-                    let next_vtable = this_vtable.get_next();
-
-                    if next_vtable == 0 {
-                        vtable_address = Self::make_next_vtable(this_vtable, memory)?;
-                    } else {
-                        vtable_address = next_vtable as usize;
-                    }
-
-                    seek_vtable += 1;
-                }
-
-                let item_address = vtable_address + (v_table_idx * 2);
-
-                Ok(Some(NP_Cursor::new(item_address, column_schema_data, tuple_cursor.schema_addr)))
-             
-            },
-            _ => Err(NP_Error::new("unreachable"))
+        if index >= values.len() {
+            return Ok(None)
         }
+
+        let column_schema_data = values[index];
+
+        let v_table =  index / VTABLE_SIZE; // which vtable
+        let v_table_idx = index % VTABLE_SIZE; // which index on the selected vtable
+
+        let mut table_value = tuple_cursor.get_value(memory);
+        if table_value.get_addr_value() == 0 {
+            if make_path {
+                tuple_cursor = Self::make_first_vtable(tuple_cursor, memory)?;
+
+                table_value = tuple_cursor.get_value(memory);
+            } else {
+                return Ok(None);
+            }
+        }
+        
+
+        let mut seek_vtable = 0usize;
+        let mut vtable_address = table_value.get_addr_value() as usize;
+
+        if v_table > 0 {
+            while seek_vtable < v_table {
+                let this_vtable = Self::get_vtable(vtable_address, memory);
+                let next_vtable = this_vtable.get_next();
+
+                if next_vtable == 0 {
+                    vtable_address = Self::make_next_vtable(this_vtable, memory)?;
+                } else {
+                    vtable_address = next_vtable as usize;
+                }
+
+                seek_vtable += 1;
+            }                    
+        }
+
+        let item_address = vtable_address + (v_table_idx * 2);
+
+        Ok(Some(NP_Cursor::new(item_address, column_schema_data, tuple_cursor.schema_addr)))
     }
 
     #[inline(always)]
@@ -85,7 +83,7 @@ impl<'tuple> NP_Tuple<'tuple> {
         table_value.set_addr_value(first_vtable_addr as u16);
 
 
-        match &memory.get_schema()[table_cursor.schema_addr] {
+        match &memory.get_schema(table_cursor.schema_addr) {
             NP_Parsed_Schema::Tuple { values, sortable, .. } => {
                 if *sortable {
                     // make all the vtables we'll need forever
@@ -99,7 +97,7 @@ impl<'tuple> NP_Tuple<'tuple> {
 
                     // set default values for everything
                     for x in 0..values.len() {
-                        let cursor = opt_err(Self::select(table_cursor.clone(), x, false, memory)?)?;
+                        let cursor = opt_err(Self::select(table_cursor.clone(), values, x, false, memory)?)?;
                         NP_Cursor::set_default(cursor, memory)?;
                     }
                 }
@@ -151,7 +149,7 @@ impl<'tuple> NP_Tuple<'tuple> {
 
     pub fn step_iter<M: NP_Memory>(&mut self, memory: &'tuple M) -> Option<(usize, Option<NP_Cursor>)> {
 
-        match &memory.get_schema()[self.table.schema_addr] {
+        match &memory.get_schema(self.table.schema_addr) {
             NP_Parsed_Schema::Tuple { values, .. } => {
 
                 if values.len() <= self.index {
@@ -292,7 +290,7 @@ impl<'value> NP_Value<'value> for NP_Tuple<'value> {
         let mut last_vtable_idx = 0usize;
 
         let c: Vec<(u8, String, usize)>;
-        let col_schemas = match &from_memory.get_schema()[from_cursor.schema_addr] {
+        let col_schemas = match &from_memory.get_schema(from_cursor.schema_addr) {
             NP_Parsed_Schema::Table { columns, .. } => {
                 columns
             },

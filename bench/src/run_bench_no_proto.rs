@@ -119,24 +119,24 @@ impl NoProtoBench {
 
             let mut loops = 0;
 
-            for x in 0..3 {
+            for (x1, x) in [("0", 0), ("1", 1), ("2", 2)].iter() {
                 loops += 1;
                 new_buff.cursor_to_root();
-                new_buff.move_cursor(&["list", x.to_string().as_str()])?;
+                new_buff.move_cursor(&["list", x1])?;
                 assert_eq!(new_buff.get(&["name"])?, Some("Hello, world!"));
-                assert_eq!(new_buff.get(&["rating"])?, Some(3.1415432432445543543 + (x as f32)));
+                assert_eq!(new_buff.get(&["rating"])?, Some(3.1415432432445543543 + (*x as f32)));
                 assert_eq!(new_buff.get(&["postfix"])?, Some("!"));
         
                 new_buff.move_cursor(&["sibling"])?;
-                assert_eq!(new_buff.get(&["time"])?, Some(123456 + (x as u32)));
-                assert_eq!(new_buff.get(&["ratio"])?, Some(3.14159 + (x as f32)));
-                assert_eq!(new_buff.get(&["size"])?, Some(10000 + (x as u16)));
+                assert_eq!(new_buff.get(&["time"])?, Some(123456 + (*x as u32)));
+                assert_eq!(new_buff.get(&["ratio"])?, Some(3.14159 + (*x as f32)));
+                assert_eq!(new_buff.get(&["size"])?, Some(10000 + (*x as u16)));
         
                 new_buff.move_cursor(&["parent"])?;
-                assert_eq!(new_buff.get(&["id"])?, Some(0xABADCAFEABADCAFE + (x as u64)));
-                assert_eq!(new_buff.get(&["count"])?, Some(10000 + (x as u16)));
+                assert_eq!(new_buff.get(&["id"])?, Some(0xABADCAFEABADCAFE + (*x as u64)));
+                assert_eq!(new_buff.get(&["count"])?, Some(10000 + (*x as u16)));
                 assert_eq!(new_buff.get(&["prefix"])?, Some("@"));
-                assert_eq!(new_buff.get(&["length"])?, Some(1000000 + (x as u32)));
+                assert_eq!(new_buff.get(&["length"])?, Some(1000000 + (*x as u32)));
                 
             }
 
@@ -158,24 +158,24 @@ impl NoProtoBench {
         new_buffer.set(&["location"], "https://arstechnica.com")?;
         new_buffer.set(&["fruit"], 2u8)?;
     
-        for x in 0..3 {
+        for (x1, x) in [("0", 0), ("1", 1), ("2", 2)].iter() {
     
             new_buffer.cursor_to_root();
-            new_buffer.move_cursor(&["list", x.to_string().as_str()])?;
+            new_buffer.move_cursor(&["list", x1])?;
             new_buffer.set(&["name"], "Hello, world!")?;
-            new_buffer.set(&["rating"], 3.1415432432445543543 + (x as f32))?;
+            new_buffer.set(&["rating"], 3.1415432432445543543 + (*x as f32))?;
             new_buffer.set(&["postfix"], "!")?;
     
             new_buffer.move_cursor(&["sibling"])?;
-            new_buffer.set(&["time"], 123456 + (x as u32))?;
-            new_buffer.set(&["ratio"], 3.14159 + (x as f32))?;
-            new_buffer.set(&["size"], 10000 + (x as u16))?;
+            new_buffer.set(&["time"], 123456 + (*x as u32))?;
+            new_buffer.set(&["ratio"], 3.14159 + (*x as f32))?;
+            new_buffer.set(&["size"], 10000 + (*x as u16))?;
     
             new_buffer.move_cursor(&["parent"])?;
-            new_buffer.set(&["id"], 0xABADCAFEABADCAFE + (x as u64))?;
-            new_buffer.set(&["count"], 10000 + (x as u16))?;
+            new_buffer.set(&["id"], 0xABADCAFEABADCAFE + (*x as u64))?;
+            new_buffer.set(&["count"], 10000 + (*x as u16))?;
             new_buffer.set(&["prefix"], "@")?;
-            new_buffer.set(&["length"], 1000000 + (x as u32))?;
+            new_buffer.set(&["length"], 1000000 + (*x as u32))?;
             
         }
     

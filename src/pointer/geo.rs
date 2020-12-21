@@ -134,9 +134,9 @@ impl<'value> NP_Value<'value> for NP_Geo_Bytes {
         if c_value.get_addr_value() == 0 {
             return Ok(0) 
         } else {
-            let size = match memory.get_schema()[cursor.schema_addr] {
+            let size = match memory.get_schema(cursor.schema_addr) {
                 NP_Parsed_Schema::Geo { size, ..} => {
-                    size
+                    *size
                 },
                 _ => 0
             };
@@ -155,9 +155,9 @@ impl<'value> NP_Value<'value> for NP_Geo_Bytes {
             return Ok(None);
         }
 
-        let size = match memory.get_schema()[cursor.schema_addr] {
+        let size = match memory.get_schema(cursor.schema_addr) {
             NP_Parsed_Schema::Geo { size, .. } => {
-                size
+                *size
             },
             _ => 0
         };
@@ -388,9 +388,9 @@ impl<'value> NP_Value<'value> for NP_Geo {
 
         let c_value = cursor.get_value(memory);
 
-        let size = match memory.get_schema()[cursor.schema_addr] {
+        let size = match memory.get_schema(cursor.schema_addr) {
             NP_Parsed_Schema::Geo { size, .. } => {
-                size
+                *size
             },
             _ => 0
         };
@@ -522,9 +522,9 @@ impl<'value> NP_Value<'value> for NP_Geo {
             return Ok(None);
         }
     
-        let size = match memory.get_schema()[cursor.schema_addr] {
+        let size = match memory.get_schema(cursor.schema_addr) {
             NP_Parsed_Schema::Geo { size, .. } => {
-                size
+                *size
             },
             _ => 0
         };
@@ -597,7 +597,7 @@ impl<'value> NP_Value<'value> for NP_Geo {
                     },
                     None => {
 
-                        match &memory.get_schema()[cursor.schema_addr] {
+                        match &memory.get_schema(cursor.schema_addr) {
                             NP_Parsed_Schema::Geo { i: _, sortable: _, default, size: _} => {
                                 if let Some(d) = default {
                                     let mut object = JSMAP::new();
@@ -630,9 +630,9 @@ impl<'value> NP_Value<'value> for NP_Geo {
         if value_addr == 0 {
             return Ok(0) 
         } else {
-            let size = match memory.get_schema()[cursor.schema_addr] {
+            let size = match memory.get_schema(cursor.schema_addr) {
                 NP_Parsed_Schema::Geo { i: _, sortable: _, default: _, size} => {
-                    size
+                    *size
                 },
                 _ => 0
             };

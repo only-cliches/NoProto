@@ -154,7 +154,7 @@ impl<'value> NP_Value<'value> for NP_Date {
                         NP_JSON::Integer(y.value as i64)
                     },
                     None => {
-                        match memory.get_schema()[cursor.schema_addr] {
+                        match memory.get_schema(cursor.schema_addr) {
                             NP_Parsed_Schema::Date { i: _, default, sortable: _} => {
                                 if let Some(d) = default {
                                     NP_JSON::Integer(d.value.clone() as i64)
