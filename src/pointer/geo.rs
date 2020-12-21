@@ -191,7 +191,7 @@ impl<'value> NP_Value<'value> for NP_Geo_Bytes {
         NP_Geo::from_json_to_schema(schema, json_schema)
     }
 
-    fn from_bytes_to_schema(schema: Vec<NP_Parsed_Schema>, address: usize, bytes: &Vec<u8>) -> (bool, Vec<NP_Parsed_Schema>) {
+    fn from_bytes_to_schema(schema: Vec<NP_Parsed_Schema>, address: usize, bytes: &[u8]) -> (bool, Vec<NP_Parsed_Schema>) {
         NP_Geo::from_bytes_to_schema(schema, address, bytes)
     }
 }
@@ -722,7 +722,7 @@ impl<'value> NP_Value<'value> for NP_Geo {
         }
     }
 
-    fn from_bytes_to_schema(mut schema: Vec<NP_Parsed_Schema>, address: usize, bytes: &Vec<u8>) -> (bool, Vec<NP_Parsed_Schema>) {
+    fn from_bytes_to_schema(mut schema: Vec<NP_Parsed_Schema>, address: usize, bytes: &[u8]) -> (bool, Vec<NP_Parsed_Schema>) {
         let size = bytes[address + 1];
 
         // no default

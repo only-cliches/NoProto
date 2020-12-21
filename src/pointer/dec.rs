@@ -892,7 +892,7 @@ impl<'value> NP_Value<'value> for NP_Dec {
    
     }
 
-    fn from_bytes_to_schema(mut schema: Vec<NP_Parsed_Schema>, address: usize, bytes: &Vec<u8>) -> (bool, Vec<NP_Parsed_Schema>) {
+    fn from_bytes_to_schema(mut schema: Vec<NP_Parsed_Schema>, address: usize, bytes: &[u8]) -> (bool, Vec<NP_Parsed_Schema>) {
         let exp = bytes[address + 1];
 
         let default = if bytes[address + 2] == 0 {

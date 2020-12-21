@@ -349,7 +349,7 @@ impl<'value> NP_Value<'value> for &'value [u8] {
         return Ok((has_fixed_size, schema_data, schema));
     }
 
-    fn from_bytes_to_schema(mut schema: Vec<NP_Parsed_Schema>, address: usize, bytes: &Vec<u8>) -> (bool, Vec<NP_Parsed_Schema>) {
+    fn from_bytes_to_schema(mut schema: Vec<NP_Parsed_Schema>, address: usize, bytes: &[u8]) -> (bool, Vec<NP_Parsed_Schema>) {
         // fixed size
         let fixed_size = u16::from_be_bytes([
             bytes[address + 1],

@@ -461,7 +461,7 @@ pub trait NP_Value<'value> {
 
     /// Parse bytes into schema
     /// 
-    fn from_bytes_to_schema(schema: Vec<NP_Parsed_Schema>, address: usize, bytes: &Vec<u8>) -> (bool, Vec<NP_Parsed_Schema>);
+    fn from_bytes_to_schema(schema: Vec<NP_Parsed_Schema>, address: usize, bytes: &[u8]) -> (bool, Vec<NP_Parsed_Schema>);
 
     /// Set the value of this scalar into the buffer
     /// 

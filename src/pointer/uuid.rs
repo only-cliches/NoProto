@@ -246,7 +246,7 @@ impl<'value> NP_Value<'value> for &NP_UUID {
         None
     }
 
-    fn from_bytes_to_schema(mut schema: Vec<NP_Parsed_Schema>, _address: usize, _bytes: &Vec<u8>) -> (bool, Vec<NP_Parsed_Schema>) {
+    fn from_bytes_to_schema(mut schema: Vec<NP_Parsed_Schema>, _address: usize, _bytes: &[u8]) -> (bool, Vec<NP_Parsed_Schema>) {
         schema.push(NP_Parsed_Schema::Uuid {
             i: NP_TypeKeys::Uuid,
             sortable: true

@@ -57,7 +57,7 @@ impl<'value> NP_Value<'value> for NP_Any {
         None
     }
 
-    fn from_bytes_to_schema(mut schema: Vec<NP_Parsed_Schema>, _address: usize, _bytes: &Vec<u8>) -> (bool, Vec<NP_Parsed_Schema>) {
+    fn from_bytes_to_schema(mut schema: Vec<NP_Parsed_Schema>, _address: usize, _bytes: &[u8]) -> (bool, Vec<NP_Parsed_Schema>) {
         schema.push(NP_Parsed_Schema::Any {
             i: NP_TypeKeys::Any,
             sortable: false

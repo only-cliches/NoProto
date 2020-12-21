@@ -5,7 +5,6 @@ use crate::{error::NP_Error};
 use core::cell::UnsafeCell;
 use alloc::vec::Vec;
 
-
 #[doc(hidden)]
 #[derive(Debug)]
 pub struct NP_Memory<'memory> {

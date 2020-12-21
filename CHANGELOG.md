@@ -1,6 +1,8 @@
-# 0.6.3 
+# 0.6.3 December 20, 2020
 - Restored hashmap code for faster RPC lookups.
-- 
+- Optimized RPC code to reduce allocations.
+- Implemented compiled RPC byte specs.
+- RPC now sends hash of id + version instead of the actual id + version (saves 15 bytes on each request).
 
 # 0.6.2 December 20, 2020
 - Removed hashmap as it didn't help performance enough to justify the extra code/complexity.

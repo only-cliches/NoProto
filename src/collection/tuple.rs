@@ -401,7 +401,7 @@ impl<'value> NP_Value<'value> for NP_Tuple<'value> {
         None
     }
 
-    fn from_bytes_to_schema(schema: Vec<NP_Parsed_Schema>, address: usize, bytes: &Vec<u8>) -> (bool, Vec<NP_Parsed_Schema>) {
+    fn from_bytes_to_schema(schema: Vec<NP_Parsed_Schema>, address: usize, bytes: &[u8]) -> (bool, Vec<NP_Parsed_Schema>) {
         let is_sorted = bytes[address + 1];
 
         let column_len = bytes[address + 2];

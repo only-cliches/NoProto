@@ -450,7 +450,7 @@ impl<'value> NP_Value<'value> for NP_List {
         None
     }
 
-    fn from_bytes_to_schema(mut schema: Vec<NP_Parsed_Schema>, address: usize, bytes: &Vec<u8>) -> (bool, Vec<NP_Parsed_Schema>) {
+    fn from_bytes_to_schema(mut schema: Vec<NP_Parsed_Schema>, address: usize, bytes: &[u8]) -> (bool, Vec<NP_Parsed_Schema>) {
 
         let list_schema_addr = schema.len();
         schema.push(NP_Parsed_Schema::List {

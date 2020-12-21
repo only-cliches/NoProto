@@ -264,7 +264,7 @@ macro_rules! noproto_number {
             
             }
 
-            fn from_bytes_to_schema(mut schema: Vec<NP_Parsed_Schema>, address: usize, bytes: &Vec<u8>) -> (bool, Vec<NP_Parsed_Schema>) {
+            fn from_bytes_to_schema(mut schema: Vec<NP_Parsed_Schema>, address: usize, bytes: &[u8]) -> (bool, Vec<NP_Parsed_Schema>) {
                 schema.push(match $tkey {
                     NP_TypeKeys::Int8 => {
                         NP_Parsed_Schema::Int8 { sortable: true, i: $tkey, default: i8::np_get_default_from_bytes(address, bytes)}
@@ -335,7 +335,7 @@ impl super::NP_Scalar for f64 {}
 trait NP_BigEndian {
     fn np_get_default_from_json(json: &NP_JSON) -> Option<Self> where Self: Sized;
     fn np_get_default<'default>(ptr: &'default NP_Parsed_Schema) -> Option<Self> where Self: Sized;
-    fn np_get_default_from_bytes<'default>(address: usize, bytes: &'default Vec<u8>) -> Option<Self> where Self: Sized;
+    fn np_get_default_from_bytes<'default>(address: usize, bytes: &'default [u8]) -> Option<Self> where Self: Sized;
 }
 
 
@@ -360,7 +360,7 @@ impl NP_BigEndian for i8 {
             }
         }
     }
-    fn np_get_default_from_bytes<'default>(address: usize, bytes: &'default Vec<u8>) -> Option<Self> {
+    fn np_get_default_from_bytes<'default>(address: usize, bytes: &'default [u8]) -> Option<Self> {
         if bytes[address + 1] == 0 {
             None
         } else {
@@ -431,7 +431,7 @@ impl NP_BigEndian for i16 {
             }
         }
     }
-    fn np_get_default_from_bytes<'default>(address: usize, bytes: &'default Vec<u8>) -> Option<Self> {
+    fn np_get_default_from_bytes<'default>(address: usize, bytes: &'default [u8]) -> Option<Self> {
         if bytes[address + 1] == 0 {
             None
         } else {
@@ -504,7 +504,7 @@ impl NP_BigEndian for i32 {
             }
         }
     }
-    fn np_get_default_from_bytes<'default>(address: usize, bytes: &'default Vec<u8>) -> Option<Self> {
+    fn np_get_default_from_bytes<'default>(address: usize, bytes: &'default [u8]) -> Option<Self> {
         if bytes[address + 1] == 0 {
             None
         } else {
@@ -578,7 +578,7 @@ impl NP_BigEndian for i64 {
             }
         }
     }
-    fn np_get_default_from_bytes<'default>(address: usize, bytes: &'default Vec<u8>) -> Option<Self> {
+    fn np_get_default_from_bytes<'default>(address: usize, bytes: &'default [u8]) -> Option<Self> {
         if bytes[address + 1] == 0 {
             None
         } else {
@@ -652,7 +652,7 @@ impl NP_BigEndian for u8 {
             }
         }
     }
-    fn np_get_default_from_bytes<'default>(address: usize, bytes: &'default Vec<u8>) -> Option<Self> {
+    fn np_get_default_from_bytes<'default>(address: usize, bytes: &'default [u8]) -> Option<Self> {
         if bytes[address + 1] == 0 {
             None
         } else {
@@ -726,7 +726,7 @@ impl NP_BigEndian for u16 {
             }
         }
     }
-    fn np_get_default_from_bytes<'default>(address: usize, bytes: &'default Vec<u8>) -> Option<Self> {
+    fn np_get_default_from_bytes<'default>(address: usize, bytes: &'default [u8]) -> Option<Self> {
         if bytes[address + 1] == 0 {
             None
         } else {
@@ -800,7 +800,7 @@ impl NP_BigEndian for u32 {
             }
         }
     }
-    fn np_get_default_from_bytes<'default>(address: usize, bytes: &'default Vec<u8>) -> Option<Self> {
+    fn np_get_default_from_bytes<'default>(address: usize, bytes: &'default [u8]) -> Option<Self> {
         if bytes[address + 1] == 0 {
             None
         } else {
@@ -873,7 +873,7 @@ impl NP_BigEndian for u64 {
             }
         }
     }
-    fn np_get_default_from_bytes<'default>(address: usize, bytes: &'default Vec<u8>) -> Option<Self> {
+    fn np_get_default_from_bytes<'default>(address: usize, bytes: &'default [u8]) -> Option<Self> {
         if bytes[address + 1] == 0 {
             None
         } else {
@@ -945,7 +945,7 @@ impl NP_BigEndian for f32 {
             }
         }
     }
-    fn np_get_default_from_bytes<'default>(address: usize, bytes: &'default Vec<u8>) -> Option<Self> {
+    fn np_get_default_from_bytes<'default>(address: usize, bytes: &'default [u8]) -> Option<Self> {
         if bytes[address + 1] == 0 {
             None
         } else {
@@ -1017,7 +1017,7 @@ impl NP_BigEndian for f64 {
             }
         }
     }
-    fn np_get_default_from_bytes<'default>(address: usize, bytes: &'default Vec<u8>) -> Option<Self> {
+    fn np_get_default_from_bytes<'default>(address: usize, bytes: &'default [u8]) -> Option<Self> {
         if bytes[address + 1] == 0 {
             None
         } else {

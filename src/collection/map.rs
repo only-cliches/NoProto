@@ -280,7 +280,7 @@ impl<'value> NP_Value<'value> for NP_Map<'value> {
         None
     }
 
-    fn from_bytes_to_schema(mut schema: Vec<NP_Parsed_Schema>, address: usize, bytes: &Vec<u8>) -> (bool, Vec<NP_Parsed_Schema>) {
+    fn from_bytes_to_schema(mut schema: Vec<NP_Parsed_Schema>, address: usize, bytes: &[u8]) -> (bool, Vec<NP_Parsed_Schema>) {
         let of_addr = schema.len();
         schema.push(NP_Parsed_Schema::Map {
             i: NP_TypeKeys::Map,

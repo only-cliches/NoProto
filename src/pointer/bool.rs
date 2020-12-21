@@ -196,7 +196,7 @@ impl<'value> NP_Value<'value> for bool {
         return Ok((true, schema_data, schema));
   
     }
-    fn from_bytes_to_schema(mut schema: Vec<NP_Parsed_Schema>, address: usize, bytes: &Vec<u8>) -> (bool, Vec<NP_Parsed_Schema>) {
+    fn from_bytes_to_schema(mut schema: Vec<NP_Parsed_Schema>, address: usize, bytes: &[u8]) -> (bool, Vec<NP_Parsed_Schema>) {
         schema.push(NP_Parsed_Schema::Boolean {
             i: NP_TypeKeys::Boolean,
             sortable: true,

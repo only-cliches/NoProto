@@ -81,7 +81,7 @@ impl<'value> NP_Value<'value> for &'value str {
         }
     }
 
-    fn from_bytes_to_schema(mut schema: Vec<NP_Parsed_Schema>, address: usize, bytes: &Vec<u8>) -> (bool, Vec<NP_Parsed_Schema>) {
+    fn from_bytes_to_schema(mut schema: Vec<NP_Parsed_Schema>, address: usize, bytes: &[u8]) -> (bool, Vec<NP_Parsed_Schema>) {
 
         // case byte
         let case_byte = String_Case::from(bytes[address + 1]);

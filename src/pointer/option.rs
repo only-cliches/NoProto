@@ -344,7 +344,7 @@ impl<'value> NP_Value<'value> for NP_Enum {
     
     }
 
-    fn from_bytes_to_schema(mut schema: Vec<NP_Parsed_Schema>, address: usize, bytes: &Vec<u8>) -> (bool, Vec<NP_Parsed_Schema>) {
+    fn from_bytes_to_schema(mut schema: Vec<NP_Parsed_Schema>, address: usize, bytes: &[u8]) -> (bool, Vec<NP_Parsed_Schema>) {
         let mut default_index: Option<u8> = None;
         let mut default_value: Option<NP_Enum> = None;
 

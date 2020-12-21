@@ -14,6 +14,10 @@ const HASH_SIZE: usize = 2048;
 
 impl NP_HashMap {
 
+    pub fn empty() -> Self {
+        Self { data: Vec::with_capacity(1) }
+    }
+
     pub fn new() -> Self {
         let mut vector = Vec::with_capacity(HASH_SIZE);
         vector.extend((0..HASH_SIZE).map(|_| Vec::new()));

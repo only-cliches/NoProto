@@ -506,7 +506,7 @@
 //!    "default": 56
 //! }"#)?;
 //!
-//! assert_eq!(vec![6, 1, 0, 0, 0, 56], factory.compile_schema());
+//! assert_eq!(&[6, 1, 0, 0, 0, 56], factory.compile_schema());
 //! 
 //! // [       6,           1,      0, 0, 0, 56]
 //! // [i32 type, has default,    default value]
@@ -515,7 +515,7 @@
 //!    "type": "i32"
 //! }"#)?;
 //!
-//! assert_eq!(vec![6, 0], factory.compile_schema());
+//! assert_eq!(&[6, 0], factory.compile_schema());
 //! 
 //! // [       6,           0]
 //! // [i32 type,  no default]
@@ -544,7 +544,7 @@
 //!    "default": "red"
 //! }"#)?;
 //!
-//! assert_eq!(vec![20, 3, 3, 4, 98, 108, 117, 101, 6, 111, 114, 97, 110, 103, 101, 3, 114, 101, 100], factory.compile_schema());
+//! assert_eq!(&[20, 3, 3, 4, 98, 108, 117, 101, 6, 111, 114, 97, 110, 103, 101, 3, 114, 101, 100], factory.compile_schema());
 //! 
 //! // [       20,                        3,            3, 4, 98, 108, 117, 101, 6, 111, 114, 97, 110, 103, 101, 3, 114, 101, 100]
 //! // [data type, 1 based index of default, # of options,     b,   l,   u,   e,      o,   r,  a,   n,   g,   e,      r,   e,   d]  
@@ -554,7 +554,7 @@
 //!    "choices": ["blue", "orange", "red"]
 //! }"#)?;
 //!
-//! assert_eq!(vec![20, 0, 3, 4, 98, 108, 117, 101, 6, 111, 114, 97, 110, 103, 101, 3, 114, 101, 100], factory.compile_schema());
+//! assert_eq!(&[20, 0, 3, 4, 98, 108, 117, 101, 6, 111, 114, 97, 110, 103, 101, 3, 114, 101, 100], factory.compile_schema());
 //! 
 //! // [       20,          0,             3, 4, 98, 108, 117, 101, 6, 111, 114, 97, 110, 103, 101, 3, 114, 101, 100]
 //! // [data type, no default,  # of options,     b,   l,   u,   e,      o,   r,  a,   n,   g,   e,      r,   e,   d]  
@@ -581,7 +581,7 @@
 //!    "default": true
 //! }"#)?;
 //!
-//! assert_eq!(vec![15, 1], factory.compile_schema());
+//! assert_eq!(&[15, 1], factory.compile_schema());
 //! 
 //! // [       15,               1]
 //! // [data type, default is true]  
@@ -591,7 +591,7 @@
 //!    "default": false
 //! }"#)?;
 //!
-//! assert_eq!(vec![15, 2], factory.compile_schema());
+//! assert_eq!(&[15, 2], factory.compile_schema());
 //! 
 //! // [       15,                2]
 //! // [data type, default is false]  
@@ -601,7 +601,7 @@
 //!    "type": "bool"
 //! }"#)?;
 //!
-//! assert_eq!(vec![15, 0], factory.compile_schema());
+//! assert_eq!(&[15, 0], factory.compile_schema());
 //! 
 //! // [       15,          0]
 //! // [data type, no default]  
@@ -627,7 +627,7 @@
 //!    "exp": 2
 //! }"#)?;
 //!
-//! assert_eq!(vec![14, 2, 0], factory.compile_schema());
+//! assert_eq!(&[14, 2, 0], factory.compile_schema());
 //! 
 //! // [       14,         2,                0]
 //! // [data type, expontent, no default value]
@@ -638,7 +638,7 @@
 //!    "default": 521.32
 //! }"#)?;
 //!
-//! assert_eq!(vec![14, 2, 1, 0, 0, 0, 0, 0, 0, 203, 164], factory.compile_schema());
+//! assert_eq!(&[14, 2, 1, 0, 0, 0, 0, 0, 0, 203, 164], factory.compile_schema());
 //! 
 //! // [       14,         2,                 1, 0, 0, 0, 0, 0, 0, 203, 164]
 //! // [data type, expontent, has default value,              default value]
@@ -661,7 +661,7 @@
 //!    "type": "geo8"
 //! }"#)?;
 //!
-//! assert_eq!(vec![16, 8, 0], factory.compile_schema());
+//! assert_eq!(&[16, 8, 0], factory.compile_schema());
 //! 
 //! // [       16,                 8,                0]
 //! // [data type, geo size (4/8/16), no default value]
@@ -672,7 +672,7 @@
 //!    "default": {"lat": 29.2, "lng": -19.2}
 //! }"#)?;
 //!
-//! assert_eq!(vec![16, 8, 1, 145, 103, 145, 0, 116, 142, 80, 0], factory.compile_schema());
+//! assert_eq!(&[16, 8, 1, 145, 103, 145, 0, 116, 142, 80, 0], factory.compile_schema());
 //! 
 //! // [       16,                 8,                 1, 145, 103, 145, 0, 116, 142, 80, 0]
 //! // [data type, geo size (4/8/16), has default value,             geo8 value (lat/lng) ]
@@ -694,7 +694,7 @@
 //!    "type": "uuid"
 //! }"#)?;
 //!
-//! assert_eq!(vec![17], factory.compile_schema());
+//! assert_eq!(&[17], factory.compile_schema());
 //! 
 //! // [       17]
 //! // [data type]
@@ -716,7 +716,7 @@
 //!    "type": "string"
 //! }"#)?;
 //!
-//! assert_eq!(vec![2, 0, 0, 0, 0, 0], factory.compile_schema());
+//! assert_eq!(&[2, 0, 0, 0, 0, 0], factory.compile_schema());
 //! 
 //! // [        2,                   0,             0, 0,                 0, 0]
 //! // [data type, uppercase/lowercase, fixed size (u16),  default size (u16) ]
@@ -726,7 +726,7 @@
 //!    "size": 20
 //! }"#)?;
 //!
-//! assert_eq!(vec![2, 0, 0, 20, 0, 0], factory.compile_schema());
+//! assert_eq!(&[2, 0, 0, 20, 0, 0], factory.compile_schema());
 //! 
 //! // [        2,                   0,            0, 20,                 0, 0]
 //! // [data type, uppercase/lowercase, fixed size (u16),  default size (u16) ]
@@ -737,7 +737,7 @@
 //!    "default": "hello"
 //! }"#)?;
 //!
-//! assert_eq!(vec![2, 0, 0, 20, 0, 6, 104, 101, 108, 108, 111], factory.compile_schema());
+//! assert_eq!(&[2, 0, 0, 20, 0, 6, 104, 101, 108, 108, 111], factory.compile_schema());
 //! 
 //! // [        2,                   0,             0, 20,                0, 6, 104, 101, 108, 108, 111]
 //! // [data type, uppercase/lowercase,  fixed size (u16),  default size (u16),   h,   e,   l,   l,   o]
@@ -760,7 +760,7 @@
 //!    "type": "date"
 //! }"#)?;
 //!
-//! assert_eq!(vec![19, 0], factory.compile_schema());
+//! assert_eq!(&[19, 0], factory.compile_schema());
 //! 
 //! // [       19,             0]
 //! // [data type, default flag ]
@@ -770,7 +770,7 @@
 //!    "default": 1604862252
 //! }"#)?;
 //!
-//! assert_eq!(vec![19, 1, 0, 0, 0, 0, 95, 168, 65, 44], factory.compile_schema());
+//! assert_eq!(&[19, 1, 0, 0, 0, 0, 95, 168, 65, 44], factory.compile_schema());
 //! 
 //! // [       19,            1, 0, 0, 0, 0, 95, 168, 65, 44]
 //! // [data type, default flag,        default value       ]
@@ -797,7 +797,7 @@
 //! }"#)?;
 //!
 //!
-//! assert_eq!(vec![21, 2, 3, 97, 103, 101, 0, 2, 8, 0, 4, 110, 97, 109, 101, 0, 6, 2, 0, 0, 0, 0, 0], factory.compile_schema());
+//! assert_eq!(&[21, 2, 3, 97, 103, 101, 0, 2, 8, 0, 4, 110, 97, 109, 101, 0, 6, 2, 0, 0, 0, 0, 0], factory.compile_schema());
 //! 
 //! // [       21,            2, 3, 97, 103, 101,                     0, 2,           8, 0, 4, 110, 97, 109, 101,                      0, 6,   2, 0, 0, 0, 0, 0]
 //! // [data type, # of columns,     a,   g,   e, column schema size (u16),  column schema,      n,  a,   m,   e,  column schema size (u16),    column schema  ]
@@ -816,7 +816,7 @@
 //!     "of": {"type": "u8"}
 //! }"#)?;
 //!
-//! assert_eq!(vec![23, 8, 0], factory.compile_schema());
+//! assert_eq!(&[23, 8, 0], factory.compile_schema());
 //! 
 //! // [       23,        8, 0]
 //! // [data type, "of" schema]
@@ -834,8 +834,8 @@
 //!     "type": "map",
 //!     "value": {"type": "u8"}
 //! }"#)?;
-//!
-//! assert_eq!(vec![22, 8, 0], factory.compile_schema());
+//! 
+//! assert_eq!(&[22, 8, 0], factory.compile_schema());
 //! 
 //! // [       22,         8, 0]
 //! // [data type, value schema]
@@ -857,7 +857,7 @@
 //!    ]
 //! }"#)?;
 //!
-//! assert_eq!(vec![24, 0, 2, 0, 2, 8, 0, 0, 6, 2, 0, 0, 0, 0, 0], factory.compile_schema());
+//! assert_eq!(&[24, 0, 2, 0, 2, 8, 0, 0, 6, 2, 0, 0, 0, 0, 0], factory.compile_schema());
 //! 
 //! // [       24,      0,           2,               0, 2,   8, 0,              0, 6,  2, 0, 0, 0, 0, 0]
 //! // [data type, sorted, length (u8),  schema size (u16), schema, schema size (u16),      schema      ]

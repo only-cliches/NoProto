@@ -1,8 +1,8 @@
 #![warn(missing_docs)]
 #![allow(non_camel_case_types)]
-// #![no_std]
+#![no_std]
 
-//! ## Simple & Performant Zero-Copy Serialization
+//! ## Simple & Performant Serialization with RPC
 //! Performance of Protocol Buffers with flexibility of JSON
 //! 
 //! [Github](https://github.com/ClickSimply/NoProto) | [Crates.io](https://crates.io/crates/no_proto) | [Documentation](https://docs.rs/no_proto)
@@ -282,26 +282,35 @@ use schema::NP_Parsed_Schema;
 /// [Go to NP_Buffer docs](./buffer/struct.NP_Buffer.html)
 /// 
 #[derive(Debug)]
-pub struct NP_Factory {
+pub struct NP_Factory<'fact> {
     /// schema data used by this factory
     pub schema: NP_Schema,
-    schema_bytes: Vec<u8>
+    schema_bytes: NP_Schema_Bytes<'fact>
 }
 
-impl NP_Factory {
+/// The schema bytes container
+#[derive(Debug)]
+pub enum NP_Schema_Bytes<'bytes> {
+    /// Borrwed schema
+    Borrwed(&'bytes [u8]),
+    /// Owned bytes
+    Owned(Vec<u8>)
+}
+
+impl<'fact> NP_Factory<'fact> {
     
     /// Generate a new factory from the given schema.
     /// 
     /// This operation will fail if the schema provided is invalid or if the schema is not valid JSON.  If it fails you should get a useful error message letting you know what the problem is.
     /// 
-    pub fn new(json_schema: &str) -> Result<NP_Factory, NP_Error> {
+    pub fn new(json_schema: &'fact str) -> Result<NP_Factory, NP_Error> {
 
         let parsed_value = json_decode(json_schema.to_owned())?;
 
         let (is_sortable, schema_bytes, schema) = NP_Schema::from_json(Vec::new(), &parsed_value)?;
 
         Ok(Self {
-            schema_bytes: schema_bytes,
+            schema_bytes: NP_Schema_Bytes::Owned(schema_bytes),
             schema:  NP_Schema {
                 is_sortable: is_sortable,
                 parsed: schema
@@ -313,12 +322,27 @@ impl NP_Factory {
     /// Create a new factory from a compiled schema byte array.
     /// The byte schemas are at least an order of magnitude faster to parse than JSON schemas.
     /// 
-    pub fn new_compiled(schema_bytes: Vec<u8>) -> Self {
+    pub fn new_compiled(schema_bytes: &'fact [u8]) -> Self {
         
-        let (is_sortable, schema) = NP_Schema::from_bytes(Vec::new(), 0, &schema_bytes);
+        let (is_sortable, schema) = NP_Schema::from_bytes(Vec::new(), 0, schema_bytes);
 
         Self {
-            schema_bytes: schema_bytes,
+            schema_bytes: NP_Schema_Bytes::Borrwed(schema_bytes),
+            schema:  NP_Schema { 
+                is_sortable: is_sortable,
+                parsed: schema
+            }
+        }
+    }
+
+    /// Generate factory from *const [u8], probably not safe to use generally speaking
+    #[doc(hidden)]
+    pub fn new_compiled_ptr(schema_bytes: *const [u8]) -> Self {
+        
+        let (is_sortable, schema) = NP_Schema::from_bytes(Vec::new(), 0, unsafe { &*schema_bytes });
+
+        Self {
+            schema_bytes: NP_Schema_Bytes::Borrwed(unsafe { &*schema_bytes }),
             schema:  NP_Schema { 
                 is_sortable: is_sortable,
                 parsed: schema
@@ -328,8 +352,11 @@ impl NP_Factory {
 
     /// Get a copy of the compiled schema byte array
     /// 
-    pub fn compile_schema(&self) -> Vec<u8> {
-        self.schema_bytes.clone()
+    pub fn compile_schema(&self) -> &[u8] {
+        match &self.schema_bytes {
+            NP_Schema_Bytes::Owned(x) => x,
+            NP_Schema_Bytes::Borrwed(x) => *x
+        }
     }
 
 
