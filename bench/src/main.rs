@@ -35,6 +35,7 @@ fn main() {
     println!("\n========= SIZE BENCHMARK =========");
 
     NoProtoBench::size_bench();
+    FlatBufferBench::size_bench();
     ProtocolBufferBench::size_bench();
     MessagePackBench::size_bench();
     JSONBench::size_bench();
@@ -43,6 +44,7 @@ fn main() {
     println!("\n======== ENCODE BENCHMARK ========");
     
     let base = NoProtoBench::encode_bench().unwrap();
+    FlatBufferBench::encode_bench(base);
     ProtocolBufferBench::encode_bench(base);
     MessagePackBench::encode_bench(base);
     JSONBench::encode_bench(base);
@@ -51,6 +53,7 @@ fn main() {
     println!("\n======== DECODE BENCHMARK ========");
 
     let base = NoProtoBench::decode_bench().unwrap();
+    FlatBufferBench::decode_bench(base);
     ProtocolBufferBench::decode_bench(base);
     MessagePackBench::decode_bench(base);
     JSONBench::decode_bench(base);
@@ -59,6 +62,7 @@ fn main() {
     println!("\n====== DECODE ONE BENCHMARK ======");
 
     let base = NoProtoBench::decode_one_bench().unwrap();
+    FlatBufferBench::decode_one_bench(base);
     ProtocolBufferBench::decode_one_bench(base);
     MessagePackBench::decode_one_bench(base);
     JSONBench::decode_one_bench(base);
@@ -68,6 +72,7 @@ fn main() {
     println!("\n====== UPDATE ONE BENCHMARK ======");
 
     let base = NoProtoBench::update_bench().unwrap();
+    FlatBufferBench::update_bench(base);
     ProtocolBufferBench::update_bench(base);
     MessagePackBench::update_bench(base);
     JSONBench::update_bench(base);

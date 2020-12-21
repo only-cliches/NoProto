@@ -23,6 +23,48 @@ Benchmarks can be ran with `cargo run --release`.
 
 # Benchmarks Histry
 
+## Dec 20, 2020
+### v0.7.0
+3.4Ghz i5 2017 21.5" iMac with 32 GB RAM
+
+```
+========= SIZE BENCHMARK =========
+NoProto:     size: 284b, zlib: 229b
+PBuffers:    size: 220b, zlib: 163b
+MessagePack: size: 431b, zlib: 245b
+JSON:        size: 673b, zlib: 246b
+BSON:        size: 600b, zlib: 279b
+
+======== ENCODE BENCHMARK ========
+NoProto:           312 ops/ms 1.00
+PBuffers:          270 ops/ms 0.87
+MessagePack:        38 ops/ms 0.12
+JSON:              167 ops/ms 0.54
+BSON:               28 ops/ms 0.09
+
+======== DECODE BENCHMARK ========
+NoProto:           469 ops/ms 1.00
+PBuffers:          390 ops/ms 0.83
+MessagePack:        70 ops/ms 0.15
+JSON:              134 ops/ms 0.28
+BSON:               34 ops/ms 0.07
+
+====== DECODE ONE BENCHMARK ======
+NoProto:         27027 ops/ms 1.00
+PBuffers:          400 ops/ms 0.02
+MessagePack:        80 ops/ms 0.00
+JSON:              167 ops/ms 0.01
+BSON:               35 ops/ms 0.00
+
+====== UPDATE ONE BENCHMARK ======
+NoProto:          3953 ops/ms 1.00
+PBuffers:          167 ops/ms 0.04
+MessagePack:        35 ops/ms 0.01
+JSON:              127 ops/ms 0.03
+BSON:               26 ops/ms 0.01
+```
+
+
 ## Dec 15, 2020
 ### v0.6.1
 3.4Ghz i5 2017 21.5" iMac with 32 GB RAM

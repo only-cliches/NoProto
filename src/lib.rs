@@ -30,7 +30,7 @@
 //! Byte-wise sorting comes in the box and is a first class operation. Two NoProto buffers can be compared at the byte level *without deserializing* and a correct ordering between the buffer's internal values will be the result.  This is extremely useful for storing ordered keys in databases. 
 //! 
 //! *Compared to Protocol Buffers*
-//! - Similar serialization & deserialization performance
+//! - Faster serialization & deserialization performance
 //! - Updating buffers is orders of magnitude faster
 //! - Easier & Simpler API
 //! - Schemas are dynamic at runtime, no compilation step
@@ -135,11 +135,11 @@
 //! 
 //! | Library            | Encode | Decode All | Decode 1 | Update 1 | Size (bytes) | Size (Zlib) |
 //! |--------------------|--------|------------|----------|----------|--------------|-------------|
-//! | NoProto            | 272    | 375        | 5051     | 4098     | 284          | 229         |
-//! | Protocol Buffers 2 | 266    | 365        | 366      | 160      | 220          | 163         |
-//! | MessagePack        | 33     | 63         | 68       | 31       | 431          | 245         |
-//! | JSON               | 186    | 127        | 141      | 115      | 673          | 246         |
-//! | BSON               | 28     | 28         | 30       | 22       | 600          | 279         |
+//! | NoProto            | 312    | 469        | 27027    | 3953     | 284          | 229         |
+//! | Protocol Buffers 2 | 270    | 390        | 400      | 167      | 220          | 163         |
+//! | MessagePack        | 38     | 70         | 80       | 35       | 431          | 245         |
+//! | JSON               | 167    | 134        | 167      | 127      | 673          | 246         |
+//! | BSON               | 28     | 34         | 35       | 26       | 600          | 279         |
 //! 
 //! 
 //! - **Encode**: Transfer a collection of test data into a serialized `Vec<u8>`.
@@ -190,6 +190,7 @@
 pub mod pointer;
 pub mod collection;
 pub mod buffer;
+pub mod buffer_ro;
 pub mod schema;
 pub mod error;
 pub mod json_flex;
@@ -206,6 +207,7 @@ mod utils;
 #[macro_use]
 extern crate alloc;
 
+use crate::buffer_ro::NP_Buffer_RO;
 use crate::memory::NP_Memory;
 use crate::json_flex::NP_JSON;
 use crate::schema::NP_Schema;
@@ -214,7 +216,7 @@ use crate::error::NP_Error;
 use buffer::{NP_Buffer, DEFAULT_ROOT_PTR_ADDR};
 use alloc::vec::Vec;
 use alloc::{borrow::ToOwned};
-use memory::NP_Memory_Writable;
+use memory::{NP_Memory_ReadOnly, NP_Memory_Writable};
 use schema::NP_Parsed_Schema;
 
 /// Factories are created from schemas.  Once you have a factory you can use it to create new buffers or open existing ones.
@@ -298,6 +300,17 @@ pub enum NP_Schema_Bytes<'bytes> {
     Owned(Vec<u8>)
 }
 
+/// When calling `maybe_compact` on a buffer, this struct is provided to help make a choice on wether to compact or not.
+#[derive(Debug, Eq, PartialEq)]
+pub struct NP_Size_Data {
+    /// The size of the existing buffer
+    pub current_buffer: usize,
+    /// The estimated size of buffer after compaction
+    pub after_compaction: usize,
+    /// How many known wasted bytes in existing buffer
+    pub wasted_bytes: usize
+}
+
 impl<'fact> NP_Factory<'fact> {
     
     /// Generate a new factory from the given schema.
@@ -378,7 +391,7 @@ impl<'fact> NP_Factory<'fact> {
     /// ```
     /// use no_proto::error::NP_Error;
     /// use no_proto::NP_Factory;
-    /// use no_proto::buffer::NP_Size_Data;
+    /// use no_proto::NP_Size_Data;
     /// 
     /// let factory: NP_Factory = NP_Factory::new(r#"{
     ///    "type": "tuple",
@@ -443,6 +456,12 @@ impl<'fact> NP_Factory<'fact> {
     /// 
     pub fn open_buffer<'buffer>(&'buffer self, bytes: Vec<u8>) -> NP_Buffer<'buffer> {
         NP_Buffer::_new(NP_Memory_Writable::existing(bytes, &self.schema.parsed, DEFAULT_ROOT_PTR_ADDR))
+    }
+
+    /// Open existing buffer as ready only, much faster if you don't need to mutate anything
+    /// 
+    pub fn open_buffer_ro<'buffer>(&'buffer self, bytes: &'buffer [u8]) -> NP_Buffer_RO<'buffer> {
+        NP_Buffer_RO::_new(NP_Memory_ReadOnly::existing(bytes, &self.schema.parsed, DEFAULT_ROOT_PTR_ADDR))
     }
 
     /// Generate a new empty buffer from this factory.

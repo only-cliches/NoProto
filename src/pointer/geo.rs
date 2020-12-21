@@ -401,7 +401,7 @@ impl<'value> NP_Value<'value> for NP_Geo {
             unreachable!();
         }
 
-        let write_bytes = memory.write_bytes();
+        let write_bytes: &mut [u8];
 
         let half_value_bytes = value_bytes_size / 2;
 
@@ -476,6 +476,8 @@ impl<'value> NP_Value<'value> for NP_Geo {
 
         if value_address != 0 { // existing value, replace
 
+            write_bytes = memory.write_bytes();
+
             // overwrite existing values in buffer
             for x in 0..value_bytes.len() {
                 if x < value_bytes_size {
@@ -492,6 +494,8 @@ impl<'value> NP_Value<'value> for NP_Geo {
                 4 => { memory.malloc_borrow(&[0u8; 4])? },
                 _ => { 0 }
             };
+
+            write_bytes = memory.write_bytes();
 
             // set values in buffer
             for x in 0..value_bytes.len() {

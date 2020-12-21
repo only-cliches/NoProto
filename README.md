@@ -26,7 +26,7 @@ Like Protocol Buffers schemas are seperate from the data buffers and are require
 Byte-wise sorting comes in the box and is a first class operation. Two NoProto buffers can be compared at the byte level *without deserializing* and a correct ordering between the buffer's internal values will be the result.  This is extremely useful for storing ordered keys in databases. 
 
 *Compared to Protocol Buffers*
-- Similar serialization & deserialization performance
+- Faster serialization & deserialization performance
 - Updating buffers is orders of magnitude faster
 - Easier & Simpler API
 - Schemas are dynamic at runtime, no compilation step
@@ -110,6 +110,9 @@ let user_bytes: Vec<u8> = user_buffer.close();
 
 // we can now save user_bytes to disk, 
 // send it over the network, or whatever else is needed with the data
+
+
+# Ok::<(), NP_Error>(()) 
 ```
 
 ## Guided Learning / Next Steps:
@@ -128,11 +131,11 @@ The format and data used in the benchmarks were taken from the `flatbuffers` ben
 
 | Library            | Encode | Decode All | Decode 1 | Update 1 | Size (bytes) | Size (Zlib) |
 |--------------------|--------|------------|----------|----------|--------------|-------------|
-| NoProto            | 272    | 375        | 5051     | 4098     | 284          | 229         |
-| Protocol Buffers 2 | 266    | 365        | 366      | 160      | 220          | 163         |
-| MessagePack        | 33     | 63         | 68       | 31       | 431          | 245         |
-| JSON               | 186    | 127        | 141      | 115      | 673          | 246         |
-| BSON               | 28     | 28         | 30       | 22       | 600          | 279         |
+| NoProto            | 312    | 469        | 27027    | 3953     | 284          | 229         |
+| Protocol Buffers 2 | 270    | 390        | 400      | 167      | 220          | 163         |
+| MessagePack        | 38     | 70         | 80       | 35       | 431          | 245         |
+| JSON               | 167    | 134        | 167      | 127      | 673          | 246         |
+| BSON               | 28     | 34         | 35       | 26       | 600          | 279         |
 
 
 - **Encode**: Transfer a collection of test data into a serialized `Vec<u8>`.

@@ -1,5 +1,9 @@
-# 0.7.0
-
+# 0.7.0 December 20, 2020
+- Added `open_buffer_ro` method to open buffers as read only.
+- Moved `NP_Memory` into a trait system to allow read only buffers.
+- Read only buffers are `Send`, thread safe, and significantly faster to open.
+- Significant performance improvements in benchmarks.
+- No longer trading blows with Protocol Buffers, NoProto is measurably faster now. :)
 
 # 0.6.3 December 20, 2020
 - Restored hashmap code for faster RPC lookups.

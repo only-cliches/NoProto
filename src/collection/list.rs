@@ -396,7 +396,7 @@ impl<'value> NP_Value<'value> for NP_List {
         NP_JSON::Array(json_list)
     }
 
-    fn do_compact<M: NP_Memory>(from_cursor: NP_Cursor, from_memory: &'value M, to_cursor: NP_Cursor, to_memory: &'value M) -> Result<NP_Cursor, NP_Error> where Self: 'value + Sized {
+    fn do_compact<M: NP_Memory, M2: NP_Memory>(from_cursor: NP_Cursor, from_memory: &'value M, to_cursor: NP_Cursor, to_memory: &'value M2) -> Result<NP_Cursor, NP_Error> where Self: 'value + Sized {
 
         let from_value = from_cursor.get_value(from_memory);
 

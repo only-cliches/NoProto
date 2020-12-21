@@ -278,7 +278,7 @@ impl<'value> NP_Value<'value> for NP_Tuple<'value> {
         NP_JSON::Array(json_list)
     }
 
-    fn do_compact<M: NP_Memory>(from_cursor: NP_Cursor, from_memory: &'value M, mut to_cursor: NP_Cursor, to_memory: &'value M) -> Result<NP_Cursor, NP_Error> where Self: 'value + Sized {
+    fn do_compact<M: NP_Memory, M2: NP_Memory>(from_cursor: NP_Cursor, from_memory: &'value M, mut to_cursor: NP_Cursor, to_memory: &'value M2) -> Result<NP_Cursor, NP_Error> where Self: 'value + Sized {
 
         let from_value = from_cursor.get_value(from_memory);
 
@@ -481,12 +481,12 @@ fn sorting_tuples_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"tuple\",\"values\":[{\"type\":\"string\",\"size\":10},{\"type\":\"uuid\"},{\"type\":\"uint8\"}],\"sorted\":true}";
     let factory = crate::NP_Factory::new(schema)?;
     let mut buffer = factory.empty_buffer(None);
-    assert_eq!(buffer.read_bytes(), &[0u8, 0, 3, 0, 13, 0, 23, 0, 39, 0, 0, 0, 0, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0].to_vec());
+    assert_eq!(buffer.read_bytes(), &[0u8, 0, 3, 0, 13, 0, 23, 0, 39, 0, 0, 0, 0, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
     buffer.set(&["0"], "hello")?;
     let uuid = crate::pointer::uuid::NP_UUID::generate(22);
     buffer.set(&["1"], &uuid)?;
     buffer.set(&["2"], 20u8)?;
-    assert_eq!(buffer.read_bytes(), &[0u8, 0, 3, 0, 13, 0, 23, 0, 39, 0, 0, 0, 0, 104, 101, 108, 108, 111, 32, 32, 32, 32, 32, 76, 230, 170, 176, 120, 208, 69, 186, 109, 122, 100, 179, 210, 224, 68, 195, 20].to_vec());
+    assert_eq!(buffer.read_bytes(), &[0u8, 0, 3, 0, 13, 0, 23, 0, 39, 0, 0, 0, 0, 104, 101, 108, 108, 111, 32, 32, 32, 32, 32, 76, 230, 170, 176, 120, 208, 69, 186, 109, 122, 100, 179, 210, 224, 68, 195, 20]);
 
     Ok(())
 }

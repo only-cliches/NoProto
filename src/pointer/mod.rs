@@ -316,7 +316,7 @@ impl<'cursor> NP_Cursor {
 
     /// Compact from old cursor and memory into new cursor and memory
     /// 
-    pub fn compact<M: NP_Memory>(from_cursor: NP_Cursor, from_memory: &M, to_cursor: NP_Cursor, to_memory: &M) -> Result<NP_Cursor, NP_Error> {
+    pub fn compact<M: NP_Memory, M2: NP_Memory>(from_cursor: NP_Cursor, from_memory: &M, to_cursor: NP_Cursor, to_memory: &M2) -> Result<NP_Cursor, NP_Error> {
 
         match from_memory.get_schema()[from_cursor.schema_addr].get_type_key() {
             NP_TypeKeys::Any           => { Ok(to_cursor) }
@@ -486,7 +486,7 @@ pub trait NP_Value<'value> {
     
     /// Handle copying from old pointer/buffer to new pointer/buffer (recursive for collections)
     /// 
-    fn do_compact<M: NP_Memory>(from_cursor: NP_Cursor, from_memory: &'value M, to_cursor: NP_Cursor, to_memory: &'value M) -> Result<NP_Cursor, NP_Error> where Self: 'value + Sized {
+    fn do_compact<M: NP_Memory, M2: NP_Memory>(from_cursor: NP_Cursor, from_memory: &'value M, to_cursor: NP_Cursor, to_memory: &'value M2) -> Result<NP_Cursor, NP_Error> where Self: 'value + Sized {
 
         match Self::into_value(&from_cursor, from_memory)? {
             Some(x) => {

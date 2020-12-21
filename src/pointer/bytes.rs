@@ -88,7 +88,7 @@ impl<'value> NP_Value<'value> for &'value [u8] {
     
         let str_size = bytes.len() as usize;
     
-        let write_bytes = memory.write_bytes();
+        let mut write_bytes = memory.write_bytes();
     
         let size = match memory.get_schema()[cursor.schema_addr] {
             NP_Parsed_Schema::Bytes { size, .. } => size,
@@ -111,6 +111,8 @@ impl<'value> NP_Value<'value> for &'value [u8] {
             }
 
             let addr = c_value.get_addr_value() as usize;
+
+            write_bytes = memory.write_bytes();
     
             for x in 0..(size as usize) {
                 if x < bytes.len() {
