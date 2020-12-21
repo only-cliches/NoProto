@@ -23,7 +23,6 @@ pub mod uuid;
 pub mod option;
 pub mod date;
 
-use crate::buffer::ROOT_PTR_ADDR;
 use core::{fmt::{Debug}};
 
 use alloc::prelude::v1::Box;
@@ -263,8 +262,8 @@ impl<'cursor> NP_Cursor {
     pub fn get_value<'value>(&self, memory: &'value NP_Memory<'value>) -> &'value mut dyn NP_Pointer_Bytes {
         let ptr = memory.write_bytes().as_mut_ptr();
         // if requesting root pointer or address is higher than buffer length
-        if self.buff_addr == ROOT_PTR_ADDR || self.buff_addr > memory.read_bytes().len() {
-            unsafe { &mut *(ptr.add(ROOT_PTR_ADDR) as *mut NP_Pointer_Scalar) }
+        if self.buff_addr == memory.root || self.buff_addr > memory.read_bytes().len() {
+            unsafe { &mut *(ptr.add(memory.root) as *mut NP_Pointer_Scalar) }
         } else {
             match memory.get_schema()[self.parent_schema_addr] {
                 NP_Parsed_Schema::List { .. } => {

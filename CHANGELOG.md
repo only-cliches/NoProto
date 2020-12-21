@@ -1,3 +1,6 @@
+# 0.7.0
+
+
 # 0.6.3 December 20, 2020
 - Restored hashmap code for faster RPC lookups.
 - Optimized RPC code to reduce allocations.

@@ -380,6 +380,7 @@ enum NP_RCP_Spec<'spec> {
 }
 
 impl<'spec> NP_RCP_Spec<'spec> {
+    #[inline(always)]
     pub fn write(&mut self) -> Result<&mut Vec<u8>, NP_Error> {
         match self {
             NP_RCP_Spec::Owned(vec) => Ok(vec),
@@ -926,7 +927,7 @@ impl<'fact> NP_RPC_Factory<'fact> {
         }
 
         // next 2 bytes is rpc address
-        let rpc_addr = u16::from_be_bytes(unsafe { *(&bytes[4..6] as *const [u8] as *const [u8; 2]) }) as usize;
+        let rpc_addr = read_u16(&bytes, 4);
 
         // next 1 byte is request/response byte
         match RPC_Type::from(bytes[6]) {
@@ -1007,7 +1008,7 @@ impl<'fact> NP_RPC_Factory<'fact> {
         }
 
         // next 2 bytes is rpc address
-        let rpc_addr = u16::from_be_bytes(unsafe { *(&bytes[4..6] as *const [u8] as *const [u8; 2]) }) as usize;
+        let rpc_addr = read_u16(&bytes, 4);
 
         // next 1 byte is request/response byte
         match RPC_Type::from(bytes[6]) {
@@ -1215,7 +1216,7 @@ impl<'request> NP_RPC_Response<'request> {
 
     /// Close this response
     /// 
-    /// The only failure condition is if you set the `NP_ResponseKinds` to `Error` but didn't have an error type declared in the rpc method.
+    /// The only failure condition is if you set the `kind` to `NP_ResponseKinds::Error` but didn't have an error type declared in the rpc method.
     /// 
     pub fn rpc_close(self) -> Result<Vec<u8>, NP_Error> {
         let mut response_bytes: Vec<u8> = Vec::with_capacity(self.data.read_bytes().len() + 19 + 4);

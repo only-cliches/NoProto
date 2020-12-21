@@ -17,7 +17,7 @@ use crate::alloc::borrow::ToOwned;
 
 /// The address location of the root pointer.
 #[doc(hidden)]
-pub const ROOT_PTR_ADDR: usize = 1;
+pub const DEFAULT_ROOT_PTR_ADDR: usize = 1;
 /// Maximum size of list collections
 #[doc(hidden)]
 pub const LIST_MAX_SIZE: usize = core::u16::MAX as usize;
@@ -35,8 +35,7 @@ pub struct NP_Buffer<'buffer> {
     /// Schema data used by this buffer
     memory: NP_Memory<'buffer>,
     cursor: NP_Cursor,
-    sortable: bool,
-    backup_cursor: NP_Cursor
+    sortable: bool
 }
 
 /// When calling `maybe_compact` on a buffer, this struct is provided to help make a choice on wether to compact or not.
@@ -53,10 +52,9 @@ pub struct NP_Size_Data {
 impl<'buffer> Clone for NP_Buffer<'buffer> {
     fn clone(&self) -> Self {
         Self {
-            memory: NP_Memory::existing(self.memory.read_bytes().clone(), self.memory.get_schema()),
+            memory: NP_Memory::existing(self.memory.read_bytes().clone(), self.memory.get_schema(), self.memory.root),
             cursor: self.cursor.clone(),
-            sortable: self.sortable,
-            backup_cursor: self.backup_cursor
+            sortable: self.sortable
         }
     }
 }
@@ -71,7 +69,7 @@ impl<'buffer> NP_Buffer<'buffer> {
         match memory.schema[0] {
             NP_Parsed_Schema::Tuple { sortable, .. } => {
                 if sortable {
-                    NP_Tuple::select(NP_Cursor::new(ROOT_PTR_ADDR, 0, 0), 0, true, &memory).unwrap_or(None);
+                    NP_Tuple::select(NP_Cursor::new(memory.root, 0, 0), 0, true, &memory).unwrap_or(None);
                     is_sortable = true;
                 }
             },
@@ -79,13 +77,11 @@ impl<'buffer> NP_Buffer<'buffer> {
         };
 
         NP_Buffer {
-            cursor: NP_Cursor::new(ROOT_PTR_ADDR, 0, 0),
+            cursor: NP_Cursor::new(memory.root, 0, 0),
             memory: memory,
-            sortable: is_sortable,
-            backup_cursor: NP_Cursor::new(ROOT_PTR_ADDR, 0, 0)
+            sortable: is_sortable
         }
     }
-
 
     /// Copy an object at the provided path and all it's children into JSON.
     /// 
@@ -203,7 +199,7 @@ impl<'buffer> NP_Buffer<'buffer> {
                         vtables +=1;
                         length -= 4;
                     }
-                    let root_offset = ROOT_PTR_ADDR + 2 + (vtables * 10);
+                    let root_offset = DEFAULT_ROOT_PTR_ADDR + 2 + (vtables * 10);
 
                     let closed_vec = self.memory.dump();
                     
@@ -242,7 +238,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// Moves cursor position to root of buffer, the default.
     /// 
     pub fn cursor_to_root(&mut self) {
-        self.cursor = NP_Cursor::new(ROOT_PTR_ADDR, 0, 0);
+        self.cursor = NP_Cursor::new(self.memory.root, 0, 0);
     }
 
     /// Used to set scalar values inside the buffer.
@@ -967,15 +963,14 @@ impl<'buffer> NP_Buffer<'buffer> {
             None => self.memory.read_bytes().len()
         };
 
-        let old_root = NP_Cursor::new(ROOT_PTR_ADDR, 0, 0);
+        let old_root = NP_Cursor::new(self.memory.root, 0, 0);
 
-        let new_bytes = NP_Memory::new(Some(capacity), self.memory.schema);
-        let new_root  = NP_Cursor::new(ROOT_PTR_ADDR, 0, 0);
+        let new_bytes = NP_Memory::new(Some(capacity), self.memory.schema, self.memory.root);
+        let new_root  = NP_Cursor::new(self.memory.root, 0, 0);
 
         NP_Cursor::compact(old_root, &self.memory, new_root, &new_bytes)?;
 
-        self.cursor = NP_Cursor::new(ROOT_PTR_ADDR, 0, 0);
-        self.backup_cursor = NP_Cursor::new(ROOT_PTR_ADDR, 0, 0);
+        self.cursor = NP_Cursor::new(self.memory.root, 0, 0);
 
         self.memory = new_bytes;
 
@@ -1007,9 +1002,9 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// 
     pub fn calc_bytes<'bytes>(&self) -> Result<NP_Size_Data, NP_Error> {
 
-        let root = NP_Cursor::new(ROOT_PTR_ADDR, 0, 0);
-        let real_bytes = NP_Cursor::calc_size(&root, &self.memory)? + ROOT_PTR_ADDR;
-        let total_size = self.memory.read_bytes().len();
+        let root = NP_Cursor::new(self.memory.root, 0, 0);
+        let real_bytes = NP_Cursor::calc_size(&root, &self.memory)? + self.memory.root;
+        let total_size = self.memory.read_bytes().len() - self.memory.root + 1;
         if total_size >= real_bytes {
             return Ok(NP_Size_Data {
                 current_buffer: total_size,

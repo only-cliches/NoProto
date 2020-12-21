@@ -9,6 +9,7 @@ use alloc::vec::Vec;
 #[derive(Debug)]
 pub struct NP_Memory<'memory> {
     bytes: UnsafeCell<Vec<u8>>,
+    pub root: usize,
     pub schema: &'memory Vec<NP_Parsed_Schema>
 }
 
@@ -23,16 +24,17 @@ impl<'memory> NP_Memory<'memory> {
     }
 
     #[inline(always)]
-    pub fn existing(bytes: Vec<u8>, schema: &'memory Vec<NP_Parsed_Schema>) -> Self {
+    pub fn existing(bytes: Vec<u8>, schema: &'memory Vec<NP_Parsed_Schema>, root: usize) -> Self {
 
         Self {
+            root,
             bytes: UnsafeCell::new(bytes),
             schema: schema
         }
     }
 
     #[inline(always)]
-    pub fn new(capacity: Option<usize>, schema: &'memory Vec<NP_Parsed_Schema>) -> Self {
+    pub fn new(capacity: Option<usize>, schema: &'memory Vec<NP_Parsed_Schema>, root: usize) -> Self {
         let use_size = match capacity {
             Some(x) => x,
             None => 1024
@@ -44,6 +46,7 @@ impl<'memory> NP_Memory<'memory> {
         new_bytes.extend(&[0u8; 3]);
 
         NP_Memory {
+            root,
             bytes: UnsafeCell::new(new_bytes),
             schema: schema,
         }
