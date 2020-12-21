@@ -38,7 +38,7 @@ pub struct NP_Map<'map> {
 impl<'map> NP_Map<'map> {
 
     #[inline(always)]
-    pub fn select(map_cursor: NP_Cursor, key: &str, make_path: bool, memory: &'map NP_Memory) -> Result<Option<NP_Cursor>, NP_Error> {
+    pub fn select<M: NP_Memory>(map_cursor: NP_Cursor, key: &str, make_path: bool, memory: &'map M) -> Result<Option<NP_Cursor>, NP_Error> {
 
         let mut map_iter = Self::new_iter(&map_cursor, memory);
 
@@ -58,7 +58,7 @@ impl<'map> NP_Map<'map> {
     }
 
     #[inline(always)]
-    pub fn get_map<'get>(map_buff_addr: usize, memory: &'get NP_Memory<'get>) -> &'get mut NP_Map_Bytes {
+    pub fn get_map<'get, M: NP_Memory>(map_buff_addr: usize, memory: &'get M) -> &'get mut NP_Map_Bytes {
         if map_buff_addr > memory.read_bytes().len() { // attack
             unsafe { &mut *(memory.write_bytes().as_ptr() as *mut NP_Map_Bytes) }
         } else { // normal operation
@@ -67,7 +67,7 @@ impl<'map> NP_Map<'map> {
     }
 
     #[inline(always)]
-    pub fn new_iter(map_cursor: &NP_Cursor, memory: &'map NP_Memory) -> Self {
+    pub fn new_iter<M: NP_Memory>(map_cursor: &NP_Cursor, memory: &'map M) -> Self {
 
         let value_of = match memory.get_schema()[map_cursor.schema_addr] {
             NP_Parsed_Schema::Map { value, .. } => value,
@@ -97,7 +97,7 @@ impl<'map> NP_Map<'map> {
     }
 
     #[inline(always)]
-    pub fn step_iter(&mut self, memory: &'map NP_Memory<'map>) -> Option<(&'map str, NP_Cursor)> {
+    pub fn step_iter<M: NP_Memory>(&mut self, memory: &'map M) -> Option<(&'map str, NP_Cursor)> {
         
         match self.head {
             Some(head) => {
@@ -130,7 +130,7 @@ impl<'map> NP_Map<'map> {
     }
 
     #[inline(always)]
-    pub fn insert(map_cursor: &NP_Cursor, memory: &NP_Memory, key: &str) -> Result<NP_Cursor, NP_Error> {
+    pub fn insert<M: NP_Memory>(map_cursor: &NP_Cursor, memory: &M, key: &str) -> Result<NP_Cursor, NP_Error> {
 
         let value_of = match memory.get_schema()[map_cursor.schema_addr] {
             NP_Parsed_Schema::Map { value, .. } => value,
@@ -185,7 +185,7 @@ impl<'value> NP_Value<'value> for NP_Map<'value> {
         Ok(NP_JSON::Dictionary(schema_json))
     }
 
-    fn get_size(cursor: &NP_Cursor, memory: &'value NP_Memory<'value>) -> Result<usize, NP_Error> {
+    fn get_size<M: NP_Memory>(cursor: &NP_Cursor, memory: &'value M) -> Result<usize, NP_Error> {
 
         let c_value = cursor.get_value(memory);
 
@@ -209,7 +209,7 @@ impl<'value> NP_Value<'value> for NP_Map<'value> {
    
     }
 
-    fn to_json(cursor: &NP_Cursor, memory: &'value NP_Memory) -> NP_JSON {
+    fn to_json<M: NP_Memory>(cursor: &NP_Cursor, memory: &'value M) -> NP_JSON {
 
         let c_value = cursor.get_value(memory);
 
@@ -229,7 +229,7 @@ impl<'value> NP_Value<'value> for NP_Map<'value> {
    
     }
 
-    fn do_compact(from_cursor: NP_Cursor, from_memory: &'value NP_Memory, to_cursor: NP_Cursor, to_memory: &'value NP_Memory) -> Result<NP_Cursor, NP_Error> where Self: 'value + Sized {
+    fn do_compact<M: NP_Memory>(from_cursor: NP_Cursor, from_memory: &'value M, to_cursor: NP_Cursor, to_memory: &'value M) -> Result<NP_Cursor, NP_Error> where Self: 'value + Sized {
 
         let from_value = from_cursor.get_value(from_memory);
 

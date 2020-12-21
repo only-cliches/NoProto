@@ -1,6 +1,6 @@
 //! Top level abstraction for buffer objects
 
-use crate::{utils::opt_err};
+use crate::{memory::NP_Memory_Writable, utils::opt_err};
 use crate::collection::tuple::NP_Tuple;
 
 use crate::{pointer::{NP_Scalar}};
@@ -33,7 +33,7 @@ pub const VTABLE_BYTES: usize = 10;
 #[derive(Debug)]
 pub struct NP_Buffer<'buffer> {
     /// Schema data used by this buffer
-    memory: NP_Memory<'buffer>,
+    memory: NP_Memory_Writable<'buffer>,
     cursor: NP_Cursor,
     sortable: bool
 }
@@ -52,7 +52,7 @@ pub struct NP_Size_Data {
 impl<'buffer> Clone for NP_Buffer<'buffer> {
     fn clone(&self) -> Self {
         Self {
-            memory: NP_Memory::existing(self.memory.read_bytes().clone(), self.memory.get_schema(), self.memory.root),
+            memory: self.memory.clone(),
             cursor: self.cursor.clone(),
             sortable: self.sortable
         }
@@ -62,11 +62,11 @@ impl<'buffer> Clone for NP_Buffer<'buffer> {
 impl<'buffer> NP_Buffer<'buffer> {
 
     #[doc(hidden)]
-    pub fn _new(memory: NP_Memory<'buffer>) -> Self { // make new buffer
+    pub fn _new(memory: NP_Memory_Writable<'buffer>) -> Self { // make new buffer
 
         let mut is_sortable: bool = false;
         // is the root a sortable tuple?  if so, create its children and vtables
-        match memory.schema[0] {
+        match memory.get_schema()[0] {
             NP_Parsed_Schema::Tuple { sortable, .. } => {
                 if sortable {
                     NP_Tuple::select(NP_Cursor::new(memory.root, 0, 0), 0, true, &memory).unwrap_or(None);
@@ -965,7 +965,7 @@ impl<'buffer> NP_Buffer<'buffer> {
 
         let old_root = NP_Cursor::new(self.memory.root, 0, 0);
 
-        let new_bytes = NP_Memory::new(Some(capacity), self.memory.schema, self.memory.root);
+        let new_bytes = NP_Memory_Writable::new(Some(capacity), self.memory.schema, self.memory.root);
         let new_root  = NP_Cursor::new(self.memory.root, 0, 0);
 
         NP_Cursor::compact(old_root, &self.memory, new_root, &new_bytes)?;
@@ -1096,7 +1096,7 @@ pub struct NP_Item<'item> {
     /// Cursor value
     cursor: Option<NP_Cursor>,
     parent: NP_Cursor,
-    memory: &'item NP_Memory<'item>
+    memory: &'item NP_Memory_Writable<'item>
 }
 
 impl<'item> NP_Item<'item> {
@@ -1113,7 +1113,7 @@ impl<'item> NP_Item<'item> {
     /// Get value at this pointer
     pub fn get<X>(&'item self) -> Result<Option<X>, NP_Error> where X: NP_Value<'item> + NP_Scalar {
         if let Some(cursor) = self.cursor {
-            match X::into_value(&cursor, &self.memory)? {
+            match X::into_value(&cursor, self.memory)? {
                 Some(x) => {
                     Ok(Some(x))
                 },
@@ -1191,7 +1191,7 @@ pub enum NP_Iterator_Collection<'col> {
 
 #[allow(missing_docs)]
 impl<'col> NP_Iterator_Collection<'col> {
-    pub fn new(cursor: NP_Cursor, memory: &'col NP_Memory) -> Result<Self, NP_Error> {
+    pub fn new<M: NP_Memory>(cursor: NP_Cursor, memory: &'col M) -> Result<Self, NP_Error> {
         match memory.get_schema()[cursor.schema_addr] {
             NP_Parsed_Schema::Table { .. } => {
                 let table = NP_Table::new_iter(&cursor, memory);
@@ -1218,13 +1218,13 @@ impl<'col> NP_Iterator_Collection<'col> {
 pub struct NP_Generic_Iterator<'it> {
     root: NP_Cursor,
     value: NP_Iterator_Collection<'it>,
-    memory: &'it NP_Memory<'it>,
+    memory: &'it NP_Memory_Writable<'it>,
     index: usize
 }
 
 #[allow(missing_docs)]
 impl<'it> NP_Generic_Iterator<'it> {
-    pub fn new(cursor: NP_Cursor, memory: &'it NP_Memory) -> Result<Self, NP_Error> {
+    pub fn new(cursor: NP_Cursor, memory: &'it NP_Memory_Writable<'it>) -> Result<Self, NP_Error> {
         Ok(Self { 
             root: cursor.clone(),
             value: NP_Iterator_Collection::new(cursor.clone(), memory)?,
@@ -1241,7 +1241,7 @@ impl<'it> Iterator for NP_Generic_Iterator<'it> {
     fn next(&mut self) -> Option<Self::Item> {
         match &mut self.value {
             NP_Iterator_Collection::Map(x) => {
-                if let Some(next_item) = x.step_iter(&self.memory) {
+                if let Some(next_item) = x.step_iter(self.memory) {
                     self.index += 1;
                     Some(NP_Item { memory: self.memory, key: next_item.0, col: next_item.0, index: self.index - 1, cursor: Some(next_item.1), parent: self.root.clone() })
                 } else {
@@ -1249,21 +1249,21 @@ impl<'it> Iterator for NP_Generic_Iterator<'it> {
                 }
             },
             NP_Iterator_Collection::List(x) => {
-                if let Some(next_item) = x.step_iter(&self.memory) {
+                if let Some(next_item) = x.step_iter(self.memory) {
                     Some(NP_Item { memory: self.memory, key: "", col: "", index: next_item.0, cursor: next_item.1, parent: self.root.clone() })
                 } else {
                     None
                 }
             },
             NP_Iterator_Collection::Table(x) => {
-                if let Some(next_item) = x.step_iter(&self.memory) {
+                if let Some(next_item) = x.step_iter(self.memory) {
                     Some(NP_Item { memory: self.memory, key: next_item.1, col: next_item.1, index: next_item.0, cursor: next_item.2, parent: self.root.clone() })
                 } else {
                     None
                 }
             },
             NP_Iterator_Collection::Tuple(x) => {
-                if let Some(next_item) = x.step_iter(&self.memory) {
+                if let Some(next_item) = x.step_iter(self.memory) {
                     Some(NP_Item { memory: self.memory, key: "", col: "", index: next_item.0, cursor: next_item.1, parent: self.root.clone() })
                 } else {
                     None

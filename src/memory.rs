@@ -7,20 +7,39 @@ use alloc::vec::Vec;
 
 #[doc(hidden)]
 #[derive(Debug)]
-pub struct NP_Memory<'memory> {
+pub struct NP_Memory_Writable<'memory> {
     bytes: UnsafeCell<Vec<u8>>,
     pub root: usize,
     pub schema: &'memory Vec<NP_Parsed_Schema>
 }
 
 
+#[doc(hidden)]
+pub trait NP_Memory {
+    fn get_root(&self) -> usize;
+    fn get_schema(&self) -> &Vec<NP_Parsed_Schema>;
+    fn malloc_borrow(&self, bytes: &[u8])  -> Result<usize, NP_Error>;
+    fn malloc(&self, bytes: Vec<u8>) -> Result<usize, NP_Error>;
+    fn read_bytes(&self) -> &Vec<u8>;
+    fn write_bytes(&self) -> &mut Vec<u8>;
+    fn get_1_byte(&self, address: usize) -> Option<u8>;
+    fn get_2_bytes(&self, address: usize) -> Option<&[u8; 2]>;
+    fn get_4_bytes(&self, address: usize) -> Option<&[u8; 4]>;
+    fn get_8_bytes(&self, address: usize) -> Option<&[u8; 8]>;
+    fn get_16_bytes(&self, address: usize) -> Option<&[u8; 16]>;
+    fn get_32_bytes(&self, address: usize) -> Option<&[u8; 32]>;
+    fn dump(self) -> Vec<u8>;
+}
 
 #[doc(hidden)]
-impl<'memory> NP_Memory<'memory> {
+impl<'memory> NP_Memory_Writable<'memory> {
 
-    #[inline(always)]
-    pub fn get_schema(&self) -> &'memory Vec<NP_Parsed_Schema> {
-        self.schema
+    pub fn clone(&self) -> Self {
+        Self {
+            root: self.root,
+            bytes: UnsafeCell::new(self.read_bytes().clone()),
+            schema: self.schema.clone()
+        }
     }
 
     #[inline(always)]
@@ -45,15 +64,29 @@ impl<'memory> NP_Memory<'memory> {
         // size, root pointer
         new_bytes.extend(&[0u8; 3]);
 
-        NP_Memory {
+        Self {
             root,
             bytes: UnsafeCell::new(new_bytes),
             schema: schema,
         }
     }
 
+}
+
+impl<'memory> NP_Memory for NP_Memory_Writable<'memory> {
+
     #[inline(always)]
-    pub fn malloc_borrow(&self, bytes: &[u8])  -> Result<usize, NP_Error> {
+    fn get_root(&self) -> usize {
+        self.root
+    }
+
+    #[inline(always)]
+    fn get_schema(&self) -> &Vec<NP_Parsed_Schema> {
+        self.schema
+    }
+
+    #[inline(always)]
+    fn malloc_borrow(&self, bytes: &[u8])  -> Result<usize, NP_Error> {
         let self_bytes = unsafe { &mut *self.bytes.get() };
 
         let location = self_bytes.len();
@@ -68,24 +101,24 @@ impl<'memory> NP_Memory<'memory> {
     }
 
     #[inline(always)]
-    pub fn malloc(&self, bytes: Vec<u8>) -> Result<usize, NP_Error> {
+    fn malloc(&self, bytes: Vec<u8>) -> Result<usize, NP_Error> {
         self.malloc_borrow(&bytes)
     }
 
     #[inline(always)]
-    pub fn read_bytes(&self) -> &Vec<u8> {
+    fn read_bytes(&self) -> &Vec<u8> {
         let self_bytes = unsafe { &*self.bytes.get() };
         self_bytes
     }   
 
     #[inline(always)]
-    pub fn write_bytes(&self) -> &mut Vec<u8> {
+    fn write_bytes(&self) -> &mut Vec<u8> {
         let self_bytes = unsafe { &mut *self.bytes.get() };
         self_bytes
     }
 
     #[inline(always)]
-    pub fn get_1_byte(&self, address: usize) -> Option<u8> {
+    fn get_1_byte(&self, address: usize) -> Option<u8> {
 
         // empty value
         if address == 0 {
@@ -98,7 +131,7 @@ impl<'memory> NP_Memory<'memory> {
     }
 
     #[inline(always)]
-    pub fn get_2_bytes(&self, address: usize) -> Option<&[u8; 2]> {
+    fn get_2_bytes(&self, address: usize) -> Option<&[u8; 2]> {
 
         // empty value
         if address == 0 {
@@ -117,7 +150,7 @@ impl<'memory> NP_Memory<'memory> {
     }
 
     #[inline(always)]
-    pub fn get_4_bytes(&self, address: usize) -> Option<&[u8; 4]> {
+    fn get_4_bytes(&self, address: usize) -> Option<&[u8; 4]> {
 
         // empty value
         if address == 0 {
@@ -136,7 +169,7 @@ impl<'memory> NP_Memory<'memory> {
     }
 
     #[inline(always)]
-    pub fn get_8_bytes(&self, address: usize) -> Option<&[u8; 8]> {
+    fn get_8_bytes(&self, address: usize) -> Option<&[u8; 8]> {
 
         // empty value
         if address == 0 {
@@ -155,7 +188,7 @@ impl<'memory> NP_Memory<'memory> {
     }
 
     #[inline(always)]
-    pub fn get_16_bytes(&self, address: usize) -> Option<&[u8; 16]> {
+    fn get_16_bytes(&self, address: usize) -> Option<&[u8; 16]> {
 
         // empty value
         if address == 0 {
@@ -174,7 +207,7 @@ impl<'memory> NP_Memory<'memory> {
     }
 
     #[inline(always)]
-    pub fn get_32_bytes(&self, address: usize) -> Option<&[u8; 32]> {
+    fn get_32_bytes(&self, address: usize) -> Option<&[u8; 32]> {
 
         // empty value
         if address == 0 {
@@ -192,7 +225,7 @@ impl<'memory> NP_Memory<'memory> {
         Some(unsafe { &*(slice as *const [u8] as *const [u8; 32]) })
     }
 
-    pub fn dump(self) -> Vec<u8> {
+    fn dump(self) -> Vec<u8> {
         self.bytes.into_inner()
     }
 }

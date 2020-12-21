@@ -34,7 +34,7 @@ pub struct NP_List {
 impl NP_List {
 
     #[inline(always)]
-    pub fn select(list_cursor: NP_Cursor, index: usize, make_path: bool, memory: &NP_Memory) -> Result<Option<(usize, Option<NP_Cursor>)>, NP_Error> {
+    pub fn select<M: NP_Memory>(list_cursor: NP_Cursor, index: usize, make_path: bool, memory: &M) -> Result<Option<(usize, Option<NP_Cursor>)>, NP_Error> {
         let list_value = list_cursor.get_value(memory);
 
         if index > 255 { return Ok(None) }
@@ -121,7 +121,7 @@ impl NP_List {
     }
 
     #[inline(always)]
-    pub fn make_item_in_loop(self, memory: &NP_Memory) -> Result<NP_Cursor, NP_Error> {
+    pub fn make_item_in_loop<M: NP_Memory>(self, memory: &M) -> Result<NP_Cursor, NP_Error> {
         
         let list_value = self.list.get_value(memory);
         let list_data = Self::get_list(list_value.get_addr_value() as usize, memory);
@@ -154,7 +154,7 @@ impl NP_List {
     }
 
     #[inline(always)]
-    pub fn make_list<'make>(list_cursor: &NP_Cursor, memory: &'make NP_Memory) -> Result<(), NP_Error> {
+    pub fn make_list<'make, M: NP_Memory>(list_cursor: &NP_Cursor, memory: &'make M) -> Result<(), NP_Error> {
         let list_addr = memory.malloc_borrow(&[0u8; 4])?; // head & tail
         let value = list_cursor.get_value(memory);
         value.set_addr_value(list_addr as u16);
@@ -162,7 +162,7 @@ impl NP_List {
     }
 
     #[inline(always)]
-    pub fn get_list<'list>(list_cursor_value_addr: usize, memory: &'list NP_Memory<'list>) -> &'list mut NP_List_Bytes {
+    pub fn get_list<'list, M: NP_Memory>(list_cursor_value_addr: usize, memory: &'list M) -> &'list mut NP_List_Bytes {
         if list_cursor_value_addr > memory.read_bytes().len() { // attack
             unsafe { &mut *(memory.write_bytes().as_ptr() as *mut NP_List_Bytes) }
         } else { // normal operation
@@ -171,7 +171,7 @@ impl NP_List {
     }
 
     #[inline(always)]
-    pub fn new_iter(list_cursor: &NP_Cursor, memory: &NP_Memory, only_real: bool, starting_index: usize) -> Self {
+    pub fn new_iter<M: NP_Memory>(list_cursor: &NP_Cursor, memory: &M, only_real: bool, starting_index: usize) -> Self {
 
         let value = list_cursor.get_value(memory);
 
@@ -221,7 +221,7 @@ impl NP_List {
     }
 
     #[inline(always)]
-    pub fn step_iter(&mut self, memory: &NP_Memory) -> Option<(usize, Option<NP_Cursor>)> {
+    pub fn step_iter<M: NP_Memory>(&mut self, memory: &M) -> Option<(usize, Option<NP_Cursor>)> {
 
         match self.head {
             Some(head) => {
@@ -276,7 +276,7 @@ impl NP_List {
     }
 
     #[inline(always)]
-    pub fn push<'push>(list_cursor: &NP_Cursor, memory: &NP_Memory, index: Option<usize>) -> Result<Option<(u16, NP_Cursor)>, NP_Error> {
+    pub fn push<'push, M: NP_Memory>(list_cursor: &NP_Cursor, memory: &M, index: Option<usize>) -> Result<Option<(u16, NP_Cursor)>, NP_Error> {
 
         let list_value = list_cursor.get_value(memory);
 
@@ -349,7 +349,7 @@ impl<'value> NP_Value<'value> for NP_List {
         Ok(NP_JSON::Dictionary(schema_json))
     }
 
-    fn get_size(cursor: &NP_Cursor, memory: &NP_Memory<'value>) -> Result<usize, NP_Error> {
+    fn get_size<M: NP_Memory>(cursor: &NP_Cursor, memory: &M) -> Result<usize, NP_Error> {
 
         let c_value = cursor.get_value(memory);
 
@@ -373,7 +373,7 @@ impl<'value> NP_Value<'value> for NP_List {
         Ok(acc_size + base_size)
     }
     
-    fn to_json(cursor: &NP_Cursor, memory: &'value NP_Memory) -> NP_JSON {
+    fn to_json<M: NP_Memory>(cursor: &NP_Cursor, memory: &'value M) -> NP_JSON {
 
         let c_value = cursor.get_value(memory);
 
@@ -396,7 +396,7 @@ impl<'value> NP_Value<'value> for NP_List {
         NP_JSON::Array(json_list)
     }
 
-    fn do_compact(from_cursor: NP_Cursor, from_memory: &'value NP_Memory, to_cursor: NP_Cursor, to_memory: &'value NP_Memory) -> Result<NP_Cursor, NP_Error> where Self: 'value + Sized {
+    fn do_compact<M: NP_Memory>(from_cursor: NP_Cursor, from_memory: &'value M, to_cursor: NP_Cursor, to_memory: &'value M) -> Result<NP_Cursor, NP_Error> where Self: 'value + Sized {
 
         let from_value = from_cursor.get_value(from_memory);
 

@@ -115,7 +115,7 @@ impl<'value> NP_Value<'value> for &'value str {
         (fixed_size > 0, schema)
     }
 
-    fn into_value(cursor: &NP_Cursor, memory: &'value NP_Memory) -> Result<Option<Self>, NP_Error> where Self: Sized {
+    fn into_value<M: NP_Memory>(cursor: &NP_Cursor, memory: &'value M) -> Result<Option<Self>, NP_Error> where Self: Sized {
 
         let c_value = cursor.get_value(memory);
 
@@ -125,7 +125,7 @@ impl<'value> NP_Value<'value> for &'value str {
             return Ok(None);
         }
 
-        match memory.schema[cursor.schema_addr] {
+        match memory.get_schema()[cursor.schema_addr] {
             NP_Parsed_Schema::UTF8String { size, .. } => {
                 if size > 0 {
                     // fixed size
@@ -159,7 +159,7 @@ impl<'value> NP_Value<'value> for &'value str {
             _ => None
         }
     }
-    fn get_size(cursor: &NP_Cursor, memory: &NP_Memory<'value>) -> Result<usize, NP_Error> {
+    fn get_size<M: NP_Memory>(cursor: &NP_Cursor, memory: &M) -> Result<usize, NP_Error> {
 
         let c_value = cursor.get_value(memory);
         let value_addr = c_value.get_addr_value() as usize;
@@ -169,7 +169,7 @@ impl<'value> NP_Value<'value> for &'value str {
             return Ok(0);
         }
 
-        match memory.schema[cursor.schema_addr] {
+        match memory.get_schema()[cursor.schema_addr] {
             NP_Parsed_Schema::UTF8String { size, .. } => {
                 // fixed size
                 if size > 0 {
@@ -279,13 +279,13 @@ impl<'value> NP_Value<'value> for &'value str {
         return Ok((has_fixed_size, schema_data, schema));
     }
 
-    fn to_json(cursor: &NP_Cursor, memory: &'value NP_Memory) -> NP_JSON {
+    fn to_json<M: NP_Memory>(cursor: &NP_Cursor, memory: &'value M) -> NP_JSON {
 
         match Self::into_value(cursor, memory) {
             Ok(x) => match x {
                 Some(y) => NP_JSON::String(y.to_string()),
                 None => {
-                    match &memory.schema[cursor.schema_addr] {
+                    match &memory.get_schema()[cursor.schema_addr] {
                         NP_Parsed_Schema::UTF8String { default, .. } => match default {
                             Some(x) => NP_JSON::String(x.to_string()),
                             None => NP_JSON::Null,
@@ -298,11 +298,11 @@ impl<'value> NP_Value<'value> for &'value str {
         }
     }
 
-    fn set_value<'set>(cursor: NP_Cursor, memory: &'set NP_Memory, value: Self) -> Result<NP_Cursor, NP_Error> where Self: 'set + Sized {
+    fn set_value<'set, M: NP_Memory>(cursor: NP_Cursor, memory: &'set M, value: Self) -> Result<NP_Cursor, NP_Error> where Self: 'set + Sized {
 
         let c_value = cursor.get_value(memory);
 
-        let (size, case) = match memory.schema[cursor.schema_addr] {
+        let (size, case) = match memory.get_schema()[cursor.schema_addr] {
             NP_Parsed_Schema::UTF8String { size, case, .. } => (size, case),
             _ => (0, String_Case::None)
         };

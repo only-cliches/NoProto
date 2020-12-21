@@ -26,7 +26,7 @@ pub struct NP_Table<'table> {
 impl<'table> NP_Table<'table> {
 
     #[inline(always)]
-    pub fn select(mut table_cursor: NP_Cursor, key: &str, make_path: bool, memory: &NP_Memory) -> Result<Option<NP_Cursor>, NP_Error> {
+    pub fn select<M: NP_Memory>(mut table_cursor: NP_Cursor, key: &str, make_path: bool, memory: &M) -> Result<Option<NP_Cursor>, NP_Error> {
         match &memory.get_schema()[table_cursor.schema_addr] {
             NP_Parsed_Schema::Table { columns, .. } => {
 
@@ -76,7 +76,7 @@ impl<'table> NP_Table<'table> {
     }
 
     #[inline(always)]
-    pub fn make_first_vtable<'make>(table_cursor: NP_Cursor, memory: &'make NP_Memory) -> Result<NP_Cursor, NP_Error> {
+    pub fn make_first_vtable<'make, M: NP_Memory>(table_cursor: NP_Cursor, memory: &'make M) -> Result<NP_Cursor, NP_Error> {
 
         let first_vtable_addr = memory.malloc_borrow(&[0u8; VTABLE_BYTES])?;
         
@@ -87,7 +87,7 @@ impl<'table> NP_Table<'table> {
     }
 
     #[inline(always)]
-    pub fn make_next_vtable<'make>(prev_vtable: &'make mut NP_Vtable, memory: &'make NP_Memory) -> Result<usize, NP_Error> {
+    pub fn make_next_vtable<'make, M: NP_Memory>(prev_vtable: &'make mut NP_Vtable, memory: &'make M) -> Result<usize, NP_Error> {
 
         let vtable_addr = memory.malloc_borrow(&[0u8; VTABLE_BYTES])?;
         
@@ -97,7 +97,7 @@ impl<'table> NP_Table<'table> {
     }
 
     #[inline(always)]
-    pub fn new_iter(cursor: &NP_Cursor, memory: &'table NP_Memory) -> Self {
+    pub fn new_iter<M: NP_Memory>(cursor: &NP_Cursor, memory: &'table M) -> Self {
 
         let table_value = cursor.get_value(memory);
 
@@ -117,7 +117,7 @@ impl<'table> NP_Table<'table> {
     }
 
     #[inline(always)]
-    pub fn get_vtable<'vtable>(v_table_addr: usize, memory: &'vtable NP_Memory) -> &'vtable mut NP_Vtable {
+    pub fn get_vtable<'vtable, M: NP_Memory>(v_table_addr: usize, memory: &'vtable M) -> &'vtable mut NP_Vtable {
         if v_table_addr > memory.read_bytes().len() { // attack
             unsafe { &mut *(memory.write_bytes().as_ptr() as *mut NP_Vtable) }
         } else { // normal operation
@@ -126,7 +126,7 @@ impl<'table> NP_Table<'table> {
     }
 
     #[inline(always)]
-    pub fn step_iter(&mut self, memory: &'table NP_Memory) -> Option<(usize, &'table str, Option<NP_Cursor>)> {
+    pub fn step_iter<M: NP_Memory>(&mut self, memory: &'table M) -> Option<(usize, &'table str, Option<NP_Cursor>)> {
 
         match &memory.get_schema()[self.table.schema_addr] {
             NP_Parsed_Schema::Table { columns, .. } => {
@@ -249,7 +249,7 @@ impl<'value> NP_Value<'value> for NP_Table<'value> {
         Ok(NP_JSON::Dictionary(schema_json))
     }
  
-    fn get_size(cursor: &NP_Cursor, memory: &'value NP_Memory<'value>) -> Result<usize, NP_Error> {
+    fn get_size<M: NP_Memory>(cursor: &NP_Cursor, memory: &'value M) -> Result<usize, NP_Error> {
 
         let c_value = cursor.get_value(memory);
 
@@ -282,7 +282,7 @@ impl<'value> NP_Value<'value> for NP_Table<'value> {
         Ok(acc_size)
     }
 
-    fn to_json(cursor: &NP_Cursor, memory: &'value NP_Memory) -> NP_JSON {
+    fn to_json<M: NP_Memory>(cursor: &NP_Cursor, memory: &'value M) -> NP_JSON {
 
         let c_value = cursor.get_value(memory);
 
@@ -303,7 +303,7 @@ impl<'value> NP_Value<'value> for NP_Table<'value> {
         NP_JSON::Dictionary(json_map)
     }
 
-    fn do_compact(from_cursor: NP_Cursor, from_memory: &'value NP_Memory, mut to_cursor: NP_Cursor, to_memory: &'value NP_Memory) -> Result<NP_Cursor, NP_Error> where Self: 'value + Sized {
+    fn do_compact<M: NP_Memory>(from_cursor: NP_Cursor, from_memory: &'value M, mut to_cursor: NP_Cursor, to_memory: &'value M) -> Result<NP_Cursor, NP_Error> where Self: 'value + Sized {
 
         let from_value = from_cursor.get_value(from_memory);
 

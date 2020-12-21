@@ -206,14 +206,15 @@ mod utils;
 #[macro_use]
 extern crate alloc;
 
+use crate::memory::NP_Memory;
 use crate::json_flex::NP_JSON;
 use crate::schema::NP_Schema;
 use crate::json_flex::json_decode;
 use crate::error::NP_Error;
-use crate::memory::NP_Memory;
 use buffer::{NP_Buffer, DEFAULT_ROOT_PTR_ADDR};
 use alloc::vec::Vec;
 use alloc::{borrow::ToOwned};
+use memory::NP_Memory_Writable;
 use schema::NP_Parsed_Schema;
 
 /// Factories are created from schemas.  Once you have a factory you can use it to create new buffers or open existing ones.
@@ -426,11 +427,11 @@ impl<'fact> NP_Factory<'fact> {
                     // how many leading bytes are identical across all buffers with this schema
                     let root_offset = DEFAULT_ROOT_PTR_ADDR + 2 + (vtables * 10);
 
-                    let default_buffer = NP_Buffer::_new(NP_Memory::new(Some(root_offset + bytes.len()), &self.schema.parsed, DEFAULT_ROOT_PTR_ADDR));
+                    let default_buffer = NP_Buffer::_new(NP_Memory_Writable::new(Some(root_offset + bytes.len()), &self.schema.parsed, DEFAULT_ROOT_PTR_ADDR));
                     let mut use_bytes = default_buffer.close()[0..root_offset].to_vec();
                     use_bytes.extend_from_slice(&bytes[..]);
 
-                    Ok(NP_Buffer::_new(NP_Memory::existing(use_bytes, &self.schema.parsed, DEFAULT_ROOT_PTR_ADDR)))
+                    Ok(NP_Buffer::_new(NP_Memory_Writable::existing(use_bytes, &self.schema.parsed, DEFAULT_ROOT_PTR_ADDR)))
                 }
             },
             _ => return Err(NP_Error::new("Attempted to open sorted buffer when root wasn't tuple!"))
@@ -441,7 +442,7 @@ impl<'fact> NP_Factory<'fact> {
     /// Open existing Vec<u8> as buffer for this factory.  
     /// 
     pub fn open_buffer<'buffer>(&'buffer self, bytes: Vec<u8>) -> NP_Buffer<'buffer> {
-        NP_Buffer::_new(NP_Memory::existing(bytes, &self.schema.parsed, DEFAULT_ROOT_PTR_ADDR))
+        NP_Buffer::_new(NP_Memory_Writable::existing(bytes, &self.schema.parsed, DEFAULT_ROOT_PTR_ADDR))
     }
 
     /// Generate a new empty buffer from this factory.
@@ -452,6 +453,6 @@ impl<'fact> NP_Factory<'fact> {
     /// You can change the address size through compaction after the buffer is created, so it's fine to start with a smaller address space and convert it to a larger one later as needed.  It's also possible to go the other way, you can convert larger address space down to a smaller one durring compaction.
     /// 
     pub fn empty_buffer<'buffer>(&'buffer self, capacity: Option<usize>) -> NP_Buffer<'buffer> {
-        NP_Buffer::_new(NP_Memory::new(capacity, &self.schema.parsed, DEFAULT_ROOT_PTR_ADDR))
+        NP_Buffer::_new(NP_Memory_Writable::new(capacity, &self.schema.parsed, DEFAULT_ROOT_PTR_ADDR))
     }
 }

@@ -80,7 +80,7 @@ impl<'value> NP_Value<'value> for &'value [u8] {
     }
 
  
-    fn set_value<'set>(cursor: NP_Cursor, memory: &'set NP_Memory, value: Self) -> Result<NP_Cursor, NP_Error> where Self: 'set + Sized {
+    fn set_value<'set, M: NP_Memory>(cursor: NP_Cursor, memory: &'set M, value: Self) -> Result<NP_Cursor, NP_Error> where Self: 'set + Sized {
 
         let c_value = cursor.get_value(memory);
     
@@ -90,7 +90,7 @@ impl<'value> NP_Value<'value> for &'value [u8] {
     
         let write_bytes = memory.write_bytes();
     
-        let size = match memory.schema[cursor.schema_addr] {
+        let size = match memory.get_schema()[cursor.schema_addr] {
             NP_Parsed_Schema::Bytes { size, .. } => size,
             _ => 0
         };
@@ -177,7 +177,7 @@ impl<'value> NP_Value<'value> for &'value [u8] {
     }
     
 
-    fn into_value(cursor: &NP_Cursor, memory: &'value NP_Memory) -> Result<Option<Self>, NP_Error> where Self: Sized {
+    fn into_value<M: NP_Memory>(cursor: &NP_Cursor, memory: &'value M) -> Result<Option<Self>, NP_Error> where Self: Sized {
 
         let c_value = cursor.get_value(memory);
 
@@ -187,7 +187,7 @@ impl<'value> NP_Value<'value> for &'value [u8] {
             return Ok(None);
         }
 
-        match memory.schema[cursor.schema_addr] {
+        match memory.get_schema()[cursor.schema_addr] {
             NP_Parsed_Schema::Bytes {
                 i: _,
                 sortable: _,
@@ -217,7 +217,7 @@ impl<'value> NP_Value<'value> for &'value [u8] {
         }
     }
 
-    fn to_json(cursor: &NP_Cursor, memory: &'value NP_Memory) -> NP_JSON {
+    fn to_json<M: NP_Memory>(cursor: &NP_Cursor, memory: &'value M) -> NP_JSON {
 
 
         match Self::into_value(cursor, memory) {
@@ -231,7 +231,7 @@ impl<'value> NP_Value<'value> for &'value [u8] {
                     },
                     None => {
 
-                        match &memory.schema[cursor.schema_addr] {
+                        match &memory.get_schema()[cursor.schema_addr] {
                             NP_Parsed_Schema::Bytes { default, .. } => {
                                 match default {
                                     Some(x) => {
@@ -254,7 +254,7 @@ impl<'value> NP_Value<'value> for &'value [u8] {
             }
         }
     }
-    fn get_size(cursor: &NP_Cursor, memory: &NP_Memory<'value>) -> Result<usize, NP_Error> {
+    fn get_size<M: NP_Memory>(cursor: &NP_Cursor, memory: &M) -> Result<usize, NP_Error> {
 
         let c_value = cursor.get_value(memory);
         let value_addr = c_value.get_addr_value() as usize;
@@ -264,7 +264,7 @@ impl<'value> NP_Value<'value> for &'value [u8] {
             return Ok(0);
         }
 
-        match memory.schema[cursor.schema_addr] {
+        match memory.get_schema()[cursor.schema_addr] {
             NP_Parsed_Schema::Bytes { size, .. } => {
                 // fixed size
                 if size > 0 {
