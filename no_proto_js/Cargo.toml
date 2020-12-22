@@ -1,0 +1,18 @@
+[package]
+name = "no_proto_js"
+version = "0.1.0"
+authors = ["Scott Lott <me@scottlott.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wasm-bindgen = "0.2"
+wee_alloc = "0.4.5"
+
+[profile.release]
+lto = true
+opt-level = 'z'

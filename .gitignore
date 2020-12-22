@@ -1,6 +1,7 @@
-/target
+no_proto_rs/target
 **/*.rs.bk
-Cargo.lock
+no_proto_rs/Cargo.lock
 test.json
 
 bench/target/**/*
+no_proto_js/target/**/*

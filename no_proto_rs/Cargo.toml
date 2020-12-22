@@ -15,9 +15,7 @@ keywords = ["protocol-buffers", "grpc", "rpc", "serialization", "json"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[dependencies]
-
 [features]
 np_rpc = []
-
 default = ["np_rpc"]
+
