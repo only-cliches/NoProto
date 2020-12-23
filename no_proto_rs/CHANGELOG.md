@@ -1,5 +1,7 @@
-# 0.7.1 
+# 0.7.1 December 22, 2020
 - Minor performance improvements.
+- Fixed some type errors in `XX::max` calls.
+- Working on `wasm` version of this library.
 
 # 0.7.0 December 20, 2020
 - Added `open_buffer_ro` method to open buffers as read only.

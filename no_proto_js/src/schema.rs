@@ -561,15 +561,15 @@
 
 use alloc::string::String;
 use core::{fmt::Debug};
-// use crate::{json_flex::NP_JSON, pointer::{string::NP_String, ulid::_NP_ULID, uuid::_NP_UUID}};
-// use crate::pointer::any::NP_Any;
-// use crate::pointer::date::NP_Date;
-// use crate::pointer::geo::NP_Geo;
-// use crate::pointer::dec::NP_Dec;
+use crate::{json_flex::NP_JSON, pointer::{string::NP_String, ulid::_NP_ULID, uuid::_NP_UUID}};
+use crate::pointer::any::NP_Any;
+use crate::pointer::date::NP_Date;
+use crate::pointer::geo::NP_Geo;
+use crate::pointer::dec::NP_Dec;
 // use crate::collection::tuple::NP_Tuple;
-// use crate::pointer::bytes::NP_Bytes;
+use crate::pointer::bytes::NP_Bytes;
 // use crate::collection::{list::NP_List, table::NP_Table, map::NP_Map};
-// use crate::pointer::{option::NP_Enum, NP_Value};
+use crate::pointer::{option::NP_Enum, NP_Value};
 use crate::error::NP_Error;
 use alloc::vec::Vec;
 use alloc::boxed::Box;
@@ -616,33 +616,34 @@ impl From<u8> for NP_TypeKeys {
 impl NP_TypeKeys {
     /// Convert this NP_TypeKey into a specific type index
     pub fn into_type_idx<'idx>(&self) -> (&'idx str, NP_TypeKeys) {
-        match self {
-            NP_TypeKeys::None =>       {    ("none", NP_TypeKeys::None) }
-            NP_TypeKeys::Any =>        {    NP_Any::type_idx() }
-            NP_TypeKeys::UTF8String => { NP_String::type_idx() }
-            NP_TypeKeys::Bytes =>      {  NP_Bytes::type_idx() }
-            NP_TypeKeys::Int8 =>       {        i8::type_idx() }
-            NP_TypeKeys::Int16 =>      {       i16::type_idx() }
-            NP_TypeKeys::Int32 =>      {       i32::type_idx() }
-            NP_TypeKeys::Int64 =>      {       i64::type_idx() }
-            NP_TypeKeys::Uint8 =>      {        u8::type_idx() }
-            NP_TypeKeys::Uint16 =>     {       u16::type_idx() }
-            NP_TypeKeys::Uint32 =>     {       u32::type_idx() }
-            NP_TypeKeys::Uint64 =>     {       u64::type_idx() }
-            NP_TypeKeys::Float =>      {       f32::type_idx() }
-            NP_TypeKeys::Double =>     {       f64::type_idx() }
-            NP_TypeKeys::Decimal =>    {    NP_Dec::type_idx() }
-            NP_TypeKeys::Boolean =>    {      bool::type_idx() }
-            NP_TypeKeys::Geo =>        {    NP_Geo::type_idx() }
-            NP_TypeKeys::Uuid =>       {  _NP_UUID::type_idx() }
-            NP_TypeKeys::Ulid =>       {  _NP_ULID::type_idx() }
-            NP_TypeKeys::Date =>       {   NP_Date::type_idx() }
-            NP_TypeKeys::Enum =>       {   NP_Enum::type_idx() }
-            NP_TypeKeys::Table =>      {  NP_Table::type_idx() }
-            NP_TypeKeys::Map =>        {    NP_Map::type_idx() }
-            NP_TypeKeys::List =>       {   NP_List::type_idx() }
-            NP_TypeKeys::Tuple =>      {  NP_Tuple::type_idx() }
-        }
+        // match self {
+        //     NP_TypeKeys::None =>       {    ("none", NP_TypeKeys::None) }
+        //     NP_TypeKeys::Any =>        {    NP_Any::type_idx() }
+        //     NP_TypeKeys::UTF8String => { NP_String::type_idx() }
+        //     NP_TypeKeys::Bytes =>      {  NP_Bytes::type_idx() }
+        //     NP_TypeKeys::Int8 =>       {        i8::type_idx() }
+        //     NP_TypeKeys::Int16 =>      {       i16::type_idx() }
+        //     NP_TypeKeys::Int32 =>      {       i32::type_idx() }
+        //     NP_TypeKeys::Int64 =>      {       i64::type_idx() }
+        //     NP_TypeKeys::Uint8 =>      {        u8::type_idx() }
+        //     NP_TypeKeys::Uint16 =>     {       u16::type_idx() }
+        //     NP_TypeKeys::Uint32 =>     {       u32::type_idx() }
+        //     NP_TypeKeys::Uint64 =>     {       u64::type_idx() }
+        //     NP_TypeKeys::Float =>      {       f32::type_idx() }
+        //     NP_TypeKeys::Double =>     {       f64::type_idx() }
+        //     NP_TypeKeys::Decimal =>    {    NP_Dec::type_idx() }
+        //     NP_TypeKeys::Boolean =>    {      bool::type_idx() }
+        //     NP_TypeKeys::Geo =>        {    NP_Geo::type_idx() }
+        //     NP_TypeKeys::Uuid =>       {  _NP_UUID::type_idx() }
+        //     NP_TypeKeys::Ulid =>       {  _NP_ULID::type_idx() }
+        //     NP_TypeKeys::Date =>       {   NP_Date::type_idx() }
+        //     NP_TypeKeys::Enum =>       {   NP_Enum::type_idx() }
+        //     NP_TypeKeys::Table =>      {  NP_Table::type_idx() }
+        //     NP_TypeKeys::Map =>        {    NP_Map::type_idx() }
+        //     NP_TypeKeys::List =>       {   NP_List::type_idx() }
+        //     NP_TypeKeys::Tuple =>      {  NP_Tuple::type_idx() }
+        // }
+        panic!()
     }
 }
 
@@ -668,7 +669,7 @@ impl From<u8> for String_Case {
 /// When a schema is parsed from JSON or Bytes, it is stored in this recursive type
 /// 
 #[allow(missing_docs)]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum NP_Parsed_Schema {
     None,
     Any        { sortable: bool, i:NP_TypeKeys },
@@ -836,10 +837,10 @@ impl NP_Schema {
             NP_Parsed_Schema::Ulid       { .. }      => {  _NP_ULID::schema_to_json(parsed_schema, address) }
             NP_Parsed_Schema::Date       { .. }      => {   NP_Date::schema_to_json(parsed_schema, address) }
             NP_Parsed_Schema::Enum       { .. }      => {   NP_Enum::schema_to_json(parsed_schema, address) }
-            NP_Parsed_Schema::Table      { .. }      => {  NP_Table::schema_to_json(parsed_schema, address) }
-            NP_Parsed_Schema::Map        { .. }      => {    NP_Map::schema_to_json(parsed_schema, address) }
-            NP_Parsed_Schema::List       { .. }      => {   NP_List::schema_to_json(parsed_schema, address) }
-            NP_Parsed_Schema::Tuple      { .. }      => {  NP_Tuple::schema_to_json(parsed_schema, address) }
+            // NP_Parsed_Schema::Table      { .. }      => {  NP_Table::schema_to_json(parsed_schema, address) }
+            // NP_Parsed_Schema::Map        { .. }      => {    NP_Map::schema_to_json(parsed_schema, address) }
+            // NP_Parsed_Schema::List       { .. }      => {   NP_List::schema_to_json(parsed_schema, address) }
+            // NP_Parsed_Schema::Tuple      { .. }      => {  NP_Tuple::schema_to_json(parsed_schema, address) }
             _ => { Ok(NP_JSON::Null) }
         }
     }
@@ -882,10 +883,11 @@ impl NP_Schema {
             NP_TypeKeys::Ulid =>       {  _NP_ULID::from_bytes_to_schema(cache, address, bytes) }
             NP_TypeKeys::Date =>       {   NP_Date::from_bytes_to_schema(cache, address, bytes) }
             NP_TypeKeys::Enum =>       {   NP_Enum::from_bytes_to_schema(cache, address, bytes) }
-            NP_TypeKeys::Table =>      {  NP_Table::from_bytes_to_schema(cache, address, bytes) }
-            NP_TypeKeys::Map =>        {    NP_Map::from_bytes_to_schema(cache, address, bytes) }
-            NP_TypeKeys::List =>       {   NP_List::from_bytes_to_schema(cache, address, bytes) }
-            NP_TypeKeys::Tuple =>      {  NP_Tuple::from_bytes_to_schema(cache, address, bytes) }
+            _ => panic!()
+            // NP_TypeKeys::Table =>      {  NP_Table::from_bytes_to_schema(cache, address, bytes) }
+            // NP_TypeKeys::Map =>        {    NP_Map::from_bytes_to_schema(cache, address, bytes) }
+            // NP_TypeKeys::List =>       {   NP_List::from_bytes_to_schema(cache, address, bytes) }
+            // NP_TypeKeys::Tuple =>      {  NP_Tuple::from_bytes_to_schema(cache, address, bytes) }
         }
     }
 
@@ -901,48 +903,48 @@ impl NP_Schema {
                 match x.as_str() {
                     "any"      => {    NP_Any::from_json_to_schema(schema, &json_schema) },
                     "str"      => { NP_String::from_json_to_schema(schema, &json_schema) },
-                    "string"   => { NP_String::from_json_to_schema(schema, &json_schema) },
-                    "utf8"     => { NP_String::from_json_to_schema(schema, &json_schema) },
-                    "utf-8"    => { NP_String::from_json_to_schema(schema, &json_schema) },
-                    "bytes"    => {  NP_Bytes::from_json_to_schema(schema, &json_schema) },
-                    "u8[]"     => {  NP_Bytes::from_json_to_schema(schema, &json_schema) },
-                    "[u8]"     => {  NP_Bytes::from_json_to_schema(schema, &json_schema) },
-                    "i8"       => {        i8::from_json_to_schema(schema, &json_schema) },
-                    "int8"     => {        i8::from_json_to_schema(schema, &json_schema) },
-                    "i16"      => {       i16::from_json_to_schema(schema, &json_schema) },
-                    "int16"    => {       i16::from_json_to_schema(schema, &json_schema) },
-                    "i32"      => {       i32::from_json_to_schema(schema, &json_schema) },
-                    "int32"    => {       i32::from_json_to_schema(schema, &json_schema) },
-                    "i64"      => {       i64::from_json_to_schema(schema, &json_schema) },
-                    "int64"    => {       i64::from_json_to_schema(schema, &json_schema) },
-                    "u8"       => {        u8::from_json_to_schema(schema, &json_schema) },
-                    "uint8"    => {        u8::from_json_to_schema(schema, &json_schema) },
-                    "u16"      => {       u16::from_json_to_schema(schema, &json_schema) },
-                    "uint16"   => {       u16::from_json_to_schema(schema, &json_schema) },
-                    "u32"      => {       u32::from_json_to_schema(schema, &json_schema) },
-                    "uint32"   => {       u32::from_json_to_schema(schema, &json_schema) },
-                    "u64"      => {       u64::from_json_to_schema(schema, &json_schema) },
-                    "uint64"   => {       u64::from_json_to_schema(schema, &json_schema) },
-                    "f32"      => {       f32::from_json_to_schema(schema, &json_schema) },
-                    "float"    => {       f32::from_json_to_schema(schema, &json_schema) },
-                    "f64"      => {       f64::from_json_to_schema(schema, &json_schema) },
-                    "double"   => {       f64::from_json_to_schema(schema, &json_schema) },
-                    "dec"      => {    NP_Dec::from_json_to_schema(schema, &json_schema) },
-                    "decimal"  => {    NP_Dec::from_json_to_schema(schema, &json_schema) },
-                    "bool"     => {      bool::from_json_to_schema(schema, &json_schema) },
-                    "boolean"  => {      bool::from_json_to_schema(schema, &json_schema) },
-                    "geo4"     => {    NP_Geo::from_json_to_schema(schema, &json_schema) },
-                    "geo8"     => {    NP_Geo::from_json_to_schema(schema, &json_schema) },
-                    "geo16"    => {    NP_Geo::from_json_to_schema(schema, &json_schema) },
-                    "uuid"     => {  _NP_UUID::from_json_to_schema(schema, &json_schema) },
-                    "ulid"     => {  _NP_ULID::from_json_to_schema(schema, &json_schema) },
-                    "date"     => {   NP_Date::from_json_to_schema(schema, &json_schema) },
-                    "enum"     => {   NP_Enum::from_json_to_schema(schema, &json_schema) },
-                    "option"   => {   NP_Enum::from_json_to_schema(schema, &json_schema) },
-                    "table"    => {  NP_Table::from_json_to_schema(schema, &json_schema) },
-                    "list"     => {   NP_List::from_json_to_schema(schema, &json_schema) },
-                    "map"      => {    NP_Map::from_json_to_schema(schema, &json_schema) },
-                    "tuple"    => {  NP_Tuple::from_json_to_schema(schema, &json_schema) },
+                    // "string"   => { NP_String::from_json_to_schema(schema, &json_schema) },
+                    // "utf8"     => { NP_String::from_json_to_schema(schema, &json_schema) },
+                    // "utf-8"    => { NP_String::from_json_to_schema(schema, &json_schema) },
+                    // "bytes"    => {  NP_Bytes::from_json_to_schema(schema, &json_schema) },
+                    // "u8[]"     => {  NP_Bytes::from_json_to_schema(schema, &json_schema) },
+                    // "[u8]"     => {  NP_Bytes::from_json_to_schema(schema, &json_schema) },
+                    // "i8"       => {        i8::from_json_to_schema(schema, &json_schema) },
+                    // "int8"     => {        i8::from_json_to_schema(schema, &json_schema) },
+                    // "i16"      => {       i16::from_json_to_schema(schema, &json_schema) },
+                    // "int16"    => {       i16::from_json_to_schema(schema, &json_schema) },
+                    // "i32"      => {       i32::from_json_to_schema(schema, &json_schema) },
+                    // "int32"    => {       i32::from_json_to_schema(schema, &json_schema) },
+                    // "i64"      => {       i64::from_json_to_schema(schema, &json_schema) },
+                    // "int64"    => {       i64::from_json_to_schema(schema, &json_schema) },
+                    // "u8"       => {        u8::from_json_to_schema(schema, &json_schema) },
+                    // "uint8"    => {        u8::from_json_to_schema(schema, &json_schema) },
+                    // "u16"      => {       u16::from_json_to_schema(schema, &json_schema) },
+                    // "uint16"   => {       u16::from_json_to_schema(schema, &json_schema) },
+                    // "u32"      => {       u32::from_json_to_schema(schema, &json_schema) },
+                    // "uint32"   => {       u32::from_json_to_schema(schema, &json_schema) },
+                    // "u64"      => {       u64::from_json_to_schema(schema, &json_schema) },
+                    // "uint64"   => {       u64::from_json_to_schema(schema, &json_schema) },
+                    // "f32"      => {       f32::from_json_to_schema(schema, &json_schema) },
+                    // "float"    => {       f32::from_json_to_schema(schema, &json_schema) },
+                    // "f64"      => {       f64::from_json_to_schema(schema, &json_schema) },
+                    // "double"   => {       f64::from_json_to_schema(schema, &json_schema) },
+                    // "dec"      => {    NP_Dec::from_json_to_schema(schema, &json_schema) },
+                    // "decimal"  => {    NP_Dec::from_json_to_schema(schema, &json_schema) },
+                    // "bool"     => {      bool::from_json_to_schema(schema, &json_schema) },
+                    // "boolean"  => {      bool::from_json_to_schema(schema, &json_schema) },
+                    // "geo4"     => {    NP_Geo::from_json_to_schema(schema, &json_schema) },
+                    // "geo8"     => {    NP_Geo::from_json_to_schema(schema, &json_schema) },
+                    // "geo16"    => {    NP_Geo::from_json_to_schema(schema, &json_schema) },
+                    // "uuid"     => {  _NP_UUID::from_json_to_schema(schema, &json_schema) },
+                    // "ulid"     => {  _NP_ULID::from_json_to_schema(schema, &json_schema) },
+                    // "date"     => {   NP_Date::from_json_to_schema(schema, &json_schema) },
+                    // "enum"     => {   NP_Enum::from_json_to_schema(schema, &json_schema) },
+                    // "option"   => {   NP_Enum::from_json_to_schema(schema, &json_schema) },
+                    // "table"    => {  NP_Table::from_json_to_schema(schema, &json_schema) },
+                    // "list"     => {   NP_List::from_json_to_schema(schema, &json_schema) },
+                    // "map"      => {    NP_Map::from_json_to_schema(schema, &json_schema) },
+                    // "tuple"    => {  NP_Tuple::from_json_to_schema(schema, &json_schema) },
                     _ => {
                         let mut err_msg = String::from("Can't find a type that matches this schema! ");
                         err_msg.push_str(json_schema.stringify().as_str());

@@ -254,32 +254,3 @@ impl<'value> NP_Value<'value> for &NP_UUID {
         (true, schema)
     }
 }
-
-#[test]
-fn schema_parsing_works() -> Result<(), NP_Error> {
-    let schema = "{\"type\":\"uuid\"}";
-    let factory = crate::NP_Factory::new(schema)?;
-    assert_eq!(schema, factory.schema.to_json()?.stringify());
-    
-    Ok(())
-}
-
-
-
-#[test]
-fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
-    let schema = "{\"type\":\"uuid\"}";
-    let factory = crate::NP_Factory::new(schema)?;
-    let mut buffer = factory.empty_buffer(None);
-    let set_value = NP_UUID::generate(212);
-    buffer.set(&[], &set_value)?;
-    assert_eq!(buffer.get::<&NP_UUID>(&[])?, Some(&NP_UUID::generate(212)));
-    assert_eq!(buffer.get::<&NP_UUID>(&[])?.unwrap().to_string(), "9EE6AAB0-2C94-41FE-FB88-42F73253F217");
-    buffer.del(&[])?;
-    assert_eq!(buffer.get::<&NP_UUID>(&[])?, None);
-
-    buffer.compact(None)?;
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 3usize);
-
-    Ok(())
-}

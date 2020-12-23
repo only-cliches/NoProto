@@ -253,7 +253,7 @@ impl<'value> NP_Value<'value> for &'value str {
         let default = match &json_schema["default"] {
             NP_JSON::String(bytes) => {
                 let str_bytes = bytes.clone().into_bytes();
-                if str_bytes.len() > u16::max as usize - 1 {
+                if str_bytes.len() > u16::MAX as usize - 1 {
                     return Err(NP_Error::new(
                         "Default string value cannot be larger than 2^16 bytes!",
                     ));

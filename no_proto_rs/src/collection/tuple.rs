@@ -382,7 +382,7 @@ impl<'value> NP_Value<'value> for NP_Tuple<'value> {
 
         for col in column_schemas {
 
-            if col.len() > u16::max as usize {
+            if col.len() > u16::MAX as usize {
                 return Err(NP_Error::new("Schema overflow error!"))
             }
             

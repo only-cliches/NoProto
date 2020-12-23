@@ -417,7 +417,7 @@ impl<'value> NP_Value<'value> for NP_Table<'value> {
             schema_bytes.push(bytes.len() as u8);
             schema_bytes.extend(bytes);
 
-            if col.1.len() > u16::max as usize {
+            if col.1.len() > u16::MAX as usize {
                 return Err(NP_Error::new("Schema overflow error!"))
             }
             
