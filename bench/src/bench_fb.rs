@@ -76,88 +76,14 @@ pub fn enum_name_enum(e: Enum) -> &'static str {
   ENUM_NAMES_ENUM[index as usize]
 }
 
-// struct Foo, aligned to 8
-#[repr(C, align(8))]
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Foo {
-  id_: u64,
-  count_: i16,
-  prefix_: i8,
-  padding0__: u8,
-  length_: u32,
-} // pub struct Foo
-impl flatbuffers::SafeSliceAccess for Foo {}
-impl<'a> flatbuffers::Follow<'a> for Foo {
-  type Inner = &'a Foo;
-  #[inline]
-  fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
-    <&'a Foo>::follow(buf, loc)
-  }
-}
-impl<'a> flatbuffers::Follow<'a> for &'a Foo {
-  type Inner = &'a Foo;
-  #[inline]
-  fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
-    flatbuffers::follow_cast_ref::<Foo>(buf, loc)
-  }
-}
-impl<'b> flatbuffers::Push for Foo {
-    type Output = Foo;
-    #[inline]
-    fn push(&self, dst: &mut [u8], _rest: &[u8]) {
-        let src = unsafe {
-            ::std::slice::from_raw_parts(self as *const Foo as *const u8, Self::size())
-        };
-        dst.copy_from_slice(src);
-    }
-}
-impl<'b> flatbuffers::Push for &'b Foo {
-    type Output = Foo;
-
-    #[inline]
-    fn push(&self, dst: &mut [u8], _rest: &[u8]) {
-        let src = unsafe {
-            ::std::slice::from_raw_parts(*self as *const Foo as *const u8, Self::size())
-        };
-        dst.copy_from_slice(src);
-    }
-}
-
-
-impl Foo {
-  pub fn new<'a>(_id: u64, _count: i16, _prefix: i8, _length: u32) -> Self {
-    Foo {
-      id_: _id.to_little_endian(),
-      count_: _count.to_little_endian(),
-      prefix_: _prefix.to_little_endian(),
-      length_: _length.to_little_endian(),
-
-      padding0__: 0,
-    }
-  }
-  pub fn id<'a>(&'a self) -> u64 {
-    self.id_.from_little_endian()
-  }
-  pub fn count<'a>(&'a self) -> i16 {
-    self.count_.from_little_endian()
-  }
-  pub fn prefix<'a>(&'a self) -> i8 {
-    self.prefix_.from_little_endian()
-  }
-  pub fn length<'a>(&'a self) -> u32 {
-    self.length_.from_little_endian()
-  }
-}
-
-// struct Bar, aligned to 8
-#[repr(C, align(8))]
+// struct Bar, aligned to 4
+#[repr(C, align(4))]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Bar {
-  parent_: Foo,
   time_: i32,
   ratio_: f32,
   size__: u16,
-  padding0__: u16,  padding1__: u32,
+  padding0__: u16,
 } // pub struct Bar
 impl flatbuffers::SafeSliceAccess for Bar {}
 impl<'a> flatbuffers::Follow<'a> for Bar {
@@ -198,18 +124,14 @@ impl<'b> flatbuffers::Push for &'b Bar {
 
 
 impl Bar {
-  pub fn new<'a>(_parent: &'a Foo, _time: i32, _ratio: f32, _size_: u16) -> Self {
+  pub fn new<'a>(_time: i32, _ratio: f32, _size_: u16) -> Self {
     Bar {
-      parent_: *_parent,
       time_: _time.to_little_endian(),
       ratio_: _ratio.to_little_endian(),
       size__: _size_.to_little_endian(),
 
-      padding0__: 0,padding1__: 0,
+      padding0__: 0,
     }
-  }
-  pub fn parent<'a>(&'a self) -> &'a Foo {
-    &self.parent_
   }
   pub fn time<'a>(&'a self) -> i32 {
     self.time_.from_little_endian()

@@ -23,15 +23,7 @@ package benchpb;
 
 enum Enum { Apples = 0; Pears = 1; Bananas = 2; }
 
-message Foo {
-  required uint64 id = 1;
-  required int32 count = 2;
-  required int32 prefix = 3;
-  required uint32 length = 4;
-}
-
 message Bar {
-  required Foo parent = 1;
   required int32 time = 2;
   required float ratio = 3;
   required uint32 size = 4;

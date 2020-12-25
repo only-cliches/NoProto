@@ -28,7 +28,7 @@ impl NoProtoBench {
     
         for _x in 0..LOOPS {
             let new_buffer = NoProtoBench::encode_single(&factory)?;
-            assert_eq!(new_buffer.len(), 284);
+            assert_eq!(new_buffer.len(), 209);
         }
     
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
@@ -49,7 +49,7 @@ impl NoProtoBench {
 
             // new_buff.compact(None)?;
 
-            assert_eq!(new_buff.close().len(), 284);
+            assert_eq!(new_buff.close().len(), 209);
         }
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
@@ -72,13 +72,7 @@ impl NoProtoBench {
                         ["sibling", {"type": "table", "columns": [
                             ["time", {"type": "u32"}],
                             ["ratio", {"type": "float"}],
-                            ["size", {"type": "u16"}],
-                            ["parent", {"type": "table", "columns": [
-                                ["id", {"type": "u64"}],
-                                ["count", {"type": "u16"}],
-                                ["prefix", {"type": "string", "size": 1}],
-                                ["length", {"type": "u32"}]
-                            ]}]
+                            ["size", {"type": "u16"}]
                         ]}]
                     ]
                 }}],
@@ -131,12 +125,7 @@ impl NoProtoBench {
                 assert_eq!(new_buff.get(&["time"])?, Some(123456 + (*x as u32)));
                 assert_eq!(new_buff.get(&["ratio"])?, Some(3.14159 + (*x as f32)));
                 assert_eq!(new_buff.get(&["size"])?, Some(10000 + (*x as u16)));
-        
-                new_buff.move_cursor(&["parent"])?;
-                assert_eq!(new_buff.get(&["id"])?, Some(0xABADCAFEABADCAFE + (*x as u64)));
-                assert_eq!(new_buff.get(&["count"])?, Some(10000 + (*x as u16)));
-                assert_eq!(new_buff.get(&["prefix"])?, Some("@"));
-                assert_eq!(new_buff.get(&["length"])?, Some(1000000 + (*x as u32)));
+
                 
             }
 
@@ -170,12 +159,6 @@ impl NoProtoBench {
             new_buffer.set(&["time"], 123456 + (*x as u32))?;
             new_buffer.set(&["ratio"], 3.14159 + (*x as f32))?;
             new_buffer.set(&["size"], 10000 + (*x as u16))?;
-    
-            new_buffer.move_cursor(&["parent"])?;
-            new_buffer.set(&["id"], 0xABADCAFEABADCAFE + (*x as u64))?;
-            new_buffer.set(&["count"], 10000 + (*x as u16))?;
-            new_buffer.set(&["prefix"], "@")?;
-            new_buffer.set(&["length"], 1000000 + (*x as u32))?;
             
         }
     

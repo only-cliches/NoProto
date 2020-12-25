@@ -2,7 +2,6 @@ use crate::LOOPS;
 use crate::bench_pb::FooBarContainer;
 use crate::bench_pb::FooBar;
 use crate::bench_pb::Bar;
-use crate::bench_pb::Foo;
 use crate::bench_pb::Enum;
 use crate::protobuf::Message;
 
@@ -32,7 +31,7 @@ impl ProtocolBufferBench {
 
         for _x in 0..LOOPS {
             let buffer = Self::encode_single();
-            assert_eq!(buffer.len(), 220);
+            assert_eq!(buffer.len(), 154);
         }
     
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
@@ -52,12 +51,6 @@ impl ProtocolBufferBench {
             bar.set_time(123456 + y as i32);
             bar.set_ratio(3.14159f32 + y as f32);
             bar.set_size(10000 + y as u32);
-            let mut foo = Foo::new();
-            foo.set_id(0xABADCAFEABADCAFE );
-            foo.set_count(10000 );
-            foo.set_prefix("@".as_bytes()[0] as i32);
-            foo.set_length(1000000 );
-            bar.set_parent(foo);
             foobar.set_sibling(bar);
             foobarlist.push(foobar);
         }
@@ -107,14 +100,6 @@ impl ProtocolBufferBench {
                 bar.set_ratio(old_bar.get_ratio());
                 bar.set_size(old_bar.get_size());
 
-                let old_foo = old_bar.get_parent();
-
-                let mut foo = Foo::new();
-                foo.set_id(old_foo.get_id());
-                foo.set_count(old_foo.get_count());
-                foo.set_prefix(old_foo.get_prefix());
-                foo.set_length(old_foo.get_length());
-                bar.set_parent(foo);
                 foobar.set_sibling(bar);
                 foobarlist.push(foobar);
             });
@@ -130,7 +115,7 @@ impl ProtocolBufferBench {
             foobarcontainer.write_to_with_cached_sizes(&mut message).unwrap();
             message.flush().unwrap();
 
-            assert_eq!(bytes.len(), 210);
+            assert_eq!(bytes.len(), 144);
         }
     
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
@@ -170,13 +155,6 @@ impl ProtocolBufferBench {
                 assert_eq!(old_bar.get_time(), 123456 + y as i32);
                 assert_eq!(old_bar.get_ratio(), 3.14159f32 + y as f32);
                 assert_eq!(old_bar.get_size(), 10000 + y as u32);
-
-                let old_foo = old_bar.get_parent();
-
-                assert_eq!(old_foo.get_id(), 0xABADCAFEABADCAFE);
-                assert_eq!(old_foo.get_count(), 10000 );
-                assert_eq!(old_foo.get_prefix(), "@".as_bytes()[0] as i32);
-                assert_eq!(old_foo.get_length(), 1000000 );
 
             });
 

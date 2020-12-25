@@ -27,7 +27,7 @@ impl BSONBench {
 
         for _x in 0..LOOPS {
             let buffer = Self::encode_single();
-            assert_eq!(buffer.len(), 600);
+            assert_eq!(buffer.len(), 414);
         }
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
@@ -52,13 +52,7 @@ impl BSONBench {
                 "sibling": {
                     "time": 123456 + (x as i32),
                     "ratio": 3.14159f64,
-                    "size": 10000 + (x as i32),
-                    "parent": {
-                        "id": 0xABADCAFEABA + (x as i64),
-                        "count": 1000 + (x as i32),
-                        "prefix": "@",
-                        "length": 10000 + (x as i32)
-                    }
+                    "size": 10000 + (x as i32)
                 }
             }));
         }
@@ -85,7 +79,7 @@ impl BSONBench {
             let mut byte_array : Vec<u8> = vec![];
             container.to_writer(&mut byte_array).unwrap();
 
-            assert_eq!(byte_array.len(), 590);
+            assert_eq!(byte_array.len(), 404);
         }
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
@@ -132,11 +126,6 @@ impl BSONBench {
                 assert_eq!(sibling.get_i32("time").unwrap(), 123456 + (x as i32));
                 assert_eq!(sibling.get_f64("ratio").unwrap(), 3.14159f64);
                 assert_eq!(sibling.get_i32("size").unwrap(), 10000 + (x as i32));
-                let parent = sibling.get_document("parent").unwrap();
-                assert_eq!(parent.get_i64("id").unwrap(), 0xABADCAFEABA + (x as i64));
-                assert_eq!(parent.get_i32("count").unwrap(), 1000 + (x as i32));
-                assert_eq!(parent.get_str("prefix").unwrap(), "@");
-                assert_eq!(parent.get_i32("length").unwrap(), 10000 + (x as i32));
             });
 
             assert!(loops == 3);

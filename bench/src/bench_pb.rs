@@ -24,294 +24,8 @@
 // const _PROTOBUF_VERSION_CHECK: () = ::protobuf::VERSION_2_18_1;
 
 #[derive(PartialEq,Clone,Default)]
-pub struct Foo {
-    // message fields
-    id: ::std::option::Option<u64>,
-    count: ::std::option::Option<i32>,
-    prefix: ::std::option::Option<i32>,
-    length: ::std::option::Option<u32>,
-    // special fields
-    pub unknown_fields: ::protobuf::UnknownFields,
-    pub cached_size: ::protobuf::CachedSize,
-}
-
-impl<'a> ::std::default::Default for &'a Foo {
-    fn default() -> &'a Foo {
-        <Foo as ::protobuf::Message>::default_instance()
-    }
-}
-
-impl Foo {
-    pub fn new() -> Foo {
-        ::std::default::Default::default()
-    }
-
-    // required uint64 id = 1;
-
-
-    pub fn get_id(&self) -> u64 {
-        self.id.unwrap_or(0)
-    }
-    pub fn clear_id(&mut self) {
-        self.id = ::std::option::Option::None;
-    }
-
-    pub fn has_id(&self) -> bool {
-        self.id.is_some()
-    }
-
-    // Param is passed by value, moved
-    pub fn set_id(&mut self, v: u64) {
-        self.id = ::std::option::Option::Some(v);
-    }
-
-    // required int32 count = 2;
-
-
-    pub fn get_count(&self) -> i32 {
-        self.count.unwrap_or(0)
-    }
-    pub fn clear_count(&mut self) {
-        self.count = ::std::option::Option::None;
-    }
-
-    pub fn has_count(&self) -> bool {
-        self.count.is_some()
-    }
-
-    // Param is passed by value, moved
-    pub fn set_count(&mut self, v: i32) {
-        self.count = ::std::option::Option::Some(v);
-    }
-
-    // required int32 prefix = 3;
-
-
-    pub fn get_prefix(&self) -> i32 {
-        self.prefix.unwrap_or(0)
-    }
-    pub fn clear_prefix(&mut self) {
-        self.prefix = ::std::option::Option::None;
-    }
-
-    pub fn has_prefix(&self) -> bool {
-        self.prefix.is_some()
-    }
-
-    // Param is passed by value, moved
-    pub fn set_prefix(&mut self, v: i32) {
-        self.prefix = ::std::option::Option::Some(v);
-    }
-
-    // required uint32 length = 4;
-
-
-    pub fn get_length(&self) -> u32 {
-        self.length.unwrap_or(0)
-    }
-    pub fn clear_length(&mut self) {
-        self.length = ::std::option::Option::None;
-    }
-
-    pub fn has_length(&self) -> bool {
-        self.length.is_some()
-    }
-
-    // Param is passed by value, moved
-    pub fn set_length(&mut self, v: u32) {
-        self.length = ::std::option::Option::Some(v);
-    }
-}
-
-impl ::protobuf::Message for Foo {
-    fn is_initialized(&self) -> bool {
-        if self.id.is_none() {
-            return false;
-        }
-        if self.count.is_none() {
-            return false;
-        }
-        if self.prefix.is_none() {
-            return false;
-        }
-        if self.length.is_none() {
-            return false;
-        }
-        true
-    }
-
-    fn merge_from(&mut self, is: &mut ::protobuf::CodedInputStream<'_>) -> ::protobuf::ProtobufResult<()> {
-        while !is.eof()? {
-            let (field_number, wire_type) = is.read_tag_unpack()?;
-            match field_number {
-                1 => {
-                    if wire_type != ::protobuf::wire_format::WireTypeVarint {
-                        return ::std::result::Result::Err(::protobuf::rt::unexpected_wire_type(wire_type));
-                    }
-                    let tmp = is.read_uint64()?;
-                    self.id = ::std::option::Option::Some(tmp);
-                },
-                2 => {
-                    if wire_type != ::protobuf::wire_format::WireTypeVarint {
-                        return ::std::result::Result::Err(::protobuf::rt::unexpected_wire_type(wire_type));
-                    }
-                    let tmp = is.read_int32()?;
-                    self.count = ::std::option::Option::Some(tmp);
-                },
-                3 => {
-                    if wire_type != ::protobuf::wire_format::WireTypeVarint {
-                        return ::std::result::Result::Err(::protobuf::rt::unexpected_wire_type(wire_type));
-                    }
-                    let tmp = is.read_int32()?;
-                    self.prefix = ::std::option::Option::Some(tmp);
-                },
-                4 => {
-                    if wire_type != ::protobuf::wire_format::WireTypeVarint {
-                        return ::std::result::Result::Err(::protobuf::rt::unexpected_wire_type(wire_type));
-                    }
-                    let tmp = is.read_uint32()?;
-                    self.length = ::std::option::Option::Some(tmp);
-                },
-                _ => {
-                    ::protobuf::rt::read_unknown_or_skip_group(field_number, wire_type, is, self.mut_unknown_fields())?;
-                },
-            };
-        }
-        ::std::result::Result::Ok(())
-    }
-
-    // Compute sizes of nested messages
-    #[allow(unused_variables)]
-    fn compute_size(&self) -> u32 {
-        let mut my_size = 0;
-        if let Some(v) = self.id {
-            my_size += ::protobuf::rt::value_size(1, v, ::protobuf::wire_format::WireTypeVarint);
-        }
-        if let Some(v) = self.count {
-            my_size += ::protobuf::rt::value_size(2, v, ::protobuf::wire_format::WireTypeVarint);
-        }
-        if let Some(v) = self.prefix {
-            my_size += ::protobuf::rt::value_size(3, v, ::protobuf::wire_format::WireTypeVarint);
-        }
-        if let Some(v) = self.length {
-            my_size += ::protobuf::rt::value_size(4, v, ::protobuf::wire_format::WireTypeVarint);
-        }
-        my_size += ::protobuf::rt::unknown_fields_size(self.get_unknown_fields());
-        self.cached_size.set(my_size);
-        my_size
-    }
-
-    fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream<'_>) -> ::protobuf::ProtobufResult<()> {
-        if let Some(v) = self.id {
-            os.write_uint64(1, v)?;
-        }
-        if let Some(v) = self.count {
-            os.write_int32(2, v)?;
-        }
-        if let Some(v) = self.prefix {
-            os.write_int32(3, v)?;
-        }
-        if let Some(v) = self.length {
-            os.write_uint32(4, v)?;
-        }
-        os.write_unknown_fields(self.get_unknown_fields())?;
-        ::std::result::Result::Ok(())
-    }
-
-    fn get_cached_size(&self) -> u32 {
-        self.cached_size.get()
-    }
-
-    fn get_unknown_fields(&self) -> &::protobuf::UnknownFields {
-        &self.unknown_fields
-    }
-
-    fn mut_unknown_fields(&mut self) -> &mut ::protobuf::UnknownFields {
-        &mut self.unknown_fields
-    }
-
-    fn as_any(&self) -> &dyn (::std::any::Any) {
-        self as &dyn (::std::any::Any)
-    }
-    fn as_any_mut(&mut self) -> &mut dyn (::std::any::Any) {
-        self as &mut dyn (::std::any::Any)
-    }
-    fn into_any(self: ::std::boxed::Box<Self>) -> ::std::boxed::Box<dyn (::std::any::Any)> {
-        self
-    }
-
-    fn descriptor(&self) -> &'static ::protobuf::reflect::MessageDescriptor {
-        Self::descriptor_static()
-    }
-
-    fn new() -> Foo {
-        Foo::new()
-    }
-
-    fn descriptor_static() -> &'static ::protobuf::reflect::MessageDescriptor {
-        static descriptor: ::protobuf::rt::LazyV2<::protobuf::reflect::MessageDescriptor> = ::protobuf::rt::LazyV2::INIT;
-        descriptor.get(|| {
-            let mut fields = ::std::vec::Vec::new();
-            fields.push(::protobuf::reflect::accessor::make_option_accessor::<_, ::protobuf::types::ProtobufTypeUint64>(
-                "id",
-                |m: &Foo| { &m.id },
-                |m: &mut Foo| { &mut m.id },
-            ));
-            fields.push(::protobuf::reflect::accessor::make_option_accessor::<_, ::protobuf::types::ProtobufTypeInt32>(
-                "count",
-                |m: &Foo| { &m.count },
-                |m: &mut Foo| { &mut m.count },
-            ));
-            fields.push(::protobuf::reflect::accessor::make_option_accessor::<_, ::protobuf::types::ProtobufTypeInt32>(
-                "prefix",
-                |m: &Foo| { &m.prefix },
-                |m: &mut Foo| { &mut m.prefix },
-            ));
-            fields.push(::protobuf::reflect::accessor::make_option_accessor::<_, ::protobuf::types::ProtobufTypeUint32>(
-                "length",
-                |m: &Foo| { &m.length },
-                |m: &mut Foo| { &mut m.length },
-            ));
-            ::protobuf::reflect::MessageDescriptor::new_pb_name::<Foo>(
-                "Foo",
-                fields,
-                file_descriptor_proto()
-            )
-        })
-    }
-
-    fn default_instance() -> &'static Foo {
-        static instance: ::protobuf::rt::LazyV2<Foo> = ::protobuf::rt::LazyV2::INIT;
-        instance.get(Foo::new)
-    }
-}
-
-impl ::protobuf::Clear for Foo {
-    fn clear(&mut self) {
-        self.id = ::std::option::Option::None;
-        self.count = ::std::option::Option::None;
-        self.prefix = ::std::option::Option::None;
-        self.length = ::std::option::Option::None;
-        self.unknown_fields.clear();
-    }
-}
-
-impl ::std::fmt::Debug for Foo {
-    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
-        ::protobuf::text_format::fmt(self, f)
-    }
-}
-
-impl ::protobuf::reflect::ProtobufValue for Foo {
-    fn as_ref(&self) -> ::protobuf::reflect::ReflectValueRef {
-        ::protobuf::reflect::ReflectValueRef::Message(self)
-    }
-}
-
-#[derive(PartialEq,Clone,Default)]
 pub struct Bar {
     // message fields
-    pub parent: ::protobuf::SingularPtrField<Foo>,
     time: ::std::option::Option<i32>,
     ratio: ::std::option::Option<f32>,
     size: ::std::option::Option<u32>,
@@ -329,34 +43,6 @@ impl<'a> ::std::default::Default for &'a Bar {
 impl Bar {
     pub fn new() -> Bar {
         ::std::default::Default::default()
-    }
-
-    // required .benchpb.Foo parent = 1;
-
-
-    pub fn get_parent(&self) -> &Foo {
-        self.parent.as_ref().unwrap_or_else(|| <Foo as ::protobuf::Message>::default_instance())
-    }
-    pub fn clear_parent(&mut self) {
-        self.parent.clear();
-    }
-
-    pub fn has_parent(&self) -> bool {
-        self.parent.is_some()
-    }
-
-    // Param is passed by value, moved
-    pub fn set_parent(&mut self, v: Foo) {
-        self.parent = ::protobuf::SingularPtrField::some(v);
-    }
-
-    // Mutable pointer to the field.
-    // If field is not initialized, it is initialized with default value first.
-    pub fn mut_parent(&mut self) -> &mut Foo {
-        if self.parent.is_none() {
-            self.parent.set_default();
-        }
-        self.parent.as_mut().unwrap()
     }
 
     // required int32 time = 2;
@@ -419,9 +105,6 @@ impl Bar {
 
 impl ::protobuf::Message for Bar {
     fn is_initialized(&self) -> bool {
-        if self.parent.is_none() {
-            return false;
-        }
         if self.time.is_none() {
             return false;
         }
@@ -431,11 +114,6 @@ impl ::protobuf::Message for Bar {
         if self.size.is_none() {
             return false;
         }
-        for v in &self.parent {
-            if !v.is_initialized() {
-                return false;
-            }
-        };
         true
     }
 
@@ -443,9 +121,6 @@ impl ::protobuf::Message for Bar {
         while !is.eof()? {
             let (field_number, wire_type) = is.read_tag_unpack()?;
             match field_number {
-                1 => {
-                    ::protobuf::rt::read_singular_message_into(wire_type, is, &mut self.parent)?;
-                },
                 2 => {
                     if wire_type != ::protobuf::wire_format::WireTypeVarint {
                         return ::std::result::Result::Err(::protobuf::rt::unexpected_wire_type(wire_type));
@@ -479,10 +154,6 @@ impl ::protobuf::Message for Bar {
     #[allow(unused_variables)]
     fn compute_size(&self) -> u32 {
         let mut my_size = 0;
-        if let Some(ref v) = self.parent.as_ref() {
-            let len = v.compute_size();
-            my_size += 1 + ::protobuf::rt::compute_raw_varint32_size(len) + len;
-        }
         if let Some(v) = self.time {
             my_size += ::protobuf::rt::value_size(2, v, ::protobuf::wire_format::WireTypeVarint);
         }
@@ -498,11 +169,6 @@ impl ::protobuf::Message for Bar {
     }
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream<'_>) -> ::protobuf::ProtobufResult<()> {
-        if let Some(ref v) = self.parent.as_ref() {
-            os.write_tag(1, ::protobuf::wire_format::WireTypeLengthDelimited)?;
-            os.write_raw_varint32(v.get_cached_size())?;
-            v.write_to_with_cached_sizes(os)?;
-        }
         if let Some(v) = self.time {
             os.write_int32(2, v)?;
         }
@@ -550,11 +216,6 @@ impl ::protobuf::Message for Bar {
         static descriptor: ::protobuf::rt::LazyV2<::protobuf::reflect::MessageDescriptor> = ::protobuf::rt::LazyV2::INIT;
         descriptor.get(|| {
             let mut fields = ::std::vec::Vec::new();
-            fields.push(::protobuf::reflect::accessor::make_singular_ptr_field_accessor::<_, ::protobuf::types::ProtobufTypeMessage<Foo>>(
-                "parent",
-                |m: &Bar| { &m.parent },
-                |m: &mut Bar| { &mut m.parent },
-            ));
             fields.push(::protobuf::reflect::accessor::make_option_accessor::<_, ::protobuf::types::ProtobufTypeInt32>(
                 "time",
                 |m: &Bar| { &m.time },
@@ -586,7 +247,6 @@ impl ::protobuf::Message for Bar {
 
 impl ::protobuf::Clear for Bar {
     fn clear(&mut self) {
-        self.parent.clear();
         self.time = ::std::option::Option::None;
         self.ratio = ::std::option::Option::None;
         self.size = ::std::option::Option::None;
@@ -656,6 +316,12 @@ impl FooBar {
         }
         self.sibling.as_mut().unwrap()
     }
+
+    // Take field
+    pub fn take_sibling(&mut self) -> Bar {
+        self.sibling.take().unwrap_or_else(|| Bar::new())
+    }
+
     // optional string name = 2;
 
 
@@ -685,6 +351,11 @@ impl FooBar {
             self.name.set_default();
         }
         self.name.as_mut().unwrap()
+    }
+
+    // Take field
+    pub fn take_name(&mut self) -> ::std::string::String {
+        self.name.take().unwrap_or_else(|| ::std::string::String::new())
     }
 
     // optional double rating = 3;
@@ -1016,6 +687,10 @@ impl FooBarContainer {
         self.location.as_mut().unwrap()
     }
 
+    // Take field
+    pub fn take_location(&mut self) -> ::std::string::String {
+        self.location.take().unwrap_or_else(|| ::std::string::String::new())
+    }
 }
 
 impl ::protobuf::Message for FooBarContainer {
@@ -1241,105 +916,83 @@ impl ::protobuf::reflect::ProtobufValue for Enum {
 }
 
 static file_descriptor_proto_data: &'static [u8] = b"\
-    \n\x0ebench_pb.proto\x12\x07benchpb\"[\n\x03Foo\x12\x0e\n\x02id\x18\x01\
-    \x20\x02(\x04R\x02id\x12\x14\n\x05count\x18\x02\x20\x02(\x05R\x05count\
-    \x12\x16\n\x06prefix\x18\x03\x20\x02(\x05R\x06prefix\x12\x16\n\x06length\
-    \x18\x04\x20\x02(\rR\x06length\"i\n\x03Bar\x12$\n\x06parent\x18\x01\x20\
-    \x02(\x0b2\x0c.benchpb.FooR\x06parent\x12\x12\n\x04time\x18\x02\x20\x02(\
-    \x05R\x04time\x12\x14\n\x05ratio\x18\x03\x20\x02(\x02R\x05ratio\x12\x12\
-    \n\x04size\x18\x04\x20\x02(\rR\x04size\"v\n\x06FooBar\x12&\n\x07sibling\
-    \x18\x01\x20\x01(\x0b2\x0c.benchpb.BarR\x07sibling\x12\x12\n\x04name\x18\
-    \x02\x20\x01(\tR\x04name\x12\x16\n\x06rating\x18\x03\x20\x01(\x01R\x06ra\
-    ting\x12\x18\n\x07postfix\x18\x04\x20\x01(\rR\x07postfix\"\x99\x01\n\x0f\
-    FooBarContainer\x12#\n\x04list\x18\x01\x20\x03(\x0b2\x0f.benchpb.FooBarR\
-    \x04list\x12\x20\n\x0binitialized\x18\x02\x20\x01(\x08R\x0binitialized\
-    \x12#\n\x05fruit\x18\x03\x20\x01(\x0e2\r.benchpb.EnumR\x05fruit\x12\x1a\
-    \n\x08location\x18\x04\x20\x01(\tR\x08location**\n\x04Enum\x12\n\n\x06Ap\
-    ples\x10\0\x12\t\n\x05Pears\x10\x01\x12\x0b\n\x07Bananas\x10\x02J\xfd\
-    \x10\n\x06\x12\x04\x13\03\x01\n\x8d\x06\n\x01\x0c\x12\x03\x13\0\x122\xc7\
-    \x04\x20Copyright\x202015\x20Google\x20Inc.\x20All\x20rights\x20reserved\
-    .\n\n\x20Licensed\x20under\x20the\x20Apache\x20License,\x20Version\x202.\
-    0\x20(the\x20\"License\");\n\x20you\x20may\x20not\x20use\x20this\x20file\
-    \x20except\x20in\x20compliance\x20with\x20the\x20License.\n\x20You\x20ma\
-    y\x20obtain\x20a\x20copy\x20of\x20the\x20License\x20at\n\n\x20\x20\x20\
-    \x20\x20http://www.apache.org/licenses/LICENSE-2.0\n\n\x20Unless\x20requ\
-    ired\x20by\x20applicable\x20law\x20or\x20agreed\x20to\x20in\x20writing,\
-    \x20software\n\x20distributed\x20under\x20the\x20License\x20is\x20distri\
-    buted\x20on\x20an\x20\"AS\x20IS\"\x20BASIS,\n\x20WITHOUT\x20WARRANTIES\
-    \x20OR\x20CONDITIONS\x20OF\x20ANY\x20KIND,\x20either\x20express\x20or\
-    \x20implied.\n\x20See\x20the\x20License\x20for\x20the\x20specific\x20lan\
-    guage\x20governing\x20permissions\x20and\n\x20limitations\x20under\x20th\
-    e\x20License.\n2\xb8\x01\x20trying\x20to\x20represent\x20a\x20typical\
-    \x20mix\x20of\x20datatypes:\n\x201\x20array\x20of\x203\x20elements,\x20e\
-    ach\x20element:\x201\x20string,\x203\x20nested\x20objects,\x209\x20scala\
-    rs\n\x20root\x20element\x20has\x20the\x20array,\x20additional\x20string\
-    \x20and\x20an\x20enum\n\n\x08\n\x01\x02\x12\x03\x15\0\x10\n\t\n\x02\x05\
-    \0\x12\x03\x17\01\n\n\n\x03\x05\0\x01\x12\x03\x17\x05\t\n\x0b\n\x04\x05\
-    \0\x02\0\x12\x03\x17\x0c\x17\n\x0c\n\x05\x05\0\x02\0\x01\x12\x03\x17\x0c\
-    \x12\n\x0c\n\x05\x05\0\x02\0\x02\x12\x03\x17\x15\x16\n\x0b\n\x04\x05\0\
-    \x02\x01\x12\x03\x17\x18\"\n\x0c\n\x05\x05\0\x02\x01\x01\x12\x03\x17\x18\
-    \x1d\n\x0c\n\x05\x05\0\x02\x01\x02\x12\x03\x17\x20!\n\x0b\n\x04\x05\0\
-    \x02\x02\x12\x03\x17#/\n\x0c\n\x05\x05\0\x02\x02\x01\x12\x03\x17#*\n\x0c\
-    \n\x05\x05\0\x02\x02\x02\x12\x03\x17-.\n\n\n\x02\x04\0\x12\x04\x19\0\x1e\
-    \x01\n\n\n\x03\x04\0\x01\x12\x03\x19\x08\x0b\n\x0b\n\x04\x04\0\x02\0\x12\
-    \x03\x1a\x02\x19\n\x0c\n\x05\x04\0\x02\0\x04\x12\x03\x1a\x02\n\n\x0c\n\
-    \x05\x04\0\x02\0\x05\x12\x03\x1a\x0b\x11\n\x0c\n\x05\x04\0\x02\0\x01\x12\
-    \x03\x1a\x12\x14\n\x0c\n\x05\x04\0\x02\0\x03\x12\x03\x1a\x17\x18\n\x0b\n\
-    \x04\x04\0\x02\x01\x12\x03\x1b\x02\x1b\n\x0c\n\x05\x04\0\x02\x01\x04\x12\
-    \x03\x1b\x02\n\n\x0c\n\x05\x04\0\x02\x01\x05\x12\x03\x1b\x0b\x10\n\x0c\n\
-    \x05\x04\0\x02\x01\x01\x12\x03\x1b\x11\x16\n\x0c\n\x05\x04\0\x02\x01\x03\
-    \x12\x03\x1b\x19\x1a\n\x0b\n\x04\x04\0\x02\x02\x12\x03\x1c\x02\x1c\n\x0c\
-    \n\x05\x04\0\x02\x02\x04\x12\x03\x1c\x02\n\n\x0c\n\x05\x04\0\x02\x02\x05\
-    \x12\x03\x1c\x0b\x10\n\x0c\n\x05\x04\0\x02\x02\x01\x12\x03\x1c\x11\x17\n\
-    \x0c\n\x05\x04\0\x02\x02\x03\x12\x03\x1c\x1a\x1b\n\x0b\n\x04\x04\0\x02\
-    \x03\x12\x03\x1d\x02\x1d\n\x0c\n\x05\x04\0\x02\x03\x04\x12\x03\x1d\x02\n\
-    \n\x0c\n\x05\x04\0\x02\x03\x05\x12\x03\x1d\x0b\x11\n\x0c\n\x05\x04\0\x02\
-    \x03\x01\x12\x03\x1d\x12\x18\n\x0c\n\x05\x04\0\x02\x03\x03\x12\x03\x1d\
-    \x1b\x1c\n\n\n\x02\x04\x01\x12\x04\x20\0%\x01\n\n\n\x03\x04\x01\x01\x12\
-    \x03\x20\x08\x0b\n\x0b\n\x04\x04\x01\x02\0\x12\x03!\x02\x1a\n\x0c\n\x05\
-    \x04\x01\x02\0\x04\x12\x03!\x02\n\n\x0c\n\x05\x04\x01\x02\0\x06\x12\x03!\
-    \x0b\x0e\n\x0c\n\x05\x04\x01\x02\0\x01\x12\x03!\x0f\x15\n\x0c\n\x05\x04\
-    \x01\x02\0\x03\x12\x03!\x18\x19\n\x0b\n\x04\x04\x01\x02\x01\x12\x03\"\
-    \x02\x1a\n\x0c\n\x05\x04\x01\x02\x01\x04\x12\x03\"\x02\n\n\x0c\n\x05\x04\
-    \x01\x02\x01\x05\x12\x03\"\x0b\x10\n\x0c\n\x05\x04\x01\x02\x01\x01\x12\
-    \x03\"\x11\x15\n\x0c\n\x05\x04\x01\x02\x01\x03\x12\x03\"\x18\x19\n\x0b\n\
-    \x04\x04\x01\x02\x02\x12\x03#\x02\x1b\n\x0c\n\x05\x04\x01\x02\x02\x04\
-    \x12\x03#\x02\n\n\x0c\n\x05\x04\x01\x02\x02\x05\x12\x03#\x0b\x10\n\x0c\n\
-    \x05\x04\x01\x02\x02\x01\x12\x03#\x11\x16\n\x0c\n\x05\x04\x01\x02\x02\
-    \x03\x12\x03#\x19\x1a\n\x0b\n\x04\x04\x01\x02\x03\x12\x03$\x02\x1b\n\x0c\
-    \n\x05\x04\x01\x02\x03\x04\x12\x03$\x02\n\n\x0c\n\x05\x04\x01\x02\x03\
-    \x05\x12\x03$\x0b\x11\n\x0c\n\x05\x04\x01\x02\x03\x01\x12\x03$\x12\x16\n\
-    \x0c\n\x05\x04\x01\x02\x03\x03\x12\x03$\x19\x1a\n\n\n\x02\x04\x02\x12\
-    \x04'\0,\x01\n\n\n\x03\x04\x02\x01\x12\x03'\x08\x0e\n\x0b\n\x04\x04\x02\
-    \x02\0\x12\x03(\x02\x1b\n\x0c\n\x05\x04\x02\x02\0\x04\x12\x03(\x02\n\n\
-    \x0c\n\x05\x04\x02\x02\0\x06\x12\x03(\x0b\x0e\n\x0c\n\x05\x04\x02\x02\0\
-    \x01\x12\x03(\x0f\x16\n\x0c\n\x05\x04\x02\x02\0\x03\x12\x03(\x19\x1a\n\
-    \x0b\n\x04\x04\x02\x02\x01\x12\x03)\x02\x1b\n\x0c\n\x05\x04\x02\x02\x01\
-    \x04\x12\x03)\x02\n\n\x0c\n\x05\x04\x02\x02\x01\x05\x12\x03)\x0b\x11\n\
-    \x0c\n\x05\x04\x02\x02\x01\x01\x12\x03)\x12\x16\n\x0c\n\x05\x04\x02\x02\
-    \x01\x03\x12\x03)\x19\x1a\n\x0b\n\x04\x04\x02\x02\x02\x12\x03*\x02\x1d\n\
-    \x0c\n\x05\x04\x02\x02\x02\x04\x12\x03*\x02\n\n\x0c\n\x05\x04\x02\x02\
-    \x02\x05\x12\x03*\x0b\x11\n\x0c\n\x05\x04\x02\x02\x02\x01\x12\x03*\x12\
-    \x18\n\x0c\n\x05\x04\x02\x02\x02\x03\x12\x03*\x1b\x1c\n\x0b\n\x04\x04\
-    \x02\x02\x03\x12\x03+\x02\x1e\n\x0c\n\x05\x04\x02\x02\x03\x04\x12\x03+\
-    \x02\n\n\x0c\n\x05\x04\x02\x02\x03\x05\x12\x03+\x0b\x11\n\x0c\n\x05\x04\
-    \x02\x02\x03\x01\x12\x03+\x12\x19\n\x0c\n\x05\x04\x02\x02\x03\x03\x12\
-    \x03+\x1c\x1d\n\n\n\x02\x04\x03\x12\x04.\03\x01\n\n\n\x03\x04\x03\x01\
-    \x12\x03.\x08\x17\n$\n\x04\x04\x03\x02\0\x12\x03/\x02\x1b\"\x17\x203\x20\
-    copies\x20of\x20the\x20above\n\n\x0c\n\x05\x04\x03\x02\0\x04\x12\x03/\
-    \x02\n\n\x0c\n\x05\x04\x03\x02\0\x06\x12\x03/\x0b\x11\n\x0c\n\x05\x04\
-    \x03\x02\0\x01\x12\x03/\x12\x16\n\x0c\n\x05\x04\x03\x02\0\x03\x12\x03/\
-    \x19\x1a\n\x0b\n\x04\x04\x03\x02\x01\x12\x030\x02\x20\n\x0c\n\x05\x04\
-    \x03\x02\x01\x04\x12\x030\x02\n\n\x0c\n\x05\x04\x03\x02\x01\x05\x12\x030\
-    \x0b\x0f\n\x0c\n\x05\x04\x03\x02\x01\x01\x12\x030\x10\x1b\n\x0c\n\x05\
-    \x04\x03\x02\x01\x03\x12\x030\x1e\x1f\n\x0b\n\x04\x04\x03\x02\x02\x12\
-    \x031\x02\x1a\n\x0c\n\x05\x04\x03\x02\x02\x04\x12\x031\x02\n\n\x0c\n\x05\
-    \x04\x03\x02\x02\x06\x12\x031\x0b\x0f\n\x0c\n\x05\x04\x03\x02\x02\x01\
-    \x12\x031\x10\x15\n\x0c\n\x05\x04\x03\x02\x02\x03\x12\x031\x18\x19\n\x0b\
-    \n\x04\x04\x03\x02\x03\x12\x032\x02\x1f\n\x0c\n\x05\x04\x03\x02\x03\x04\
-    \x12\x032\x02\n\n\x0c\n\x05\x04\x03\x02\x03\x05\x12\x032\x0b\x11\n\x0c\n\
-    \x05\x04\x03\x02\x03\x01\x12\x032\x12\x1a\n\x0c\n\x05\x04\x03\x02\x03\
-    \x03\x12\x032\x1d\x1e\
+    \n\x0ebench_pb.proto\x12\x07benchpb\"C\n\x03Bar\x12\x12\n\x04time\x18\
+    \x02\x20\x02(\x05R\x04time\x12\x14\n\x05ratio\x18\x03\x20\x02(\x02R\x05r\
+    atio\x12\x12\n\x04size\x18\x04\x20\x02(\rR\x04size\"v\n\x06FooBar\x12&\n\
+    \x07sibling\x18\x01\x20\x01(\x0b2\x0c.benchpb.BarR\x07sibling\x12\x12\n\
+    \x04name\x18\x02\x20\x01(\tR\x04name\x12\x16\n\x06rating\x18\x03\x20\x01\
+    (\x01R\x06rating\x12\x18\n\x07postfix\x18\x04\x20\x01(\rR\x07postfix\"\
+    \x99\x01\n\x0fFooBarContainer\x12#\n\x04list\x18\x01\x20\x03(\x0b2\x0f.b\
+    enchpb.FooBarR\x04list\x12\x20\n\x0binitialized\x18\x02\x20\x01(\x08R\
+    \x0binitialized\x12#\n\x05fruit\x18\x03\x20\x01(\x0e2\r.benchpb.EnumR\
+    \x05fruit\x12\x1a\n\x08location\x18\x04\x20\x01(\tR\x08location**\n\x04E\
+    num\x12\n\n\x06Apples\x10\0\x12\t\n\x05Pears\x10\x01\x12\x0b\n\x07Banana\
+    s\x10\x02J\x8c\x0e\n\x06\x12\x04\x13\0+\x01\n\x8d\x06\n\x01\x0c\x12\x03\
+    \x13\0\x122\xc7\x04\x20Copyright\x202015\x20Google\x20Inc.\x20All\x20rig\
+    hts\x20reserved.\n\n\x20Licensed\x20under\x20the\x20Apache\x20License,\
+    \x20Version\x202.0\x20(the\x20\"License\");\n\x20you\x20may\x20not\x20us\
+    e\x20this\x20file\x20except\x20in\x20compliance\x20with\x20the\x20Licens\
+    e.\n\x20You\x20may\x20obtain\x20a\x20copy\x20of\x20the\x20License\x20at\
+    \n\n\x20\x20\x20\x20\x20http://www.apache.org/licenses/LICENSE-2.0\n\n\
+    \x20Unless\x20required\x20by\x20applicable\x20law\x20or\x20agreed\x20to\
+    \x20in\x20writing,\x20software\n\x20distributed\x20under\x20the\x20Licen\
+    se\x20is\x20distributed\x20on\x20an\x20\"AS\x20IS\"\x20BASIS,\n\x20WITHO\
+    UT\x20WARRANTIES\x20OR\x20CONDITIONS\x20OF\x20ANY\x20KIND,\x20either\x20\
+    express\x20or\x20implied.\n\x20See\x20the\x20License\x20for\x20the\x20sp\
+    ecific\x20language\x20governing\x20permissions\x20and\n\x20limitations\
+    \x20under\x20the\x20License.\n2\xb8\x01\x20trying\x20to\x20represent\x20\
+    a\x20typical\x20mix\x20of\x20datatypes:\n\x201\x20array\x20of\x203\x20el\
+    ements,\x20each\x20element:\x201\x20string,\x203\x20nested\x20objects,\
+    \x209\x20scalars\n\x20root\x20element\x20has\x20the\x20array,\x20additio\
+    nal\x20string\x20and\x20an\x20enum\n\n\x08\n\x01\x02\x12\x03\x15\0\x10\n\
+    \t\n\x02\x05\0\x12\x03\x17\01\n\n\n\x03\x05\0\x01\x12\x03\x17\x05\t\n\
+    \x0b\n\x04\x05\0\x02\0\x12\x03\x17\x0c\x17\n\x0c\n\x05\x05\0\x02\0\x01\
+    \x12\x03\x17\x0c\x12\n\x0c\n\x05\x05\0\x02\0\x02\x12\x03\x17\x15\x16\n\
+    \x0b\n\x04\x05\0\x02\x01\x12\x03\x17\x18\"\n\x0c\n\x05\x05\0\x02\x01\x01\
+    \x12\x03\x17\x18\x1d\n\x0c\n\x05\x05\0\x02\x01\x02\x12\x03\x17\x20!\n\
+    \x0b\n\x04\x05\0\x02\x02\x12\x03\x17#/\n\x0c\n\x05\x05\0\x02\x02\x01\x12\
+    \x03\x17#*\n\x0c\n\x05\x05\0\x02\x02\x02\x12\x03\x17-.\n\n\n\x02\x04\0\
+    \x12\x04\x19\0\x1d\x01\n\n\n\x03\x04\0\x01\x12\x03\x19\x08\x0b\n\x0b\n\
+    \x04\x04\0\x02\0\x12\x03\x1a\x02\x1a\n\x0c\n\x05\x04\0\x02\0\x04\x12\x03\
+    \x1a\x02\n\n\x0c\n\x05\x04\0\x02\0\x05\x12\x03\x1a\x0b\x10\n\x0c\n\x05\
+    \x04\0\x02\0\x01\x12\x03\x1a\x11\x15\n\x0c\n\x05\x04\0\x02\0\x03\x12\x03\
+    \x1a\x18\x19\n\x0b\n\x04\x04\0\x02\x01\x12\x03\x1b\x02\x1b\n\x0c\n\x05\
+    \x04\0\x02\x01\x04\x12\x03\x1b\x02\n\n\x0c\n\x05\x04\0\x02\x01\x05\x12\
+    \x03\x1b\x0b\x10\n\x0c\n\x05\x04\0\x02\x01\x01\x12\x03\x1b\x11\x16\n\x0c\
+    \n\x05\x04\0\x02\x01\x03\x12\x03\x1b\x19\x1a\n\x0b\n\x04\x04\0\x02\x02\
+    \x12\x03\x1c\x02\x1b\n\x0c\n\x05\x04\0\x02\x02\x04\x12\x03\x1c\x02\n\n\
+    \x0c\n\x05\x04\0\x02\x02\x05\x12\x03\x1c\x0b\x11\n\x0c\n\x05\x04\0\x02\
+    \x02\x01\x12\x03\x1c\x12\x16\n\x0c\n\x05\x04\0\x02\x02\x03\x12\x03\x1c\
+    \x19\x1a\n\n\n\x02\x04\x01\x12\x04\x1f\0$\x01\n\n\n\x03\x04\x01\x01\x12\
+    \x03\x1f\x08\x0e\n\x0b\n\x04\x04\x01\x02\0\x12\x03\x20\x02\x1b\n\x0c\n\
+    \x05\x04\x01\x02\0\x04\x12\x03\x20\x02\n\n\x0c\n\x05\x04\x01\x02\0\x06\
+    \x12\x03\x20\x0b\x0e\n\x0c\n\x05\x04\x01\x02\0\x01\x12\x03\x20\x0f\x16\n\
+    \x0c\n\x05\x04\x01\x02\0\x03\x12\x03\x20\x19\x1a\n\x0b\n\x04\x04\x01\x02\
+    \x01\x12\x03!\x02\x1b\n\x0c\n\x05\x04\x01\x02\x01\x04\x12\x03!\x02\n\n\
+    \x0c\n\x05\x04\x01\x02\x01\x05\x12\x03!\x0b\x11\n\x0c\n\x05\x04\x01\x02\
+    \x01\x01\x12\x03!\x12\x16\n\x0c\n\x05\x04\x01\x02\x01\x03\x12\x03!\x19\
+    \x1a\n\x0b\n\x04\x04\x01\x02\x02\x12\x03\"\x02\x1d\n\x0c\n\x05\x04\x01\
+    \x02\x02\x04\x12\x03\"\x02\n\n\x0c\n\x05\x04\x01\x02\x02\x05\x12\x03\"\
+    \x0b\x11\n\x0c\n\x05\x04\x01\x02\x02\x01\x12\x03\"\x12\x18\n\x0c\n\x05\
+    \x04\x01\x02\x02\x03\x12\x03\"\x1b\x1c\n\x0b\n\x04\x04\x01\x02\x03\x12\
+    \x03#\x02\x1e\n\x0c\n\x05\x04\x01\x02\x03\x04\x12\x03#\x02\n\n\x0c\n\x05\
+    \x04\x01\x02\x03\x05\x12\x03#\x0b\x11\n\x0c\n\x05\x04\x01\x02\x03\x01\
+    \x12\x03#\x12\x19\n\x0c\n\x05\x04\x01\x02\x03\x03\x12\x03#\x1c\x1d\n\n\n\
+    \x02\x04\x02\x12\x04&\0+\x01\n\n\n\x03\x04\x02\x01\x12\x03&\x08\x17\n$\n\
+    \x04\x04\x02\x02\0\x12\x03'\x02\x1b\"\x17\x203\x20copies\x20of\x20the\
+    \x20above\n\n\x0c\n\x05\x04\x02\x02\0\x04\x12\x03'\x02\n\n\x0c\n\x05\x04\
+    \x02\x02\0\x06\x12\x03'\x0b\x11\n\x0c\n\x05\x04\x02\x02\0\x01\x12\x03'\
+    \x12\x16\n\x0c\n\x05\x04\x02\x02\0\x03\x12\x03'\x19\x1a\n\x0b\n\x04\x04\
+    \x02\x02\x01\x12\x03(\x02\x20\n\x0c\n\x05\x04\x02\x02\x01\x04\x12\x03(\
+    \x02\n\n\x0c\n\x05\x04\x02\x02\x01\x05\x12\x03(\x0b\x0f\n\x0c\n\x05\x04\
+    \x02\x02\x01\x01\x12\x03(\x10\x1b\n\x0c\n\x05\x04\x02\x02\x01\x03\x12\
+    \x03(\x1e\x1f\n\x0b\n\x04\x04\x02\x02\x02\x12\x03)\x02\x1a\n\x0c\n\x05\
+    \x04\x02\x02\x02\x04\x12\x03)\x02\n\n\x0c\n\x05\x04\x02\x02\x02\x06\x12\
+    \x03)\x0b\x0f\n\x0c\n\x05\x04\x02\x02\x02\x01\x12\x03)\x10\x15\n\x0c\n\
+    \x05\x04\x02\x02\x02\x03\x12\x03)\x18\x19\n\x0b\n\x04\x04\x02\x02\x03\
+    \x12\x03*\x02\x1f\n\x0c\n\x05\x04\x02\x02\x03\x04\x12\x03*\x02\n\n\x0c\n\
+    \x05\x04\x02\x02\x03\x05\x12\x03*\x0b\x11\n\x0c\n\x05\x04\x02\x02\x03\
+    \x01\x12\x03*\x12\x1a\n\x0c\n\x05\x04\x02\x02\x03\x03\x12\x03*\x1d\x1e\
 ";
 
 static file_descriptor_proto_lazy: ::protobuf::rt::LazyV2<::protobuf::descriptor::FileDescriptorProto> = ::protobuf::rt::LazyV2::INIT;

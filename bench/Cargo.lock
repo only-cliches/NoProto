@@ -22,6 +22,7 @@ checksum = "3441f0f7b02788e948e47f457ca01f1d7e6d92c693bc132c22b087d3141c03ff"
 name = "bench"
 version = "0.1.0"
 dependencies = [
+ "bincode",
  "bson",
  "flatbuffers",
  "flate2",
@@ -31,6 +32,17 @@ dependencies = [
  "protobuf",
  "rand",
  "rmp",
+ "serde",
+]
+
+[[package]]
+name = "bincode"
+version = "1.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f30d3a39baa26f9651f17b375061f3233dde33424a8b72b0dbe93a68a0bc896d"
+dependencies = [
+ "byteorder",
+ "serde",
 ]
 
 [[package]]

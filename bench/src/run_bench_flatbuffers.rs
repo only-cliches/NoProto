@@ -5,7 +5,6 @@ use crate::bench_fb::benchfb::FooBarContainer as FooBarContainerFB;
 use crate::bench_fb::benchfb::FooBarArgs as FooBarArgsFB;
 use crate::bench_fb::benchfb::FooBar as FooBarFB;
 use crate::bench_fb::benchfb::Bar as BarFB;
-use crate::bench_fb::benchfb::Foo as FooFB;
 use crate::bench_fb::benchfb::Enum as EnumFB;
 
 
@@ -38,7 +37,7 @@ impl FlatBufferBench {
 
         for _x in 0..LOOPS {
             let buffer = Self::encode_single();
-            assert_eq!(buffer.len(), 336);
+            assert_eq!(buffer.len(), 264);
         }
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
@@ -51,8 +50,7 @@ impl FlatBufferBench {
         let mut vector = Vec::new();
 
         for x in 0..3 {
-            let foo = FooFB::new(0xABADCAFEABADCAFE + (x as u64), 1000 + (x as i16), "@".as_bytes()[0] as i8, 10000 + (x as u32));
-            let bar = BarFB::new(&foo, 123456 + (x as i32), 3.14159 + (x as f32), 10000 + (x as u16));
+            let bar = BarFB::new(123456 + (x as i32), 3.14159 + (x as f32), 10000 + (x as u16));
             let name = fbb.create_string("Hello, World!");
             let foobar_args = FooBarArgsFB { name: Some(name), sibling: Some(&bar), rating:  3.1415432432445543543 + (x as f64), postfix:  "!".as_bytes()[0]};
             let foobar = FooBarFB::create(&mut fbb, &foobar_args);
@@ -85,10 +83,8 @@ impl FlatBufferBench {
             container.list().unwrap().iter().enumerate().for_each(|(idx, foobar)| {
 
                 let old_bar = foobar.sibling().unwrap();
-                let old_foo = old_bar.parent();
 
-                let foo = FooFB::new(old_foo.id(), old_foo.count(), old_foo.prefix(), old_foo.length());
-                let bar = BarFB::new(&foo, old_bar.time(), old_bar.ratio(), old_bar.size_());
+                let bar = BarFB::new(old_bar.time(), old_bar.ratio(), old_bar.size_());
                 let name = if idx == 0 { // our update
                     fbb.create_string("bob")
                 } else {
@@ -108,7 +104,7 @@ impl FlatBufferBench {
     
             let finished = fbb.finished_data().to_vec();
 
-            assert_eq!(finished.len(), 320);
+            assert_eq!(finished.len(), 248);
         }
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
@@ -143,12 +139,6 @@ impl FlatBufferBench {
             container.list().unwrap().iter().enumerate().for_each(|(x, foobar)| {
                 loops += 1;
                 let old_bar = foobar.sibling().unwrap();
-                let old_foo = old_bar.parent();
-
-                assert_eq!(old_foo.id(), 0xABADCAFEABADCAFE + (x as u64));
-                assert_eq!(old_foo.count(), 1000 + (x as i16));
-                assert_eq!(old_foo.prefix(), "@".as_bytes()[0] as i8);
-                assert_eq!(old_foo.length(), 10000 + (x as u32));
 
                 assert_eq!(old_bar.time(), 123456 + (x as i32));
                 assert_eq!(old_bar.ratio(), 3.14159 + (x as f32));

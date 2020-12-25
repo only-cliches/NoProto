@@ -27,7 +27,7 @@ impl JSONBench {
 
         for _x in 0..LOOPS {
             let buffer = Self::encode_single();
-            assert_eq!(buffer.len(), 673);
+            assert_eq!(buffer.len(), 439);
         }
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
@@ -51,13 +51,7 @@ impl JSONBench {
                 sibling: {
                     time: 123456 + (x as i32),
                     ratio: 3.14159,
-                    size: 10000 + (x as u16),
-                    parent: {
-                        id: 0xABADCAFEABADCAFE + (x as u64),
-                        count: 1000 + (x as i16),
-                        prefix: "@",
-                        length: 10000 + (x as u32)
-                    }
+                    size: 10000 + (x as u16)
                 }
             };
         }
@@ -78,7 +72,7 @@ impl JSONBench {
 
             container["list"][0]["name"] = JsonValue::String(String::from("bob"));
 
-            assert_eq!(container.dump().len(), 663);
+            assert_eq!(container.dump().len(), 429);
         }
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
@@ -123,11 +117,6 @@ impl JSONBench {
                     assert_eq!(sibling["time"].as_f64().unwrap(), 123456f64 + (x as f64));
                     assert_eq!(sibling["ratio"].as_f64().unwrap(), 3.14159);
                     assert_eq!(sibling["size"].as_f64().unwrap(), 10000f64 + (x as f64));
-                    let parent = &sibling["parent"];
-                    assert_eq!(parent["id"].as_f64().unwrap(), 12370766946607417000.0f64);
-                    assert_eq!(parent["count"].as_f64().unwrap(), 1000f64 + (x as f64));
-                    assert_eq!(parent["prefix"], JsonValue::String(String::from("@")));
-                    assert_eq!(parent["length"].as_f64().unwrap(), 10000f64 + (x as f64));
                 });
             }
             assert!(loops == 3);

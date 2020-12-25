@@ -21,15 +21,7 @@ namespace benchfb;
 
 enum Enum : short { Apples, Pears, Bananas }
 
-struct Foo {
-  id:ulong;
-  count:short;
-  prefix:byte;
-  length:uint;
-}
-
 struct Bar {
-  parent:Foo;
   time:int;
   ratio:float;
   size:ushort;

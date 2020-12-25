@@ -30,7 +30,7 @@ impl MessagePackBench {
 
         for _x in 0..LOOPS {
             let buffer = Self::encode_single();
-            assert_eq!(buffer.len(), 431);
+            assert_eq!(buffer.len(), 296);
         }
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
@@ -43,14 +43,8 @@ impl MessagePackBench {
         let mut vector = Vec::new();
 
         for x in 0..3 {
-            let mut foo = BTreeMap::new();
-            foo.insert(String::from("id"), Value::from(0xABADCAFEABADCAFE + (x as u64)));
-            foo.insert(String::from("count"), Value::from(1000 + (x as i16)));
-            foo.insert(String::from("prefix"), Value::from("@".as_bytes()[0] as i8));
-            foo.insert(String::from("length"), Value::from(10000 + (x as u32)));
 
             let mut bar = BTreeMap::new();
-            bar.insert(String::from("parent"), Value::from(foo));
             bar.insert(String::from("time"), Value::from(123456 + (x as i32)));
             bar.insert(String::from("ratio"), Value::from(3.14159 + (x as f32)));
             bar.insert(String::from("size"), Value::from(10000 + (x as u16)));
@@ -99,7 +93,7 @@ impl MessagePackBench {
                 _ => panic!()
             }
 
-            assert_eq!(container.serialize().unwrap().len(), 421);
+            assert_eq!(container.serialize().unwrap().len(), 286);
         }
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
@@ -175,20 +169,6 @@ impl MessagePackBench {
                                     } else { panic!() }
                                     if let Value::UInt16(size) = bar.get("size").unwrap() {
                                         assert_eq!(size, &(10000 + (x as u16)));
-                                    } else { panic!() }
-                                    if let Value::Map(foo) = bar.get("parent").unwrap() {
-                                        if let Value::UInt16(length) = foo.get("length").unwrap() {
-                                            assert_eq!(length, &(10000 + x as u16));
-                                        } else { panic!() }
-                                        if let Value::UInt8(prefix) = foo.get("prefix").unwrap() {
-                                            assert_eq!(prefix, &64);
-                                        } else { panic!() }
-                                        if let Value::Int8(count) = foo.get("count").unwrap() {
-                                            assert_eq!(count, &(-24 + x as i8));
-                                        } else { panic!() }
-                                        if let Value::UInt64(id) = foo.get("id").unwrap() {
-                                            assert_eq!(id, &(0xABADCAFEABADCAFE + (x as u64)));
-                                        } else { panic!() }
                                     } else { panic!() }
                                 } else { panic!() }
                             } else { panic!() }
