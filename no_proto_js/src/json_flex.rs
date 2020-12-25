@@ -371,15 +371,7 @@ impl Index<usize> for NP_JSON {
 impl Index<String> for NP_JSON {
     type Output = NP_JSON;
     fn index<'a>(&'a self, id: String) -> &'a Self::Output {
-        match self.into_hashmap() {
-            Some(x) => {
-                match x.get(id.as_str()) {
-                    Some(y) => y,
-                    None => &NP_JSON::Null
-                }
-            },
-            None => &NP_JSON::Null
-        }
+        panic!()
     }
 }
 

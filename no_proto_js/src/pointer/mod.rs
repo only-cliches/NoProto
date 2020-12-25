@@ -26,12 +26,13 @@ pub mod date;
 use core::{fmt::{Debug}};
 
 use alloc::prelude::v1::Box;
-use crate::{pointer::dec::NP_Dec, schema::NP_Schema_Addr};
-use crate::NP_Parsed_Schema;
+use crate::{pointer::dec::NP_Dec, schema::{NP_Parsed_Schema, NP_Schema_Addr}};
+// use crate::NP_Parsed_Schema;
 use crate::{json_flex::NP_JSON};
 use crate::memory::{NP_Memory};
 use crate::NP_Error;
-use crate::{schema::{NP_TypeKeys}, collection::{map::NP_Map, table::NP_Table, list::NP_List, tuple::NP_Tuple}};
+use crate::{schema::{NP_TypeKeys}};
+// use crate::{schema::{NP_TypeKeys}, collection::{map::NP_Map, table::NP_Table, list::NP_List, tuple::NP_Tuple}};
 
 use alloc::{string::String, vec::Vec, borrow::ToOwned};
 use bytes::NP_Bytes;
@@ -260,23 +261,24 @@ impl<'cursor> NP_Cursor {
     /// Get the value bytes of this cursor
     #[inline(always)]
     pub fn get_value<X: NP_Memory>(&self, memory: &X) -> &'cursor mut dyn NP_Pointer_Bytes {
-        let ptr = memory.write_bytes().as_mut_ptr();
-        // if requesting root pointer or address is higher than buffer length
-        if self.buff_addr == memory.get_root() || self.buff_addr > memory.read_bytes().len() {
-            unsafe { &mut *(ptr.add(memory.get_root()) as *mut NP_Pointer_Scalar) }
-        } else {
-            match memory.get_schema(self.parent_schema_addr) {
-                NP_Parsed_Schema::List { .. } => {
-                    unsafe { &mut *(ptr.add(self.buff_addr) as *mut NP_Pointer_List_Item) }
-                },
-                NP_Parsed_Schema::Map { .. } => {
-                    unsafe { &mut *(ptr.add(self.buff_addr) as *mut NP_Pointer_Map_Item) }
-                },
-                _ => { // parent is scalar, table or tuple
-                    unsafe { &mut *(ptr.add(self.buff_addr) as *mut NP_Pointer_Scalar) }
-                }
-            }                   
-        }
+        // let ptr = memory.write_bytes().as_mut_ptr();
+        // // if requesting root pointer or address is higher than buffer length
+        // if self.buff_addr == memory.get_root() || self.buff_addr > memory.read_bytes().len() {
+        //     unsafe { &mut *(ptr.add(memory.get_root()) as *mut NP_Pointer_Scalar) }
+        // } else {
+        //     match memory.get_schema(self.parent_schema_addr) {
+        //         NP_Parsed_Schema::List { .. } => {
+        //             unsafe { &mut *(ptr.add(self.buff_addr) as *mut NP_Pointer_List_Item) }
+        //         },
+        //         NP_Parsed_Schema::Map { .. } => {
+        //             unsafe { &mut *(ptr.add(self.buff_addr) as *mut NP_Pointer_Map_Item) }
+        //         },
+        //         _ => { // parent is scalar, table or tuple
+        //             unsafe { &mut *(ptr.add(self.buff_addr) as *mut NP_Pointer_Scalar) }
+        //         }
+        //     }                   
+        // }
+        panic!()
     }
 
     /// Exports this pointer and all it's descendants into a JSON object.
@@ -284,100 +286,101 @@ impl<'cursor> NP_Cursor {
     /// 
     pub fn json_encode<M: NP_Memory>(cursor: &NP_Cursor, memory: &M) -> NP_JSON {
 
-        match memory.get_schema(cursor.schema_addr).get_type_key() {
-            NP_TypeKeys::None           => { NP_JSON::Null },
-            NP_TypeKeys::Any            => { NP_JSON::Null },
-            NP_TypeKeys::UTF8String     => { NP_String::to_json(cursor, memory) },
-            NP_TypeKeys::Bytes          => {  NP_Bytes::to_json(cursor, memory) },
-            NP_TypeKeys::Int8           => {        i8::to_json(cursor, memory) },
-            NP_TypeKeys::Int16          => {       i16::to_json(cursor, memory) },
-            NP_TypeKeys::Int32          => {       i32::to_json(cursor, memory) },
-            NP_TypeKeys::Int64          => {       i64::to_json(cursor, memory) },
-            NP_TypeKeys::Uint8          => {        u8::to_json(cursor, memory) },
-            NP_TypeKeys::Uint16         => {       u16::to_json(cursor, memory) },
-            NP_TypeKeys::Uint32         => {       u32::to_json(cursor, memory) },
-            NP_TypeKeys::Uint64         => {       u64::to_json(cursor, memory) },
-            NP_TypeKeys::Float          => {       f32::to_json(cursor, memory) },
-            NP_TypeKeys::Double         => {       f64::to_json(cursor, memory) },
-            NP_TypeKeys::Decimal        => {    NP_Dec::to_json(cursor, memory) },
-            NP_TypeKeys::Boolean        => {      bool::to_json(cursor, memory) },
-            NP_TypeKeys::Geo            => {    NP_Geo::to_json(cursor, memory) },
-            NP_TypeKeys::Uuid           => {  _NP_UUID::to_json(cursor, memory) },
-            NP_TypeKeys::Ulid           => {  _NP_ULID::to_json(cursor, memory) },
-            NP_TypeKeys::Date           => {   NP_Date::to_json(cursor, memory) },
-            NP_TypeKeys::Enum           => {   NP_Enum::to_json(cursor, memory) },
-            NP_TypeKeys::Table          => {  NP_Table::to_json(cursor, memory) },
-            NP_TypeKeys::Map            => {    NP_Map::to_json(cursor, memory) },
-            NP_TypeKeys::List           => {   NP_List::to_json(cursor, memory) },
-            NP_TypeKeys::Tuple          => {  NP_Tuple::to_json(cursor, memory) }
-        }
-
+        // match memory.get_schema(cursor.schema_addr).get_type_key() {
+        //     NP_TypeKeys::None           => { NP_JSON::Null },
+        //     NP_TypeKeys::Any            => { NP_JSON::Null },
+        //     NP_TypeKeys::UTF8String     => { NP_String::to_json(cursor, memory) },
+        //     NP_TypeKeys::Bytes          => {  NP_Bytes::to_json(cursor, memory) },
+        //     NP_TypeKeys::Int8           => {        i8::to_json(cursor, memory) },
+        //     NP_TypeKeys::Int16          => {       i16::to_json(cursor, memory) },
+        //     NP_TypeKeys::Int32          => {       i32::to_json(cursor, memory) },
+        //     NP_TypeKeys::Int64          => {       i64::to_json(cursor, memory) },
+        //     NP_TypeKeys::Uint8          => {        u8::to_json(cursor, memory) },
+        //     NP_TypeKeys::Uint16         => {       u16::to_json(cursor, memory) },
+        //     NP_TypeKeys::Uint32         => {       u32::to_json(cursor, memory) },
+        //     NP_TypeKeys::Uint64         => {       u64::to_json(cursor, memory) },
+        //     NP_TypeKeys::Float          => {       f32::to_json(cursor, memory) },
+        //     NP_TypeKeys::Double         => {       f64::to_json(cursor, memory) },
+        //     NP_TypeKeys::Decimal        => {    NP_Dec::to_json(cursor, memory) },
+        //     NP_TypeKeys::Boolean        => {      bool::to_json(cursor, memory) },
+        //     NP_TypeKeys::Geo            => {    NP_Geo::to_json(cursor, memory) },
+        //     NP_TypeKeys::Uuid           => {  _NP_UUID::to_json(cursor, memory) },
+        //     NP_TypeKeys::Ulid           => {  _NP_ULID::to_json(cursor, memory) },
+        //     NP_TypeKeys::Date           => {   NP_Date::to_json(cursor, memory) },
+        //     NP_TypeKeys::Enum           => {   NP_Enum::to_json(cursor, memory) },
+        //     NP_TypeKeys::Table          => {  NP_Table::to_json(cursor, memory) },
+        //     NP_TypeKeys::Map            => {    NP_Map::to_json(cursor, memory) },
+        //     NP_TypeKeys::List           => {   NP_List::to_json(cursor, memory) },
+        //     NP_TypeKeys::Tuple          => {  NP_Tuple::to_json(cursor, memory) }
+        // }
+            panic!()
     }
 
     /// Compact from old cursor and memory into new cursor and memory
     /// 
     pub fn compact<M: NP_Memory, M2: NP_Memory>(from_cursor: NP_Cursor, from_memory: &M, to_cursor: NP_Cursor, to_memory: &M2) -> Result<NP_Cursor, NP_Error> {
 
-        match from_memory.get_schema(from_cursor.schema_addr).get_type_key() {
-            NP_TypeKeys::Any           => { Ok(to_cursor) }
-            NP_TypeKeys::UTF8String    => { NP_String::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-            NP_TypeKeys::Bytes         => {  NP_Bytes::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-            NP_TypeKeys::Int8          => {        i8::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-            NP_TypeKeys::Int16         => {       i16::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-            NP_TypeKeys::Int32         => {       i32::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-            NP_TypeKeys::Int64         => {       i64::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-            NP_TypeKeys::Uint8         => {        u8::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-            NP_TypeKeys::Uint16        => {       u16::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-            NP_TypeKeys::Uint32        => {       u32::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-            NP_TypeKeys::Uint64        => {       u64::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-            NP_TypeKeys::Float         => {       f32::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-            NP_TypeKeys::Double        => {       f64::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-            NP_TypeKeys::Decimal       => {    NP_Dec::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-            NP_TypeKeys::Boolean       => {      bool::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-            NP_TypeKeys::Geo           => {    NP_Geo::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-            NP_TypeKeys::Uuid          => {  _NP_UUID::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-            NP_TypeKeys::Ulid          => {  _NP_ULID::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-            NP_TypeKeys::Date          => {   NP_Date::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-            NP_TypeKeys::Enum          => {   NP_Enum::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-            NP_TypeKeys::Table         => {  NP_Table::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-            NP_TypeKeys::Map           => {    NP_Map::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-            NP_TypeKeys::List          => {   NP_List::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-            NP_TypeKeys::Tuple         => {  NP_Tuple::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-            _ => { Err(NP_Error::new("unreachable")) }
-        }
+        // match from_memory.get_schema(from_cursor.schema_addr).get_type_key() {
+        //     NP_TypeKeys::Any           => { Ok(to_cursor) }
+        //     NP_TypeKeys::UTF8String    => { NP_String::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
+        //     NP_TypeKeys::Bytes         => {  NP_Bytes::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
+        //     NP_TypeKeys::Int8          => {        i8::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
+        //     NP_TypeKeys::Int16         => {       i16::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
+        //     NP_TypeKeys::Int32         => {       i32::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
+        //     NP_TypeKeys::Int64         => {       i64::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
+        //     NP_TypeKeys::Uint8         => {        u8::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
+        //     NP_TypeKeys::Uint16        => {       u16::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
+        //     NP_TypeKeys::Uint32        => {       u32::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
+        //     NP_TypeKeys::Uint64        => {       u64::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
+        //     NP_TypeKeys::Float         => {       f32::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
+        //     NP_TypeKeys::Double        => {       f64::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
+        //     NP_TypeKeys::Decimal       => {    NP_Dec::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
+        //     NP_TypeKeys::Boolean       => {      bool::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
+        //     NP_TypeKeys::Geo           => {    NP_Geo::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
+        //     NP_TypeKeys::Uuid          => {  _NP_UUID::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
+        //     NP_TypeKeys::Ulid          => {  _NP_ULID::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
+        //     NP_TypeKeys::Date          => {   NP_Date::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
+        //     NP_TypeKeys::Enum          => {   NP_Enum::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
+        //     NP_TypeKeys::Table         => {  NP_Table::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
+        //     NP_TypeKeys::Map           => {    NP_Map::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
+        //     NP_TypeKeys::List          => {   NP_List::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
+        //     NP_TypeKeys::Tuple         => {  NP_Tuple::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
+        //     _ => { Err(NP_Error::new("unreachable")) }
+        // }
+        panic!()
     }
 
     /// Set default for this value.  Not related to the schema default, this is the default value for this data type
     /// 
     pub fn set_default<M: NP_Memory>(cursor: NP_Cursor, memory: &M) -> Result<(), NP_Error> {
 
-        match memory.get_schema(cursor.schema_addr).get_type_key() {
-            NP_TypeKeys::None        => { return Err(NP_Error::new("unreachable")); },
-            NP_TypeKeys::Any         => { return Err(NP_Error::new("unreachable")); },
-            NP_TypeKeys::Table       => { return Err(NP_Error::new("unreachable")); },
-            NP_TypeKeys::Map         => { return Err(NP_Error::new("unreachable")); },
-            NP_TypeKeys::List        => { return Err(NP_Error::new("unreachable")); },
-            NP_TypeKeys::Tuple       => { return Err(NP_Error::new("unreachable")); },
-            NP_TypeKeys::UTF8String  => {  NP_String::set_value(cursor, memory, &String::default())?; },
-            NP_TypeKeys::Bytes       => {   NP_Bytes::set_value(cursor, memory, &NP_Bytes::default())?; },
-            NP_TypeKeys::Int8        => {         i8::set_value(cursor, memory, i8::default())?; },
-            NP_TypeKeys::Int16       => {        i16::set_value(cursor, memory, i16::default())?; },
-            NP_TypeKeys::Int32       => {        i32::set_value(cursor, memory, i32::default())?; },
-            NP_TypeKeys::Int64       => {        i64::set_value(cursor, memory, i64::default())?; },
-            NP_TypeKeys::Uint8       => {         u8::set_value(cursor, memory, u8::default())?; },
-            NP_TypeKeys::Uint16      => {        u16::set_value(cursor, memory, u16::default())?; },
-            NP_TypeKeys::Uint32      => {        u32::set_value(cursor, memory, u32::default())?; },
-            NP_TypeKeys::Uint64      => {        u64::set_value(cursor, memory, u64::default())?; },
-            NP_TypeKeys::Float       => {        f32::set_value(cursor, memory, f32::default())?; },
-            NP_TypeKeys::Double      => {        f64::set_value(cursor, memory, f64::default())?; },
-            NP_TypeKeys::Decimal     => {     NP_Dec::set_value(cursor, memory, NP_Dec::default())?; },
-            NP_TypeKeys::Boolean     => {       bool::set_value(cursor, memory, bool::default())?; },
-            NP_TypeKeys::Geo         => {     NP_Geo::set_value(cursor, memory, NP_Geo::default())?; },
-            NP_TypeKeys::Uuid        => {   _NP_UUID::set_value(cursor, memory, &NP_UUID::default())?; },
-            NP_TypeKeys::Ulid        => {   _NP_ULID::set_value(cursor, memory, &NP_ULID::default())?; },
-            NP_TypeKeys::Date        => {    NP_Date::set_value(cursor, memory, NP_Date::default())?; },
-            NP_TypeKeys::Enum        => {    NP_Enum::set_value(cursor, memory, NP_Enum::default())?; }
-        }
+        // match memory.get_schema(cursor.schema_addr).get_type_key() {
+        //     NP_TypeKeys::None        => { return Err(NP_Error::new("unreachable")); },
+        //     NP_TypeKeys::Any         => { return Err(NP_Error::new("unreachable")); },
+        //     NP_TypeKeys::Table       => { return Err(NP_Error::new("unreachable")); },
+        //     NP_TypeKeys::Map         => { return Err(NP_Error::new("unreachable")); },
+        //     NP_TypeKeys::List        => { return Err(NP_Error::new("unreachable")); },
+        //     NP_TypeKeys::Tuple       => { return Err(NP_Error::new("unreachable")); },
+        //     NP_TypeKeys::UTF8String  => {  NP_String::set_value(cursor, memory, &String::default())?; },
+        //     NP_TypeKeys::Bytes       => {   NP_Bytes::set_value(cursor, memory, &NP_Bytes::default())?; },
+        //     NP_TypeKeys::Int8        => {         i8::set_value(cursor, memory, i8::default())?; },
+        //     NP_TypeKeys::Int16       => {        i16::set_value(cursor, memory, i16::default())?; },
+        //     NP_TypeKeys::Int32       => {        i32::set_value(cursor, memory, i32::default())?; },
+        //     NP_TypeKeys::Int64       => {        i64::set_value(cursor, memory, i64::default())?; },
+        //     NP_TypeKeys::Uint8       => {         u8::set_value(cursor, memory, u8::default())?; },
+        //     NP_TypeKeys::Uint16      => {        u16::set_value(cursor, memory, u16::default())?; },
+        //     NP_TypeKeys::Uint32      => {        u32::set_value(cursor, memory, u32::default())?; },
+        //     NP_TypeKeys::Uint64      => {        u64::set_value(cursor, memory, u64::default())?; },
+        //     NP_TypeKeys::Float       => {        f32::set_value(cursor, memory, f32::default())?; },
+        //     NP_TypeKeys::Double      => {        f64::set_value(cursor, memory, f64::default())?; },
+        //     NP_TypeKeys::Decimal     => {     NP_Dec::set_value(cursor, memory, NP_Dec::default())?; },
+        //     NP_TypeKeys::Boolean     => {       bool::set_value(cursor, memory, bool::default())?; },
+        //     NP_TypeKeys::Geo         => {     NP_Geo::set_value(cursor, memory, NP_Geo::default())?; },
+        //     NP_TypeKeys::Uuid        => {   _NP_UUID::set_value(cursor, memory, &NP_UUID::default())?; },
+        //     NP_TypeKeys::Ulid        => {   _NP_ULID::set_value(cursor, memory, &NP_ULID::default())?; },
+        //     NP_TypeKeys::Date        => {    NP_Date::set_value(cursor, memory, NP_Date::default())?; },
+        //     NP_TypeKeys::Enum        => {    NP_Enum::set_value(cursor, memory, NP_Enum::default())?; }
+        // }
 
         Ok(())
     }
@@ -395,35 +398,35 @@ impl<'cursor> NP_Cursor {
         if value.get_addr_value() == 0 { // no value, just base size
             return Ok(base_size);
         }
-
-        // get the size of the value based on schema
-        let type_size = match memory.get_schema(cursor.schema_addr).get_type_key() {
-            NP_TypeKeys::None         => { Ok(0) },
-            NP_TypeKeys::Any          => { Ok(0) },
-            NP_TypeKeys::UTF8String   => { NP_String::get_size(cursor, memory) },
-            NP_TypeKeys::Bytes        => {  NP_Bytes::get_size(cursor, memory) },
-            NP_TypeKeys::Int8         => {        i8::get_size(cursor, memory) },
-            NP_TypeKeys::Int16        => {       i16::get_size(cursor, memory) },
-            NP_TypeKeys::Int32        => {       i32::get_size(cursor, memory) },
-            NP_TypeKeys::Int64        => {       i64::get_size(cursor, memory) },
-            NP_TypeKeys::Uint8        => {        u8::get_size(cursor, memory) },
-            NP_TypeKeys::Uint16       => {       u16::get_size(cursor, memory) },
-            NP_TypeKeys::Uint32       => {       u32::get_size(cursor, memory) },
-            NP_TypeKeys::Uint64       => {       u64::get_size(cursor, memory) },
-            NP_TypeKeys::Float        => {       f32::get_size(cursor, memory) },
-            NP_TypeKeys::Double       => {       f64::get_size(cursor, memory) },
-            NP_TypeKeys::Decimal      => {    NP_Dec::get_size(cursor, memory) },
-            NP_TypeKeys::Boolean      => {      bool::get_size(cursor, memory) },
-            NP_TypeKeys::Geo          => {    NP_Geo::get_size(cursor, memory) },
-            NP_TypeKeys::Uuid         => {  _NP_UUID::get_size(cursor, memory) },
-            NP_TypeKeys::Ulid         => {  _NP_ULID::get_size(cursor, memory) },
-            NP_TypeKeys::Date         => {   NP_Date::get_size(cursor, memory) },
-            NP_TypeKeys::Enum         => {   NP_Enum::get_size(cursor, memory) },
-            NP_TypeKeys::Table        => {  NP_Table::get_size(cursor, memory) },
-            NP_TypeKeys::Map          => {    NP_Map::get_size(cursor, memory) },
-            NP_TypeKeys::List         => {   NP_List::get_size(cursor, memory) },
-            NP_TypeKeys::Tuple        => {  NP_Tuple::get_size(cursor, memory) }
-        }?;
+        let type_size = 0;
+        // // get the size of the value based on schema
+        // let type_size = match memory.get_schema(cursor.schema_addr).get_type_key() {
+        //     NP_TypeKeys::None         => { Ok(0) },
+        //     NP_TypeKeys::Any          => { Ok(0) },
+        //     NP_TypeKeys::UTF8String   => { NP_String::get_size(cursor, memory) },
+        //     NP_TypeKeys::Bytes        => {  NP_Bytes::get_size(cursor, memory) },
+        //     NP_TypeKeys::Int8         => {        i8::get_size(cursor, memory) },
+        //     NP_TypeKeys::Int16        => {       i16::get_size(cursor, memory) },
+        //     NP_TypeKeys::Int32        => {       i32::get_size(cursor, memory) },
+        //     NP_TypeKeys::Int64        => {       i64::get_size(cursor, memory) },
+        //     NP_TypeKeys::Uint8        => {        u8::get_size(cursor, memory) },
+        //     NP_TypeKeys::Uint16       => {       u16::get_size(cursor, memory) },
+        //     NP_TypeKeys::Uint32       => {       u32::get_size(cursor, memory) },
+        //     NP_TypeKeys::Uint64       => {       u64::get_size(cursor, memory) },
+        //     NP_TypeKeys::Float        => {       f32::get_size(cursor, memory) },
+        //     NP_TypeKeys::Double       => {       f64::get_size(cursor, memory) },
+        //     NP_TypeKeys::Decimal      => {    NP_Dec::get_size(cursor, memory) },
+        //     NP_TypeKeys::Boolean      => {      bool::get_size(cursor, memory) },
+        //     NP_TypeKeys::Geo          => {    NP_Geo::get_size(cursor, memory) },
+        //     NP_TypeKeys::Uuid         => {  _NP_UUID::get_size(cursor, memory) },
+        //     NP_TypeKeys::Ulid         => {  _NP_ULID::get_size(cursor, memory) },
+        //     NP_TypeKeys::Date         => {   NP_Date::get_size(cursor, memory) },
+        //     NP_TypeKeys::Enum         => {   NP_Enum::get_size(cursor, memory) },
+        //     NP_TypeKeys::Table        => {  NP_Table::get_size(cursor, memory) },
+        //     NP_TypeKeys::Map          => {    NP_Map::get_size(cursor, memory) },
+        //     NP_TypeKeys::List         => {   NP_List::get_size(cursor, memory) },
+        //     NP_TypeKeys::Tuple        => {  NP_Tuple::get_size(cursor, memory) }
+        // }?;
 
         Ok(type_size + base_size)
     }

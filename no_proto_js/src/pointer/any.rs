@@ -72,12 +72,3 @@ impl<'value> Default for NP_Any {
     }
 }
 
-
-#[test]
-fn schema_parsing_works() -> Result<(), NP_Error> {
-    let schema = "{\"type\":\"any\"}";
-    let factory = crate::NP_Factory::new(schema)?;
-    assert_eq!(schema, factory.schema.to_json()?.stringify());
-    
-    Ok(())
-}

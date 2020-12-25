@@ -33,11 +33,11 @@ use core::str;
 use alloc::string::ToString;
 
 /// &str type alias
-pub type NP_String<'string> = &'string str;
+pub type NP_String<'string> = String;
 
-impl NP_Scalar for &str {}
+impl NP_Scalar for String {}
 
-impl<'value> NP_Value<'value> for &'value str {
+impl<'value> NP_Value<'value> for String {
     fn type_idx() -> (&'value str, NP_TypeKeys) {
         ("string", NP_TypeKeys::UTF8String)
     }
@@ -133,7 +133,7 @@ impl<'value> NP_Value<'value> for &'value str {
                     // get bytes
                     let bytes = &memory.read_bytes()[(value_addr)..(value_addr + (*size as usize))];
 
-                    return Ok(Some(unsafe { str::from_utf8_unchecked(bytes) }));
+                    return Ok(Some(unsafe { String::from(str::from_utf8_unchecked(bytes)) }));
                 } else {
                     // dynamic size
                     // get size of bytes
@@ -143,7 +143,7 @@ impl<'value> NP_Value<'value> for &'value str {
                     // get bytes
                     let bytes = &memory.read_bytes()[(value_addr + 2)..(value_addr + 2 + bytes_size)];
 
-                    return Ok(Some(unsafe { str::from_utf8_unchecked(bytes) }));
+                    return Ok(Some(unsafe { String::from(str::from_utf8_unchecked(bytes)) }));
                 }
             }
             _ => Err(NP_Error::new("unreachable")),
@@ -153,7 +153,7 @@ impl<'value> NP_Value<'value> for &'value str {
     fn schema_default(schema: &'value NP_Parsed_Schema) -> Option<Self> {
         match schema {
             NP_Parsed_Schema::UTF8String { default, .. } => match default {
-                Some(x) => Some(x),
+                Some(x) => Some(String::from(x)),
                 None => None,
             },
             _ => None
@@ -188,95 +188,98 @@ impl<'value> NP_Value<'value> for &'value str {
 
     fn from_json_to_schema(mut schema: Vec<NP_Parsed_Schema>, json_schema: &Box<NP_JSON>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {
 
-        let mut schema_data: Vec<u8> = Vec::new();
-        schema_data.push(NP_TypeKeys::UTF8String as u8);
+        // let mut schema_data: Vec<u8> = Vec::new();
+        // schema_data.push(NP_TypeKeys::UTF8String as u8);
 
-        let mut case_byte = String_Case::None;
-        let mut set = 0;
+        // let mut case_byte = String_Case::None;
+        // let mut set = 0;
 
-        match json_schema["lowercase"] {
-            NP_JSON::True => { case_byte = String_Case::Lowercase; set += 1; },
-            _ => {}
-        }
+        // match json_schema["lowercase"] {
+        //     NP_JSON::True => { case_byte = String_Case::Lowercase; set += 1; },
+        //     _ => {}
+        // }
 
-        match json_schema["uppercase"] {
-            NP_JSON::True => { case_byte = String_Case::Uppercase; set += 1; },
-            _ => {}
-        }
+        // match json_schema["uppercase"] {
+        //     NP_JSON::True => { case_byte = String_Case::Uppercase; set += 1; },
+        //     _ => {}
+        // }
 
-        if set == 2 {
-            return Err(NP_Error::new("Only one of uppercase and lowercase can be set!"));
-        }
+        // if set == 2 {
+        //     return Err(NP_Error::new("Only one of uppercase and lowercase can be set!"));
+        // }
 
-        schema_data.push(case_byte as u8);
+        // schema_data.push(case_byte as u8);
 
-        let mut has_fixed_size = false;
+        // let mut has_fixed_size = false;
 
-        let size = match json_schema["size"] {
-            NP_JSON::Integer(x) => {
-                has_fixed_size = true;
-                if x < 1 {
-                    return Err(NP_Error::new(
-                        "Fixed size for string must be larger than 1!",
-                    ));
-                }
-                if x > u16::MAX.into() {
-                    return Err(NP_Error::new(
-                        "Fixed size for string cannot be larger than 2^16!",
-                    ));
-                }
-                schema_data.extend((x as u16).to_be_bytes().to_vec());
-                x as u16
-            }
-            NP_JSON::Float(x) => {
-                has_fixed_size = true;
-                if x < 1.0 {
-                    return Err(NP_Error::new(
-                        "Fixed size for string must be larger than 1!",
-                    ));
-                }
-                if x > u16::MAX.into() {
-                    return Err(NP_Error::new(
-                        "Fixed size for string cannot be larger than 2^16!",
-                    ));
-                }
+        // let size = match json_schema["size"] {
+        //     NP_JSON::Integer(x) => {
+        //         has_fixed_size = true;
+        //         if x < 1 {
+        //             return Err(NP_Error::new(
+        //                 "Fixed size for string must be larger than 1!",
+        //             ));
+        //         }
+        //         if x > u16::MAX.into() {
+        //             return Err(NP_Error::new(
+        //                 "Fixed size for string cannot be larger than 2^16!",
+        //             ));
+        //         }
+        //         schema_data.extend((x as u16).to_be_bytes().to_vec());
+        //         x as u16
+        //     }
+        //     NP_JSON::Float(x) => {
+        //         has_fixed_size = true;
+        //         if x < 1.0 {
+        //             return Err(NP_Error::new(
+        //                 "Fixed size for string must be larger than 1!",
+        //             ));
+        //         }
+        //         if x > u16::MAX.into() {
+        //             return Err(NP_Error::new(
+        //                 "Fixed size for string cannot be larger than 2^16!",
+        //             ));
+        //         }
 
-                schema_data.extend((x as u16).to_be_bytes().to_vec());
-                x as u16
-            }
-            _ => {
-                schema_data.extend(0u16.to_be_bytes().to_vec());
-                0u16
-            }
-        };
+        //         schema_data.extend((x as u16).to_be_bytes().to_vec());
+        //         x as u16
+        //     }
+        //     _ => {
+        //         schema_data.extend(0u16.to_be_bytes().to_vec());
+        //         0u16
+        //     }
+        // };
 
-        let default = match &json_schema["default"] {
-            NP_JSON::String(bytes) => {
+        let boxed: Option<Box<String>> = Some(Box::new(String::from("")));
+
+        let max_len = (u16::max as usize) - 1;
+
+        let default = match &boxed {
+            Some(bytes) => {
                 let str_bytes = bytes.clone().into_bytes();
-                if str_bytes.len() > u16::max as usize - 1 {
-                    return Err(NP_Error::new(
-                        "Default string value cannot be larger than 2^16 bytes!",
-                    ));
+                if str_bytes.len() > max_len {
+                    return Err(NP_Error::new("Default string value cannot be larger than 2^16 bytes!"));
                 }
-                schema_data.extend(((str_bytes.len() + 1) as u16).to_be_bytes().to_vec());
-                schema_data.extend(str_bytes);
+                // schema_data.extend(((str_bytes.len() + 1) as u16).to_be_bytes().to_vec());
+                // schema_data.extend(str_bytes);
                 Some(bytes.to_string())
             }
             _ => {
-                schema_data.extend(0u16.to_be_bytes().to_vec());
+                // schema_data.extend(0u16.to_be_bytes().to_vec());
                 None
             }
         };
 
-        schema.push(NP_Parsed_Schema::UTF8String {
-            i: NP_TypeKeys::UTF8String,
-            size: size,
-            default: default,
-            case: case_byte,
-            sortable: has_fixed_size,
-        });
+        // schema.push(NP_Parsed_Schema::UTF8String {
+        //     i: NP_TypeKeys::UTF8String,
+        //     size: size,
+        //     default: default,
+        //     case: case_byte,
+        //     sortable: has_fixed_size,
+        // });
 
-        return Ok((has_fixed_size, schema_data, schema));
+        // return Ok((has_fixed_size, schema_data, schema));
+        return Ok((false, Vec::new(), Vec::new()))
     }
 
     fn to_json<M: NP_Memory>(cursor: &NP_Cursor, memory: &'value M) -> NP_JSON {
@@ -409,88 +412,4 @@ impl<'value> NP_Value<'value> for &'value str {
             return Ok(cursor);
         }
     }
-}
-
-#[test]
-fn schema_parsing_works() -> Result<(), NP_Error> {
-    let schema = "{\"type\":\"string\",\"default\":\"hello\"}";
-    let factory = crate::NP_Factory::new(schema)?;
-    assert_eq!(schema, factory.schema.to_json()?.stringify());
-
-    let schema = "{\"type\":\"string\",\"size\":10}";
-    let factory = crate::NP_Factory::new(schema)?;
-    assert_eq!(schema, factory.schema.to_json()?.stringify());
-
-    let schema = "{\"type\":\"string\",\"lowercase\":true}";
-    let factory = crate::NP_Factory::new(schema)?;
-    assert_eq!(schema, factory.schema.to_json()?.stringify());
-
-    let schema = "{\"type\":\"string\",\"uppercase\":true}";
-    let factory = crate::NP_Factory::new(schema)?;
-    assert_eq!(schema, factory.schema.to_json()?.stringify());
-
-    let schema = "{\"type\":\"string\"}";
-    let factory = crate::NP_Factory::new(schema)?;
-    assert_eq!(schema, factory.schema.to_json()?.stringify());
-
-    Ok(())
-}
-
-#[test]
-fn default_value_works() -> Result<(), NP_Error> {
-    let schema = "{\"type\":\"string\",\"default\":\"hello\"}";
-    let factory = crate::NP_Factory::new(schema)?;
-    let buffer = factory.empty_buffer(None);
-    assert_eq!(buffer.get::<&str>(&[])?.unwrap(), "hello");
-
-    Ok(())
-}
-
-#[test]
-fn fixed_size_works() -> Result<(), NP_Error> {
-    let schema = "{\"type\":\"string\",\"size\": 20}";
-    let factory = crate::NP_Factory::new(schema)?;
-    let mut buffer = factory.empty_buffer(None);
-    buffer.set(&[], "hello there this sentence is long")?;
-    assert_eq!(buffer.get::<&str>(&[])?.unwrap(), "hello there this sen");
-
-    Ok(())
-}
-
-#[test]
-fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
-    let schema = "{\"type\":\"string\"}";
-    let factory = crate::NP_Factory::new(schema)?;
-    let mut buffer = factory.empty_buffer(None);
-    buffer.set(&[], "hello there this sentence is long")?;
-    assert_eq!(
-        buffer.get::<&str>(&[])?.unwrap(),
-        "hello there this sentence is long"
-    );
-    buffer.del(&[])?;
-    assert_eq!(buffer.get::<&str>(&[])?, None);
-
-    buffer.compact(None)?;
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 3usize);
-
-    Ok(())
-}
-
-
-#[test]
-fn uppercase_lowercase_works() -> Result<(), NP_Error> {
-    let schema = "{\"type\":\"string\",\"lowercase\": true}";
-    let factory = crate::NP_Factory::new(schema)?;
-    let mut buffer = factory.empty_buffer(None);
-    buffer.set(&[], "HELLO")?;
-    assert_eq!(buffer.get::<&str>(&[])?.unwrap(),"hello");
-
-    let schema = "{\"type\":\"string\",\"uppercase\": true}";
-    let factory = crate::NP_Factory::new(schema)?;
-    let mut buffer = factory.empty_buffer(None);
-    buffer.set(&[], "hello")?;
-    assert_eq!(buffer.get::<&str>(&[])?.unwrap(),"HELLO");
-
-
-    Ok(())
 }
