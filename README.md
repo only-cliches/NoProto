@@ -131,12 +131,11 @@ The format and data used in the benchmarks were taken from the `flatbuffers` ben
 
 | Library            | Encode | Decode All | Decode 1 | Update 1 | Size (bytes) | Size (Zlib) |
 |--------------------|--------|------------|----------|----------|--------------|-------------|
-| NoProto            | 822    | 1105       | 52632    | 10638    | 284          | 229         |
-| Protocol Buffers 2 | 723    | 881        | 902      | 384      | 220          | 163         |
-| MessagePack        | 99     | 163        | 171      | 91       | 431          | 245         |
-| JSON               | 436    | 299        | 374      | 287      | 673          | 246         |
-| BSON               | 82     | 78         | 83       | 62       | 600          | 279         |
-
+| NoProto            | 1,209  | 1,653      | 50,000   | 14,085   | 209          | 167         |
+| Protocol Buffers 2 | 958    | 1,263      | 1,285    | 556      | 154          | 141         |
+| MessagePack        | 154    | 242        | 271      | 136      | 296          | 187         |
+| JSON               | 606    | 471        | 605      | 445      | 439          | 184         |
+| BSON               | 127    | 122        | 132      | 96       | 414          | 216         |
 
 - **Encode**: Transfer a collection of 33 fields of test data into a serialized `Vec<u8>`.
 - **Decode All**: Deserialize the test object from the `Vec<u8>` into all 33 fields.
