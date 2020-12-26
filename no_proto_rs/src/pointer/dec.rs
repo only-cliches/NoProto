@@ -499,7 +499,7 @@ impl Into<NP_Dec> for f64 {
     fn into(self) -> NP_Dec { 
         match precision(self) {
             Some(x) => {
-                let max_decimal_places = u32::min(x, 18);
+                let max_decimal_places = u8::min(x as u8, 18);
                 let mut new_self = self.clone();
                 let mut loop_exp = max_decimal_places;
                 while loop_exp > 0 {
@@ -545,7 +545,7 @@ impl Into<NP_Dec> for f32 {
     fn into(self) -> NP_Dec { 
         match precision32(self) {
             Some(x) => {
-                let max_decimal_places = u32::min(x, 18);
+                let max_decimal_places = u8::min(x as u8, 18);
                 let mut new_self = self.clone();
                 let mut loop_exp = max_decimal_places;
                 while loop_exp > 0 {

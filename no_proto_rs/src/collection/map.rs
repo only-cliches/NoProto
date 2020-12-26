@@ -28,6 +28,7 @@ impl<'item> Map_Item<'item> {
 #[doc(hidden)]
 #[derive(Debug)]
 pub struct NP_Map<'map> { 
+    count: usize,
     current: Option<Map_Item<'map>>,
     head: Option<Map_Item<'map>>,
     map: NP_Cursor,
@@ -77,6 +78,7 @@ impl<'map> NP_Map<'map> {
         if map_cursor.get_value(memory).get_addr_value() == 0 {
             return Self {
                 current: None,
+                count: 0,
                 head: None,
                 map: map_cursor.clone(),
                 value_of
@@ -90,6 +92,7 @@ impl<'map> NP_Map<'map> {
 
         Self {
             current: None,
+            count: 0,
             head: Some(Map_Item::new(head_cursor_value.get_key(memory), head_cursor.buff_addr )),
             map: map_cursor.clone(),
             value_of
@@ -98,9 +101,15 @@ impl<'map> NP_Map<'map> {
 
     #[inline(always)]
     pub fn step_iter<M: NP_Memory>(&mut self, memory: &'map M) -> Option<(&'map str, NP_Cursor)> {
+
+        if self.count > 260 {
+            return None;
+        }
         
         match self.head {
             Some(head) => {
+
+                self.count += 1;
 
                 match self.current {
                     Some(current) => { // subsequent iterations

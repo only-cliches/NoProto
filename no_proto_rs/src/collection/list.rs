@@ -22,6 +22,7 @@ pub struct NP_List {
     current: Option<List_Item>,
     previous: Option<List_Item>,
     index: usize,
+    count: usize,
     tail: Option<List_Item>,
     head: Option<List_Item>,
     only_real: bool,
@@ -197,6 +198,7 @@ impl NP_List {
                 
                 return Self {
                     current: None,
+                    count: 0,
                     previous: None,
                     head: Some(List_Item { index: head_cursor.get_value(memory).get_index() as usize, buff_addr: head_cursor.buff_addr}),
                     tail: Some(List_Item { index: tail_cursor.get_value(memory).get_index() as usize, buff_addr: tail_cursor.buff_addr}),
@@ -213,6 +215,7 @@ impl NP_List {
             previous: None,
             head: None,
             tail: None,
+            count: 0,
             only_real,
             index: starting_index,
             schema_of,
@@ -223,8 +226,14 @@ impl NP_List {
     #[inline(always)]
     pub fn step_iter<M: NP_Memory>(&mut self, memory: &M) -> Option<(usize, Option<NP_Cursor>)> {
 
+        if self.count > 260 {
+            return None;
+        }
+
         match self.head {
             Some(head) => {
+
+                self.count += 1;
 
                 match self.current {
                     Some(current) => { // subsequent iterations

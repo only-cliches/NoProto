@@ -125,8 +125,6 @@ impl NoProtoBench {
                 assert_eq!(new_buff.get(&["time"])?, Some(123456 + (*x as u32)));
                 assert_eq!(new_buff.get(&["ratio"])?, Some(3.14159 + (*x as f32)));
                 assert_eq!(new_buff.get(&["size"])?, Some(10000 + (*x as u16)));
-
-                
             }
 
             assert!(loops == 3);

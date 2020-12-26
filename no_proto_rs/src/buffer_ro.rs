@@ -747,11 +747,19 @@ impl<'buffer> NP_Buffer_RO<'buffer> {
         let mut loop_cursor = cursor;
 
         let mut path_index = 0usize;
+
+        let mut loop_count = 0u16;
         
         loop {
+
+            loop_count += 1;
             
             if path.len() == path_index {
                 return Ok(Some(loop_cursor));
+            }
+
+            if loop_count > 256 {
+                return Err(NP_Error::new("Select overflow"))
             }
 
             // now select into collections

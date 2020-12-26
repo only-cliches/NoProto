@@ -1,3 +1,8 @@
+# 0.7.2 December 26, 2020
+- Added looping limits to prevent DOS attacks with specially made buffers.
+- Added a bunch of stuff to the readme to help with pros/cons of other libs.
+- Added bincode to the benchmarks.
+
 # 0.7.1 December 22, 2020
 - Minor performance improvements.
 - Fixed some type errors in `XX::max` calls.

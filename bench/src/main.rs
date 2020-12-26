@@ -7,7 +7,7 @@ use crate::run_bench_flatbuffers::FlatBufferBench;
 use crate::run_bench_bson::BSONBench;
 use crate::run_bench_bincode::BincodeBench;
 
-pub const LOOPS: usize = 1_000_000;
+pub const LOOPS: usize = 1_0_000;
 
 mod bench_fb;
 mod bench_pb;

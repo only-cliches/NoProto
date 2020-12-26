@@ -55,7 +55,8 @@ impl<'tuple> NP_Tuple<'tuple> {
         let mut vtable_address = table_value.get_addr_value() as usize;
 
         if v_table > 0 {
-            while seek_vtable < v_table {
+            let mut loop_max = 64usize;
+            while seek_vtable < v_table && loop_max > 0 {
                 let this_vtable = Self::get_vtable(vtable_address, memory);
                 let next_vtable = this_vtable.get_next();
 
@@ -66,6 +67,7 @@ impl<'tuple> NP_Tuple<'tuple> {
                 }
 
                 seek_vtable += 1;
+                loop_max -= 1;
             }                    
         }
 
@@ -232,11 +234,12 @@ impl<'value> NP_Value<'value> for NP_Tuple<'value> {
         let mut acc_size = 0usize;
 
         let mut nex_vtable = c_value.get_addr_value() as usize;
-
-        while nex_vtable > 0 {
+        let mut loop_max = 65usize;
+        while nex_vtable > 0 && loop_max > 0 {
             acc_size += 10;
             let vtable = Self::get_vtable(nex_vtable, memory);
             nex_vtable = vtable.get_next() as usize;
+            loop_max -= 1;
         }
 
         let mut table = Self::new_iter(&cursor, memory);
