@@ -131,11 +131,12 @@ The format and data used in the benchmarks were taken from the `flatbuffers` ben
 
 | Library            | Encode | Decode All | Decode 1 | Update 1 | Size (bytes) | Size (Zlib) |
 |--------------------|--------|------------|----------|----------|--------------|-------------|
-| NoProto            | 1,209  | 1,653      | 50,000   | 14,085   | 209          | 167         |
-| Protocol Buffers 2 | 958    | 1,263      | 1,285    | 556      | 154          | 141         |
-| MessagePack        | 154    | 242        | 271      | 136      | 296          | 187         |
-| JSON               | 606    | 471        | 605      | 445      | 439          | 184         |
-| BSON               | 127    | 122        | 132      | 96       | 414          | 216         |
+| NoProto            | 822    | 1,105      | 52,632   | 10,638   | 284          | 229         |
+| Protocol Buffers 2 | 723    | 881        | 902      | 384      | 220          | 163         |
+| MessagePack        | 99     | 163        | 171      | 91       | 431          | 245         |
+| JSON               | 436    | 299        | 374      | 287      | 673          | 246         |
+| BSON               | 82     | 78         | 83       | 62       | 600          | 279         |
+
 
 - **Encode**: Transfer a collection of 33 fields of test data into a serialized `Vec<u8>`.
 - **Decode All**: Deserialize the test object from the `Vec<u8>` into all 33 fields.
@@ -144,9 +145,25 @@ The format and data used in the benchmarks were taken from the `flatbuffers` ben
 
 Complete benchmark source code is available [here](https://github.com/only-cliches/NoProto/tree/master/bench).
 
-In my opinion the benchmarks above make NoProto the clear winner if you ever plan to mutate or update your buffer data.  If buffer data can always be immutable and the fixed compiled schemas aren't an issue, Flatbuffers is the better choice.
+## NoProto Strengths
+If your usecase fits any of the concepts below, NoProto is a good choice for your application.
 
-I also think there's a strong argument here against using data without a schema.  The cost of an entirely flexible formats like JSON or BSON is crazy.  Putting schemas on your data not only increases your data hygiene but makes the storage of the data far more comapct while increasing the deserialization and serialization perfomrance substantially.
+1. Flexible At Runtime
+If you need to work with data types that will change or be created at runtime, you normally have to pick something like JSON since highly optimized formats like Flatbuffers and Bincode depend on compiling the data types into your application (making everything fixed at runtime). When it comes to formats that can change/implement data types at runtime, NoProto is fastest format I've been able to find (if you know if one that might be faster, let me know!).
+
+2. Extremely Fast Updates
+If you have a workflow in your application that is read -> modify -> write with buffers, NoProto will usually outperform every other format, including Bincode and Flatbuffers. This is because NoProto never actually deserializes, it doesn't need to. I wrote this library with databases in mind, if you want to support client requests like "change username field to X", NoProto will do this faster than any other format, usually orders of magnitude faster. This includes complicated mutations like "push a value onto the end of this nested list".
+
+3. Incremental Deserializing
+You only pay for the fields you read, no more. There is no deserializing step in NoProto, opening a buffer typically performs no operations (except for sorted buffers, which is opt in). Once you start asking for fields, the library will navigate the buffer using the format rules to get just what you asked for and nothing else. If you have a workflow in your application where you read a buffer and only grab a few fields inside it, NoProto will outperform most other libraries.
+
+
+### When to use Flatbuffers / Bincode / CapN Proto
+If you can safely compile all your data types into your application and you don't intend to mutate buffers after they're created, Bincode/Flatbuffers/CapNProto is a better choice for you.
+
+### When to use JSON / BSON / MessagePack
+If your data changes so often that schemas don't really make sense or the format you use must be self describing, JSON/BSON/MessagePack is a better choice.   Although I'd argue that if you *can* make schemas work you should.  Once you can use a type with schemas you save a ton of space in the resulting buffers and performance is way better.
+
 
 #### Limitations
 - Buffers cannot be larger than 2^16 bytes (~64kb).
