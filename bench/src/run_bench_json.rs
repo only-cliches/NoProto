@@ -11,7 +11,7 @@ pub struct JSONBench();
 
 impl JSONBench {
 
-    pub fn size_bench() {
+    pub fn size_bench() -> (usize, usize) {
 
         let encoded = Self::encode_single();
 
@@ -20,9 +20,10 @@ impl JSONBench {
         let compressed = e.finish().unwrap();
 
         println!("JSON:        size: {}b, zlib: {}b", encoded.len(), compressed.len());
+        return (encoded.len(), compressed.len())
     }
 
-    pub fn encode_bench(base: u128) {
+    pub fn encode_bench(base: u128) -> String {
         let start = SystemTime::now();
 
         for _x in 0..LOOPS {
@@ -32,6 +33,8 @@ impl JSONBench {
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
         println!("JSON:        {:>9.0} ops/ms {:.2}", LOOPS as f64 / time.as_millis() as f64, (base as f64 / time.as_micros() as f64));
+
+        format!("{:>5.0}", LOOPS as f64 / time.as_millis() as f64)
     }
 
     #[inline(always)]
@@ -62,7 +65,7 @@ impl JSONBench {
 
 
 
-    pub fn update_bench(base: u128)  {
+    pub fn update_bench(base: u128) -> String  {
         let buffer = Self::encode_single();
 
         let start = SystemTime::now();
@@ -77,10 +80,10 @@ impl JSONBench {
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
         println!("JSON:        {:>9.0} ops/ms {:.2}", LOOPS as f64 / time.as_millis() as f64, (base as f64 / time.as_micros() as f64));
-
+        format!("{:>5.0}", LOOPS as f64 / time.as_millis() as f64)
     }
 
-    pub fn decode_one_bench(base: u128)  {
+    pub fn decode_one_bench(base: u128) -> String  {
         let buffer = Self::encode_single();
 
         let start = SystemTime::now();
@@ -92,17 +95,21 @@ impl JSONBench {
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
         println!("JSON:        {:>9.0} ops/ms {:.2}", LOOPS as f64 / time.as_millis() as f64, (base as f64 / time.as_micros() as f64));
+        format!("{:>5.0}", LOOPS as f64 / time.as_millis() as f64)
     }
 
-    pub fn decode_bench(base: u128)  {
+    pub fn decode_bench(base: u128) -> String {
         let buffer = Self::encode_single();
 
         let start = SystemTime::now();
 
+        let hello_world = JsonValue::String(String::from("Hello, world!"));
+        let ars_technica = JsonValue::String(String::from("http://arstechnica.com"));
+
         for _x in 0..LOOPS {
             let container = json::parse(unsafe { from_utf8_unchecked(&buffer) }).unwrap();
 
-            assert_eq!(container["location"], JsonValue::String(String::from("http://arstechnica.com")));
+            assert_eq!(container["location"], ars_technica);
             assert_eq!(container["fruit"].as_f64(), Some(2.0f64));
             assert_eq!(container["initialized"], JsonValue::Boolean(true));
             let mut loops = 0;
@@ -110,7 +117,7 @@ impl JSONBench {
                 
                 list.iter().enumerate().for_each(|(x, foobar)| {
                     loops += 1;
-                    assert_eq!(foobar["name"], JsonValue::String(String::from("Hello, World!")));
+                    assert_eq!(foobar["name"], hello_world);
                     assert_eq!(foobar["rating"].as_f64().unwrap(), 3.1415432432445543543 + (x as f64));
                     assert_eq!(foobar["postfix"], JsonValue::String(String::from("!")));
                     let sibling = &foobar["sibling"];
@@ -124,6 +131,6 @@ impl JSONBench {
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
         println!("JSON:        {:>9.0} ops/ms {:.2}", LOOPS as f64 / time.as_millis() as f64, (base as f64 / time.as_micros() as f64));
-
+        format!("{:>5.0}", LOOPS as f64 / time.as_millis() as f64)
     }
 }

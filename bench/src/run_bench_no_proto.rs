@@ -9,7 +9,7 @@ pub struct NoProtoBench();
 
 impl NoProtoBench {
 
-    pub fn size_bench() {
+    pub fn size_bench() -> (usize, usize) {
         let factory = NoProtoBench::get_factory().unwrap();
         let encoded = Self::encode_single(&factory).unwrap();
 
@@ -18,10 +18,11 @@ impl NoProtoBench {
         let compressed = e.finish().unwrap();
 
         println!("NoProto:     size: {}b, zlib: {}b", encoded.len(), compressed.len());
+        return (encoded.len(), compressed.len())
     }
 
 
-    pub fn encode_bench() -> Result<u128, NP_Error> {
+    pub fn encode_bench() -> Result<(u128, String), NP_Error> {
         let factory = NoProtoBench::get_factory()?;
 
         let start = SystemTime::now();
@@ -34,10 +35,10 @@ impl NoProtoBench {
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
         println!("NoProto:     {:>9.0} ops/ms 1.00", LOOPS as f64 / time.as_millis() as f64);  
 
-        Ok(time.as_micros())
+        Ok((time.as_micros(), format!("{:>5.0}", LOOPS as f64 / time.as_millis() as f64)))
     }
 
-    pub fn update_bench() -> Result<u128, NP_Error> {
+    pub fn update_bench() -> Result<(u128, String), NP_Error> {
         let factory = NoProtoBench::get_factory()?;
         let new_buffer = NoProtoBench::encode_single(&factory)?;
         let start = SystemTime::now();
@@ -55,7 +56,7 @@ impl NoProtoBench {
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
         println!("NoProto:     {:>9.0} ops/ms 1.00", LOOPS as f64 / time.as_millis() as f64);  
 
-        Ok(time.as_micros())
+        Ok((time.as_micros(), format!("{:>5.0}", LOOPS as f64 / time.as_millis() as f64)))
     }
 
     #[inline(always)]
@@ -83,7 +84,7 @@ impl NoProtoBench {
         }"#)
     }
 
-    pub fn decode_one_bench() -> Result<u128, NP_Error> {
+    pub fn decode_one_bench() -> Result<(u128, String), NP_Error> {
         let factory = NoProtoBench::get_factory()?;
         let new_buffer = NoProtoBench::encode_single(&factory)?;
         let start = SystemTime::now();
@@ -96,10 +97,10 @@ impl NoProtoBench {
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
         println!("NoProto:     {:>9.0} ops/ms 1.00", LOOPS as f64 / time.as_millis() as f64);  
 
-        Ok(time.as_micros())
+        Ok((time.as_micros(), format!("{:>5.0}", LOOPS as f64 / time.as_millis() as f64)))
     }
 
-    pub fn decode_bench() -> Result<u128, NP_Error> {
+    pub fn decode_bench() -> Result<(u128, String), NP_Error> {
         let factory = NoProtoBench::get_factory()?;
         let new_buffer = NoProtoBench::encode_single(&factory)?;
         let start = SystemTime::now();
@@ -134,7 +135,7 @@ impl NoProtoBench {
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
         println!("NoProto:     {:>9.0} ops/ms 1.00", LOOPS as f64 / time.as_millis() as f64);  
 
-        Ok(time.as_micros())
+        Ok((time.as_micros(), format!("{:>5.0}", LOOPS as f64 / time.as_millis() as f64)))
     }
 
     #[inline(always)]

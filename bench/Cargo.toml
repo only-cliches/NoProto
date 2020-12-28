@@ -9,17 +9,17 @@ edition = "2018"
 [dependencies]
 bincode = "1.3.1"
 bson = "1.1.0"
+bytes = "1.0.0"
 flatbuffers = "0.7.0"
 flate2 = "1.0.19"
 json = "0.12.4"
 messagepack-rs = "0.8.0"
 no_proto = { path = "../no_proto_rs" }
+prost = "0.7.0"
 protobuf = "2.18.1"
-# no_proto = "0.4.2"
 rand = "0.7.3"
 rmp = "0.8.9"
 serde = "1.0.118"
-
 
 [target.x86_64-apple-darwin]
 rustflags = ["-Ctarget-cpu=native"]

@@ -14,7 +14,7 @@ pub struct MessagePackBench();
 
 impl MessagePackBench {
 
-    pub fn size_bench() {
+    pub fn size_bench() -> (usize, usize) {
 
         let encoded = Self::encode_single();
 
@@ -23,9 +23,10 @@ impl MessagePackBench {
         let compressed = e.finish().unwrap();
 
         println!("MessagePack: size: {}b, zlib: {}b", encoded.len(), compressed.len());
+        return (encoded.len(), compressed.len())
     }
 
-    pub fn encode_bench(base: u128) {
+    pub fn encode_bench(base: u128) -> String {
         let start = SystemTime::now();
 
         for _x in 0..LOOPS {
@@ -34,7 +35,8 @@ impl MessagePackBench {
         }
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
-        println!("MessagePack: {:>9.0} ops/ms {:.2}", LOOPS as f64 / time.as_millis() as f64, (base as f64 / time.as_micros() as f64));    
+        println!("MessagePack: {:>9.0} ops/ms {:.2}", LOOPS as f64 / time.as_millis() as f64, (base as f64 / time.as_micros() as f64)); 
+        format!("{:>5.0}", LOOPS as f64 / time.as_millis() as f64)   
     }
 
     #[inline(always)]
@@ -69,7 +71,7 @@ impl MessagePackBench {
 
 
 
-    pub fn update_bench(base: u128)  {
+    pub fn update_bench(base: u128) -> String  {
         let buffer = Self::encode_single();
 
         let start = SystemTime::now();
@@ -98,10 +100,11 @@ impl MessagePackBench {
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
         println!("MessagePack: {:>9.0} ops/ms {:.2}", LOOPS as f64 / time.as_millis() as f64, (base as f64 / time.as_micros() as f64));
+        format!("{:>5.0}", LOOPS as f64 / time.as_millis() as f64)
 
     }
 
-    pub fn decode_one_bench(base: u128)  {
+    pub fn decode_one_bench(base: u128) -> String {
         let buffer = Self::encode_single();
 
         let start = SystemTime::now();
@@ -122,14 +125,17 @@ impl MessagePackBench {
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
         println!("MessagePack: {:>9.0} ops/ms {:.2}", LOOPS as f64 / time.as_millis() as f64, (base as f64 / time.as_micros() as f64));    
-
+        format!("{:>5.0}", LOOPS as f64 / time.as_millis() as f64)
     }
 
-    pub fn decode_bench(base: u128)  {
+    pub fn decode_bench(base: u128) -> String  {
         
         let buffer = Self::encode_single();
 
         let start = SystemTime::now();
+
+        let hello_world = String::from("Hello, world!");
+        let ars_technica = String::from("http://arstechnica.com");
 
 
         for _x in 0..LOOPS {
@@ -138,7 +144,7 @@ impl MessagePackBench {
             match &container {
                 Value::Map(foobarcontainer) => {
                     if let Value::String(location) = foobarcontainer.get("location").unwrap() {
-                        assert_eq!(location, &String::from("http://arstechnica.com"));
+                        assert_eq!(location, &ars_technica);
                     } else { panic!() }
                     if let Value::UInt8(fruit) = foobarcontainer.get("fruit").unwrap() {
                         assert_eq!(fruit, &2u8);
@@ -152,7 +158,7 @@ impl MessagePackBench {
                             loops += 1;
                             if let Value::Map(foobar) = value {
                                 if let Value::String(name) = foobar.get("name").unwrap() {
-                                    assert_eq!(name, &String::from("Hello, World!"));
+                                    assert_eq!(name, &hello_world);
                                 } else { panic!() }
                                 if let Value::Float64(rating) = foobar.get("rating").unwrap() {
                                     assert_eq!(rating, &(3.1415432432445543543 + (x as f64)));
@@ -182,6 +188,6 @@ impl MessagePackBench {
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
         println!("MessagePack: {:>9.0} ops/ms {:.2}", LOOPS as f64 / time.as_millis() as f64, (base as f64 / time.as_micros() as f64));
-
+        format!("{:>5.0}", LOOPS as f64 / time.as_millis() as f64)
     }
 }
