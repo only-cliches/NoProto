@@ -34,7 +34,7 @@ impl JSONBench {
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
         println!("JSON:        {:>9.0} ops/ms {:.2}", LOOPS as f64 / time.as_millis() as f64, (base as f64 / time.as_micros() as f64));
 
-        format!("{:>5.0}", LOOPS as f64 / time.as_millis() as f64)
+        format!("{:>6.0}", LOOPS as f64 / time.as_millis() as f64)
     }
 
     #[inline(always)]
@@ -80,7 +80,7 @@ impl JSONBench {
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
         println!("JSON:        {:>9.0} ops/ms {:.2}", LOOPS as f64 / time.as_millis() as f64, (base as f64 / time.as_micros() as f64));
-        format!("{:>5.0}", LOOPS as f64 / time.as_millis() as f64)
+        format!("{:>6.0}", LOOPS as f64 / time.as_millis() as f64)
     }
 
     pub fn decode_one_bench(base: u128) -> String  {
@@ -95,7 +95,7 @@ impl JSONBench {
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
         println!("JSON:        {:>9.0} ops/ms {:.2}", LOOPS as f64 / time.as_millis() as f64, (base as f64 / time.as_micros() as f64));
-        format!("{:>5.0}", LOOPS as f64 / time.as_millis() as f64)
+        format!("{:>6.0}", LOOPS as f64 / time.as_millis() as f64)
     }
 
     pub fn decode_bench(base: u128) -> String {
@@ -103,7 +103,7 @@ impl JSONBench {
 
         let start = SystemTime::now();
 
-        let hello_world = JsonValue::String(String::from("Hello, world!"));
+        let hello_world = JsonValue::String(String::from("Hello, World!"));
         let ars_technica = JsonValue::String(String::from("http://arstechnica.com"));
 
         for _x in 0..LOOPS {
@@ -131,6 +131,6 @@ impl JSONBench {
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
         println!("JSON:        {:>9.0} ops/ms {:.2}", LOOPS as f64 / time.as_millis() as f64, (base as f64 / time.as_micros() as f64));
-        format!("{:>5.0}", LOOPS as f64 / time.as_millis() as f64)
+        format!("{:>6.0}", LOOPS as f64 / time.as_millis() as f64)
     }
 }

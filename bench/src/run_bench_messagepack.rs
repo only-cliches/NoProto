@@ -36,7 +36,7 @@ impl MessagePackBench {
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
         println!("MessagePack: {:>9.0} ops/ms {:.2}", LOOPS as f64 / time.as_millis() as f64, (base as f64 / time.as_micros() as f64)); 
-        format!("{:>5.0}", LOOPS as f64 / time.as_millis() as f64)   
+        format!("{:>6.0}", LOOPS as f64 / time.as_millis() as f64)   
     }
 
     #[inline(always)]
@@ -100,7 +100,7 @@ impl MessagePackBench {
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
         println!("MessagePack: {:>9.0} ops/ms {:.2}", LOOPS as f64 / time.as_millis() as f64, (base as f64 / time.as_micros() as f64));
-        format!("{:>5.0}", LOOPS as f64 / time.as_millis() as f64)
+        format!("{:>6.0}", LOOPS as f64 / time.as_millis() as f64)
 
     }
 
@@ -125,7 +125,7 @@ impl MessagePackBench {
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
         println!("MessagePack: {:>9.0} ops/ms {:.2}", LOOPS as f64 / time.as_millis() as f64, (base as f64 / time.as_micros() as f64));    
-        format!("{:>5.0}", LOOPS as f64 / time.as_millis() as f64)
+        format!("{:>6.0}", LOOPS as f64 / time.as_millis() as f64)
     }
 
     pub fn decode_bench(base: u128) -> String  {
@@ -134,7 +134,7 @@ impl MessagePackBench {
 
         let start = SystemTime::now();
 
-        let hello_world = String::from("Hello, world!");
+        let hello_world = String::from("Hello, World!");
         let ars_technica = String::from("http://arstechnica.com");
 
 
@@ -188,6 +188,6 @@ impl MessagePackBench {
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
         println!("MessagePack: {:>9.0} ops/ms {:.2}", LOOPS as f64 / time.as_millis() as f64, (base as f64 / time.as_micros() as f64));
-        format!("{:>5.0}", LOOPS as f64 / time.as_millis() as f64)
+        format!("{:>6.0}", LOOPS as f64 / time.as_millis() as f64)
     }
 }

@@ -7,7 +7,7 @@ use crate::run_bench_flatbuffers::FlatBufferBench;
 use crate::run_bench_bson::BSONBench;
 use crate::run_bench_bincode::BincodeBench;
 use crate::run_bench_prost::ProstBench;
-pub const LOOPS: usize = 1_0_000;
+pub const LOOPS: usize = 1_000_000;
 
 mod bench_fb;
 mod bench_pb;
@@ -98,14 +98,14 @@ fn main() {
     println!("| Library            | Encode | Decode All | Decode 1 | Update 1 | Size (bytes) | Size (Zlib) |");
     println!("|--------------------|--------|------------|----------|----------|--------------|-------------|");
     println!("| **Runtime Libs**   |        |            |          |          |              |             |");
-    println!("| *NoProto*          |  {} |      {} |    {} |    {} |          {} |         {} |", np_enc, np_dec, np_dec1, np_up, np_size.0, np_size.1);
-    println!("| JSON               |  {} |      {} |    {} |    {} |          {} |         {} |", json_enc, json_dec, json_dec1, json_up, json_size.0, json_size.1);
-    println!("| BSON               |  {} |      {} |    {} |    {} |          {} |         {} |", bson_enc, bson_dec, bson_dec1, bson_up, bson_size.0, bson_size.1);
-    println!("| MessagePack        |  {} |      {} |    {} |    {} |          {} |         {} |", msg_enc, msg_dec, msg_dec1, msg_up, msg_size.0, msg_size.1);
+    println!("| *NoProto*          | {} |     {} |   {} |   {} |          {} |         {} |", np_enc, np_dec, np_dec1, np_up, np_size.0, np_size.1);
+    println!("| JSON               | {} |     {} |   {} |   {} |          {} |         {} |", json_enc, json_dec, json_dec1, json_up, json_size.0, json_size.1);
+    println!("| BSON               | {} |     {} |   {} |   {} |          {} |         {} |", bson_enc, bson_dec, bson_dec1, bson_up, bson_size.0, bson_size.1);
+    println!("| MessagePack        | {} |     {} |   {} |   {} |          {} |         {} |", msg_enc, msg_dec, msg_dec1, msg_up, msg_size.0, msg_size.1);
     println!("| **Compiled Libs**  |        |            |          |          |              |             |");
-    println!("| Flatbuffers        |  {} |      {} |    {} |    {} |          {} |         {} |", fb_enc, fb_dec, fb_dec1, fb_up, fb_size.0, fb_size.1);
-    println!("| Bincode            |  {} |      {} |    {} |    {} |          {} |         {} |", bn_enc, bn_dec, bn_dec1, bn_up, bn_size.0, bn_size.1);
-    println!("| Protobuf           |  {} |      {} |    {} |    {} |          {} |         {} |", pb_enc, pb_dec, pb_dec1, pb_up, pb_size.0, pb_size.1);
-    println!("| Prost              |  {} |      {} |    {} |    {} |          {} |         {} |", pro_enc, pro_dec, pro_dec1, pro_up, pro_size.0, pro_size.1);
+    println!("| Flatbuffers        | {} |     {} |   {} |   {} |          {} |         {} |", fb_enc, fb_dec, fb_dec1, fb_up, fb_size.0, fb_size.1);
+    println!("| Bincode            | {} |     {} |   {} |   {} |          {} |         {} |", bn_enc, bn_dec, bn_dec1, bn_up, bn_size.0, bn_size.1);
+    println!("| Protobuf           | {} |     {} |   {} |   {} |          {} |         {} |", pb_enc, pb_dec, pb_dec1, pb_up, pb_size.0, pb_size.1);
+    println!("| Prost              | {} |     {} |   {} |   {} |          {} |         {} |", pro_enc, pro_dec, pro_dec1, pro_up, pro_size.0, pro_size.1);
 }
 

@@ -23,6 +23,61 @@ Benchmarks can be ran with `cargo run --release`.
 
 # Benchmarks Histry
 
+## Dec 27, 2020
+### v0.7.1
+M1 Macbook Air with 8GB RAM (Native)
+```
+========= SIZE BENCHMARK =========
+NoProto:     size: 208b, zlib: 166b
+Flatbuffers: size: 264b, zlib: 181b
+Bincode:     size: 163b, zlib: 129b
+Protobuf:    size: 154b, zlib: 141b
+MessagePack: size: 296b, zlib: 187b
+JSON:        size: 439b, zlib: 184b
+BSON:        size: 414b, zlib: 216b
+Prost:       size: 154b, zlib: 142b
+
+======== ENCODE BENCHMARK ========
+NoProto:          1170 ops/ms 1.00
+Flatbuffers:      1188 ops/ms 1.02
+Bincode:          6250 ops/ms 5.33
+Protobuf:          986 ops/ms 0.84
+MessagePack:       155 ops/ms 0.13
+JSON:              607 ops/ms 0.52
+BSON:              129 ops/ms 0.11
+Prost:            1558 ops/ms 1.33
+
+======== DECODE BENCHMARK ========
+NoProto:          1634 ops/ms 1.00
+Flatbuffers:     15873 ops/ms 9.59
+Bincode:          9804 ops/ms 5.98
+Protobuf:         1274 ops/ms 0.78
+MessagePack:       262 ops/ms 0.16
+JSON:              476 ops/ms 0.29
+BSON:              120 ops/ms 0.07
+Prost:            2049 ops/ms 1.25
+
+====== DECODE ONE BENCHMARK ======
+NoProto:         50000 ops/ms 1.00
+Flatbuffers:    250000 ops/ms 4.27
+Bincode:         10526 ops/ms 0.21
+Protobuf:         1245 ops/ms 0.03
+MessagePack:       281 ops/ms 0.01
+JSON:              599 ops/ms 0.01
+BSON:              130 ops/ms 0.00
+Prost:            2193 ops/ms 0.05
+
+====== UPDATE ONE BENCHMARK ======
+NoProto:         13333 ops/ms 1.00
+Flatbuffers:      1208 ops/ms 0.09
+Bincode:          4484 ops/ms 0.34
+Protobuf:          531 ops/ms 0.04
+MessagePack:       138 ops/ms 0.01
+JSON:              444 ops/ms 0.03
+BSON:               95 ops/ms 0.01
+Prost:            1089 ops/ms 0.08
+```
+
 ## Dec 25, 2020
 ### v0.7.1
 M1 Macbook Air with 8GB RAM (Native)

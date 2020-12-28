@@ -63,7 +63,7 @@ impl BincodeBench {
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
         println!("Bincode:     {:>9.0} ops/ms {:.2}", LOOPS as f64 / time.as_millis() as f64, (base as f64 / time.as_micros() as f64)); 
-        format!("{:>5.0}", LOOPS as f64 / time.as_millis() as f64) 
+        format!("{:>6.0}", LOOPS as f64 / time.as_millis() as f64) 
     }
 
     #[inline(always)]
@@ -114,7 +114,7 @@ impl BincodeBench {
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
         println!("Bincode:     {:>9.0} ops/ms {:.2}", LOOPS as f64 / time.as_millis() as f64, (base as f64 / time.as_micros() as f64));
-        format!("{:>5.0}", LOOPS as f64 / time.as_millis() as f64)
+        format!("{:>6.0}", LOOPS as f64 / time.as_millis() as f64)
     }
 
     pub fn decode_one_bench(base: u128) -> String {
@@ -129,7 +129,7 @@ impl BincodeBench {
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
         println!("Bincode:     {:>9.0} ops/ms {:.2}", LOOPS as f64 / time.as_millis() as f64, (base as f64 / time.as_micros() as f64));
-        format!("{:>5.0}", LOOPS as f64 / time.as_millis() as f64)
+        format!("{:>6.0}", LOOPS as f64 / time.as_millis() as f64)
     }
 
     pub fn decode_bench(base: u128) -> String {
@@ -164,6 +164,6 @@ impl BincodeBench {
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
         println!("Bincode:     {:>9.0} ops/ms {:.2}", LOOPS as f64 / time.as_millis() as f64, (base as f64 / time.as_micros() as f64));
-        format!("{:>5.0}", LOOPS as f64 / time.as_millis() as f64)
+        format!("{:>6.0}", LOOPS as f64 / time.as_millis() as f64)
     }
 }

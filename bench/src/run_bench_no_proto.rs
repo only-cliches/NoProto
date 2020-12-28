@@ -29,13 +29,13 @@ impl NoProtoBench {
     
         for _x in 0..LOOPS {
             let new_buffer = NoProtoBench::encode_single(&factory)?;
-            assert_eq!(new_buffer.len(), 209);
+            assert_eq!(new_buffer.len(), 208);
         }
     
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
         println!("NoProto:     {:>9.0} ops/ms 1.00", LOOPS as f64 / time.as_millis() as f64);  
 
-        Ok((time.as_micros(), format!("{:>5.0}", LOOPS as f64 / time.as_millis() as f64)))
+        Ok((time.as_micros(), format!("{:>6.0}", LOOPS as f64 / time.as_millis() as f64)))
     }
 
     pub fn update_bench() -> Result<(u128, String), NP_Error> {
@@ -50,13 +50,13 @@ impl NoProtoBench {
 
             // new_buff.compact(None)?;
 
-            assert_eq!(new_buff.close().len(), 209);
+            assert_eq!(new_buff.close().len(), 208);
         }
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
         println!("NoProto:     {:>9.0} ops/ms 1.00", LOOPS as f64 / time.as_millis() as f64);  
 
-        Ok((time.as_micros(), format!("{:>5.0}", LOOPS as f64 / time.as_millis() as f64)))
+        Ok((time.as_micros(), format!("{:>6.0}", LOOPS as f64 / time.as_millis() as f64)))
     }
 
     #[inline(always)]
@@ -91,13 +91,13 @@ impl NoProtoBench {
 
         for _x in 0..LOOPS {
             let new_buff = factory.open_buffer_ro(&new_buffer);
-            assert_eq!(new_buff.get(&["location"])?, Some("https://arstechnica.com"));
+            assert_eq!(new_buff.get(&["location"])?, Some("http://arstechnica.com"));
         }
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
         println!("NoProto:     {:>9.0} ops/ms 1.00", LOOPS as f64 / time.as_millis() as f64);  
 
-        Ok((time.as_micros(), format!("{:>5.0}", LOOPS as f64 / time.as_millis() as f64)))
+        Ok((time.as_micros(), format!("{:>6.0}", LOOPS as f64 / time.as_millis() as f64)))
     }
 
     pub fn decode_bench() -> Result<(u128, String), NP_Error> {
@@ -109,7 +109,7 @@ impl NoProtoBench {
             let mut new_buff = factory.open_buffer_ro(&new_buffer);
 
             assert_eq!(new_buff.get(&["initialized"])?, Some(true));
-            assert_eq!(new_buff.get(&["location"])?, Some("https://arstechnica.com"));
+            assert_eq!(new_buff.get(&["location"])?, Some("http://arstechnica.com"));
             assert_eq!(new_buff.get(&["fruit"])?, Some(2u8));
 
             let mut loops = 0;
@@ -135,7 +135,7 @@ impl NoProtoBench {
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
         println!("NoProto:     {:>9.0} ops/ms 1.00", LOOPS as f64 / time.as_millis() as f64);  
 
-        Ok((time.as_micros(), format!("{:>5.0}", LOOPS as f64 / time.as_millis() as f64)))
+        Ok((time.as_micros(), format!("{:>6.0}", LOOPS as f64 / time.as_millis() as f64)))
     }
 
     #[inline(always)]
@@ -143,7 +143,7 @@ impl NoProtoBench {
         let mut new_buffer = factory.empty_buffer(None);
 
         new_buffer.set(&["initialized"], true)?;
-        new_buffer.set(&["location"], "https://arstechnica.com")?;
+        new_buffer.set(&["location"], "http://arstechnica.com")?;
         new_buffer.set(&["fruit"], 2u8)?;
     
         for (x1, x) in [("0", 0), ("1", 1), ("2", 2)].iter() {
@@ -172,7 +172,7 @@ impl NoProtoBench {
         let mut new_buffer = user_factory.empty_buffer(None, Some(NP_Size::U16));
 
         new_buffer.set("initialized", true)?;
-        new_buffer.set("location", String::from("https://arstechnica.com"))?;
+        new_buffer.set("location", String::from("http://arstechnica.com"))?;
         new_buffer.set("fruit", 2u8)?;
 
         for x in 0..3 {
