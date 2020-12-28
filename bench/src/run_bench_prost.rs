@@ -91,7 +91,7 @@ impl ProstBench {
             };
             let foobar = FooBar {
                 sibling: Some(bar),
-                name: Some("Hello, world!".to_string()),
+                name: Some(String::from("Hello, world!")),
                 rating: Some(3.1415432432445543543 + (x as f64)),
                 postfix: Some("!".as_bytes()[0] as u32)
             };
