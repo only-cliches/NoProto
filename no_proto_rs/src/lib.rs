@@ -31,14 +31,12 @@
 //! Byte-wise sorting comes in the box and is a first class operation. Two NoProto buffers can be compared at the byte level *without deserializing* and a correct ordering between the buffer's internal values will be the result.  This is extremely useful for storing ordered keys in databases. 
 //! 
 //! *Compared to Protocol Buffers*
-//! - Faster serialization & deserialization performance
-//! - Updating buffers is orders of magnitude faster
-//! - Easier & Simpler API
+//! - Comparable serialization & deserialization performance
+//! - Updating buffers is an order of magnitude faster
 //! - Schemas are dynamic at runtime, no compilation step
 //! - Supports more types and better nested type support
 //! - Byte-wise sorting is first class operation
 //! - Updates without deserializng/serializing
-//! - Works with `no_std`.
 //! - Safely handle untrusted data.
 //! 
 //! *Compared to JSON / BSON*
@@ -54,6 +52,7 @@
 //! 
 //! *Compared to Flatbuffers / Bincode*
 //! - Data types can change or be created at runtime
+//! - Updating buffers is an order of magnitude faster
 //! - Supports byte-wise sorting
 //! - Updates without deserializng/serializing
 //! - Works with `no_std`.
@@ -143,21 +142,22 @@
 //! ## Benchmarks
 //! While it's difficult to properly benchmark libraries like these in a fair way, I've made an attempt in the graph below.  These benchmarks are available in the `bench` folder and you can easily run them yourself with `cargo run --release`. 
 //! 
-//! The format and data used in the benchmarks were taken from the `flatbuffers` benchmarks github repo.  You should always benchmark/test your own use case for each library before making any decisions on what to use.
+//! The format and data used in the benchmarks were taken from the `flatbuffers` benchmarks github repo.  You should always benchmark/test your own use case for each library before making any choices on what to use.
 //! 
 //! **Legend**: Ops / Millisecond, higher is better
 //! 
 //! | Library            | Encode | Decode All | Decode 1 | Update 1 | Size (bytes) | Size (Zlib) |
 //! |--------------------|--------|------------|----------|----------|--------------|-------------|
-//! | **Runtime Libs**   |        |            |          |          |              |             | 
-//! | *NoProto*          | 1,209  | 1,653      | 50,000   | 14,085   | 209          | 167         |
-//! | JSON               | 606    | 471        | 605      | 445      | 439          | 184         |
-//! | BSON               | 127    | 122        | 132      | 96       | 414          | 216         |
-//! | MessagePack        | 154    | 242        | 271      | 136      | 296          | 187         |
-//! | **Compiled Libs**  |        |            |          |          |              |             | 
-//! | Flatbuffers        | 1,189  | 15,625     | 250,000  | 1,200    | 264          | 181         |
-//! | Bincode            | 6,250  | 9,434      | 10,309   | 4,367    | 163          | 129         |
-//! | Protocol Buffers 2 | 958    | 1,263      | 1,285    | 556      | 154          | 141         |
+//! | **Runtime Libs**   |        |            |          |          |              |             |
+//! | *NoProto*          |   1172 |       1642 |    50000 |    13333 |          208 |         166 |
+//! | JSON               |    614 |        486 |      594 |      437 |          439 |         184 |
+//! | BSON               |    130 |        122 |      130 |       93 |          414 |         216 |
+//! | MessagePack        |    157 |        258 |      276 |      137 |          296 |         187 |
+//! | **Compiled Libs**  |        |            |          |          |              |             |
+//! | Flatbuffers        |   1175 |      15625 |   250000 |     1247 |          264 |         181 |
+//! | Bincode            |   6667 |       9901 |    10638 |     4673 |          163 |         129 |
+//! | Protobuf           |    943 |       1311 |     1255 |      542 |          154 |         141 |
+//! | Prost              |   1531 |       2037 |     2288 |     1047 |          154 |         142 |
 //! 
 //! - **Encode**: Transfer a collection of fields of test data into a serialized `Vec<u8>`.
 //! - **Decode All**: Deserialize the test object from the `Vec<u8>` into all fields.
@@ -187,7 +187,7 @@
 //! Almost all of NoProto's data types are designed to serialize into bytewise sortable values, *including signed integers*.  When used with Tuples, making database keys with compound sorting is extremly easy.  When you combine that with first class support for `UUID`s and `ULID`s NoProto makes an excellent tool for parsing and creating primary keys for databases like RocksDB, LevelDB and TiKV. 
 //! 
 //! 6. `no_std` Support<br/>
-//! If you need a serialization format with low memory usage that works in `no_std` environments, NoProto is likely the best format choice for you.
+//! If you need a serialization format with low memory usage that works in `no_std` environments, NoProto is one of the few good choices.
 //! 
 //! 
 //! ### When to use Flatbuffers / Bincode / CapN Proto
