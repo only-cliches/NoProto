@@ -150,7 +150,7 @@ impl<'value> NP_Value<'value> for String {
         }
     }
 
-    fn schema_default(schema: &'value NP_Parsed_Schema) -> Option<Self> {
+    fn default_value(schema: &'value NP_Parsed_Schema) -> Option<Self> {
         match schema {
             NP_Parsed_Schema::UTF8String { default, .. } => match default {
                 Some(x) => Some(String::from(x)),

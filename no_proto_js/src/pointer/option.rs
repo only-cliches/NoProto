@@ -44,7 +44,7 @@ pub enum NP_Enum {
     Some(String)
 }
 
-impl super::NP_Scalar for NP_Enum {}
+impl<'value> super::NP_Scalar<'value> for NP_Enum {}
 
 impl NP_Enum {
     /// Create a new option type with the given string
@@ -113,7 +113,7 @@ impl<'value> NP_Value<'value> for NP_Enum {
         Ok(NP_JSON::Dictionary(schema_json))
     }
 
-    fn schema_default(schema: &NP_Parsed_Schema) -> Option<Self> {
+    fn default_value(schema: &NP_Parsed_Schema) -> Option<Self> {
 
         match schema {
             NP_Parsed_Schema::Enum { i: _, choices: _, default, sortable: _} => {

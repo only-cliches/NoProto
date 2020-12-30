@@ -50,7 +50,7 @@ pub struct NP_ULID {
 /// ULID alias for shared type
 pub type _NP_ULID<'a> = &'a NP_ULID;
 
-impl super::NP_Scalar for &NP_ULID {}
+impl<'value> super::NP_Scalar<'value> for &NP_ULID {}
 
 impl NP_ULID {
 
@@ -244,7 +244,7 @@ impl<'value> NP_Value<'value> for &NP_ULID {
 
     }
 
-    fn schema_default(_schema: &NP_Parsed_Schema) -> Option<Self> {
+    fn default_value(_schema: &NP_Parsed_Schema) -> Option<Self> {
         None
     }
 

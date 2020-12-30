@@ -10,9 +10,9 @@
 //! }"#)?;
 //!
 //! let mut new_buffer = factory.empty_buffer(None);
-//! new_buffer.set(&[], &[0u8, 1, 2, 3, 4] as NP_Bytes)?;
+//! new_buffer.set(&[], &[0u8, 1, 2, 3, 4] as &[u8])?;
 //! 
-//! assert_eq!(&[0u8, 1, 2, 3, 4] as NP_Bytes, new_buffer.get::<NP_Bytes>(&[])?.unwrap());
+//! assert_eq!(&[0u8, 1, 2, 3, 4] as &[u8], new_buffer.get::<&[u8]>(&[])?.unwrap());
 //!
 //! # Ok::<(), NP_Error>(()) 
 //! ```
@@ -30,11 +30,34 @@ use crate::NP_Memory;
 use alloc::string::ToString;
 
 /// Arbitrary bytes
-pub type NP_Bytes<'bytes> = &'bytes [u8];
+/// Alias for Vec<u8>
+pub type NP_Bytes = Vec<u8>;
 
-impl super::NP_Scalar for &[u8] {}
+/// Arbitrary bytes, borrowed
+/// Alias for &[u8]
+pub type NP_Borrow_Bytes<'bytes> = &'bytes [u8];
 
-impl<'value> NP_Value<'value> for &'value [u8] {
+
+impl<'value> super::NP_Scalar<'value> for NP_Bytes {
+    fn schema_default(schema: &NP_Parsed_Schema) -> Option<Self> where Self: Sized {
+        match schema {
+            NP_Parsed_Schema::Bytes { size, .. } => {
+                Some(if *size > 0 {
+                    let mut v: Vec<u8> = Vec::with_capacity(*size as usize);
+                    for _x in 0..*size {
+                        v.push(0u8);
+                    }
+                    v
+                } else {
+                    Vec::new()
+                })
+            },
+            _ => None
+        }
+    }
+}
+
+impl<'value> NP_Value<'value> for NP_Bytes {
 
 
     fn type_idx() -> (&'value str, NP_TypeKeys) { ("bytes", NP_TypeKeys::Bytes) }
@@ -65,12 +88,12 @@ impl<'value> NP_Value<'value> for &'value [u8] {
         Ok(NP_JSON::Dictionary(schema_json))
     }
 
-    fn schema_default(schema: &'value NP_Parsed_Schema) -> Option<Self> {
+    fn default_value(schema: &'value NP_Parsed_Schema) -> Option<Self> {
 
         match schema {
             NP_Parsed_Schema::Bytes { default, .. } => {
                 if let Some(d) = default {
-                    Some(&d[..])
+                    Some(d.clone())
                 } else {
                     None
                 }
@@ -81,141 +104,14 @@ impl<'value> NP_Value<'value> for &'value [u8] {
 
  
     fn set_value<'set, M: NP_Memory>(cursor: NP_Cursor, memory: &'set M, value: Self) -> Result<NP_Cursor, NP_Error> where Self: 'set + Sized {
-
-        let c_value = cursor.get_value(memory);
-    
-        let bytes = value;
-    
-        let str_size = bytes.len() as usize;
-    
-        let mut write_bytes = memory.write_bytes();
-    
-        let size = match memory.get_schema(cursor.schema_addr) {
-            NP_Parsed_Schema::Bytes { size, .. } => *size,
-            _ => 0
-        };
-    
-        if size > 0 {
-            // fixed size bytes
-    
-            if c_value.get_addr_value() == 0 {
-                // malloc new bytes
-    
-                let mut empty_bytes: Vec<u8> = Vec::with_capacity(size as usize);
-                for _x in 0..size {
-                    empty_bytes.push(0);
-                }
-    
-                let new_addr = memory.malloc(empty_bytes)? as usize;
-                c_value.set_addr_value(new_addr as u16);
-            }
-
-            let addr = c_value.get_addr_value() as usize;
-
-            write_bytes = memory.write_bytes();
-    
-            for x in 0..(size as usize) {
-                if x < bytes.len() {
-                    // assign values of bytes
-                    write_bytes[(addr + x)] = bytes[x];
-                } else {
-                    // rest is zeros
-                    write_bytes[(addr + x)] = 0;
-                }
-            }
-    
-            return Ok(cursor);
-        }
-    
-        // flexible size
-        let addr_value = c_value.get_addr_value() as usize;
-    
-        let prev_size: usize = if addr_value != 0 {
-            let size_bytes: &[u8; 2] = memory.get_2_bytes(addr_value).unwrap_or(&[0; 2]);
-            u16::from_be_bytes(*size_bytes) as usize
-        } else {
-            0 as usize
-        };
-    
-        if prev_size >= str_size as usize {
-            // previous string is larger than this one, use existing memory
-    
-            // update string length in buffer
-            if str_size > core::u16::MAX as usize {
-                return Err(NP_Error::new("String too large!"));
-            }
-            let size_bytes = (str_size as u16).to_be_bytes();
-            // set string size
-            for x in 0..size_bytes.len() {
-                write_bytes[(addr_value + x)] = size_bytes[x];
-            }
-    
-            let offset = 2;
-    
-            // set bytes
-            for x in 0..bytes.len() {
-                write_bytes[(addr_value + x + offset) as usize] = bytes[x];
-            }
-    
-            return Ok(cursor);
-        } else {
-            // not enough space or space has not been allocted yet
-    
-            // first bytes are string length
-            let new_addr = {
-                if str_size > core::u16::MAX as usize {
-                    return Err(NP_Error::new("String too large!"));
-                }
-                let size_bytes = (str_size as u16).to_be_bytes();
-                memory.malloc_borrow(&size_bytes)?
-            };
-    
-            c_value.set_addr_value(new_addr as u16);
-    
-            memory.malloc_borrow(bytes)?;
-    
-            return Ok(cursor);
-        }
+        NP_Borrow_Bytes::set_value(cursor, memory, &value)
     }
     
 
     fn into_value<M: NP_Memory>(cursor: &NP_Cursor, memory: &'value M) -> Result<Option<Self>, NP_Error> where Self: Sized {
-
-        let c_value = cursor.get_value(memory);
-
-        let value_addr = c_value.get_addr_value() as usize;
-        // empty value
-        if value_addr == 0 {
-            return Ok(None);
-        }
-
-        match memory.get_schema(cursor.schema_addr) {
-            NP_Parsed_Schema::Bytes {
-                i: _,
-                sortable: _,
-                default: _,
-                size,
-            } => {
-                if *size > 0 {
-                    // fixed size
-
-                    // get bytes
-                    let bytes = &memory.read_bytes()[(value_addr)..(value_addr + (*size as usize))];
-
-                    return Ok(Some(bytes));
-                } else {
-                    // dynamic size
-                    // get size of bytes
-
-                    let bytes_size: usize = u16::from_be_bytes(*memory.get_2_bytes(value_addr).unwrap_or(&[0; 2])) as usize;
-
-                    // get bytes
-                    let bytes = &memory.read_bytes()[(value_addr + 2)..(value_addr + 2 + bytes_size)];
-
-                    return Ok(Some(bytes));
-                }
-            }
-            _ => Err(NP_Error::new("unreachable")),
+        match NP_Borrow_Bytes::into_value(cursor, memory)? {
+            Some(bytes) => Ok(Some(bytes.to_vec())),
+            None => Ok(None)
         }
     }
 
@@ -386,6 +282,193 @@ impl<'value> NP_Value<'value> for &'value [u8] {
 
     }
 }
+
+impl<'value> super::NP_Scalar<'value> for &[u8] {
+    fn schema_default(_schema: &NP_Parsed_Schema) -> Option<Self> where Self: Sized {
+        None
+    }
+}
+
+impl<'value> NP_Value<'value> for NP_Borrow_Bytes<'value> {
+
+
+    fn type_idx() -> (&'value str, NP_TypeKeys) { NP_Bytes::type_idx() }
+    fn self_type_idx(&self) -> (&'value str, NP_TypeKeys) { NP_Bytes::type_idx() }
+
+    fn schema_to_json(schema: &Vec<NP_Parsed_Schema>, address: usize)-> Result<NP_JSON, NP_Error> {
+        NP_Bytes::schema_to_json(schema, address)
+    }
+
+    fn default_value(schema: &'value NP_Parsed_Schema) -> Option<Self> {
+        match schema {
+            NP_Parsed_Schema::Bytes { default, .. } => {
+                if let Some(d) = default {
+                    Some(&d[..])
+                } else {
+                    None
+                }
+            },
+            _ => None
+        }
+    }
+
+ 
+    fn set_value<'set, M: NP_Memory>(cursor: NP_Cursor, memory: &'set M, value: Self) -> Result<NP_Cursor, NP_Error> where Self: 'set + Sized {
+
+        let c_value = cursor.get_value(memory);
+    
+        let bytes = value;
+    
+        let str_size = bytes.len() as usize;
+    
+        let mut write_bytes = memory.write_bytes();
+    
+        let size = match memory.get_schema(cursor.schema_addr) {
+            NP_Parsed_Schema::Bytes { size, .. } => *size,
+            _ => 0
+        };
+    
+        if size > 0 {
+            // fixed size bytes
+    
+            if c_value.get_addr_value() == 0 {
+                // malloc new bytes
+    
+                let mut empty_bytes: Vec<u8> = Vec::with_capacity(size as usize);
+                for _x in 0..size {
+                    empty_bytes.push(0);
+                }
+    
+                let new_addr = memory.malloc(empty_bytes)? as usize;
+                c_value.set_addr_value(new_addr as u16);
+            }
+
+            let addr = c_value.get_addr_value() as usize;
+
+            write_bytes = memory.write_bytes();
+    
+            for x in 0..(size as usize) {
+                if x < bytes.len() {
+                    // assign values of bytes
+                    write_bytes[(addr + x)] = bytes[x];
+                } else {
+                    // rest is zeros
+                    write_bytes[(addr + x)] = 0;
+                }
+            }
+    
+            return Ok(cursor);
+        }
+    
+        // flexible size
+        let addr_value = c_value.get_addr_value() as usize;
+    
+        let prev_size: usize = if addr_value != 0 {
+            let size_bytes: &[u8; 2] = memory.get_2_bytes(addr_value).unwrap_or(&[0; 2]);
+            u16::from_be_bytes(*size_bytes) as usize
+        } else {
+            0 as usize
+        };
+    
+        if prev_size >= str_size as usize {
+            // previous string is larger than this one, use existing memory
+    
+            // update string length in buffer
+            if str_size > core::u16::MAX as usize {
+                return Err(NP_Error::new("String too large!"));
+            }
+            let size_bytes = (str_size as u16).to_be_bytes();
+            // set string size
+            for x in 0..size_bytes.len() {
+                write_bytes[(addr_value + x)] = size_bytes[x];
+            }
+    
+            let offset = 2;
+    
+            // set bytes
+            for x in 0..bytes.len() {
+                write_bytes[(addr_value + x + offset) as usize] = bytes[x];
+            }
+    
+            return Ok(cursor);
+        } else {
+            // not enough space or space has not been allocted yet
+    
+            // first bytes are string length
+            let new_addr = {
+                if str_size > core::u16::MAX as usize {
+                    return Err(NP_Error::new("String too large!"));
+                }
+                let size_bytes = (str_size as u16).to_be_bytes();
+                memory.malloc_borrow(&size_bytes)?
+            };
+    
+            c_value.set_addr_value(new_addr as u16);
+    
+            memory.malloc_borrow(bytes)?;
+    
+            return Ok(cursor);
+        }
+    }
+    
+
+    fn into_value<M: NP_Memory>(cursor: &NP_Cursor, memory: &'value M) -> Result<Option<Self>, NP_Error> where Self: Sized {
+
+        let c_value = cursor.get_value(memory);
+
+        let value_addr = c_value.get_addr_value() as usize;
+        // empty value
+        if value_addr == 0 {
+            return Ok(None);
+        }
+
+        match memory.get_schema(cursor.schema_addr) {
+            NP_Parsed_Schema::Bytes {
+                i: _,
+                sortable: _,
+                default: _,
+                size,
+            } => {
+                if *size > 0 {
+                    // fixed size
+
+                    // get bytes
+                    let bytes = &memory.read_bytes()[(value_addr)..(value_addr + (*size as usize))];
+
+                    return Ok(Some(bytes));
+                } else {
+                    // dynamic size
+                    // get size of bytes
+
+                    let bytes_size: usize = u16::from_be_bytes(*memory.get_2_bytes(value_addr).unwrap_or(&[0; 2])) as usize;
+
+                    // get bytes
+                    let bytes = &memory.read_bytes()[(value_addr + 2)..(value_addr + 2 + bytes_size)];
+
+                    return Ok(Some(bytes));
+                }
+            }
+            _ => Err(NP_Error::new("unreachable")),
+        }
+    }
+
+    fn to_json<M: NP_Memory>(cursor: &NP_Cursor, memory: &'value M) -> NP_JSON {
+        NP_Bytes::to_json(cursor, memory)
+    }
+
+    fn get_size<M: NP_Memory>(cursor: &NP_Cursor, memory: &M) -> Result<usize, NP_Error> {
+        NP_Bytes::get_size(cursor, memory)
+    }
+
+    fn from_json_to_schema(schema: Vec<NP_Parsed_Schema>, json_schema: &Box<NP_JSON>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {
+        NP_Bytes::from_json_to_schema(schema, json_schema)
+    }
+
+    fn from_bytes_to_schema(schema: Vec<NP_Parsed_Schema>, address: usize, bytes: &[u8]) -> (bool, Vec<NP_Parsed_Schema>) {
+        NP_Bytes::from_bytes_to_schema(schema, address, bytes)
+    }
+}
+
 
 #[test]
 fn schema_parsing_works() -> Result<(), NP_Error> {

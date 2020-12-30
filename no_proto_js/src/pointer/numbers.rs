@@ -90,7 +90,7 @@ macro_rules! noproto_number {
                 Ok(NP_JSON::Dictionary(schema_json))
             }
 
-            fn schema_default<'default>(schema: &'default NP_Parsed_Schema) -> Option<Self> {
+            fn default_value<'default>(schema: &'default NP_Parsed_Schema) -> Option<Self> {
                 <$t>::np_get_default(&schema)
             }
     
@@ -176,7 +176,7 @@ macro_rules! noproto_number {
                             },
                             None => {
                                 let schema = &memory.get_schema(cursor.schema_addr);
-                                match <$t>::schema_default(&schema) {
+                                match <$t>::default_value(&schema) {
                                     Some(v) => {
                                         match $numType {
                                             NP_NumType::floating => { NP_JSON::Float(v as f64) },
@@ -321,16 +321,16 @@ noproto_number!(f32,  "float", "f32", NP_TypeKeys::Float , NP_NumType::floating)
 noproto_number!(f64, "double", "f64", NP_TypeKeys::Double, NP_NumType::floating);
 
 
-impl super::NP_Scalar for i8 {}
-impl super::NP_Scalar for i16 {}
-impl super::NP_Scalar for i32 {}
-impl super::NP_Scalar for i64 {}
-impl super::NP_Scalar for u8 {}
-impl super::NP_Scalar for u16 {}
-impl super::NP_Scalar for u32 {}
-impl super::NP_Scalar for u64 {}
-impl super::NP_Scalar for f32 {}
-impl super::NP_Scalar for f64 {}
+impl<'value> super::NP_Scalar<'value> for i8 {}
+impl<'value> super::NP_Scalar<'value> for i16 {}
+impl<'value> super::NP_Scalar<'value> for i32 {}
+impl<'value> super::NP_Scalar<'value> for i64 {}
+impl<'value> super::NP_Scalar<'value> for u8 {}
+impl<'value> super::NP_Scalar<'value> for u16 {}
+impl<'value> super::NP_Scalar<'value> for u32 {}
+impl<'value> super::NP_Scalar<'value> for u64 {}
+impl<'value> super::NP_Scalar<'value> for f32 {}
+impl<'value> super::NP_Scalar<'value> for f64 {}
 
 trait NP_BigEndian {
     fn np_get_default_from_json(json: &NP_JSON) -> Option<Self> where Self: Sized;

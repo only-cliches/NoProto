@@ -45,7 +45,7 @@ pub struct NP_Date {
     pub value: u64
 }
 
-impl super::NP_Scalar for NP_Date {}
+impl<'value> super::NP_Scalar<'value> for NP_Date {}
 
 impl NP_Date {
     /// Create a new date type with the given time
@@ -87,7 +87,7 @@ impl<'value> NP_Value<'value> for NP_Date {
         Ok(NP_JSON::Dictionary(schema_json))
     }
 
-    fn schema_default(schema: &NP_Parsed_Schema) -> Option<Self> {
+    fn default_value(schema: &NP_Parsed_Schema) -> Option<Self> {
         match schema {
             NP_Parsed_Schema::Date { default, .. } => {
                 if let Some(d) = default {

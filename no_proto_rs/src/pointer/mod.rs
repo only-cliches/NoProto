@@ -26,7 +26,7 @@ pub mod date;
 use core::{fmt::{Debug}};
 
 use alloc::prelude::v1::Box;
-use crate::{pointer::dec::NP_Dec, schema::NP_Schema_Addr};
+use crate::{pointer::dec::NP_Dec, schema::NP_Schema_Addr, utils::opt_err};
 use crate::NP_Parsed_Schema;
 use crate::{json_flex::NP_JSON};
 use crate::memory::{NP_Memory};
@@ -349,34 +349,36 @@ impl<'cursor> NP_Cursor {
 
     /// Set default for this value.  Not related to the schema default, this is the default value for this data type
     /// 
-    pub fn set_default<M: NP_Memory>(cursor: NP_Cursor, memory: &M) -> Result<(), NP_Error> {
+    pub fn set_schema_default<M: NP_Memory>(cursor: NP_Cursor, memory: &M) -> Result<(), NP_Error> {
 
-        match memory.get_schema(cursor.schema_addr).get_type_key() {
+        let schema = memory.get_schema(cursor.schema_addr);
+
+        match schema.get_type_key() {
             NP_TypeKeys::None        => { return Err(NP_Error::new("unreachable")); },
             NP_TypeKeys::Any         => { return Err(NP_Error::new("unreachable")); },
             NP_TypeKeys::Table       => { return Err(NP_Error::new("unreachable")); },
             NP_TypeKeys::Map         => { return Err(NP_Error::new("unreachable")); },
             NP_TypeKeys::List        => { return Err(NP_Error::new("unreachable")); },
             NP_TypeKeys::Tuple       => { return Err(NP_Error::new("unreachable")); },
-            NP_TypeKeys::UTF8String  => {  NP_String::set_value(cursor, memory, &String::default())?; },
-            NP_TypeKeys::Bytes       => {   NP_Bytes::set_value(cursor, memory, &NP_Bytes::default())?; },
-            NP_TypeKeys::Int8        => {         i8::set_value(cursor, memory, i8::default())?; },
-            NP_TypeKeys::Int16       => {        i16::set_value(cursor, memory, i16::default())?; },
-            NP_TypeKeys::Int32       => {        i32::set_value(cursor, memory, i32::default())?; },
-            NP_TypeKeys::Int64       => {        i64::set_value(cursor, memory, i64::default())?; },
-            NP_TypeKeys::Uint8       => {         u8::set_value(cursor, memory, u8::default())?; },
-            NP_TypeKeys::Uint16      => {        u16::set_value(cursor, memory, u16::default())?; },
-            NP_TypeKeys::Uint32      => {        u32::set_value(cursor, memory, u32::default())?; },
-            NP_TypeKeys::Uint64      => {        u64::set_value(cursor, memory, u64::default())?; },
-            NP_TypeKeys::Float       => {        f32::set_value(cursor, memory, f32::default())?; },
-            NP_TypeKeys::Double      => {        f64::set_value(cursor, memory, f64::default())?; },
-            NP_TypeKeys::Decimal     => {     NP_Dec::set_value(cursor, memory, NP_Dec::default())?; },
-            NP_TypeKeys::Boolean     => {       bool::set_value(cursor, memory, bool::default())?; },
-            NP_TypeKeys::Geo         => {     NP_Geo::set_value(cursor, memory, NP_Geo::default())?; },
-            NP_TypeKeys::Uuid        => {   _NP_UUID::set_value(cursor, memory, &NP_UUID::default())?; },
-            NP_TypeKeys::Ulid        => {   _NP_ULID::set_value(cursor, memory, &NP_ULID::default())?; },
-            NP_TypeKeys::Date        => {    NP_Date::set_value(cursor, memory, NP_Date::default())?; },
-            NP_TypeKeys::Enum        => {    NP_Enum::set_value(cursor, memory, NP_Enum::default())?; }
+            NP_TypeKeys::UTF8String  => {     String::set_value(cursor, memory, opt_err(String::schema_default(schema))?)?; },
+            NP_TypeKeys::Bytes       => {   NP_Bytes::set_value(cursor, memory, opt_err(NP_Bytes::schema_default(schema))?)?; },
+            NP_TypeKeys::Int8        => {         i8::set_value(cursor, memory, opt_err(i8::schema_default(schema))?)?; },
+            NP_TypeKeys::Int16       => {        i16::set_value(cursor, memory, opt_err(i16::schema_default(schema))?)?; },
+            NP_TypeKeys::Int32       => {        i32::set_value(cursor, memory, opt_err(i32::schema_default(schema))?)?; },
+            NP_TypeKeys::Int64       => {        i64::set_value(cursor, memory, opt_err(i64::schema_default(schema))?)?; },
+            NP_TypeKeys::Uint8       => {         u8::set_value(cursor, memory, opt_err(u8::schema_default(schema))?)?; },
+            NP_TypeKeys::Uint16      => {        u16::set_value(cursor, memory, opt_err(u16::schema_default(schema))?)?; },
+            NP_TypeKeys::Uint32      => {        u32::set_value(cursor, memory, opt_err(u32::schema_default(schema))?)?; },
+            NP_TypeKeys::Uint64      => {        u64::set_value(cursor, memory, opt_err(u64::schema_default(schema))?)?; },
+            NP_TypeKeys::Float       => {        f32::set_value(cursor, memory, opt_err(f32::schema_default(schema))?)?; },
+            NP_TypeKeys::Double      => {        f64::set_value(cursor, memory, opt_err(f64::schema_default(schema))?)?; },
+            NP_TypeKeys::Decimal     => {     NP_Dec::set_value(cursor, memory, opt_err(NP_Dec::schema_default(schema))?)?; },
+            NP_TypeKeys::Boolean     => {       bool::set_value(cursor, memory, opt_err(bool::schema_default(schema))?)?; },
+            NP_TypeKeys::Geo         => {     NP_Geo::set_value(cursor, memory, opt_err(NP_Geo::schema_default(schema))?)?; },
+            NP_TypeKeys::Uuid        => {    NP_UUID::set_value(cursor, memory, opt_err(NP_UUID::schema_default(schema))?)?; },
+            NP_TypeKeys::Ulid        => {    NP_ULID::set_value(cursor, memory, opt_err(NP_ULID::schema_default(schema))?)?; },
+            NP_TypeKeys::Date        => {    NP_Date::set_value(cursor, memory, opt_err(NP_Date::schema_default(schema))?)?; },
+            NP_TypeKeys::Enum        => {    NP_Enum::set_value(cursor, memory, opt_err(NP_Enum::schema_default(schema))?)?; }
         }
 
         Ok(())
@@ -431,7 +433,12 @@ impl<'cursor> NP_Cursor {
 
 
 /// This trait is used to restrict which types can be set/get in the buffer
-pub trait NP_Scalar {}
+pub trait NP_Scalar<'scalar> {
+    /// Get the default for the schema type
+    /// Does NOT get the `default` property of the schema, but generates a default value based on the schema settings
+    fn schema_default(_schema: &'scalar NP_Parsed_Schema) -> Option<Self> where Self: Sized;
+
+}
 
 /// This trait is used to implement types as NoProto buffer types.
 /// This includes all the type data, encoding and decoding methods.
@@ -450,9 +457,7 @@ pub trait NP_Value<'value> {
     /// 
     fn schema_to_json(schema: &Vec<NP_Parsed_Schema>, address: usize)-> Result<NP_JSON, NP_Error>;
 
-    /// Get the default schema value for this type
-    /// 
-    fn schema_default(_schema: &'value NP_Parsed_Schema) -> Option<Self> where Self: Sized;
+
 
     /// Parse JSON schema into schema
     ///
@@ -475,6 +480,10 @@ pub trait NP_Value<'value> {
         let message = "This type doesn't support into!".to_owned();
         Err(NP_Error::new(message.as_str()))
     }
+
+    /// Get the default value from the schema
+    /// 
+    fn default_value(_schema: &'value NP_Parsed_Schema) -> Option<Self> where Self: Sized;
 
     /// Convert this type into a JSON value (recursive for collections)
     /// 

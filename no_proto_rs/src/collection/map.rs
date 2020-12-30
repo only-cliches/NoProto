@@ -39,7 +39,16 @@ pub struct NP_Map<'map> {
 impl<'map> NP_Map<'map> {
 
     #[inline(always)]
-    pub fn select<M: NP_Memory>(map_cursor: NP_Cursor, key: &str, make_path: bool, memory: &'map M) -> Result<Option<NP_Cursor>, NP_Error> {
+    pub fn select<M: NP_Memory>(map_cursor: NP_Cursor, key: &str, make_path: bool, schema_query: bool, memory: &'map M) -> Result<Option<NP_Cursor>, NP_Error> {
+
+        if schema_query {
+            let value_of = match memory.get_schema(map_cursor.schema_addr) {
+                NP_Parsed_Schema::Map { value, .. } => *value,
+                _ => 0
+            };
+
+            return Ok(Some(NP_Cursor::new(0, value_of, map_cursor.schema_addr)));
+        }
 
         let mut map_iter = Self::new_iter(&map_cursor, memory);
 
@@ -285,7 +294,7 @@ impl<'value> NP_Value<'value> for NP_Map<'value> {
 
     }
 
-    fn schema_default(_schema: &NP_Parsed_Schema) -> Option<Self> {
+    fn default_value(_schema: &NP_Parsed_Schema) -> Option<Self> {
         None
     }
 

@@ -47,7 +47,7 @@ pub struct NP_Geo_Bytes {
     pub lng: Vec<u8>
 }
 
-impl super::NP_Scalar for NP_Geo_Bytes{}
+impl<'value> super::NP_Scalar<'value> for NP_Geo_Bytes{}
 
 impl NP_Geo_Bytes {
     /// Get the actual geographic coordinate for these bytes
@@ -113,7 +113,7 @@ impl Default for NP_Geo_Bytes {
 }
 
 impl<'value> NP_Value<'value> for NP_Geo_Bytes {
-    fn schema_default(_schema: &NP_Parsed_Schema) -> Option<Self> {
+    fn default_value(_schema: &NP_Parsed_Schema) -> Option<Self> {
         None
     }
     fn type_idx() -> (&'value str, NP_TypeKeys) { NP_Geo::type_idx() }
@@ -212,7 +212,7 @@ pub struct NP_Geo {
     pub lng: f64
 }
 
-impl super::NP_Scalar for NP_Geo {}
+impl<'value> super::NP_Scalar<'value> for NP_Geo {}
 
 impl NP_Geo {
 
@@ -344,7 +344,7 @@ fn geo_default_value(size: u8, json: &NP_JSON) -> Result<Option<NP_Geo_Bytes>, N
 
 impl<'value> NP_Value<'value> for NP_Geo {
 
-    fn schema_default(schema: &NP_Parsed_Schema) -> Option<Self> {
+    fn default_value(schema: &NP_Parsed_Schema) -> Option<Self> {
         match schema {
             NP_Parsed_Schema::Geo { i: _, sortable: _, default, size: _} => {
                 if let Some(d) = default {

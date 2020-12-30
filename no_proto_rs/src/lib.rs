@@ -164,7 +164,7 @@
 //! - **Decode 1**: Deserialize the test object from the `Vec<u8>` into one field.
 //! - **Update 1**: Deserialize, update a single field, then serialize back into `Vec<u8>`.
 //! 
-//! **Runtime VS Compiled Libs**: Some formats require your data types to be compiled into your application, which increases performance but means your data types *cannot change at runtime*.  If your data types need to mutate during runtime or you can't know them before your application is compiled (like with databases), you must use a format that doesn't compile data types into your application, like JSON or NoProto.
+//! **Runtime VS Compiled Libs**: Some formats require data types to be compiled into the application, which increases performance but means data types *cannot change at runtime*.  If data types need to mutate during runtime or can't be known before the application is compiled (like with databases), you must use a format that doesn't compile data types into the application, like JSON or NoProto.
 //! 
 //! Complete benchmark source code is available [here](https://github.com/only-cliches/NoProto/tree/master/bench).
 //! 

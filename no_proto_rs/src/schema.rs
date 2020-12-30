@@ -93,34 +93,34 @@
 //! 
 //! ## Supported Data Types
 //! 
-//! | Type                                   | Rust Type / Struct                                                       |Bytewise Sorting  | Bytes (Size)   | Limits / Notes                                                           |
-//! |----------------------------------------|--------------------------------------------------------------------------|------------------|----------------|--------------------------------------------------------------------------|
-//! | [`table`](#table)                      | [`NP_Table`](../collection/table/struct.NP_Table.html)                   |𐄂                 | 2 bytes - ~4GB | Linked list with indexed keys that map against up to 255 named columns.  |
-//! | [`list`](#list)                        | [`NP_List`](../collection/list/struct.NP_List.html)                      |𐄂                 | 4 bytes - ~4GB | Linked list with integer indexed values and  up to 65,535 items.         |
-//! | [`map`](#map)                          | [`NP_Map`](../collection/map/struct.NP_Map.html)                         |𐄂                 | 2 bytes - ~4GB | Linked list with `Vec<u8>` keys.                                         |
-//! | [`tuple`](#tuple)                      | [`NP_Tuple`](../collection/tuple/struct.NP_Tuple.html)                   |✓ *               | 2 bytes - ~4GB | Static sized collection of specific values.                              |
-//! | [`any`](#any)                          | [`NP_Any`](../pointer/any/struct.NP_Any.html)                            |𐄂                 | 2 bytes - ~4GB | Generic type.                                                            |
-//! | [`string`](#string)                    | [`String`](../pointer/string/index.html)                                 |✓ **              | 2 bytes - ~4GB | Utf-8 formatted string.                                                  |
-//! | [`bytes`](#bytes)                      | [`NP_Bytes`](../pointer/bytes/struct.NP_Bytes.html)                      |✓ **              | 2 bytes - ~4GB | Arbitrary bytes.                                                         |
-//! | [`int8`](#int8-int16-int32-int64)      | [`i8`](../pointer/numbers/index.html)                                    |✓                 | 1 byte         | -127 to 127                                                              |
-//! | [`int16`](#int8-int16-int32-int64)     | [`i16`](../pointer/numbers/index.html)                                   |✓                 | 2 bytes        | -32,768 to 32,768                                                        |
-//! | [`int32`](#int8-int16-int32-int64)     | [`i32`](../pointer/numbers/index.html)                                   |✓                 | 4 bytes        | -2,147,483,648 to 2,147,483,648                                          |
-//! | [`int64`](#int8-int16-int32-int64)     | [`i64`](../pointer/numbers/index.html)                                   |✓                 | 8 bytes        | -9,223,372,036,854,775,808 to 9,223,372,036,854,775,808                  |
-//! | [`uint8`](#uint8-uint16-uint32-uint64) | [`u8`](../pointer/numbers/index.html)                                    |✓                 | 1 byte         | 0 - 255                                                                  |
-//! | [`uint16`](#uint8-uint16-uint32-uint64)| [`u16`](../pointer/numbers/index.html)                                   |✓                 | 2 bytes        | 0 - 65,535                                                               |
-//! | [`uint32`](#uint8-uint16-uint32-uint64)| [`u32`](../pointer/numbers/index.html)                                   |✓                 | 4 bytes        | 0 - 4,294,967,295                                                        |
-//! | [`uint64`](#uint8-uint16-uint32-uint64)| [`u64`](../pointer/numbers/index.html)                                   |✓                 | 8 bytes        | 0 - 18,446,744,073,709,551,616                                           |
-//! | [`float`](#float-double)               | [`f32`](../pointer/numbers/index.html)                                   |𐄂                 | 4 bytes        | -3.4e38 to 3.4e38                                                        |
-//! | [`double`](#float-double)              | [`f64`](../pointer/numbers/index.html)                                   |𐄂                 | 8 bytes        | -1.7e308 to 1.7e308                                                      |
-//! | [`option`](#option)                    | [`NP_Enum`](../pointer/option/struct.NP_Enum.html)                   |✓                 | 1 byte         | Up to 255 string based options in schema.                                |
-//! | [`bool`](#bool)                        | [`bool`](../pointer/bool/index.html)                                     |✓                 | 1 byte         |                                                                          |
-//! | [`decimal`](#decimal)                  | [`NP_Dec`](../pointer/dec/struct.NP_Dec.html)                            |✓                 | 8 bytes        | Fixed point decimal number based on i64.                                 |
-//! | [`geo4`](#geo4-geo8-geo16)             | [`NP_Geo`](../pointer/geo/struct.NP_Geo.html)                            |✓                 | 4 bytes        | 1.1km resolution (city) geographic coordinate                            |
-//! | [`geo8`](#geo4-geo8-geo16)             | [`NP_Geo`](../pointer/geo/struct.NP_Geo.html)                            |✓                 | 8 bytes        | 11mm resolution (marble) geographic coordinate                           |
-//! | [`geo16`](#geo4-geo8-geo16)            | [`NP_Geo`](../pointer/geo/struct.NP_Geo.html)                            |✓                 | 16 bytes       | 110 microns resolution (grain of sand) geographic coordinate             |
-//! | [`ulid`](#ulid)                        | [`NP_ULID`](../pointer/ulid/struct.NP_ULID.html)                         |✓                 | 16 bytes       | 6 bytes for the timestamp, 10 bytes of randomness.                       |
-//! | [`uuid`](#uuid)                        | [`NP_UUID`](../pointer/uuid/struct.NP_UUID.html)                         |✓                 | 16 bytes       | v4 UUID, 2e37 possible UUIDs                                             |
-//! | [`date`](#date)                        | [`NP_Date`](../pointer/date/struct.NP_Date.html)                         |✓                 | 8 bytes        | Good to store unix epoch (in milliseconds) until the year 584,866,263    |
+//! | Schema Type                            | Rust Type                                                                | Zero Copy Type   |Bytewise Sorting  | Bytes (Size)    | Limits / Notes                                                           |
+//! |----------------------------------------|--------------------------------------------------------------------------|------------------|------------------|-----------------|--------------------------------------------------------------------------|
+//! | [`table`](#table)                      | [`NP_Table`](../collection/table/struct.NP_Table.html)                   | -                |𐄂                 | 2 bytes - ~64Kb | Set of vtables with up to 255 named columns.                             |
+//! | [`list`](#list)                        | [`NP_List`](../collection/list/struct.NP_List.html)                      | -                |𐄂                 | 4 bytes - ~64Kb | Linked list with integer indexed values and  up to 255 items.            |
+//! | [`map`](#map)                          | [`NP_Map`](../collection/map/struct.NP_Map.html)                         | -                |𐄂                 | 2 bytes - ~64Kb | Linked list with `&str` keys, up to 255 items.                           |
+//! | [`tuple`](#tuple)                      | [`NP_Tuple`](../collection/tuple/struct.NP_Tuple.html)                   | -                |✓ *               | 2 bytes - ~64Kb | Static sized collection of specific values.  Up to 255 values.           |
+//! | [`any`](#any)                          | [`NP_Any`](../pointer/any/struct.NP_Any.html)                            | -                |𐄂                 | 2 bytes - ~64Kb | Generic type.                                                            |
+//! | [`string`](#string)                    | [`String`](https://doc.rust-lang.org/std/string/struct.String.html)      | &str             |✓ **              | 2 bytes - ~64Kb | Utf-8 formatted string.                                                  |
+//! | [`bytes`](#bytes)                      | [`Vec<u8>`](https://doc.rust-lang.org/std/vec/struct.Vec.html)           | &[u8]            |✓ **              | 2 bytes - ~64Kb | Arbitrary bytes.                                                         |
+//! | [`int8`](#int8-int16-int32-int64)      | [`i8`](https://doc.rust-lang.org/std/primitive.i8.html)                  | -                |✓                 | 1 byte          | -127 to 127                                                              |
+//! | [`int16`](#int8-int16-int32-int64)     | [`i16`](https://doc.rust-lang.org/std/primitive.i16.html)                | -                |✓                 | 2 bytes         | -32,768 to 32,768                                                        |
+//! | [`int32`](#int8-int16-int32-int64)     | [`i32`](https://doc.rust-lang.org/std/primitive.i32.html)                | -                |✓                 | 4 bytes         | -2,147,483,648 to 2,147,483,648                                          |
+//! | [`int64`](#int8-int16-int32-int64)     | [`i64`](https://doc.rust-lang.org/std/primitive.i64.html)                | -                |✓                 | 8 bytes         | -9,223,372,036,854,775,808 to 9,223,372,036,854,775,808                  |
+//! | [`uint8`](#uint8-uint16-uint32-uint64) | [`u8`](https://doc.rust-lang.org/std/primitive.u8.html)                  | -                |✓                 | 1 byte          | 0 - 255                                                                  |
+//! | [`uint16`](#uint8-uint16-uint32-uint64)| [`u16`](https://doc.rust-lang.org/std/primitive.u16.html)                | -                |✓                 | 2 bytes         | 0 - 65,535                                                               |
+//! | [`uint32`](#uint8-uint16-uint32-uint64)| [`u32`](https://doc.rust-lang.org/std/primitive.u32.html)                | -                |✓                 | 4 bytes         | 0 - 4,294,967,295                                                        |
+//! | [`uint64`](#uint8-uint16-uint32-uint64)| [`u64`](https://doc.rust-lang.org/std/primitive.u64.html)                | -                |✓                 | 8 bytes         | 0 - 18,446,744,073,709,551,616                                           |
+//! | [`float`](#float-double)               | [`f32`](https://doc.rust-lang.org/std/primitive.f32.html)                | -                |𐄂                 | 4 bytes         | -3.4e38 to 3.4e38                                                        |
+//! | [`double`](#float-double)              | [`f64`](https://doc.rust-lang.org/std/primitive.f64.html)                | -                |𐄂                 | 8 bytes         | -1.7e308 to 1.7e308                                                      |
+//! | [`option`](#option)                    | [`NP_Enum`](../pointer/option/struct.NP_Enum.html)                       | -                |✓                 | 1 byte          | Up to 255 string based options in schema.                                |
+//! | [`bool`](#bool)                        | [`bool`](https://doc.rust-lang.org/std/primitive.bool.html)              | -                |✓                 | 1 byte          |                                                                          |
+//! | [`decimal`](#decimal)                  | [`NP_Dec`](../pointer/dec/struct.NP_Dec.html)                            | -                |✓                 | 8 bytes         | Fixed point decimal number based on i64.                                 |
+//! | [`geo4`](#geo4-geo8-geo16)             | [`NP_Geo`](../pointer/geo/struct.NP_Geo.html)                            | -                |✓                 | 4 bytes         | 1.1km resolution (city) geographic coordinate                            |
+//! | [`geo8`](#geo4-geo8-geo16)             | [`NP_Geo`](../pointer/geo/struct.NP_Geo.html)                            | -                |✓                 | 8 bytes         | 11mm resolution (marble) geographic coordinate                           |
+//! | [`geo16`](#geo4-geo8-geo16)            | [`NP_Geo`](../pointer/geo/struct.NP_Geo.html)                            | -                |✓                 | 16 bytes        | 110 microns resolution (grain of sand) geographic coordinate             |
+//! | [`ulid`](#ulid)                        | [`NP_ULID`](../pointer/ulid/struct.NP_ULID.html)                         | &NP_ULID         |✓                 | 16 bytes        | 6 bytes for the timestamp, 10 bytes of randomness.                       |
+//! | [`uuid`](#uuid)                        | [`NP_UUID`](../pointer/uuid/struct.NP_UUID.html)                         | &NP_UUID         |✓                 | 16 bytes        | v4 UUID, 2e37 possible UUIDs                                             |
+//! | [`date`](#date)                        | [`NP_Date`](../pointer/date/struct.NP_Date.html)                         | -                |✓                 | 8 bytes         | Good to store unix epoch (in milliseconds) until the year 584,866,263    |
 //!  
 //! - \* `sorting` must be set to `true` in the schema for this object to enable sorting.
 //! - \*\* String & Bytes can be bytewise sorted only if they have a `size` property in the schema
@@ -561,7 +561,7 @@
 
 use alloc::string::String;
 use core::{fmt::Debug};
-use crate::{json_flex::NP_JSON, pointer::{string::NP_String, ulid::_NP_ULID, uuid::_NP_UUID}};
+use crate::{json_flex::NP_JSON, pointer::{ulid::NP_ULID, uuid::NP_UUID}};
 use crate::pointer::any::NP_Any;
 use crate::pointer::date::NP_Date;
 use crate::pointer::geo::NP_Geo;
@@ -619,7 +619,7 @@ impl NP_TypeKeys {
         match self {
             NP_TypeKeys::None =>       {    ("none", NP_TypeKeys::None) }
             NP_TypeKeys::Any =>        {    NP_Any::type_idx() }
-            NP_TypeKeys::UTF8String => { NP_String::type_idx() }
+            NP_TypeKeys::UTF8String => {    String::type_idx() }
             NP_TypeKeys::Bytes =>      {  NP_Bytes::type_idx() }
             NP_TypeKeys::Int8 =>       {        i8::type_idx() }
             NP_TypeKeys::Int16 =>      {       i16::type_idx() }
@@ -634,8 +634,8 @@ impl NP_TypeKeys {
             NP_TypeKeys::Decimal =>    {    NP_Dec::type_idx() }
             NP_TypeKeys::Boolean =>    {      bool::type_idx() }
             NP_TypeKeys::Geo =>        {    NP_Geo::type_idx() }
-            NP_TypeKeys::Uuid =>       {  _NP_UUID::type_idx() }
-            NP_TypeKeys::Ulid =>       {  _NP_ULID::type_idx() }
+            NP_TypeKeys::Uuid =>       {   NP_UUID::type_idx() }
+            NP_TypeKeys::Ulid =>       {   NP_ULID::type_idx() }
             NP_TypeKeys::Date =>       {   NP_Date::type_idx() }
             NP_TypeKeys::Enum =>       {   NP_Enum::type_idx() }
             NP_TypeKeys::Table =>      {  NP_Table::type_idx() }
@@ -817,7 +817,7 @@ impl NP_Schema {
     pub fn _type_to_json(parsed_schema: &Vec<NP_Parsed_Schema>, address: usize) -> Result<NP_JSON, NP_Error> {
         match parsed_schema[address] {
             NP_Parsed_Schema::Any        { .. }      => {    NP_Any::schema_to_json(parsed_schema, address) }
-            NP_Parsed_Schema::UTF8String { .. }      => { NP_String::schema_to_json(parsed_schema, address) }
+            NP_Parsed_Schema::UTF8String { .. }      => {    String::schema_to_json(parsed_schema, address) }
             NP_Parsed_Schema::Bytes      { .. }      => {  NP_Bytes::schema_to_json(parsed_schema, address) }
             NP_Parsed_Schema::Int8       { .. }      => {        i8::schema_to_json(parsed_schema, address) }
             NP_Parsed_Schema::Int16      { .. }      => {       i16::schema_to_json(parsed_schema, address) }
@@ -832,8 +832,8 @@ impl NP_Schema {
             NP_Parsed_Schema::Decimal    { .. }      => {    NP_Dec::schema_to_json(parsed_schema, address) }
             NP_Parsed_Schema::Boolean    { .. }      => {      bool::schema_to_json(parsed_schema, address) } 
             NP_Parsed_Schema::Geo        { .. }      => {    NP_Geo::schema_to_json(parsed_schema, address) }
-            NP_Parsed_Schema::Uuid       { .. }      => {  _NP_UUID::schema_to_json(parsed_schema, address) }
-            NP_Parsed_Schema::Ulid       { .. }      => {  _NP_ULID::schema_to_json(parsed_schema, address) }
+            NP_Parsed_Schema::Uuid       { .. }      => {   NP_UUID::schema_to_json(parsed_schema, address) }
+            NP_Parsed_Schema::Ulid       { .. }      => {   NP_ULID::schema_to_json(parsed_schema, address) }
             NP_Parsed_Schema::Date       { .. }      => {   NP_Date::schema_to_json(parsed_schema, address) }
             NP_Parsed_Schema::Enum       { .. }      => {   NP_Enum::schema_to_json(parsed_schema, address) }
             NP_Parsed_Schema::Table      { .. }      => {  NP_Table::schema_to_json(parsed_schema, address) }
@@ -863,7 +863,7 @@ impl NP_Schema {
         match this_type {
             NP_TypeKeys::None =>       {  cache.push(NP_Parsed_Schema::None);  (false, cache) }
             NP_TypeKeys::Any =>        {    NP_Any::from_bytes_to_schema(cache, address, bytes) }
-            NP_TypeKeys::UTF8String => { NP_String::from_bytes_to_schema(cache, address, bytes) }
+            NP_TypeKeys::UTF8String => {    String::from_bytes_to_schema(cache, address, bytes) }
             NP_TypeKeys::Bytes =>      {  NP_Bytes::from_bytes_to_schema(cache, address, bytes) }
             NP_TypeKeys::Int8 =>       {        i8::from_bytes_to_schema(cache, address, bytes) }
             NP_TypeKeys::Int16 =>      {       i16::from_bytes_to_schema(cache, address, bytes) }
@@ -878,8 +878,8 @@ impl NP_Schema {
             NP_TypeKeys::Decimal =>    {    NP_Dec::from_bytes_to_schema(cache, address, bytes) }
             NP_TypeKeys::Boolean =>    {      bool::from_bytes_to_schema(cache, address, bytes) }
             NP_TypeKeys::Geo =>        {    NP_Geo::from_bytes_to_schema(cache, address, bytes) }
-            NP_TypeKeys::Uuid =>       {  _NP_UUID::from_bytes_to_schema(cache, address, bytes) }
-            NP_TypeKeys::Ulid =>       {  _NP_ULID::from_bytes_to_schema(cache, address, bytes) }
+            NP_TypeKeys::Uuid =>       {   NP_UUID::from_bytes_to_schema(cache, address, bytes) }
+            NP_TypeKeys::Ulid =>       {   NP_ULID::from_bytes_to_schema(cache, address, bytes) }
             NP_TypeKeys::Date =>       {   NP_Date::from_bytes_to_schema(cache, address, bytes) }
             NP_TypeKeys::Enum =>       {   NP_Enum::from_bytes_to_schema(cache, address, bytes) }
             NP_TypeKeys::Table =>      {  NP_Table::from_bytes_to_schema(cache, address, bytes) }
@@ -900,10 +900,10 @@ impl NP_Schema {
             NP_JSON::String(x) => {
                 match x.as_str() {
                     "any"      => {    NP_Any::from_json_to_schema(schema, &json_schema) },
-                    "str"      => { NP_String::from_json_to_schema(schema, &json_schema) },
-                    "string"   => { NP_String::from_json_to_schema(schema, &json_schema) },
-                    "utf8"     => { NP_String::from_json_to_schema(schema, &json_schema) },
-                    "utf-8"    => { NP_String::from_json_to_schema(schema, &json_schema) },
+                    "str"      => {    String::from_json_to_schema(schema, &json_schema) },
+                    "string"   => {    String::from_json_to_schema(schema, &json_schema) },
+                    "utf8"     => {    String::from_json_to_schema(schema, &json_schema) },
+                    "utf-8"    => {    String::from_json_to_schema(schema, &json_schema) },
                     "bytes"    => {  NP_Bytes::from_json_to_schema(schema, &json_schema) },
                     "u8[]"     => {  NP_Bytes::from_json_to_schema(schema, &json_schema) },
                     "[u8]"     => {  NP_Bytes::from_json_to_schema(schema, &json_schema) },
@@ -934,8 +934,8 @@ impl NP_Schema {
                     "geo4"     => {    NP_Geo::from_json_to_schema(schema, &json_schema) },
                     "geo8"     => {    NP_Geo::from_json_to_schema(schema, &json_schema) },
                     "geo16"    => {    NP_Geo::from_json_to_schema(schema, &json_schema) },
-                    "uuid"     => {  _NP_UUID::from_json_to_schema(schema, &json_schema) },
-                    "ulid"     => {  _NP_ULID::from_json_to_schema(schema, &json_schema) },
+                    "uuid"     => {   NP_UUID::from_json_to_schema(schema, &json_schema) },
+                    "ulid"     => {   NP_ULID::from_json_to_schema(schema, &json_schema) },
                     "date"     => {   NP_Date::from_json_to_schema(schema, &json_schema) },
                     "enum"     => {   NP_Enum::from_json_to_schema(schema, &json_schema) },
                     "option"   => {   NP_Enum::from_json_to_schema(schema, &json_schema) },

@@ -1,3 +1,10 @@
+# 0.7.3 December 30, 2020
+- Added Prost to benchmarks.
+- Added documentation for zero-copy usage.
+- Added Zero copoy and non zero copy implmentations of `String`, `NP_UUID`, `NP_ULID`, and `Vec<u8>`.
+- Added new `get_schema_default` method for getting data types that are setup according to the schema.
+- Added new `get_schema_type` method for getting the schema type at a specifiic path.
+
 # 0.7.2 December 26, 2020
 - Added looping limits to prevent DOS attacks with specially made buffers.
 - Added a bunch of stuff to the readme to help with pros/cons of other libs.

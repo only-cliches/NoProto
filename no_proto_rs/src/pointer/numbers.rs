@@ -61,6 +61,12 @@ pub enum NP_NumType {
 macro_rules! noproto_number {
     ($t:ty, $str1: tt, $str2: tt, $tkey: expr, $numType: expr) => {
 
+        impl<'value> super::NP_Scalar<'value> for $t {
+            fn schema_default(_schema: &NP_Parsed_Schema) -> Option<Self> where Self: Sized {
+                Some(Self::default())
+            }
+        }
+
         impl<'value> NP_Value<'value> for $t {
 
             fn type_idx() -> (&'value str, NP_TypeKeys) { ($str1, $tkey) }
@@ -90,7 +96,7 @@ macro_rules! noproto_number {
                 Ok(NP_JSON::Dictionary(schema_json))
             }
 
-            fn schema_default<'default>(schema: &'default NP_Parsed_Schema) -> Option<Self> {
+            fn default_value<'default>(schema: &'default NP_Parsed_Schema) -> Option<Self> {
                 <$t>::np_get_default(&schema)
             }
     
@@ -176,7 +182,7 @@ macro_rules! noproto_number {
                             },
                             None => {
                                 let schema = &memory.get_schema(cursor.schema_addr);
-                                match <$t>::schema_default(&schema) {
+                                match <$t>::default_value(&schema) {
                                     Some(v) => {
                                         match $numType {
                                             NP_NumType::floating => { NP_JSON::Float(v as f64) },
@@ -320,17 +326,6 @@ noproto_number!(u64, "uint64", "u64", NP_TypeKeys::Uint64, NP_NumType::unsigned)
 noproto_number!(f32,  "float", "f32", NP_TypeKeys::Float , NP_NumType::floating);
 noproto_number!(f64, "double", "f64", NP_TypeKeys::Double, NP_NumType::floating);
 
-
-impl super::NP_Scalar for i8 {}
-impl super::NP_Scalar for i16 {}
-impl super::NP_Scalar for i32 {}
-impl super::NP_Scalar for i64 {}
-impl super::NP_Scalar for u8 {}
-impl super::NP_Scalar for u16 {}
-impl super::NP_Scalar for u32 {}
-impl super::NP_Scalar for u64 {}
-impl super::NP_Scalar for f32 {}
-impl super::NP_Scalar for f64 {}
 
 trait NP_BigEndian {
     fn np_get_default_from_json(json: &NP_JSON) -> Option<Self> where Self: Sized;

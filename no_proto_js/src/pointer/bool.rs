@@ -29,7 +29,7 @@ use alloc::string::ToString;
 
 use super::NP_Cursor;
 
-impl super::NP_Scalar for bool {}
+impl<'value> super::NP_Scalar<'value> for bool {}
 
 impl<'value> NP_Value<'value> for bool {
 
@@ -55,7 +55,7 @@ impl<'value> NP_Value<'value> for bool {
         Ok(NP_JSON::Dictionary(schema_json))
     }
 
-    fn schema_default(schema: &NP_Parsed_Schema) -> Option<Self> {
+    fn default_value(schema: &NP_Parsed_Schema) -> Option<Self> {
 
         match schema {
             NP_Parsed_Schema::Boolean { default, .. } => {

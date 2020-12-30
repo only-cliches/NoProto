@@ -455,7 +455,7 @@ pub trait NP_Value<'value> {
 
     /// Get the default schema value for this type
     /// 
-    fn schema_default(_schema: &'value NP_Parsed_Schema) -> Option<Self> where Self: Sized;
+    fn default_value(_schema: &'value NP_Parsed_Schema) -> Option<Self> where Self: Sized;
 
     /// Parse JSON schema into schema
     ///

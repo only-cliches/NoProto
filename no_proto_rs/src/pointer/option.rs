@@ -44,7 +44,17 @@ pub enum NP_Enum {
     Some(String)
 }
 
-impl super::NP_Scalar for NP_Enum {}
+impl<'value> super::NP_Scalar<'value> for &'value NP_Enum {
+    fn schema_default(_schema: &NP_Parsed_Schema) -> Option<Self> where Self: Sized {
+        None
+    }
+}
+
+impl<'value> super::NP_Scalar<'value> for NP_Enum {
+    fn schema_default(_schema: &NP_Parsed_Schema) -> Option<Self> where Self: Sized {
+        Some(Self::default())
+    }
+}
 
 impl NP_Enum {
     /// Create a new option type with the given string
@@ -111,20 +121,6 @@ impl<'value> NP_Value<'value> for NP_Enum {
         }
 
         Ok(NP_JSON::Dictionary(schema_json))
-    }
-
-    fn schema_default(schema: &NP_Parsed_Schema) -> Option<Self> {
-
-        match schema {
-            NP_Parsed_Schema::Enum { i: _, choices: _, default, sortable: _} => {
-                if let Some(d) = default {
-                    Some(d.clone())
-                } else {
-                    None
-                }
-            },
-            _ => None
-        }
     }
 
     fn set_value<'set, M: NP_Memory>(cursor: NP_Cursor, memory: &'set M, value: Self) -> Result<NP_Cursor, NP_Error> where Self: 'set + Sized {
@@ -201,6 +197,19 @@ impl<'value> NP_Value<'value> for NP_Enum {
                 })
             },
             _ => Err(NP_Error::new("unreachable"))
+        }
+    }
+
+    fn default_value(schema: &'value NP_Parsed_Schema) -> Option<Self> {
+        match schema {
+            NP_Parsed_Schema::Enum {default, ..} => {
+                if let Some(d) = default {
+                    Some(d.clone())
+                } else {
+                    None
+                }
+            },
+            _ => None
         }
     }
 

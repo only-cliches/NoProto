@@ -32,7 +32,7 @@ use alloc::string::ToString;
 /// Arbitrary bytes
 pub type NP_Bytes<'bytes> = &'bytes [u8];
 
-impl super::NP_Scalar for &[u8] {}
+impl<'value> super::NP_Scalar<'value> for &[u8] {}
 
 impl<'value> NP_Value<'value> for &'value [u8] {
 
@@ -65,7 +65,7 @@ impl<'value> NP_Value<'value> for &'value [u8] {
         Ok(NP_JSON::Dictionary(schema_json))
     }
 
-    fn schema_default(schema: &'value NP_Parsed_Schema) -> Option<Self> {
+    fn default_value(schema: &'value NP_Parsed_Schema) -> Option<Self> {
 
         match schema {
             NP_Parsed_Schema::Bytes { default, .. } => {

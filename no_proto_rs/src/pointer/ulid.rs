@@ -34,7 +34,7 @@ use alloc::boxed::Box;
 use alloc::string::ToString;
 use alloc::borrow::ToOwned;
 
-use super::NP_Cursor;
+use super::{NP_Cursor, NP_Scalar};
 
 
 /// Holds ULIDs which are good for time series keys.
@@ -50,7 +50,7 @@ pub struct NP_ULID {
 /// ULID alias for shared type
 pub type _NP_ULID<'a> = &'a NP_ULID;
 
-impl super::NP_Scalar for &NP_ULID {}
+
 
 impl NP_ULID {
 
@@ -146,7 +146,13 @@ impl Debug for NP_ULID {
     }
 }
 
-impl<'value> NP_Value<'value> for &NP_ULID {
+impl<'value> NP_Scalar<'value> for NP_ULID {
+    fn schema_default(_schema: &NP_Parsed_Schema) -> Option<Self> where Self: Sized {
+        Some(Self::default())
+    }
+}
+
+impl<'value> NP_Value<'value> for NP_ULID {
 
     fn type_idx() -> (&'value str, NP_TypeKeys) { ("ulid", NP_TypeKeys::Ulid) }
     fn self_type_idx(&self) -> (&'value str, NP_TypeKeys) { ("ulid", NP_TypeKeys::Ulid) }
@@ -160,46 +166,18 @@ impl<'value> NP_Value<'value> for &NP_ULID {
 
  
     fn set_value<'set, M: NP_Memory>(cursor: NP_Cursor, memory: &'set M, value: Self) -> Result<NP_Cursor, NP_Error> where Self: 'set + Sized {
-
-        let c_value = cursor.get_value(memory);
-
-        let mut value_address = c_value.get_addr_value() as usize;
-
-        if value_address != 0 { // existing value, replace
-            let bytes = value.value;
-            let write_bytes = memory.write_bytes();
-
-            // overwrite existing values in buffer
-            for x in 0..bytes.len() {
-                write_bytes[value_address + x] = bytes[x];
-            }
-
-        } else { // new value
-
-            value_address = memory.malloc_borrow(&value.value)?;
-            c_value.set_addr_value(value_address as u16);
-        }                    
-        
-        Ok(cursor)
+        _NP_ULID::set_value(cursor, memory, &value)
     }
 
     fn into_value<M: NP_Memory>(cursor: &NP_Cursor, memory: &'value M) -> Result<Option<Self>, NP_Error> where Self: Sized {
-
-        let c_value = cursor.get_value(memory);
-
-        let value_addr = c_value.get_addr_value();
-
-        // empty value
-        if value_addr == 0 {
-            return Ok(None);
+        match _NP_ULID::into_value(cursor, memory)? {
+            Some(x) => { Ok(Some(x.clone())) },
+            None => Ok(None)
         }
+    }
 
-        Ok(match memory.get_16_bytes(value_addr as usize) {
-            Some(x) => {
-                Some(unsafe { &*(x.as_ptr() as *const NP_ULID) })
-            },
-            None => None
-        })
+    fn default_value(_schema: &NP_Parsed_Schema) -> Option<Self> {
+        None
     }
 
     fn to_json<M: NP_Memory>(cursor: &NP_Cursor, memory: &'value M) -> NP_JSON {
@@ -244,9 +222,7 @@ impl<'value> NP_Value<'value> for &NP_ULID {
 
     }
 
-    fn schema_default(_schema: &NP_Parsed_Schema) -> Option<Self> {
-        None
-    }
+
 
     fn from_bytes_to_schema(mut schema: Vec<NP_Parsed_Schema>, _address: usize, _bytes: &[u8]) -> (bool, Vec<NP_Parsed_Schema>) {
         schema.push(NP_Parsed_Schema::Ulid {
@@ -254,6 +230,86 @@ impl<'value> NP_Value<'value> for &NP_ULID {
             sortable: true
         });
         (true, schema)
+    }
+}
+
+
+
+impl<'value> NP_Scalar<'value> for &NP_ULID {
+    fn schema_default(_schema: &NP_Parsed_Schema) -> Option<Self> where Self: Sized {
+        None
+    }
+}
+
+impl<'value> NP_Value<'value> for &NP_ULID {
+    fn type_idx() -> (&'value str, NP_TypeKeys) { NP_ULID::type_idx() }
+    fn self_type_idx(&self) -> (&'value str, NP_TypeKeys) { NP_ULID::default().self_type_idx() }
+
+    fn schema_to_json(_schema: &Vec<NP_Parsed_Schema>, _address: usize)-> Result<NP_JSON, NP_Error> {
+        NP_ULID::schema_to_json(_schema, _address)
+    }
+
+    fn set_value<'set, M: NP_Memory>(cursor: NP_Cursor, memory: &'set M, value: Self) -> Result<NP_Cursor, NP_Error> where Self: 'set + Sized {
+        let c_value = cursor.get_value(memory);
+
+        let mut value_address = c_value.get_addr_value() as usize;
+
+        if value_address != 0 { // existing value, replace
+            let bytes = value.value;
+            let write_bytes = memory.write_bytes();
+
+            // overwrite existing values in buffer
+            for x in 0..bytes.len() {
+                write_bytes[value_address + x] = bytes[x];
+            }
+
+        } else { // new value
+
+            value_address = memory.malloc_borrow(&value.value)?;
+            c_value.set_addr_value(value_address as u16);
+        }                    
+        
+        Ok(cursor)
+    }
+
+    fn default_value(_schema: &NP_Parsed_Schema) -> Option<Self> {
+        None
+    }
+
+    fn into_value<M: NP_Memory>(cursor: &NP_Cursor, memory: &'value M) -> Result<Option<Self>, NP_Error> where Self: Sized {
+
+        let c_value = cursor.get_value(memory);
+
+        let value_addr = c_value.get_addr_value();
+
+        // empty value
+        if value_addr == 0 {
+            return Ok(None);
+        }
+
+        Ok(match memory.get_16_bytes(value_addr as usize) {
+            Some(x) => {
+                Some(unsafe { &*(x.as_ptr() as *const NP_ULID) })
+            },
+            None => None
+        })
+    }
+
+    fn to_json<M: NP_Memory>(cursor: &NP_Cursor, memory: &'value M) -> NP_JSON {
+        NP_ULID::to_json(cursor, memory)
+    }
+
+    fn get_size<M: NP_Memory>(cursor: &NP_Cursor, memory: &M) -> Result<usize, NP_Error> {
+        NP_ULID::get_size(cursor, memory)
+    }
+
+    fn from_json_to_schema(schema: Vec<NP_Parsed_Schema>, _json_schema: &Box<NP_JSON>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {
+        NP_ULID::from_json_to_schema(schema, _json_schema)
+    }
+
+
+    fn from_bytes_to_schema(schema: Vec<NP_Parsed_Schema>, _address: usize, _bytes: &[u8]) -> (bool, Vec<NP_Parsed_Schema>) {
+        NP_ULID::from_bytes_to_schema(schema, _address, _bytes)
     }
 }
 

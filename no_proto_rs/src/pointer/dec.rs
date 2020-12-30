@@ -90,7 +90,16 @@ pub struct NP_Dec {
     pub exp: u8
 }
 
-impl super::NP_Scalar for NP_Dec {}
+impl<'value> super::NP_Scalar<'value> for NP_Dec {
+    fn schema_default(schema: &NP_Parsed_Schema) -> Option<Self> where Self: Sized {
+        match schema {
+            NP_Parsed_Schema::Decimal { exp, ..} => {
+                Some(NP_Dec { exp: *exp, num: 0})
+            },
+            _ => None
+        }
+    }
+}
 
 impl NP_Dec {
     /// Convert an NP_Dec into a native floating point value.
@@ -691,7 +700,7 @@ impl<'value> NP_Value<'value> for NP_Dec {
         }
     }
 
-    fn schema_default(schema: &NP_Parsed_Schema) -> Option<Self> {
+    fn default_value(schema: &NP_Parsed_Schema) -> Option<Self> {
 
         match schema {
             NP_Parsed_Schema::Decimal { i: _, sortable: _, default, exp: _} => {

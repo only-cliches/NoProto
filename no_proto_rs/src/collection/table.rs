@@ -26,10 +26,14 @@ pub struct NP_Table<'table> {
 impl<'table> NP_Table<'table> {
 
     #[inline(always)]
-    pub fn select<M: NP_Memory>(mut table_cursor: NP_Cursor, columns: &Vec<(u8, String, usize)>,  key: &str, make_path: bool, memory: &M) -> Result<Option<NP_Cursor>, NP_Error> {
+    pub fn select<M: NP_Memory>(mut table_cursor: NP_Cursor, columns: &Vec<(u8, String, usize)>,  key: &str, make_path: bool, schema_query: bool, memory: &M) -> Result<Option<NP_Cursor>, NP_Error> {
        
         match columns.iter().position(|val| { val.1 == key }) {
             Some(x) => {
+
+                if schema_query {
+                    return Ok(Some(NP_Cursor::new(0, columns[x].2, table_cursor.schema_addr)));
+                }
 
                 let v_table =  x / VTABLE_SIZE; // which vtable
                 let v_table_idx = x % VTABLE_SIZE; // which index on the selected vtable
@@ -433,7 +437,7 @@ impl<'value> NP_Value<'value> for NP_Table<'value> {
    
     }
 
-    fn schema_default(_schema: &NP_Parsed_Schema) -> Option<Self> {
+    fn default_value(_schema: &NP_Parsed_Schema) -> Option<Self> {
         None
     }
 }

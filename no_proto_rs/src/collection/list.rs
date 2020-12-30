@@ -35,7 +35,7 @@ pub struct NP_List {
 impl NP_List {
 
     #[inline(always)]
-    pub fn select<M: NP_Memory>(list_cursor: NP_Cursor, index: usize, make_path: bool, memory: &M) -> Result<Option<(usize, Option<NP_Cursor>)>, NP_Error> {
+    pub fn select<M: NP_Memory>(list_cursor: NP_Cursor, index: usize, make_path: bool, schema_query: bool, memory: &M) -> Result<Option<(usize, Option<NP_Cursor>)>, NP_Error> {
         let list_value = list_cursor.get_value(memory);
 
         if index > 255 { return Ok(None) }
@@ -44,6 +44,10 @@ impl NP_List {
             NP_Parsed_Schema::List { of, .. } => *of,
             _ => 0
         };
+
+        if schema_query {
+            return Ok(Some((index, Some(NP_Cursor::new(0, schema_of, list_cursor.schema_addr)))));
+        }
 
         // if no list here, make one please
         if list_value.get_addr_value() == 0 {
@@ -455,7 +459,7 @@ impl<'value> NP_Value<'value> for NP_List {
       
     }
 
-    fn schema_default(_schema: &NP_Parsed_Schema) -> Option<Self> {
+    fn default_value(_schema: &NP_Parsed_Schema) -> Option<Self> {
         None
     }
 

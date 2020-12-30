@@ -3,6 +3,7 @@
 //! 
 //! 
 
+use crate::schema::NP_TypeKeys;
 use crate::NP_Size_Data;
 use crate::{NP_Memory_Writable, buffer::NP_Buffer};
 use crate::{memory::NP_Memory_ReadOnly, utils::opt_err};
@@ -97,7 +98,7 @@ impl<'buffer> NP_Buffer_RO<'buffer> {
     /// 
     pub fn json_encode(&self, path: &[&str]) -> Result<NP_JSON, NP_Error> {
 
-        let value_cursor = self.select(self.cursor.clone(), path)?;
+        let value_cursor = self.select(self.cursor.clone(), false, path)?;
 
         if let Some(x) = value_cursor {
             Ok(NP_Cursor::json_encode(&x, &self.memory))
@@ -210,7 +211,7 @@ impl<'buffer> NP_Buffer_RO<'buffer> {
     /// 
     pub fn move_cursor(&mut self, path: &[&str]) -> Result<bool, NP_Error> {
 
-        let value_cursor = self.select(self.cursor.clone(), path)?;
+        let value_cursor = self.select(self.cursor.clone(), false, path)?;
 
         let cursor = if let Some(x) = value_cursor {
             x
@@ -378,7 +379,7 @@ impl<'buffer> NP_Buffer_RO<'buffer> {
     /// 
     pub fn get_iter<'iter>(&'iter self, path: &'iter [&str]) -> Result<Option<NP_Generic_Iterator<'iter>>, NP_Error> {
 
-        let value = self.select(self.cursor.clone(), path)?;
+        let value = self.select(self.cursor.clone(), false, path)?;
 
         let value = if let Some(x) = value {
             x
@@ -508,7 +509,7 @@ impl<'buffer> NP_Buffer_RO<'buffer> {
     /// ```
     /// 
     pub fn length(&self, path: &[&str]) -> Result<Option<usize>, NP_Error> {
-        let value_cursor = self.select(self.cursor.clone(), path)?;
+        let value_cursor = self.select(self.cursor.clone(), false, path)?;
 
         let found_cursor = if let Some(x) = value_cursor {
             x
@@ -580,6 +581,104 @@ impl<'buffer> NP_Buffer_RO<'buffer> {
   
     }
 
+    /// Retrieve the schema type at a given path.
+    /// 
+    /// 
+    /// ```
+    /// use no_proto::error::NP_Error;
+    /// use no_proto::NP_Factory;
+    /// use no_proto::schema::NP_TypeKeys;
+    /// 
+    /// // a list where each item is a map where each key has a value containing a list of strings
+    /// let factory: NP_Factory = NP_Factory::new(r#"{
+    ///    "type": "tuple",
+    ///    "values": [
+    ///         {"type": "geo8"},
+    ///         {"type": "dec", "exp": 2},
+    ///         {"type": "string"}
+    ///     ]
+    /// }"#)?;
+    /// 
+    /// let mut new_buffer = factory.empty_buffer(None);
+    /// let new_buffer = factory.open_buffer_ro(new_buffer.read_bytes());
+    /// 
+    /// assert_eq!(new_buffer.get_schema_type(&[])?.unwrap(), NP_TypeKeys::Tuple);
+    /// assert_eq!(new_buffer.get_schema_type(&["0"])?.unwrap(), NP_TypeKeys::Geo);
+    /// assert_eq!(new_buffer.get_schema_type(&["1"])?.unwrap(), NP_TypeKeys::Decimal);
+    /// assert_eq!(new_buffer.get_schema_type(&["2"])?.unwrap(), NP_TypeKeys::UTF8String);
+    /// 
+    /// # Ok::<(), NP_Error>(()) 
+    /// ```
+    /// 
+    pub fn get_schema_type(&self, path: &[&str]) -> Result<Option<NP_TypeKeys>, NP_Error> {
+
+        match self.select(self.cursor.clone(), true, path)? {
+            Some(x) => {
+                Ok(Some(*self.memory.get_schema(x.schema_addr).get_type_key()))
+            }
+            None => Ok(None)
+        }
+    }
+
+    /// Retrieve the schema default at a given path.
+    /// 
+    /// This is useful for `geo` and `dec` data types where there is information about the value in the schema.
+    /// 
+    /// For example, when you create an `NP_Geo` type to put into a `geo` field, you must know the resolution (4/8/16).  If you use this method you can get an empty `NP_Geo` type that already has the correct resolution set based on the schema.
+    /// 
+    /// The type that you cast the request to will be compared to the schema, if it doesn't match the schema the request will fail.
+    /// 
+    /// ```
+    /// use no_proto::error::NP_Error;
+    /// use no_proto::NP_Factory;
+    /// use no_proto::pointer::dec::NP_Dec;
+    /// use no_proto::pointer::geo::NP_Geo;
+    /// 
+    /// // a list where each item is a map where each key has a value containing a list of strings
+    /// let factory: NP_Factory = NP_Factory::new(r#"{
+    ///    "type": "tuple",
+    ///    "values": [
+    ///         {"type": "geo8"},
+    ///         {"type": "dec", "exp": 2}
+    ///     ]
+    /// }"#)?;
+    /// 
+    /// let mut new_buffer = factory.empty_buffer(None);
+    /// let new_buffer = factory.open_buffer_ro(new_buffer.read_bytes());
+    /// 
+    /// // Get an empty NP_Geo type that has the correct resolution for the schema
+    /// // 
+    /// let geo_default: NP_Geo = new_buffer.get_schema_default::<NP_Geo>(&["0"])?.unwrap();
+    /// assert_eq!(geo_default.size, 8); // geo is size 8 in schema
+    /// 
+    /// // Get an empty NP_Dec type that has the correct exp for the schema
+    /// // 
+    /// let dec_default: NP_Dec = new_buffer.get_schema_default::<NP_Dec>(&["1"])?.unwrap();
+    /// assert_eq!(dec_default.exp, 2); // exponent is 2 in schema
+    /// 
+    /// # Ok::<(), NP_Error>(()) 
+    /// ```
+    /// 
+    pub fn get_schema_default<'get, X: 'get>(&'get self, path: &[&str]) -> Result<Option<X>, NP_Error> where X: NP_Value<'get> + NP_Scalar<'get> {
+
+        match self.select(self.cursor.clone(), true, path)? {
+            Some(x) => {
+                                
+                // type does not match schema
+                if X::type_idx().1 != *self.memory.get_schema(x.schema_addr).get_type_key() {
+                    let mut err = "TypeError: Attempted to get schema for type (".to_owned();
+                    err.push_str(X::type_idx().0);
+                    err.push_str(") for schema of type (");
+                    err.push_str(self.memory.get_schema(x.schema_addr).get_type_data().0);
+                    err.push_str(")\n");
+                    return Err(NP_Error::new(err));
+                }
+
+                Ok(X::schema_default(&self.memory.get_schema(x.schema_addr)))
+            }
+            None => Ok(None)
+        }
+    }
   
     /// Retrieve an inner value from the buffer. 
     /// 
@@ -612,8 +711,8 @@ impl<'buffer> NP_Buffer_RO<'buffer> {
     /// # Ok::<(), NP_Error>(()) 
     /// ```
     /// 
-    pub fn get<'get, X: 'get>(&'get self, path: &[&str]) -> Result<Option<X>, NP_Error> where X: NP_Value<'get> + NP_Scalar {
-        let value_cursor = self.select(self.cursor.clone(), path)?;
+    pub fn get<'get, X: 'get>(&'get self, path: &[&str]) -> Result<Option<X>, NP_Error> where X: NP_Value<'get> + NP_Scalar<'get> {
+        let value_cursor = self.select(self.cursor.clone(), false, path)?;
 
         match value_cursor {
             Some(x) => {
@@ -633,7 +732,7 @@ impl<'buffer> NP_Buffer_RO<'buffer> {
                         Ok(Some(x))
                     },
                     None => { // no value found here, return default from schema
-                        match X::schema_default(&self.memory.get_schema(x.schema_addr)) {
+                        match X::default_value(&self.memory.get_schema(x.schema_addr)) {
                             Some(y) => {
                                 Ok(Some(y))
                             },
@@ -742,7 +841,7 @@ impl<'buffer> NP_Buffer_RO<'buffer> {
     }
 
 
-    fn select(&self, cursor: NP_Cursor, path: &[&str]) -> Result<Option<NP_Cursor>, NP_Error> {
+    fn select(&self, cursor: NP_Cursor, schema_query: bool, path: &[&str]) -> Result<Option<NP_Cursor>, NP_Error> {
 
         let mut loop_cursor = cursor;
 
@@ -765,7 +864,7 @@ impl<'buffer> NP_Buffer_RO<'buffer> {
             // now select into collections
             match &self.memory.get_schema(loop_cursor.schema_addr) {
                 NP_Parsed_Schema::Table { columns, .. } => {
-                    if let Some(next) = NP_Table::select(loop_cursor, columns, path[path_index], false, &self.memory)? {
+                    if let Some(next) = NP_Table::select(loop_cursor, columns, path[path_index], false, schema_query, &self.memory)? {
                         loop_cursor = next;
                         path_index += 1;
                     } else {
@@ -775,7 +874,7 @@ impl<'buffer> NP_Buffer_RO<'buffer> {
                 NP_Parsed_Schema::Tuple { values, .. } => {
                     match path[path_index].parse::<usize>() {
                         Ok(x) => {
-                            if let Some(next) = NP_Tuple::select(loop_cursor, values, x, false, &self.memory)? {
+                            if let Some(next) = NP_Tuple::select(loop_cursor, values, x, false, schema_query, &self.memory)? {
                                 loop_cursor = next;
                                 path_index += 1;
                             } else {
@@ -790,7 +889,7 @@ impl<'buffer> NP_Buffer_RO<'buffer> {
                 NP_Parsed_Schema::List { .. } => {
                     match path[path_index].parse::<usize>() {
                         Ok(x) => {
-                            if let Some(next) = NP_List::select(loop_cursor, x, false, &self.memory)? {
+                            if let Some(next) = NP_List::select(loop_cursor, x, false, schema_query, &self.memory)? {
                                 loop_cursor = opt_err(next.1)?;
                                 path_index += 1;
                             } else {
@@ -803,7 +902,7 @@ impl<'buffer> NP_Buffer_RO<'buffer> {
                     }
                 },
                 NP_Parsed_Schema::Map {  .. } => {
-                    if let Some(next) = NP_Map::select(loop_cursor, path[path_index], false, &self.memory)? {
+                    if let Some(next) = NP_Map::select(loop_cursor, path[path_index], false, schema_query, &self.memory)? {
                         loop_cursor = next;
                         path_index += 1;
                     } else {
@@ -844,14 +943,14 @@ impl<'item> NP_Item<'item> {
         }
     }
     /// Get value at this pointer
-    pub fn get<X>(&'item self) -> Result<Option<X>, NP_Error> where X: NP_Value<'item> + NP_Scalar {
+    pub fn get<X>(&'item self) -> Result<Option<X>, NP_Error> where X: NP_Value<'item> + NP_Scalar<'item> {
         if let Some(cursor) = self.cursor {
             match X::into_value(&cursor, self.memory)? {
                 Some(x) => {
                     Ok(Some(x))
                 },
                 None => {
-                    match X::schema_default(&self.memory.get_schema(cursor.schema_addr)) {
+                    match X::default_value(&self.memory.get_schema(cursor.schema_addr)) {
                         Some(y) => {
                             Ok(Some(y))
                         },

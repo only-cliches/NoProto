@@ -276,7 +276,7 @@ impl<'value> NP_Value<'value> for NP_Map<'value> {
 
     }
 
-    fn schema_default(_schema: &NP_Parsed_Schema) -> Option<Self> {
+    fn default_value(_schema: &NP_Parsed_Schema) -> Option<Self> {
         None
     }
 

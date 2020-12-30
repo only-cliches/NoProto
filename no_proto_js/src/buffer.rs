@@ -829,7 +829,7 @@ impl NP_Buffer {
                         Ok(Some(x))
                     },
                     None => { // no value found here, return default from schema
-                        match X::schema_default(&self.memory.get_schema(x.schema_addr)) {
+                        match X::default_value(&self.memory.get_schema(x.schema_addr)) {
                             Some(y) => {
                                 Ok(Some(y))
                             },
@@ -1117,7 +1117,7 @@ impl<'item> NP_Item<'item> {
                     Ok(Some(x))
                 },
                 None => {
-                    match X::schema_default(&self.memory.get_schema(cursor.schema_addr)) {
+                    match X::default_value(&self.memory.get_schema(cursor.schema_addr)) {
                         Some(y) => {
                             Ok(Some(y))
                         },

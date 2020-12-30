@@ -35,9 +35,33 @@ use alloc::string::ToString;
 /// &str type alias
 pub type NP_String<'string> = &'string str;
 
-impl NP_Scalar for &str {}
+// impl<'value> NP_Scalar<'value> for &'value str {
+//     fn schema_default(_schema: &NP_Parsed_Schema) -> Option<Self> where Self: Sized {
+//         None
+//     }
+// }
 
-impl<'value> NP_Value<'value> for &'value str {
+impl<'value> NP_Scalar<'value> for String {
+    fn schema_default(schema: &NP_Parsed_Schema) -> Option<Self> where Self: Sized {
+        match schema {
+            NP_Parsed_Schema::UTF8String { size, .. } => {
+                Some(if *size > 0 {
+                    let mut v: String = String::with_capacity(*size as usize);
+                    for _x in 0..*size {
+                        v.push(' ');
+                    }
+                    v
+                } else {
+                    String::from("")
+                })
+            },
+            _ => None
+        }
+    }
+}
+
+
+impl<'value> NP_Value<'value> for String {
     fn type_idx() -> (&'value str, NP_TypeKeys) {
         ("string", NP_TypeKeys::UTF8String)
     }
@@ -115,50 +139,18 @@ impl<'value> NP_Value<'value> for &'value str {
         (fixed_size > 0, schema)
     }
 
+    fn set_value<'set, M: NP_Memory>(cursor: NP_Cursor, memory: &'set M, value: Self) -> Result<NP_Cursor, NP_Error> where Self: 'set + Sized {
+        NP_String::set_value(cursor, memory, &value)
+    }
+
     fn into_value<M: NP_Memory>(cursor: &NP_Cursor, memory: &'value M) -> Result<Option<Self>, NP_Error> where Self: Sized {
-
-        let c_value = cursor.get_value(memory);
-
-        let value_addr = c_value.get_addr_value() as usize;
-        // empty value
-        if value_addr == 0 {
-            return Ok(None);
-        }
-
-        match memory.get_schema(cursor.schema_addr) {
-            NP_Parsed_Schema::UTF8String { size, .. } => {
-                if *size > 0 {
-                    // fixed size
-
-                    // get bytes
-                    let bytes = &memory.read_bytes()[(value_addr)..(value_addr + (*size as usize))];
-
-                    return Ok(Some(unsafe { str::from_utf8_unchecked(bytes) }));
-                } else {
-                    // dynamic size
-                    // get size of bytes
-
-                    let bytes_size: usize = u16::from_be_bytes(*memory.get_2_bytes(value_addr).unwrap_or(&[0u8; 2])) as usize;
-
-                    // get bytes
-                    let bytes = &memory.read_bytes()[(value_addr + 2)..(value_addr + 2 + bytes_size)];
-
-                    return Ok(Some(unsafe { str::from_utf8_unchecked(bytes) }));
-                }
-            }
-            _ => Err(NP_Error::new("unreachable")),
+        match NP_String::into_value(cursor, memory)? {
+            Some(x) => Ok(Some(String::from(x))),
+            None => Ok(None)
         }
     }
 
-    fn schema_default(schema: &'value NP_Parsed_Schema) -> Option<Self> {
-        match schema {
-            NP_Parsed_Schema::UTF8String { default, .. } => match default {
-                Some(x) => Some(x),
-                None => None,
-            },
-            _ => None
-        }
-    }
+
     fn get_size<M: NP_Memory>(cursor: &NP_Cursor, memory: &M) -> Result<usize, NP_Error> {
 
         let c_value = cursor.get_value(memory);
@@ -297,6 +289,30 @@ impl<'value> NP_Value<'value> for &'value str {
             Err(_e) => NP_JSON::Null,
         }
     }
+    
+    fn default_value(schema: &'value NP_Parsed_Schema) -> Option<Self> {
+        match NP_String::default_value(schema) {
+            Some(x) => Some(String::from(x)),
+            None => None
+        }
+    }
+
+}
+
+
+impl<'value> NP_Scalar<'value> for NP_String<'value> {
+    fn schema_default(_schema: &NP_Parsed_Schema) -> Option<Self> where Self: Sized {
+        None
+    }
+}
+
+impl<'value> NP_Value<'value> for NP_String<'value> {
+    fn type_idx() -> (&'value str, NP_TypeKeys) { String::type_idx() }
+    fn self_type_idx(&self) -> (&'value str, NP_TypeKeys) { String::default().self_type_idx() }
+
+    fn schema_to_json(_schema: &Vec<NP_Parsed_Schema>, _address: usize)-> Result<NP_JSON, NP_Error> {
+        String::schema_to_json(_schema, _address)
+    }
 
     fn set_value<'set, M: NP_Memory>(cursor: NP_Cursor, memory: &'set M, value: Self) -> Result<NP_Cursor, NP_Error> where Self: 'set + Sized {
 
@@ -409,7 +425,70 @@ impl<'value> NP_Value<'value> for &'value str {
             return Ok(cursor);
         }
     }
+
+    fn default_value(schema: &'value NP_Parsed_Schema) -> Option<Self> {
+        match schema {
+            NP_Parsed_Schema::UTF8String { default, .. } => match default {
+                Some(x) => Some(x),
+                None => None,
+            },
+            _ => None
+        }
+    }
+
+    fn into_value<M: NP_Memory>(cursor: &NP_Cursor, memory: &'value M) -> Result<Option<Self>, NP_Error> where Self: Sized {
+
+        let c_value = cursor.get_value(memory);
+
+        let value_addr = c_value.get_addr_value() as usize;
+        // empty value
+        if value_addr == 0 {
+            return Ok(None);
+        }
+
+        match memory.get_schema(cursor.schema_addr) {
+            NP_Parsed_Schema::UTF8String { size, .. } => {
+                if *size > 0 {
+                    // fixed size
+
+                    // get bytes
+                    let bytes = &memory.read_bytes()[(value_addr)..(value_addr + (*size as usize))];
+
+                    return Ok(Some(unsafe { str::from_utf8_unchecked(bytes) }));
+                } else {
+                    // dynamic size
+                    // get size of bytes
+
+                    let bytes_size: usize = u16::from_be_bytes(*memory.get_2_bytes(value_addr).unwrap_or(&[0u8; 2])) as usize;
+
+                    // get bytes
+                    let bytes = &memory.read_bytes()[(value_addr + 2)..(value_addr + 2 + bytes_size)];
+
+                    return Ok(Some(unsafe { str::from_utf8_unchecked(bytes) }));
+                }
+            }
+            _ => Err(NP_Error::new("unreachable")),
+        }
+    }
+
+    fn to_json<M: NP_Memory>(cursor: &NP_Cursor, memory: &'value M) -> NP_JSON {
+        String::to_json(cursor, memory)
+    }
+
+    fn get_size<M: NP_Memory>(cursor: &NP_Cursor, memory: &M) -> Result<usize, NP_Error> {
+        String::get_size(cursor, memory)
+    }
+
+    fn from_json_to_schema(schema: Vec<NP_Parsed_Schema>, _json_schema: &Box<NP_JSON>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {
+        String::from_json_to_schema(schema, _json_schema)
+    }
+
+
+    fn from_bytes_to_schema(schema: Vec<NP_Parsed_Schema>, _address: usize, _bytes: &[u8]) -> (bool, Vec<NP_Parsed_Schema>) {
+        String::from_bytes_to_schema(schema, _address, _bytes)
+    }
 }
+
 
 #[test]
 fn schema_parsing_works() -> Result<(), NP_Error> {

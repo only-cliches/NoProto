@@ -395,7 +395,7 @@ impl<'value> NP_Value<'value> for NP_Tuple<'value> {
      
     }
 
-    fn schema_default(_schema: &NP_Parsed_Schema) -> Option<Self> {
+    fn default_value(_schema: &NP_Parsed_Schema) -> Option<Self> {
         None
     }
 

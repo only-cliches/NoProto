@@ -28,10 +28,14 @@ impl<'tuple> NP_Tuple<'tuple> {
 
 
     #[inline(always)]
-    pub fn select<M: NP_Memory>(mut tuple_cursor: NP_Cursor, values: &Vec<usize>, index: usize, make_path: bool, memory: &M) -> Result<Option<NP_Cursor>, NP_Error> {
+    pub fn select<M: NP_Memory>(mut tuple_cursor: NP_Cursor, values: &Vec<usize>, index: usize, make_path: bool, schema_query: bool, memory: &M) -> Result<Option<NP_Cursor>, NP_Error> {
 
         if index >= values.len() {
             return Ok(None)
+        }
+
+        if schema_query {
+            return Ok(Some(NP_Cursor::new(0, values[index], tuple_cursor.schema_addr)));
         }
 
         let column_schema_data = values[index];
@@ -99,8 +103,8 @@ impl<'tuple> NP_Tuple<'tuple> {
 
                     // set default values for everything
                     for x in 0..values.len() {
-                        let cursor = opt_err(Self::select(table_cursor.clone(), values, x, false, memory)?)?;
-                        NP_Cursor::set_default(cursor, memory)?;
+                        let cursor = opt_err(Self::select(table_cursor.clone(), values, x, false, false, memory)?)?;
+                        NP_Cursor::set_schema_default(cursor, memory)?;
                     }
                 }
 
@@ -398,7 +402,7 @@ impl<'value> NP_Value<'value> for NP_Tuple<'value> {
      
     }
 
-    fn schema_default(_schema: &NP_Parsed_Schema) -> Option<Self> {
+    fn default_value(_schema: &NP_Parsed_Schema) -> Option<Self> {
         None
     }
 
