@@ -10,6 +10,7 @@ Performance of Protocol Buffers with flexibility of JSON
 - `no_std` support, WASM ready
 - Native byte-wise sorting
 - Extensive Documentation & Testing
+- Passes Miri compiler safety checks
 - Easily mutate, add or delete values in existing buffers
 - Schemas allow default values and non destructive updates
 - Supports most common native data types
@@ -123,7 +124,6 @@ let user_bytes: Vec<u8> = user_buffer.close();
 
 // we can now save user_bytes to disk, 
 // send it over the network, or whatever else is needed with the data
-
 ```
 
 ## Guided Learning / Next Steps:
@@ -143,15 +143,15 @@ The format and data used in the benchmarks were taken from the `flatbuffers` ben
 | Library            | Encode | Decode All | Decode 1 | Update 1 | Size (bytes) | Size (Zlib) |
 |--------------------|--------|------------|----------|----------|--------------|-------------|
 | **Runtime Libs**   |        |            |          |          |              |             |
-| *NoProto*          |   1172 |       1642 |    50000 |    13333 |          208 |         166 |
-| JSON               |    614 |        486 |      594 |      437 |          439 |         184 |
-| BSON               |    130 |        122 |      130 |       93 |          414 |         216 |
-| MessagePack        |    157 |        258 |      276 |      137 |          296 |         187 |
+| *NoProto*          |    923 |       1445 |    41667 |    11628 |          208 |         166 |
+| JSON               |    543 |        438 |      539 |      400 |          439 |         184 |
+| BSON               |    112 |        102 |      108 |       79 |          414 |         216 |
+| MessagePack        |    131 |        224 |      237 |      119 |          296 |         187 |
 | **Compiled Libs**  |        |            |          |          |              |             |
-| Flatbuffers        |   1175 |      15625 |   250000 |     1247 |          264 |         181 |
-| Bincode            |   6667 |       9901 |    10638 |     4673 |          163 |         129 |
-| Protobuf           |    943 |       1311 |     1255 |      542 |          154 |         141 |
-| Prost              |   1531 |       2037 |     2288 |     1047 |          154 |         142 |
+| Flatbuffers        |    970 |      13889 |   200000 |     1063 |          264 |         181 |
+| Bincode            |   5495 |       8696 |     9434 |     3906 |          163 |         129 |
+| Protobuf           |    824 |       1124 |     1152 |      485 |          154 |         141 |
+| Prost              |   1383 |       1835 |     1988 |      978 |          154 |         142 |
 
 - **Encode**: Transfer a collection of fields of test data into a serialized `Vec<u8>`.
 - **Decode All**: Deserialize the test object from the `Vec<u8>` into all fields.

@@ -55,9 +55,6 @@ impl<'value> super::NP_Scalar<'value> for NP_Bytes {
             _ => None
         }
     }
-}
-
-impl<'value> NP_Value<'value> for NP_Bytes {
 
     fn np_max_value<M: NP_Memory>(cursor: &NP_Cursor, memory: &M) -> Option<Self> {
         let size = match memory.get_schema(cursor.schema_addr) {
@@ -100,6 +97,11 @@ impl<'value> NP_Value<'value> for NP_Bytes {
             Some(value)
         }
     }
+
+}
+
+impl<'value> NP_Value<'value> for NP_Bytes {
+
 
 
     fn type_idx() -> (&'value str, NP_TypeKeys) { ("bytes", NP_TypeKeys::Bytes) }
@@ -330,10 +332,6 @@ impl<'value> super::NP_Scalar<'value> for &[u8] {
         None
     }
 
-}
-
-impl<'value> NP_Value<'value> for NP_Borrow_Bytes<'value> {
-
     fn np_max_value<M: NP_Memory>(_cursor: &NP_Cursor, _memory: &M) -> Option<Self> {
         None
     }
@@ -341,6 +339,11 @@ impl<'value> NP_Value<'value> for NP_Borrow_Bytes<'value> {
     fn np_min_value<M: NP_Memory>(_cursor: &NP_Cursor, _memory: &M) -> Option<Self> {
         None
     }
+}
+
+impl<'value> NP_Value<'value> for NP_Borrow_Bytes<'value> {
+
+
 
     fn type_idx() -> (&'value str, NP_TypeKeys) { NP_Bytes::type_idx() }
     fn self_type_idx(&self) -> (&'value str, NP_TypeKeys) { NP_Bytes::type_idx() }

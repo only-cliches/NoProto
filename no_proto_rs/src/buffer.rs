@@ -234,6 +234,8 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// 
     /// *WARNING* If you call this on a collection (Map, Tuple, List, or Table) ALL children will be overwritten/set.  The method is recursive, so this will hit *all* children, including nested children.
     /// 
+    /// When this is applied to a `string` data type, only ascii values are supported.
+    /// 
     /// ```
     /// use no_proto::error::NP_Error;
     /// use no_proto::NP_Factory;
@@ -289,6 +291,8 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// Will return `true` if a value was found and succesfully set, `false` otherwise.
     /// 
     /// *WARNING* If you call this on a collection (Map, Tuple, List, or Table) ALL children will be overwritten/set.  The method is recursive, so this will hit *all* children, including nested children.
+    /// 
+    /// When this is applied to a `string` data type, only ascii values are supported.
     /// 
     /// ```
     /// use no_proto::error::NP_Error;

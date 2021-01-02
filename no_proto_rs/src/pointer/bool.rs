@@ -34,11 +34,6 @@ impl<'value> super::NP_Scalar<'value> for bool {
     fn schema_default(_schema: &NP_Parsed_Schema) -> Option<Self> where Self: Sized {
         Some(Self::default())
     }
-
-}
-
-impl<'value> NP_Value<'value> for bool {
-
     fn np_max_value<M: NP_Memory>(_cursor: &NP_Cursor, _memory: &M) -> Option<Self> {
         Some(true)
     }
@@ -46,6 +41,9 @@ impl<'value> NP_Value<'value> for bool {
     fn np_min_value<M: NP_Memory>(_cursor: &NP_Cursor, _memory: &M) -> Option<Self> {
         Some(false)
     }
+}
+
+impl<'value> NP_Value<'value> for bool {
 
     fn type_idx() -> (&'value str, NP_TypeKeys) { ("bool", NP_TypeKeys::Boolean) }
     fn self_type_idx(&self) -> (&'value str, NP_TypeKeys) { ("bool", NP_TypeKeys::Boolean) }

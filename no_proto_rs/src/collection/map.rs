@@ -187,15 +187,21 @@ impl<'map> NP_Map<'map> {
 impl<'value> NP_Value<'value> for NP_Map<'value> {
 
     fn to_json<M: NP_Memory>(cursor: &NP_Cursor, memory: &'value M) -> NP_JSON {
-        panic!()
-    }
+        let c_value = cursor.get_value(memory);
 
-    fn np_max_value<M: NP_Memory>(_cursor: &NP_Cursor, _memory: &M) -> Option<Self> {
-        None
-    }
+        if c_value.get_addr_value() == 0 {
+            return NP_JSON::Null
+        }
 
-    fn np_min_value<M: NP_Memory>(_cursor: &NP_Cursor, _memory: &M) -> Option<Self> {
-        None
+        let mut json_map = JSMAP::new();
+
+        let mut map_iter = NP_Map::new_iter(&cursor, memory);
+
+        while let Some((key, item)) = NP_Map::step_iter(&mut map_iter, memory) {
+            json_map.insert(String::from(key), NP_Cursor::json_encode(&item, memory));     
+        }
+
+        NP_JSON::Dictionary(json_map)
     }
 
     fn type_idx() -> (&'value str, NP_TypeKeys) { ("map", NP_TypeKeys::Map) }

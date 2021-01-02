@@ -50,6 +50,14 @@ impl<'value> super::NP_Scalar<'value> for NP_Date {
         Some(Self::default())
     }
 
+    fn np_max_value<M: NP_Memory>(_cursor: &NP_Cursor, _memory: &M) -> Option<Self> {
+        Some(NP_Date { value: u64::MAX })
+    }
+
+    fn np_min_value<M: NP_Memory>(_cursor: &NP_Cursor, _memory: &M) -> Option<Self> {
+        Some(NP_Date { value: u64::MIN })
+    }
+    
 }
 
 impl NP_Date {
@@ -73,13 +81,7 @@ impl Debug for NP_Date {
 
 impl<'value> NP_Value<'value> for NP_Date {
 
-    fn np_max_value<M: NP_Memory>(_cursor: &NP_Cursor, _memory: &M) -> Option<Self> {
-        Some(NP_Date { value: u64::MAX })
-    }
 
-    fn np_min_value<M: NP_Memory>(_cursor: &NP_Cursor, _memory: &M) -> Option<Self> {
-        Some(NP_Date { value: u64::MIN })
-    }
 
     fn type_idx() -> (&'value str, NP_TypeKeys) { ("date", NP_TypeKeys::Date) }
     fn self_type_idx(&self) -> (&'value str, NP_TypeKeys) { ("date", NP_TypeKeys::Date) }

@@ -347,15 +347,25 @@ impl NP_List {
 impl<'value> NP_Value<'value> for NP_List {
 
     fn to_json<M: NP_Memory>(cursor: &NP_Cursor, memory: &'value M) -> NP_JSON {
-        panic!()
-    }
+        let c_value = cursor.get_value(memory);
 
-    fn np_max_value<M: NP_Memory>(_cursor: &NP_Cursor, _memory: &M) -> Option<Self> {
-        None
-    }
+        if c_value.get_addr_value() == 0 {
+            return NP_JSON::Null
+        }
 
-    fn np_min_value<M: NP_Memory>(_cursor: &NP_Cursor, _memory: &M) -> Option<Self> {
-        None
+        let mut json_list = Vec::new();
+
+        let mut list_iter = NP_List::new_iter(&cursor, memory, false, 0);
+
+        while let Some((_index, item)) = NP_List::step_iter(&mut list_iter, memory) {
+             if let Some(item_cursor) = &item {
+                json_list.push(NP_Cursor::json_encode(item_cursor, memory));   
+            } else {
+                json_list.push(NP_JSON::Null);   
+            }    
+        }
+
+        NP_JSON::Array(json_list)
     }
 
     fn type_idx() -> (&'value str, NP_TypeKeys) { ("list", NP_TypeKeys::List) }

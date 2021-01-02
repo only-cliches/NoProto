@@ -147,10 +147,6 @@ impl<'value> NP_Scalar<'value> for NP_UUID {
     fn schema_default(_schema: &NP_Parsed_Schema) -> Option<Self> where Self: Sized {
         Some(Self::default())
     }
-}
-
-impl<'value> NP_Value<'value> for NP_UUID {
-
     fn np_max_value<M: NP_Memory>(_cursor: &NP_Cursor, _memory: &M) -> Option<Self> {
         Some(NP_UUID { value: [255u8; 16]})
     }
@@ -158,6 +154,11 @@ impl<'value> NP_Value<'value> for NP_UUID {
     fn np_min_value<M: NP_Memory>(_cursor: &NP_Cursor, _memory: &M) -> Option<Self> {
         Some(NP_UUID { value: [0u8; 16]})
     }
+}
+
+impl<'value> NP_Value<'value> for NP_UUID {
+
+
 
     fn type_idx() -> (&'value str, NP_TypeKeys) { ("uuid", NP_TypeKeys::Uuid) }
     fn self_type_idx(&self) -> (&'value str, NP_TypeKeys) { ("uuid", NP_TypeKeys::Uuid) }
@@ -242,9 +243,6 @@ impl<'value> NP_Scalar<'value> for &NP_UUID {
     fn schema_default(_schema: &NP_Parsed_Schema) -> Option<Self> where Self: Sized {
         None
     }
-}
-
-impl<'value> NP_Value<'value> for &NP_UUID {
 
     fn np_max_value<M: NP_Memory>(_cursor: &NP_Cursor, _memory: &M) -> Option<Self> {
         None
@@ -253,6 +251,9 @@ impl<'value> NP_Value<'value> for &NP_UUID {
     fn np_min_value<M: NP_Memory>(_cursor: &NP_Cursor, _memory: &M) -> Option<Self> {
         None
     }
+}
+
+impl<'value> NP_Value<'value> for &NP_UUID {
 
     fn type_idx() -> (&'value str, NP_TypeKeys) { NP_UUID::type_idx() }
     fn self_type_idx(&self) -> (&'value str, NP_TypeKeys) { NP_UUID::default().self_type_idx() }

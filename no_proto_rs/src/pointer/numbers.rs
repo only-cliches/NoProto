@@ -65,9 +65,6 @@ macro_rules! noproto_number {
             fn schema_default(_schema: &NP_Parsed_Schema) -> Option<Self> where Self: Sized {
                 Some(Self::default())
             }
-        }
-
-        impl<'value> NP_Value<'value> for $t {
 
             fn np_max_value<M: NP_Memory>(_cursor: &NP_Cursor, _memory: &M) -> Option<Self> {
                 Some(<$t>::MAX)
@@ -76,6 +73,9 @@ macro_rules! noproto_number {
             fn np_min_value<M: NP_Memory>(_cursor: &NP_Cursor, _memory: &M) -> Option<Self> {
                 Some(<$t>::MIN)
             }
+        }
+
+        impl<'value> NP_Value<'value> for $t {
 
             fn type_idx() -> (&'value str, NP_TypeKeys) { ($str1, $tkey) }
 

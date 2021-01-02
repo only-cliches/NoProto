@@ -99,6 +99,24 @@ impl<'value> super::NP_Scalar<'value> for NP_Dec {
             _ => None
         }
     }
+
+    fn np_max_value<M: NP_Memory>(cursor: &NP_Cursor, memory: &M) -> Option<Self> {
+        match memory.get_schema(cursor.schema_addr) {
+            NP_Parsed_Schema::Decimal { exp, .. } => {
+                Some(NP_Dec::new(i64::MAX, *exp))
+            },
+            _ => None
+        }
+    }
+
+    fn np_min_value<M: NP_Memory>(cursor: &NP_Cursor, memory: &M) -> Option<Self> {
+        match memory.get_schema(cursor.schema_addr) {
+            NP_Parsed_Schema::Decimal { exp, .. } => {
+                Some(NP_Dec::new(i64::MIN, *exp))
+            },
+            _ => None
+        }
+    }
 }
 
 impl NP_Dec {
@@ -678,23 +696,7 @@ impl Default for NP_Dec {
 
 impl<'value> NP_Value<'value> for NP_Dec {
 
-    fn np_max_value<M: NP_Memory>(cursor: &NP_Cursor, memory: &M) -> Option<Self> {
-        match memory.get_schema(cursor.schema_addr) {
-            NP_Parsed_Schema::Decimal { exp, .. } => {
-                Some(NP_Dec::new(i64::MAX, *exp))
-            },
-            _ => None
-        }
-    }
 
-    fn np_min_value<M: NP_Memory>(cursor: &NP_Cursor, memory: &M) -> Option<Self> {
-        match memory.get_schema(cursor.schema_addr) {
-            NP_Parsed_Schema::Decimal { exp, .. } => {
-                Some(NP_Dec::new(i64::MIN, *exp))
-            },
-            _ => None
-        }
-    }
 
     fn type_idx() -> (&'value str, NP_TypeKeys) { ("decimal", NP_TypeKeys::Decimal) }
     fn self_type_idx(&self) -> (&'value str, NP_TypeKeys) { ("decimal", NP_TypeKeys::Decimal) }

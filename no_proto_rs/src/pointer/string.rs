@@ -58,10 +58,6 @@ impl<'value> NP_Scalar<'value> for String {
             _ => None
         }
     }
-}
-
-
-impl<'value> NP_Value<'value> for String {
 
     fn np_max_value<M: NP_Memory>(cursor: &NP_Cursor, memory: &M) -> Option<Self> {
         let size = match memory.get_schema(cursor.schema_addr) {
@@ -104,6 +100,12 @@ impl<'value> NP_Value<'value> for String {
             Some(value)
         }
     }
+}
+
+
+impl<'value> NP_Value<'value> for String {
+
+
 
     fn type_idx() -> (&'value str, NP_TypeKeys) {
         ("string", NP_TypeKeys::UTF8String)
@@ -347,11 +349,6 @@ impl<'value> NP_Scalar<'value> for NP_String<'value> {
     fn schema_default(_schema: &NP_Parsed_Schema) -> Option<Self> where Self: Sized {
         None
     }
-
-}
-
-impl<'value> NP_Value<'value> for NP_String<'value> {
-
     fn np_max_value<M: NP_Memory>(_cursor: &NP_Cursor, _memory: &M) -> Option<Self> {
         None
     }
@@ -359,6 +356,9 @@ impl<'value> NP_Value<'value> for NP_String<'value> {
     fn np_min_value<M: NP_Memory>(_cursor: &NP_Cursor, _memory: &M) -> Option<Self> {
         None
     }
+}
+
+impl<'value> NP_Value<'value> for NP_String<'value> {
 
     fn type_idx() -> (&'value str, NP_TypeKeys) { String::type_idx() }
     fn self_type_idx(&self) -> (&'value str, NP_TypeKeys) { String::default().self_type_idx() }

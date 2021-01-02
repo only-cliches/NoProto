@@ -57,72 +57,6 @@ impl<'value> super::NP_Scalar<'value> for NP_Geo_Bytes{
             _ => None
         }
     }
-}
-
-impl NP_Geo_Bytes {
-    /// Get the actual geographic coordinate for these bytes
-    pub fn into_geo(self) -> NP_Geo {
-        match self.size {
-            16 => {
-         
-                let mut bytes_lat = self.lat.as_slice().try_into().unwrap_or([0; 8]);
-                let mut bytes_lon = self.lng.as_slice().try_into().unwrap_or([0; 8]);
-
-                // convert to signed bytes
-                bytes_lat[0] = to_signed(bytes_lat[0]); 
-                bytes_lon[0] = to_signed(bytes_lon[0]); 
-
-                let lat = i64::from_be_bytes(bytes_lat) as f64;
-                let lon = i64::from_be_bytes(bytes_lon) as f64;
-
-                let dev = NP_Geo::get_deviser(16);
-
-                NP_Geo { lat: lat / dev, lng: lon / dev, size: 16}
-            },
-            8 => {
-                let mut bytes_lat = self.lat.as_slice().try_into().unwrap_or([0; 4]);
-                let mut bytes_lon = self.lng.as_slice().try_into().unwrap_or([0; 4]);
-
-                // convert to signed bytes
-                bytes_lat[0] = to_signed(bytes_lat[0]); 
-                bytes_lon[0] = to_signed(bytes_lon[0]); 
-
-                let lat = i32::from_be_bytes(bytes_lat) as f64;
-                let lon = i32::from_be_bytes(bytes_lon) as f64;
-
-                let dev = NP_Geo::get_deviser(8);
-
-                NP_Geo { lat: lat / dev, lng: lon / dev, size: 8}
-            },
-            4 => {
-                let mut bytes_lat = self.lat.as_slice().try_into().unwrap_or([0; 2]);
-                let mut bytes_lon = self.lng.as_slice().try_into().unwrap_or([0; 2]);
-
-                // convert to signed bytes
-                bytes_lat[0] = to_signed(bytes_lat[0]); 
-                bytes_lon[0] = to_signed(bytes_lon[0]); 
-
-                let lat = i16::from_be_bytes(bytes_lat) as f64;
-                let lon = i16::from_be_bytes(bytes_lon) as f64;
-
-                let dev = NP_Geo::get_deviser(4);
-
-                NP_Geo { lat: lat / dev, lng: lon / dev, size: 4}
-            },
-            _ => {
-                NP_Geo { lat: 0f64, lng: 0f64, size: 4}
-            }
-        }
-    }
-}
-
-impl Default for NP_Geo_Bytes {
-    fn default() -> Self { 
-        NP_Geo_Bytes { lat: Vec::new(), lng: Vec::new(), size: 0 }
-     }
-}
-
-impl<'value> NP_Value<'value> for NP_Geo_Bytes {
 
     fn np_max_value<M: NP_Memory>(cursor: &NP_Cursor, memory: &M) -> Option<Self> {
         match memory.get_schema(cursor.schema_addr) {
@@ -141,6 +75,80 @@ impl<'value> NP_Value<'value> for NP_Geo_Bytes {
             _ => None
         }
     }
+}
+
+impl NP_Geo_Bytes {
+    /// Get the actual geographic coordinate for these bytes
+    pub fn into_geo(self) -> NP_Geo {
+        match self.size {
+            16 => {
+         
+                let mut bytes_lat = self.lat.as_slice().try_into().unwrap_or([0; 8]);
+                let mut bytes_lon = self.lng.as_slice().try_into().unwrap_or([0; 8]);
+
+                // convert to signed bytes
+                bytes_lat[0] = to_signed(bytes_lat[0]); 
+                bytes_lon[0] = to_signed(bytes_lon[0]); 
+
+                let dev = NP_Geo::get_deviser((self.size as u8).into());
+
+                let lat = i64::from_be_bytes(bytes_lat) as f64 / dev;
+                let lon = i64::from_be_bytes(bytes_lon) as f64 / dev;
+                let use_lat = f64::min(f64::max(lat, -90f64), 90f64);
+                let use_lng = f64::min(f64::max(lon, -180f64), 180f64);
+
+                NP_Geo { lat: use_lat, lng: use_lng, size: self.size}
+            },
+            8 => {
+                let mut bytes_lat = self.lat.as_slice().try_into().unwrap_or([0; 4]);
+                let mut bytes_lon = self.lng.as_slice().try_into().unwrap_or([0; 4]);
+
+                // convert to signed bytes
+                bytes_lat[0] = to_signed(bytes_lat[0]); 
+                bytes_lon[0] = to_signed(bytes_lon[0]); 
+
+                let dev = NP_Geo::get_deviser((self.size as u8).into());
+
+                let lat = i32::from_be_bytes(bytes_lat) as f64 / dev;
+                let lon = i32::from_be_bytes(bytes_lon) as f64 / dev;
+                let use_lat = f64::min(f64::max(lat, -90f64), 90f64);
+                let use_lng = f64::min(f64::max(lon, -180f64), 180f64);
+
+                NP_Geo { lat: use_lat, lng: use_lng, size: self.size}
+            },
+            4 => {
+                let mut bytes_lat = self.lat.as_slice().try_into().unwrap_or([0; 2]);
+                let mut bytes_lon = self.lng.as_slice().try_into().unwrap_or([0; 2]);
+
+                // convert to signed bytes
+                bytes_lat[0] = to_signed(bytes_lat[0]); 
+                bytes_lon[0] = to_signed(bytes_lon[0]); 
+
+                let dev = NP_Geo::get_deviser((self.size as u8).into());
+
+                let lat = i16::from_be_bytes(bytes_lat) as f64 / dev;
+                let lon = i16::from_be_bytes(bytes_lon) as f64 / dev;
+                let use_lat = f64::min(f64::max(lat, -90f64), 90f64);
+                let use_lng = f64::min(f64::max(lon, -180f64), 180f64);
+
+                NP_Geo { lat: use_lat, lng: use_lng, size: self.size}
+            },
+            _ => {
+                NP_Geo { lat: 0f64, lng: 0f64, size: 4}
+            }
+        }
+    }
+}
+
+impl Default for NP_Geo_Bytes {
+    fn default() -> Self { 
+        NP_Geo_Bytes { lat: Vec::new(), lng: Vec::new(), size: 4 }
+     }
+}
+
+impl<'value> NP_Value<'value> for NP_Geo_Bytes {
+
+
     
     fn default_value(_schema: &NP_Parsed_Schema) -> Option<Self> {
         None
@@ -231,7 +239,7 @@ impl<'value> NP_Value<'value> for NP_Geo_Bytes {
 /// 
 /// Check out documentation [here](../geo/index.html).
 /// 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct NP_Geo {
     /// The size of this geographic coordinate.  4, 8 or 16
     pub size: u8,
@@ -246,6 +254,24 @@ impl<'value> super::NP_Scalar<'value> for NP_Geo {
         match schema {
             NP_Parsed_Schema::Geo { size, ..} => {
                 Some(NP_Geo { size: *size, lat: 0.0, lng: 0.0})
+            },
+            _ => None
+        }
+    }
+
+    fn np_max_value<M: NP_Memory>(cursor: &NP_Cursor, memory: &M) -> Option<Self> {
+        match memory.get_schema(cursor.schema_addr) {
+            NP_Parsed_Schema::Geo { size, ..} => {
+                Some(NP_Geo { size: *size, lat: 90f64, lng: 180f64})
+            },
+            _ => None
+        }
+    }
+
+    fn np_min_value<M: NP_Memory>(cursor: &NP_Cursor, memory: &M) -> Option<Self> {
+        match memory.get_schema(cursor.schema_addr) {
+            NP_Parsed_Schema::Geo { size, ..} => {
+                Some(NP_Geo { size: *size, lat: -90f64, lng: -180f64})
             },
             _ => None
         }
@@ -385,24 +411,6 @@ fn geo_default_value(size: u8, json: &NP_JSON) -> Result<Option<NP_Geo_Bytes>, N
 }
 
 impl<'value> NP_Value<'value> for NP_Geo {
-
-    fn np_max_value<M: NP_Memory>(cursor: &NP_Cursor, memory: &M) -> Option<Self> {
-        match memory.get_schema(cursor.schema_addr) {
-            NP_Parsed_Schema::Geo { size, ..} => {
-                Some(NP_Geo { size: *size, lat: 90f64, lng: 180f64})
-            },
-            _ => None
-        }
-    }
-
-    fn np_min_value<M: NP_Memory>(cursor: &NP_Cursor, memory: &M) -> Option<Self> {
-        match memory.get_schema(cursor.schema_addr) {
-            NP_Parsed_Schema::Geo { size, ..} => {
-                Some(NP_Geo { size: *size, lat: -90f64, lng: -180f64})
-            },
-            _ => None
-        }
-    }
 
     fn default_value(schema: &NP_Parsed_Schema) -> Option<Self> {
         match schema {
@@ -883,17 +891,17 @@ fn default_value_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"geo4\",\"default\":{\"lat\":20.23,\"lng\":-12.21}}";
     let factory = crate::NP_Factory::new(schema)?;
     let buffer = factory.empty_buffer(None);
-    assert_eq!((buffer.get::<NP_Geo>(&[])?.unwrap()).get_bytes().unwrap(), NP_Geo::new(4, 20.23, -12.21).get_bytes().unwrap());
+    assert_eq!((buffer.get::<NP_Geo>(&[])?.unwrap()), NP_Geo::new(4, 20.23, -12.21));
 
     let schema = "{\"type\":\"geo8\",\"default\":{\"lat\":20.2334234,\"lng\":-12.2146363}}";
     let factory = crate::NP_Factory::new(schema)?;
     let buffer = factory.empty_buffer(None);
-    assert_eq!((buffer.get::<NP_Geo>(&[])?.unwrap()).get_bytes().unwrap(), NP_Geo::new(8, 20.2334234, -12.2146363).get_bytes().unwrap());
+    assert_eq!((buffer.get::<NP_Geo>(&[])?.unwrap()), NP_Geo::new(8, 20.2334234, -12.2146363));
 
     let schema = "{\"type\":\"geo16\",\"default\":{\"lat\":20.233423434,\"lng\":-12.214636323}}";
     let factory = crate::NP_Factory::new(schema)?;
     let buffer = factory.empty_buffer(None);
-    assert_eq!((buffer.get::<NP_Geo>(&[])?.unwrap()).get_bytes().unwrap(), NP_Geo::new(16, 20.233423434, -12.214636323).get_bytes().unwrap());
+    assert_eq!((buffer.get::<NP_Geo>(&[])?.unwrap()), NP_Geo::new(16, 20.233423434, -12.214636323));
 
     Ok(())
 }
@@ -904,7 +912,7 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let factory = crate::NP_Factory::new(schema)?;
     let mut buffer = factory.empty_buffer(None);
     buffer.set(&[], NP_Geo::new(4, 20.23, -12.21))?;
-    assert_eq!((buffer.get::<NP_Geo>(&[])?.unwrap()).get_bytes().unwrap(), NP_Geo::new(4, 20.23, -12.21).get_bytes().unwrap());
+    assert_eq!((buffer.get::<NP_Geo>(&[])?.unwrap()), NP_Geo::new(4, 20.23, -12.21));
     buffer.del(&[])?;
     assert!({
         match buffer.get::<NP_Geo>(&[])? {
