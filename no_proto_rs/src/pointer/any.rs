@@ -16,6 +16,14 @@ pub struct NP_Any { }
 #[allow(unused_variables)]
 impl<'value> NP_Value<'value> for NP_Any {
 
+    fn np_max_value<M: NP_Memory>(cursor: &NP_Cursor, memory: &M) -> Option<Self> {
+        None
+    }
+
+    fn np_min_value<M: NP_Memory>(cursor: &NP_Cursor, memory: &M) -> Option<Self> {
+        None
+    }
+
     fn type_idx() -> (&'value str, NP_TypeKeys) { ("any", NP_TypeKeys::Any) }
     fn self_type_idx(&self) -> (&'value str, NP_TypeKeys) { ("any", NP_TypeKeys::Any) }
 

@@ -118,9 +118,13 @@ fn fmix32(mut h: u32) -> u32 {
 
 #[inline(always)]
 fn get_32_block(bytes: &[u8], index: usize) -> u32 {
-    let b32: &[u32] = unsafe { core::mem::transmute(bytes) };
+    let real_index = index.wrapping_mul(4);
+    let u32_bytes = &bytes[real_index..(real_index + 4)];
 
-    return b32[index];
+    return unsafe {
+        let bytes = *(u32_bytes as *const [u8] as *const [u8; 4]);
+        core::mem::transmute(bytes)
+    }
 }
 
 #[inline(always)]

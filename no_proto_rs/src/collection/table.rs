@@ -175,6 +175,18 @@ impl<'table> NP_Table<'table> {
 
 impl<'value> NP_Value<'value> for NP_Table<'value> {
 
+    fn to_json<M: NP_Memory>(cursor: &NP_Cursor, memory: &'value M) -> NP_JSON {
+        panic!()
+    }
+
+    fn np_max_value<M: NP_Memory>(_cursor: &NP_Cursor, _memory: &M) -> Option<Self> {
+        None
+    }
+
+    fn np_min_value<M: NP_Memory>(_cursor: &NP_Cursor, _memory: &M) -> Option<Self> {
+        None
+    }
+
     fn type_idx() -> (&'value str, NP_TypeKeys) { ("table", NP_TypeKeys::Table) }
     fn self_type_idx(&self) -> (&'value str, NP_TypeKeys) { ("table", NP_TypeKeys::Table) }
 
@@ -286,68 +298,11 @@ impl<'value> NP_Value<'value> for NP_Table<'value> {
         Ok(acc_size)
     }
 
-    fn to_json<M: NP_Memory>(cursor: &NP_Cursor, memory: &'value M) -> NP_JSON {
 
-        let c_value = cursor.get_value(memory);
-
-        if c_value.get_addr_value() == 0 { return NP_JSON::Null };
-
-        let mut json_map = JSMAP::new();
-
-        let mut table = Self::new_iter(&cursor, memory);
-
-        while let Some((_index, key, item)) = table.step_iter(memory) {
-            if let Some(real) = item {
-                json_map.insert(String::from(key), NP_Cursor::json_encode(&real, memory));  
-            } else {
-                json_map.insert(String::from(key), NP_JSON::Null);  
-            }            
-        }
-
-        NP_JSON::Dictionary(json_map)
-    }
 
     fn do_compact<M: NP_Memory, M2: NP_Memory>(from_cursor: NP_Cursor, from_memory: &'value M, mut to_cursor: NP_Cursor, to_memory: &'value M2) -> Result<NP_Cursor, NP_Error> where Self: 'value + Sized {
 
-        let from_value = from_cursor.get_value(from_memory);
-
-        if from_value.get_addr_value() == 0 {
-            return Ok(to_cursor) 
-        }
-
-        to_cursor = Self::make_first_vtable(to_cursor, to_memory)?;
-        let to_cursor_value = to_cursor.get_value(to_memory);
-        let mut last_real_vtable = to_cursor_value.get_addr_value() as usize;
-        let mut last_vtable_idx = 0usize;
-
-        let c: Vec<(u8, String, usize)>;
-        let col_schemas = match &from_memory.get_schema(from_cursor.schema_addr) {
-            NP_Parsed_Schema::Table { columns, .. } => {
-                columns
-            },
-            _ => { c = Vec::new(); &c }
-        };
-
-        let mut table = Self::new_iter(&from_cursor, from_memory);
-
-        while let Some((idx, _key, item)) = table.step_iter(from_memory) {
-           if let Some(real) = item {
-
-                let v_table =  idx / VTABLE_SIZE; // which vtable
-                let v_table_idx = idx % VTABLE_SIZE; // which index on the selected vtable
-                
-                if last_vtable_idx < v_table {
-                    let vtable_data = Self::get_vtable(last_real_vtable, to_memory);
-                    last_real_vtable = Self::make_next_vtable(vtable_data, to_memory)?;
-                    last_vtable_idx += 1;
-                }
-
-                let item_addr = last_real_vtable + (v_table_idx * 2);
-                NP_Cursor::compact(real.clone(), from_memory, NP_Cursor::new(item_addr, col_schemas[idx].2, to_cursor.schema_addr), to_memory)?;
-            }         
-        }
-
-        Ok(to_cursor)
+        panic!()
     }
 
     fn from_json_to_schema(mut schema: Vec<NP_Parsed_Schema>, json_schema: &Box<NP_JSON>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {

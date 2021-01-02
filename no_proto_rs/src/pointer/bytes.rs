@@ -59,6 +59,48 @@ impl<'value> super::NP_Scalar<'value> for NP_Bytes {
 
 impl<'value> NP_Value<'value> for NP_Bytes {
 
+    fn np_max_value<M: NP_Memory>(cursor: &NP_Cursor, memory: &M) -> Option<Self> {
+        let size = match memory.get_schema(cursor.schema_addr) {
+            NP_Parsed_Schema::Bytes { size, .. } => {
+                *size
+            },
+            _ => 0
+        };
+
+        if size == 0 {
+            None
+        } else {
+            let mut value: Vec<u8> = Vec::with_capacity(size as usize);
+
+            for _x in 0..size {
+                value.push(255);
+            }
+
+            Some(value)
+        }
+    }
+
+    fn np_min_value<M: NP_Memory>(cursor: &NP_Cursor, memory: &M) -> Option<Self> {
+        let size = match memory.get_schema(cursor.schema_addr) {
+            NP_Parsed_Schema::Bytes { size, .. } => {
+                *size
+            },
+            _ => 0
+        };
+
+        if size == 0 {
+            None
+        } else {
+            let mut value: Vec<u8> = Vec::with_capacity(size as usize);
+
+            for _x in 0..size {
+                value.push(0);
+            }
+
+            Some(value)
+        }
+    }
+
 
     fn type_idx() -> (&'value str, NP_TypeKeys) { ("bytes", NP_TypeKeys::Bytes) }
     fn self_type_idx(&self) -> (&'value str, NP_TypeKeys) { ("bytes", NP_TypeKeys::Bytes) }
@@ -287,10 +329,18 @@ impl<'value> super::NP_Scalar<'value> for &[u8] {
     fn schema_default(_schema: &NP_Parsed_Schema) -> Option<Self> where Self: Sized {
         None
     }
+
 }
 
 impl<'value> NP_Value<'value> for NP_Borrow_Bytes<'value> {
 
+    fn np_max_value<M: NP_Memory>(_cursor: &NP_Cursor, _memory: &M) -> Option<Self> {
+        None
+    }
+
+    fn np_min_value<M: NP_Memory>(_cursor: &NP_Cursor, _memory: &M) -> Option<Self> {
+        None
+    }
 
     fn type_idx() -> (&'value str, NP_TypeKeys) { NP_Bytes::type_idx() }
     fn self_type_idx(&self) -> (&'value str, NP_TypeKeys) { NP_Bytes::type_idx() }
@@ -315,7 +365,7 @@ impl<'value> NP_Value<'value> for NP_Borrow_Bytes<'value> {
  
     fn set_value<'set, M: NP_Memory>(cursor: NP_Cursor, memory: &'set M, value: Self) -> Result<NP_Cursor, NP_Error> where Self: 'set + Sized {
 
-        let c_value = cursor.get_value(memory);
+        let c_value = || { cursor.get_value(memory) };
     
         let bytes = value;
     
@@ -331,7 +381,7 @@ impl<'value> NP_Value<'value> for NP_Borrow_Bytes<'value> {
         if size > 0 {
             // fixed size bytes
     
-            if c_value.get_addr_value() == 0 {
+            if c_value().get_addr_value() == 0 {
                 // malloc new bytes
     
                 let mut empty_bytes: Vec<u8> = Vec::with_capacity(size as usize);
@@ -340,10 +390,10 @@ impl<'value> NP_Value<'value> for NP_Borrow_Bytes<'value> {
                 }
     
                 let new_addr = memory.malloc(empty_bytes)? as usize;
-                c_value.set_addr_value(new_addr as u16);
+                c_value().set_addr_value(new_addr as u16);
             }
 
-            let addr = c_value.get_addr_value() as usize;
+            let addr = c_value().get_addr_value() as usize;
 
             write_bytes = memory.write_bytes();
     
@@ -361,7 +411,7 @@ impl<'value> NP_Value<'value> for NP_Borrow_Bytes<'value> {
         }
     
         // flexible size
-        let addr_value = c_value.get_addr_value() as usize;
+        let addr_value = c_value().get_addr_value() as usize;
     
         let prev_size: usize = if addr_value != 0 {
             let size_bytes: &[u8; 2] = memory.get_2_bytes(addr_value).unwrap_or(&[0; 2]);
@@ -403,7 +453,7 @@ impl<'value> NP_Value<'value> for NP_Borrow_Bytes<'value> {
                 memory.malloc_borrow(&size_bytes)?
             };
     
-            c_value.set_addr_value(new_addr as u16);
+            c_value().set_addr_value(new_addr as u16);
     
             memory.malloc_borrow(bytes)?;
     

@@ -69,6 +69,14 @@ macro_rules! noproto_number {
 
         impl<'value> NP_Value<'value> for $t {
 
+            fn np_max_value<M: NP_Memory>(_cursor: &NP_Cursor, _memory: &M) -> Option<Self> {
+                Some(<$t>::MAX)
+            }
+        
+            fn np_min_value<M: NP_Memory>(_cursor: &NP_Cursor, _memory: &M) -> Option<Self> {
+                Some(<$t>::MIN)
+            }
+
             fn type_idx() -> (&'value str, NP_TypeKeys) { ($str1, $tkey) }
 
             fn self_type_idx(&self) -> (&'value str, NP_TypeKeys) { ($str1, $tkey) }

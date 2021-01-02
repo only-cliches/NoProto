@@ -154,6 +154,15 @@ impl<'value> NP_Scalar<'value> for NP_ULID {
 
 impl<'value> NP_Value<'value> for NP_ULID {
 
+
+    fn np_max_value<M: NP_Memory>(_cursor: &NP_Cursor, _memory: &M) -> Option<Self> {
+        Some(NP_ULID { value: [255u8; 16]})
+    }
+
+    fn np_min_value<M: NP_Memory>(_cursor: &NP_Cursor, _memory: &M) -> Option<Self> {
+        Some(NP_ULID { value: [0u8; 16]})
+    }
+
     fn type_idx() -> (&'value str, NP_TypeKeys) { ("ulid", NP_TypeKeys::Ulid) }
     fn self_type_idx(&self) -> (&'value str, NP_TypeKeys) { ("ulid", NP_TypeKeys::Ulid) }
 
@@ -239,9 +248,20 @@ impl<'value> NP_Scalar<'value> for &NP_ULID {
     fn schema_default(_schema: &NP_Parsed_Schema) -> Option<Self> where Self: Sized {
         None
     }
+
+
 }
 
 impl<'value> NP_Value<'value> for &NP_ULID {
+
+    fn np_max_value<M: NP_Memory>(_cursor: &NP_Cursor, _memory: &M) -> Option<Self> {
+        None
+    }
+
+    fn np_min_value<M: NP_Memory>(_cursor: &NP_Cursor, _memory: &M) -> Option<Self> {
+        None
+    }
+
     fn type_idx() -> (&'value str, NP_TypeKeys) { NP_ULID::type_idx() }
     fn self_type_idx(&self) -> (&'value str, NP_TypeKeys) { NP_ULID::default().self_type_idx() }
 

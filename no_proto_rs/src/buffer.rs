@@ -226,6 +226,118 @@ impl<'buffer> NP_Buffer<'buffer> {
         self.cursor = NP_Cursor::new(self.memory.root, 0, 0);
     }
 
+    /// Set the max value allowed for the specific data type at the given key.
+    /// 
+    /// String & Byte types only work if a `size` property is set in the schema.
+    /// 
+    /// Will return `true` if a value was found and succesfully set, `false` otherwise.
+    /// 
+    /// *WARNING* If you call this on a collection (Map, Tuple, List, or Table) ALL children will be overwritten/set.  The method is recursive, so this will hit *all* children, including nested children.
+    /// 
+    /// ```
+    /// use no_proto::error::NP_Error;
+    /// use no_proto::NP_Factory;
+    /// 
+    /// let factory: NP_Factory = NP_Factory::new(r#"{
+    ///    "type": "tuple",
+    ///    "sorted": true,
+    ///    "values": [
+    ///         {"type": "string", "size": 10},
+    ///         {"type": "u32"}
+    ///     ]
+    /// }"#)?;
+    /// 
+    /// let mut low_buffer = factory.empty_buffer(None);
+    /// // set all types to minimum value
+    /// low_buffer.set_min(&[])?;
+    /// // get bytes
+    /// let low_bytes: Vec<u8> = low_buffer.close();
+    /// 
+    /// let mut high_buffer = factory.empty_buffer(None);
+    /// // set all types to max value
+    /// high_buffer.set_max(&[])?;
+    /// // get bytes
+    /// let high_bytes: Vec<u8> = high_buffer.close();
+    /// 
+    /// let mut middle_buffer = factory.empty_buffer(None);
+    /// middle_buffer.set(&["0"], "Light This Candle!");
+    /// middle_buffer.set(&["1"], 22938u32);
+    /// let middle_bytes: Vec<u8> = middle_buffer.close();
+    /// 
+    /// assert!(low_bytes < middle_bytes);
+    /// assert!(middle_bytes < high_bytes);
+    /// assert!(low_bytes < high_bytes);
+    /// 
+    /// 
+    /// # Ok::<(), NP_Error>(()) 
+    /// ```
+    /// 
+    pub fn set_max(&mut self, path: &[&str]) -> Result<bool, NP_Error> {
+        let value_cursor = self.select(self.cursor.clone(), true, false, path)?;
+        match value_cursor {
+            Some(x) => {
+                Ok(NP_Cursor::set_max(x, &self.memory)?)
+            }
+            None => Ok(false)
+        }
+    }
+
+    /// Set the max value allowed for the specific data type at the given key.
+    /// 
+    /// String & Byte types only work if a `size` property is set in the schema.
+    /// 
+    /// Will return `true` if a value was found and succesfully set, `false` otherwise.
+    /// 
+    /// *WARNING* If you call this on a collection (Map, Tuple, List, or Table) ALL children will be overwritten/set.  The method is recursive, so this will hit *all* children, including nested children.
+    /// 
+    /// ```
+    /// use no_proto::error::NP_Error;
+    /// use no_proto::NP_Factory;
+    /// 
+    /// let factory: NP_Factory = NP_Factory::new(r#"{
+    ///    "type": "tuple",
+    ///    "sorted": true,
+    ///    "values": [
+    ///         {"type": "string", "size": 10},
+    ///         {"type": "u32"}
+    ///     ]
+    /// }"#)?;
+    /// 
+    /// let mut low_buffer = factory.empty_buffer(None);
+    /// // set all types to minimum value
+    /// low_buffer.set_min(&[])?;
+    /// // get bytes
+    /// let low_bytes: Vec<u8> = low_buffer.close();
+    /// 
+    /// let mut high_buffer = factory.empty_buffer(None);
+    /// // set all types to max value
+    /// high_buffer.set_max(&[])?;
+    /// // get bytes
+    /// let high_bytes: Vec<u8> = high_buffer.close();
+    /// 
+    /// let mut middle_buffer = factory.empty_buffer(None);
+    /// middle_buffer.set(&["0"], "Light This Candle!");
+    /// middle_buffer.set(&["1"], 22938u32);
+    /// let middle_bytes: Vec<u8> = middle_buffer.close();
+    /// 
+    /// assert!(low_bytes < middle_bytes);
+    /// assert!(middle_bytes < high_bytes);
+    /// assert!(low_bytes < high_bytes);
+    /// 
+    /// 
+    /// # Ok::<(), NP_Error>(()) 
+    /// ```
+    /// 
+    pub fn set_min(&mut self, path: &[&str]) -> Result<bool, NP_Error> {
+        let value_cursor = self.select(self.cursor.clone(), true, false, path)?;
+        match value_cursor {
+            Some(x) => {
+                Ok(NP_Cursor::set_min(x, &self.memory)?)
+            }
+            None => Ok(false)
+        }
+    }
+
     /// Used to set scalar values inside the buffer.
     /// 
     /// The type that you cast the request to will be compared to the schema, if it doesn't match the schema the request will fail.

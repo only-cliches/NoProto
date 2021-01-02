@@ -44,16 +44,11 @@ pub enum NP_Enum {
     Some(String)
 }
 
-impl<'value> super::NP_Scalar<'value> for &'value NP_Enum {
-    fn schema_default(_schema: &NP_Parsed_Schema) -> Option<Self> where Self: Sized {
-        None
-    }
-}
-
 impl<'value> super::NP_Scalar<'value> for NP_Enum {
     fn schema_default(_schema: &NP_Parsed_Schema) -> Option<Self> where Self: Sized {
         Some(Self::default())
     }
+
 }
 
 impl NP_Enum {
@@ -61,6 +56,8 @@ impl NP_Enum {
     pub fn new<S: Into<String>>(value: S) -> Self {
         NP_Enum::Some(value.into())
     }
+
+
 
     /// get length of value
     pub fn len(&self) -> usize {
@@ -94,6 +91,24 @@ impl Default for NP_Enum {
 }
 
 impl<'value> NP_Value<'value> for NP_Enum {
+
+    fn np_max_value<M: NP_Memory>(cursor: &NP_Cursor, memory: &M) -> Option<Self> {
+        match memory.get_schema(cursor.schema_addr) {
+            NP_Parsed_Schema::Enum { choices, .. } => {
+                Some(choices[choices.len() - 1].clone())
+            },
+            _ => None
+        }
+    }
+
+    fn np_min_value<M: NP_Memory>(cursor: &NP_Cursor, memory: &M) -> Option<Self> {
+        match memory.get_schema(cursor.schema_addr) {
+            NP_Parsed_Schema::Enum { choices, .. } => {
+                Some(choices[0].clone())
+            },
+            _ => None
+        }
+    }
 
     fn type_idx() -> (&'value str, NP_TypeKeys) { ("option", NP_TypeKeys::Enum) }
     fn self_type_idx(&self) -> (&'value str, NP_TypeKeys) { ("option", NP_TypeKeys::Enum) }

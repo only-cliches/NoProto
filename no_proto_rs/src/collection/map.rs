@@ -159,24 +159,24 @@ impl<'map> NP_Map<'map> {
             return Err(NP_Error::new("Key length cannot be larger than 255 charecters!"));
         }
 
-        let map_value = map_cursor.get_value(memory);
+        let map_value = || { map_cursor.get_value(memory) };
 
         let new_cursor_addr = memory.malloc_borrow(&[0u8; 6])?;
         let new_cursor = NP_Cursor::new(new_cursor_addr, value_of, map_cursor.schema_addr);
-        let new_cursor_value = new_cursor.get_value(memory);
+        let new_cursor_value = || { new_cursor.get_value(memory) };
 
         // set key
         let key_item_addr = memory.malloc_borrow(&[key.len() as u8])?;
         memory.malloc_borrow(key.as_bytes())?;
-        new_cursor_value.set_key_addr(key_item_addr as u16);
+        new_cursor_value().set_key_addr(key_item_addr as u16);
 
-        let head = map_value.get_addr_value() as usize;
+        let head = map_value().get_addr_value() as usize;
 
         // Set head of map to new cursor
-        map_value.set_addr_value(new_cursor_addr as u16);
+        map_value().set_addr_value(new_cursor_addr as u16);
 
         if head != 0 { // set new cursors NEXT to old HEAD
-            new_cursor_value.set_next_addr(head as u16);
+            new_cursor_value().set_next_addr(head as u16);
         }
 
         Ok(new_cursor)
@@ -185,6 +185,18 @@ impl<'map> NP_Map<'map> {
 }
 
 impl<'value> NP_Value<'value> for NP_Map<'value> {
+
+    fn to_json<M: NP_Memory>(cursor: &NP_Cursor, memory: &'value M) -> NP_JSON {
+        panic!()
+    }
+
+    fn np_max_value<M: NP_Memory>(_cursor: &NP_Cursor, _memory: &M) -> Option<Self> {
+        None
+    }
+
+    fn np_min_value<M: NP_Memory>(_cursor: &NP_Cursor, _memory: &M) -> Option<Self> {
+        None
+    }
 
     fn type_idx() -> (&'value str, NP_TypeKeys) { ("map", NP_TypeKeys::Map) }
     fn self_type_idx(&self) -> (&'value str, NP_TypeKeys) { ("map", NP_TypeKeys::Map) }
@@ -227,25 +239,7 @@ impl<'value> NP_Value<'value> for NP_Map<'value> {
    
     }
 
-    fn to_json<M: NP_Memory>(cursor: &NP_Cursor, memory: &'value M) -> NP_JSON {
 
-        let c_value = cursor.get_value(memory);
-
-        if c_value.get_addr_value() == 0 {
-            return NP_JSON::Null
-        }
-
-        let mut json_map = JSMAP::new();
-
-        let mut map_iter = Self::new_iter(&cursor, memory);
-
-        while let Some((key, item)) = Self::step_iter(&mut map_iter, memory) {
-            json_map.insert(String::from(key), NP_Cursor::json_encode(&item, memory));     
-        }
-
-        NP_JSON::Dictionary(json_map)
-   
-    }
 
     fn do_compact<M: NP_Memory, M2: NP_Memory>(from_cursor: NP_Cursor, from_memory: &'value M, to_cursor: NP_Cursor, to_memory: &'value M2) -> Result<NP_Cursor, NP_Error> where Self: 'value + Sized {
 

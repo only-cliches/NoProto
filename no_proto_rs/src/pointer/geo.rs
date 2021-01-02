@@ -48,6 +48,7 @@ pub struct NP_Geo_Bytes {
 }
 
 impl<'value> super::NP_Scalar<'value> for NP_Geo_Bytes{
+
     fn schema_default(schema: &NP_Parsed_Schema) -> Option<Self> where Self: Sized {
         match schema {
             NP_Parsed_Schema::Geo { size, ..} => {
@@ -122,6 +123,25 @@ impl Default for NP_Geo_Bytes {
 }
 
 impl<'value> NP_Value<'value> for NP_Geo_Bytes {
+
+    fn np_max_value<M: NP_Memory>(cursor: &NP_Cursor, memory: &M) -> Option<Self> {
+        match memory.get_schema(cursor.schema_addr) {
+            NP_Parsed_Schema::Geo { size, ..} => {
+                NP_Geo { size: *size, lat: 90f64, lng: 180f64}.get_bytes()
+            },
+            _ => None
+        }
+    }
+
+    fn np_min_value<M: NP_Memory>(cursor: &NP_Cursor, memory: &M) -> Option<Self> {
+        match memory.get_schema(cursor.schema_addr) {
+            NP_Parsed_Schema::Geo { size, ..} => {
+                NP_Geo { size: *size, lat: -90f64, lng: -180f64}.get_bytes()
+            },
+            _ => None
+        }
+    }
+    
     fn default_value(_schema: &NP_Parsed_Schema) -> Option<Self> {
         None
     }
@@ -266,11 +286,15 @@ impl NP_Geo {
 
         let dev = NP_Geo::get_deviser(self.size as i64);
 
+
+        let use_lat = f64::min(f64::max(self.lat, -90f64), 90f64);
+        let use_lng = f64::min(f64::max(self.lng, -180f64), 180f64);
+
         match self.size {
             16 => {
 
-                let mut lat_bytes = ((self.lat * dev) as i64).to_be_bytes();
-                let mut lon_bytes = ((self.lng * dev) as i64).to_be_bytes();
+                let mut lat_bytes = ((use_lat * dev) as i64).to_be_bytes();
+                let mut lon_bytes = ((use_lng * dev) as i64).to_be_bytes();
 
                 // convert to unsigned bytes
                 lat_bytes[0] = to_unsigned(lat_bytes[0]);
@@ -280,8 +304,8 @@ impl NP_Geo {
             },
             8 => {
 
-                let mut lat_bytes = ((self.lat * dev) as i32).to_be_bytes();
-                let mut lon_bytes = ((self.lng * dev) as i32).to_be_bytes();
+                let mut lat_bytes = ((use_lat * dev) as i32).to_be_bytes();
+                let mut lon_bytes = ((use_lng * dev) as i32).to_be_bytes();
 
                 // convert to unsigned bytes
                 lat_bytes[0] = to_unsigned(lat_bytes[0]);
@@ -291,8 +315,8 @@ impl NP_Geo {
             },
             4 => {
 
-                let mut lat_bytes = ((self.lat * dev) as i16).to_be_bytes();
-                let mut lon_bytes = ((self.lng * dev) as i16).to_be_bytes();
+                let mut lat_bytes = ((use_lat * dev) as i16).to_be_bytes();
+                let mut lon_bytes = ((use_lng * dev) as i16).to_be_bytes();
 
                 // convert to unsigned bytes
                 lat_bytes[0] = to_unsigned(lat_bytes[0]);
@@ -362,6 +386,24 @@ fn geo_default_value(size: u8, json: &NP_JSON) -> Result<Option<NP_Geo_Bytes>, N
 
 impl<'value> NP_Value<'value> for NP_Geo {
 
+    fn np_max_value<M: NP_Memory>(cursor: &NP_Cursor, memory: &M) -> Option<Self> {
+        match memory.get_schema(cursor.schema_addr) {
+            NP_Parsed_Schema::Geo { size, ..} => {
+                Some(NP_Geo { size: *size, lat: 90f64, lng: 180f64})
+            },
+            _ => None
+        }
+    }
+
+    fn np_min_value<M: NP_Memory>(cursor: &NP_Cursor, memory: &M) -> Option<Self> {
+        match memory.get_schema(cursor.schema_addr) {
+            NP_Parsed_Schema::Geo { size, ..} => {
+                Some(NP_Geo { size: *size, lat: -90f64, lng: -180f64})
+            },
+            _ => None
+        }
+    }
+
     fn default_value(schema: &NP_Parsed_Schema) -> Option<Self> {
         match schema {
             NP_Parsed_Schema::Geo { i: _, sortable: _, default, size: _} => {
@@ -404,7 +446,7 @@ impl<'value> NP_Value<'value> for NP_Geo {
 
     fn set_value<'set, M: NP_Memory>(cursor: NP_Cursor, memory: &'set M, value: Self) -> Result<NP_Cursor, NP_Error> where Self: 'set + Sized {
 
-        let c_value = cursor.get_value(memory);
+        let c_value = || {cursor.get_value(memory)};
 
         let size = match memory.get_schema(cursor.schema_addr) {
             NP_Parsed_Schema::Geo { size, .. } => {
@@ -423,14 +465,17 @@ impl<'value> NP_Value<'value> for NP_Geo {
 
         let half_value_bytes = value_bytes_size / 2;
 
+        let use_lat = f64::min(f64::max(value.lat, -90f64), 90f64);
+        let use_lng = f64::min(f64::max(value.lng, -180f64), 180f64);
+
         // convert input values into bytes
         let value_bytes = match size {
             16 => {
                 let dev = NP_Geo::get_deviser(16);
 
                 let mut v_bytes: [u8; 16] = [0; 16];
-                let mut lat_bytes = ((value.lat * dev) as i64).to_be_bytes();
-                let mut lon_bytes = ((value.lng * dev) as i64).to_be_bytes();
+                let mut lat_bytes = ((use_lat * dev) as i64).to_be_bytes();
+                let mut lon_bytes = ((use_lng * dev) as i64).to_be_bytes();
 
                 // convert to unsigned bytes
                 lat_bytes[0] = to_unsigned(lat_bytes[0]);
@@ -449,8 +494,8 @@ impl<'value> NP_Value<'value> for NP_Geo {
                 let dev = NP_Geo::get_deviser(8);
 
                 let mut v_bytes: [u8; 16] = [0; 16];
-                let mut lat_bytes = ((value.lat * dev) as i32).to_be_bytes();
-                let mut lon_bytes = ((value.lng * dev) as i32).to_be_bytes();
+                let mut lat_bytes = ((use_lat * dev) as i32).to_be_bytes();
+                let mut lon_bytes = ((use_lng * dev) as i32).to_be_bytes();
 
                 // convert to unsigned bytes
                 lat_bytes[0] = to_unsigned(lat_bytes[0]);
@@ -469,8 +514,8 @@ impl<'value> NP_Value<'value> for NP_Geo {
                 let dev = NP_Geo::get_deviser(4);
 
                 let mut v_bytes: [u8; 16] = [0; 16];
-                let mut lat_bytes = ((value.lat * dev) as i16).to_be_bytes();
-                let mut lon_bytes = ((value.lng * dev) as i16).to_be_bytes();
+                let mut lat_bytes = ((use_lat * dev) as i16).to_be_bytes();
+                let mut lon_bytes = ((use_lng * dev) as i16).to_be_bytes();
 
                 // convert to unsigned bytes
                 lat_bytes[0] = to_unsigned(lat_bytes[0]);
@@ -490,7 +535,7 @@ impl<'value> NP_Value<'value> for NP_Geo {
             }
         };
 
-        let mut value_address = c_value.get_addr_value() as usize;
+        let mut value_address = c_value().get_addr_value() as usize;
 
         if value_address != 0 { // existing value, replace
 
@@ -522,7 +567,7 @@ impl<'value> NP_Value<'value> for NP_Geo {
                 }
             }
 
-            c_value.set_addr_value(value_address as u16);
+            c_value().set_addr_value(value_address as u16);
 
         }
 

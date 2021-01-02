@@ -202,6 +202,18 @@ impl<'tuple> NP_Tuple<'tuple> {
 
 impl<'value> NP_Value<'value> for NP_Tuple<'value> {
 
+    fn to_json<M: NP_Memory>(cursor: &NP_Cursor, memory: &'value M) -> NP_JSON {
+        panic!()
+    }
+
+    fn np_max_value<M: NP_Memory>(_cursor: &NP_Cursor, _memory: &M) -> Option<Self> {
+        None
+    }
+
+    fn np_min_value<M: NP_Memory>(_cursor: &NP_Cursor, _memory: &M) -> Option<Self> {
+        None
+    }
+
     fn type_idx() -> (&'value str, NP_TypeKeys) { ("tuple", NP_TypeKeys::Tuple) }
     fn self_type_idx(&self) -> (&'value str, NP_TypeKeys) { ("tuple", NP_TypeKeys::Tuple) }
 
@@ -259,28 +271,6 @@ impl<'value> NP_Value<'value> for NP_Tuple<'value> {
         }
    
         Ok(acc_size)
-    }
-
-    fn to_json<M: NP_Memory>(cursor: &NP_Cursor, memory: &'value M) -> NP_JSON {
-
-        let c_value = cursor.get_value(memory);
-
-        if c_value.get_addr_value() == 0 { return NP_JSON::Null };
-
-        let mut json_list = Vec::new();
-
-        let mut table = Self::new_iter(&cursor, memory);
-
-        while let Some((_idx, item)) = table.step_iter(memory) {
-            if let Some(real) = item {
-                json_list.push(NP_Cursor::json_encode(&real, memory));  
-            } else {
-                json_list.push(NP_JSON::Null);  
-            }
-        }
-
-
-        NP_JSON::Array(json_list)
     }
 
     fn do_compact<M: NP_Memory, M2: NP_Memory>(from_cursor: NP_Cursor, from_memory: &'value M, mut to_cursor: NP_Cursor, to_memory: &'value M2) -> Result<NP_Cursor, NP_Error> where Self: 'value + Sized {
