@@ -6,6 +6,7 @@ use crate::run_bench_no_proto::NoProtoBench;
 use crate::run_bench_flatbuffers::FlatBufferBench;
 use crate::run_bench_bson::BSONBench;
 use crate::run_bench_bincode::BincodeBench;
+use crate::run_bench_avro::AvroBench;
 use crate::run_bench_prost::ProstBench;
 pub const LOOPS: usize = 1_000_000;
 
@@ -28,6 +29,7 @@ mod run_bench_json;
 mod run_bench_bson;
 mod run_bench_bincode;
 mod run_bench_prost;
+mod run_bench_avro;
 
 /*
 1,000,000 iterations
@@ -47,6 +49,7 @@ fn main() {
     let json_size = JSONBench::size_bench();
     let bson_size = BSONBench::size_bench();
     let pro_size = ProstBench::size_bench();
+    let avro_size = AvroBench::size_bench();
 
     println!("\n======== ENCODE BENCHMARK ========");
     
@@ -58,6 +61,7 @@ fn main() {
     let json_enc = JSONBench::encode_bench(base);
     let bson_enc = BSONBench::encode_bench(base);
     let pro_enc = ProstBench::encode_bench(base);
+    let avro_enc = AvroBench::encode_bench(base);
 
     println!("\n======== DECODE BENCHMARK ========");
 
@@ -69,6 +73,7 @@ fn main() {
     let json_dec = JSONBench::decode_bench(base);
     let bson_dec = BSONBench::decode_bench(base);
     let pro_dec = ProstBench::decode_bench(base);
+    let avro_dec = AvroBench::decode_bench(base);
 
     println!("\n====== DECODE ONE BENCHMARK ======");
 
@@ -80,6 +85,7 @@ fn main() {
     let json_dec1 = JSONBench::decode_one_bench(base);
     let bson_dec1 = BSONBench::decode_one_bench(base);
     let pro_dec1 = ProstBench::decode_one_bench(base);
+    let avro_dec1 = AvroBench::decode_one_bench(base);
 
     println!("\n====== UPDATE ONE BENCHMARK ======");
 
@@ -91,6 +97,7 @@ fn main() {
     let json_up = JSONBench::update_bench(base);
     let bson_up = BSONBench::update_bench(base);
     let pro_up = ProstBench::update_bench(base);
+    let avro_up = AvroBench::update_bench(base);
 
     println!("\n\n");
 
@@ -99,6 +106,7 @@ fn main() {
     println!("//! |--------------------|--------|------------|----------|----------|--------------|-------------|");
     println!("//! | **Runtime Libs**   |        |            |          |          |              |             |");
     println!("//! | *NoProto*          | {} |     {} |   {} |   {} |          {} |         {} |", np_enc, np_dec, np_dec1, np_up, np_size.0, np_size.1);
+    println!("//! | Apache Avro        | {} |     {} |   {} |   {} |          {} |         {} |", avro_enc, avro_dec, avro_dec1, avro_up, avro_size.0, avro_size.1);
     println!("//! | JSON               | {} |     {} |   {} |   {} |          {} |         {} |", json_enc, json_dec, json_dec1, json_up, json_size.0, json_size.1);
     println!("//! | BSON               | {} |     {} |   {} |   {} |          {} |         {} |", bson_enc, bson_dec, bson_dec1, bson_up, bson_size.0, bson_size.1);
     println!("//! | MessagePack        | {} |     {} |   {} |   {} |          {} |         {} |", msg_enc, msg_dec, msg_dec1, msg_up, msg_size.0, msg_size.1);
