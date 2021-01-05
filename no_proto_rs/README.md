@@ -9,6 +9,7 @@ Performance of Protocol Buffers with flexibility of JSON
 - Safely accept untrusted buffers
 - `no_std` support, WASM ready
 - Native byte-wise sorting
+- Supports recursive data types
 - Extensive Documentation & Testing
 - Passes Miri compiler safety checks
 - Easily mutate, add or delete values in existing buffers
@@ -26,6 +27,14 @@ NoProto allows you to store, read & mutate structured data with very little over
 Like Protocol Buffers schemas are seperate from the data buffers and are required to read, create or update data buffers.
 
 Byte-wise sorting comes in the box and is a first class operation. Two NoProto buffers can be compared at the byte level *without deserializing* and a correct ordering between the buffer's internal values will be the result.  This is extremely useful for storing ordered keys in databases. 
+
+*Compared to Apache Avro*
+- Far more space efficient
+- Significantly faster serialization & deserialization
+- Supports more native types (like unsigned ints)
+- Updates without deserializng/serializing
+- Works with `no_std`.
+- Safely handle untrusted data.
 
 *Compared to Protocol Buffers*
 - Comparable serialization & deserialization performance
@@ -59,6 +68,7 @@ Byte-wise sorting comes in the box and is a first class operation. Two NoProto b
 | Format           | Zero-Copy | Size Limit | Mutable | Schemas | Language Agnostic | No Compiling    | Byte-wise Sorting |
 |------------------|-----------|------------|---------|---------|-------------------|-----------------|-------------------|
 | **NoProto**      | ✓         | ~64KB      | ✓       | ✓       | ✓                 | ✓               | ✓                 |
+| Apache Avro      | 𐄂         | Unlimited  | 𐄂       | ✓       | ✓                 | ✓               | ✓                 |
 | JSON             | 𐄂         | Unlimited  | ✓       | 𐄂       | ✓                 | ✓               | 𐄂                 |
 | BSON             | 𐄂         | ~16MB      | ✓       | 𐄂       | ✓                 | ✓               | 𐄂                 |
 | MessagePack      | 𐄂         | Unlimited  | ✓       | 𐄂       | ✓                 | ✓               | 𐄂                 |
@@ -124,6 +134,9 @@ let user_bytes: Vec<u8> = user_buffer.close();
 
 // we can now save user_bytes to disk, 
 // send it over the network, or whatever else is needed with the data
+
+
+# Ok::<(), NP_Error>(()) 
 ```
 
 ## Guided Learning / Next Steps:
@@ -143,15 +156,17 @@ The format and data used in the benchmarks were taken from the `flatbuffers` ben
 | Library            | Encode | Decode All | Decode 1 | Update 1 | Size (bytes) | Size (Zlib) |
 |--------------------|--------|------------|----------|----------|--------------|-------------|
 | **Runtime Libs**   |        |            |          |          |              |             |
-| *NoProto*          |    923 |       1445 |    41667 |    11628 |          208 |         166 |
-| JSON               |    543 |        438 |      539 |      400 |          439 |         184 |
-| BSON               |    112 |        102 |      108 |       79 |          414 |         216 |
-| MessagePack        |    131 |        224 |      237 |      119 |          296 |         187 |
+| *NoProto*          |   1057 |       1437 |    47619 |    12195 |          208 |         166 |
+| Apache Avro        |    138 |         51 |       52 |       37 |          702 |         336 |
+| FlexBuffers        |    401 |        855 |    23256 |      264 |          490 |         309 |
+| JSON               |    550 |        438 |      544 |      396 |          439 |         184 |
+| BSON               |    115 |        103 |      109 |       80 |          414 |         216 |
+| MessagePack        |    135 |        222 |      237 |      119 |          296 |         187 |
 | **Compiled Libs**  |        |            |          |          |              |             |
-| Flatbuffers        |    970 |      13889 |   200000 |     1063 |          264 |         181 |
-| Bincode            |   5495 |       8696 |     9434 |     3906 |          163 |         129 |
-| Protobuf           |    824 |       1124 |     1152 |      485 |          154 |         141 |
-| Prost              |   1383 |       1835 |     1988 |      978 |          154 |         142 |
+| Flatbuffers        |   1046 |      14706 |   250000 |     1065 |          264 |         181 |
+| Bincode            |   5882 |       8772 |     9524 |     4016 |          163 |         129 |
+| Protobuf           |    859 |       1140 |     1163 |      480 |          154 |         141 |
+| Prost              |   1225 |       1866 |     1984 |      962 |          154 |         142 |
 
 - **Encode**: Transfer a collection of fields of test data into a serialized `Vec<u8>`.
 - **Decode All**: Deserialize the test object from the `Vec<u8>` into all fields.
@@ -202,7 +217,7 @@ If your data changes so often that schemas don't really make sense or the format
 
 MIT License
 
-Copyright (c) 2020 Scott Lott
+Copyright (c) 2021 Scott Lott
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -220,4 +235,4 @@ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+SOFTWARE. 
