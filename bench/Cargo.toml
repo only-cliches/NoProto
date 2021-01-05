@@ -13,6 +13,7 @@ bson = "1.1.0"
 bytes = "1.0.0"
 flatbuffers = "0.7.0"
 flate2 = "1.0.19"
+flexbuffers = "0.2.1"
 json = "0.12.4"
 messagepack-rs = "0.8.0"
 no_proto = { path = "../no_proto_rs" }
