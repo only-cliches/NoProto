@@ -9,7 +9,7 @@ use crate::run_bench_bincode::BincodeBench;
 use crate::run_bench_avro::AvroBench;
 use crate::run_bench_prost::ProstBench;
 use crate::run_bench_flexbuffers::FlexBench;
-pub const LOOPS: usize = 1_0_000;
+pub const LOOPS: usize = 1_000_000;
 
 mod bench_fb;
 mod bench_pb;

@@ -23,6 +23,71 @@ Benchmarks can be ran with `cargo run --release`.
 
 # Benchmarks Histry
 
+## Jan 4, 2021
+### v0.7.4
+M1 Macbook Air with 8GB RAM (Native)
+```
+========= SIZE BENCHMARK =========
+NoProto:     size: 208b, zlib: 166b
+Flatbuffers: size: 264b, zlib: 181b
+Bincode:     size: 163b, zlib: 129b
+Protobuf:    size: 154b, zlib: 141b
+MessagePack: size: 296b, zlib: 187b
+JSON:        size: 439b, zlib: 184b
+BSON:        size: 414b, zlib: 216b
+Prost:       size: 154b, zlib: 142b
+Avro:        size: 702b, zlib: 336b
+Flexbuffers: size: 490b, zlib: 309b
+
+======== ENCODE BENCHMARK ========
+NoProto:          1057 ops/ms 1.00
+Flatbuffers:      1046 ops/ms 0.99
+Bincode:          5882 ops/ms 5.55
+Protobuf:          859 ops/ms 0.81
+MessagePack:       135 ops/ms 0.13
+JSON:              550 ops/ms 0.52
+BSON:              115 ops/ms 0.11
+Prost:            1225 ops/ms 1.16
+Avro:              138 ops/ms 0.13
+Flexbuffers:       401 ops/ms 0.38
+
+======== DECODE BENCHMARK ========
+NoProto:          1437 ops/ms 1.00
+Flatbuffers:     14706 ops/ms 10.21
+Bincode:          8772 ops/ms 6.08
+Protobuf:         1140 ops/ms 0.79
+MessagePack:       222 ops/ms 0.15
+JSON:              438 ops/ms 0.31
+BSON:              103 ops/ms 0.07
+Prost:            1866 ops/ms 1.30
+Avro:               51 ops/ms 0.04
+Flexbuffers:       855 ops/ms 0.60
+
+====== DECODE ONE BENCHMARK ======
+NoProto:         47619 ops/ms 1.00
+Flatbuffers:    250000 ops/ms 4.55
+Bincode:          9524 ops/ms 0.21
+Protobuf:         1163 ops/ms 0.03
+MessagePack:       237 ops/ms 0.01
+JSON:              544 ops/ms 0.01
+BSON:              109 ops/ms 0.00
+Prost:            1984 ops/ms 0.04
+Avro:               52 ops/ms 0.00
+Flexbuffers:     23256 ops/ms 0.50
+
+====== UPDATE ONE BENCHMARK ======
+NoProto:         12195 ops/ms 1.00
+Flatbuffers:      1065 ops/ms 0.09
+Bincode:          4016 ops/ms 0.33
+Protobuf:          480 ops/ms 0.04
+MessagePack:       119 ops/ms 0.01
+JSON:              396 ops/ms 0.03
+BSON:               80 ops/ms 0.01
+Prost:             962 ops/ms 0.08
+Avro:               37 ops/ms 0.00
+Flexbuffers:       264 ops/ms 0.02
+```
+
 ## Dec 27, 2020
 ### v0.7.1
 M1 Macbook Air with 8GB RAM (Native)
