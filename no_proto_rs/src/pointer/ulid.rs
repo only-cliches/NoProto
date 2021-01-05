@@ -187,7 +187,7 @@ impl<'value> NP_Value<'value> for NP_ULID {
         }
     }
 
-    fn default_value(_schema: &NP_Parsed_Schema) -> Option<Self> {
+    fn default_value(_depth: usize, _scham_addr: usize,_schema: &Vec<NP_Parsed_Schema>) -> Option<Self> {
         None
     }
 
@@ -292,7 +292,7 @@ impl<'value> NP_Value<'value> for &NP_ULID {
         Ok(cursor)
     }
 
-    fn default_value(_schema: &NP_Parsed_Schema) -> Option<Self> {
+    fn default_value(_depth: usize, _scham_addr: usize,_schema: &Vec<NP_Parsed_Schema>) -> Option<Self> {
         None
     }
 

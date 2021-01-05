@@ -53,7 +53,7 @@ impl<'value> NP_Value<'value> for NP_Any {
 
     }
 
-    fn default_value(_schema: &NP_Parsed_Schema) -> Option<Self> {
+    fn default_value(_depth: usize, addr: usize, schema: &Vec<NP_Parsed_Schema>) -> Option<Self> {
         None
     }
 

@@ -720,9 +720,8 @@ impl<'value> NP_Value<'value> for NP_Dec {
         }
     }
 
-    fn default_value(schema: &NP_Parsed_Schema) -> Option<Self> {
-
-        match schema {
+    fn default_value(_depth: usize, addr: usize, schema: &Vec<NP_Parsed_Schema>) -> Option<Self> {
+        match &schema[addr] {
             NP_Parsed_Schema::Decimal { i: _, sortable: _, default, exp: _} => {
                 if let Some(d) = default {
                     Some(d.clone())

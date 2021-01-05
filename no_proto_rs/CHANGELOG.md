@@ -1,9 +1,9 @@
-# 0.8.0
+# 0.8.0 January 5, 2021
 - Added new recursive data types with new `portal` type.
 - Compiled schemas were not preserving default values correctly, it is now fixed and tested.
 - Added benchmarks for Apache Avro and Flexbuffers.
 
-# 0.7.4 January 2, 2020
+# 0.7.4 January 2, 2021
 - NP_Geo types no longer allow invalid values to be set into the buffer (outside lat/lng min & max values).
 - Added new `set_max` and `set_min` buffer methods to make it easer to make range query buffers.
 - Ran library through Miri, found some possible UB and fixed it.

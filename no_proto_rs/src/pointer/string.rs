@@ -335,8 +335,8 @@ impl<'value> NP_Value<'value> for String {
         }
     }
     
-    fn default_value(schema: &'value NP_Parsed_Schema) -> Option<Self> {
-        match NP_String::default_value(schema) {
+    fn default_value(_depth: usize, schema_addr: usize,schema: &Vec<NP_Parsed_Schema>) -> Option<Self> {
+        match NP_String::default_value(0, schema_addr, schema) {
             Some(x) => Some(String::from(x)),
             None => None
         }
@@ -479,8 +479,8 @@ impl<'value> NP_Value<'value> for NP_String<'value> {
         }
     }
 
-    fn default_value(schema: &'value NP_Parsed_Schema) -> Option<Self> {
-        match schema {
+    fn default_value(_depth: usize, schema_addr: usize,schema: &'value Vec<NP_Parsed_Schema>) -> Option<Self> {
+        match &schema[schema_addr] {
             NP_Parsed_Schema::UTF8String { default, .. } => match default {
                 Some(x) => Some(x),
                 None => None,

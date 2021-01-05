@@ -132,9 +132,8 @@ impl<'value> NP_Value<'value> for NP_Bytes {
         Ok(NP_JSON::Dictionary(schema_json))
     }
 
-    fn default_value(schema: &'value NP_Parsed_Schema) -> Option<Self> {
-
-        match schema {
+    fn default_value(_depth: usize, addr: usize, schema: &Vec<NP_Parsed_Schema>) -> Option<Self> {
+        match &schema[addr] {
             NP_Parsed_Schema::Bytes { default, .. } => {
                 if let Some(d) = default {
                     Some(d.clone())
@@ -352,8 +351,8 @@ impl<'value> NP_Value<'value> for NP_Borrow_Bytes<'value> {
         NP_Bytes::schema_to_json(schema, address)
     }
 
-    fn default_value(schema: &'value NP_Parsed_Schema) -> Option<Self> {
-        match schema {
+    fn default_value(_depth: usize, addr: usize, schema: &'value Vec<NP_Parsed_Schema>) -> Option<Self> {
+        match &schema[addr] {
             NP_Parsed_Schema::Bytes { default, .. } => {
                 if let Some(d) = default {
                     Some(&d[..])

@@ -1,6 +1,6 @@
 #![warn(missing_docs)]
 #![allow(non_camel_case_types)]
-// #![no_std]
+#![no_std]
 
 //! ## Simple & Performant Serialization with RPC
 //! Performance of Protocol Buffers with flexibility of JSON
@@ -239,8 +239,8 @@
 //! AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 //! LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 //! OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-//! SOFTWARE.
-//! 
+//! SOFTWARE. 
+
 #[cfg(test)]
 #[macro_use]
 extern crate std;
@@ -414,14 +414,14 @@ impl<'fact> NP_Factory<'fact> {
 
     /// Generate factory from *const [u8], probably not safe to use generally speaking
     #[doc(hidden)]
-    pub fn new_compiled_ptr(schema_bytes: *const [u8]) -> Result<Self, NP_Error> {
+    pub unsafe fn new_compiled_ptr(schema_bytes: *const [u8]) -> Result<Self, NP_Error> {
         
-        let (is_sortable, mut schema) = NP_Schema::from_bytes(Vec::new(), 0, unsafe { &*schema_bytes });
+        let (is_sortable, mut schema) = NP_Schema::from_bytes(Vec::new(), 0, &*schema_bytes );
 
         schema = NP_Schema::resolve_portals(schema)?;
 
         Ok(Self {
-            schema_bytes: NP_Schema_Bytes::Borrwed(unsafe { &*schema_bytes }),
+            schema_bytes: NP_Schema_Bytes::Borrwed(&*schema_bytes),
             schema:  NP_Schema { 
                 is_sortable: is_sortable,
                 parsed: schema
@@ -523,7 +523,9 @@ impl<'fact> NP_Factory<'fact> {
         NP_Buffer::_new(NP_Memory_Writable::existing(bytes, &self.schema.parsed, DEFAULT_ROOT_PTR_ADDR))
     }
 
-    /// Open existing buffer as ready only, much faster if you don't need to mutate anything
+    /// Open existing buffer as ready only, much faster if you don't need to mutate anything.
+    /// 
+    /// Also, read only buffers are `Sync` and `Send` so good for multithreaded environments.
     /// 
     pub fn open_buffer_ro<'buffer>(&'buffer self, bytes: &'buffer [u8]) -> NP_Buffer_RO<'buffer> {
         NP_Buffer_RO::_new(NP_Memory_ReadOnly::existing(bytes, &self.schema.parsed, DEFAULT_ROOT_PTR_ADDR))

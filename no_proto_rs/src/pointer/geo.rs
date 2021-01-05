@@ -150,7 +150,7 @@ impl<'value> NP_Value<'value> for NP_Geo_Bytes {
 
 
     
-    fn default_value(_schema: &NP_Parsed_Schema) -> Option<Self> {
+    fn default_value(_depth: usize, _addr: usize, _schema: &Vec<NP_Parsed_Schema>) -> Option<Self> {
         None
     }
     fn type_idx() -> (&'value str, NP_TypeKeys) { NP_Geo::type_idx() }
@@ -412,8 +412,8 @@ fn geo_default_value(size: u8, json: &NP_JSON) -> Result<Option<NP_Geo_Bytes>, N
 
 impl<'value> NP_Value<'value> for NP_Geo {
 
-    fn default_value(schema: &NP_Parsed_Schema) -> Option<Self> {
-        match schema {
+    fn default_value(_depth: usize, addr: usize, schema: &Vec<NP_Parsed_Schema>) -> Option<Self> {
+        match &schema[addr] {
             NP_Parsed_Schema::Geo { i: _, sortable: _, default, size: _} => {
                 if let Some(d) = default {
                     Some(d.clone())
@@ -815,7 +815,7 @@ impl<'value> NP_Value<'value> for NP_Geo {
         match size {
             4 => {
                 let lat = &bytes[(address + 3)..(address + 5)];
-                let lng = &bytes[(address + 6)..(address + 8)];
+                let lng = &bytes[(address + 5)..(address + 7)];
                 let default_value = NP_Geo_Bytes { size: size, lat: lat.to_vec(), lng: lng.to_vec()};
                 schema.push(NP_Parsed_Schema::Geo {
                     i: NP_TypeKeys::Geo,
@@ -839,7 +839,7 @@ impl<'value> NP_Value<'value> for NP_Geo {
             },
             16 => {
                 let lat = &bytes[(address + 3)..(address + 11)];
-                let lng = &bytes[(address + 12)..(address + 20)];
+                let lng = &bytes[(address + 11)..(address + 19)];
                 let default_value = NP_Geo_Bytes { size: size, lat: lat.to_vec(), lng: lng.to_vec()};
                 schema.push(NP_Parsed_Schema::Geo {
                     i: NP_TypeKeys::Geo,

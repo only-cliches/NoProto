@@ -217,8 +217,8 @@ impl<'value> NP_Value<'value> for NP_Enum {
         }
     }
 
-    fn default_value(schema: &'value NP_Parsed_Schema) -> Option<Self> {
-        match schema {
+    fn default_value(_depth: usize, schema_addr: usize,schema: &Vec<NP_Parsed_Schema>) -> Option<Self> {
+        match &schema[schema_addr] {
             NP_Parsed_Schema::Enum {default, ..} => {
                 if let Some(d) = default {
                     Some(d.clone())

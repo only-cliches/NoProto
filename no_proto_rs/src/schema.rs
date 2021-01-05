@@ -870,7 +870,7 @@ impl NP_Schema {
 
         let temp_memory = NP_Memory_Writable::new(None, &parsed, DEFAULT_ROOT_PTR_ADDR);
 
-        let mut completed: Vec<NP_Parsed_Schema> = Vec::new();
+        let mut completed: Vec<NP_Parsed_Schema> = Vec::with_capacity(parsed.len());
 
         for schema in parsed.iter() {
             match schema {

@@ -85,7 +85,7 @@ macro_rules! noproto_number {
                 let mut schema_json = JSMAP::new();
                 schema_json.insert("type".to_owned(), NP_JSON::String(Self::type_idx().0.to_string()));
             
-                if let Some(default) = <$t>::np_get_default(&schema[address]) {
+                if let Some(default) = <$t>::np_get_default(address, &schema) {
                     let default_val = default;
                     match $numType {
                         NP_NumType::signed => {
@@ -104,8 +104,8 @@ macro_rules! noproto_number {
                 Ok(NP_JSON::Dictionary(schema_json))
             }
 
-            fn default_value<'default>(schema: &'default NP_Parsed_Schema) -> Option<Self> {
-                <$t>::np_get_default(&schema)
+            fn default_value<'default>(_depth: usize, addr: usize, schema: &'default Vec<NP_Parsed_Schema>) -> Option<Self> {
+                <$t>::np_get_default(addr, &schema)
             }
     
             fn set_value<'set, M: NP_Memory>(cursor: NP_Cursor, memory: &'set M, value: Self) -> Result<NP_Cursor, NP_Error> where Self: 'set + Sized {
@@ -189,8 +189,7 @@ macro_rules! noproto_number {
                                 }
                             },
                             None => {
-                                let schema = &memory.get_schema(cursor.schema_addr);
-                                match <$t>::default_value(&schema) {
+                                match <$t>::default_value(0, cursor.schema_addr, &memory.get_schemas()) {
                                     Some(v) => {
                                         match $numType {
                                             NP_NumType::floating => { NP_JSON::Float(v as f64) },
@@ -337,15 +336,15 @@ noproto_number!(f64, "double", "f64", NP_TypeKeys::Double, NP_NumType::floating)
 
 trait NP_BigEndian {
     fn np_get_default_from_json(json: &NP_JSON) -> Option<Self> where Self: Sized;
-    fn np_get_default<'default>(ptr: &'default NP_Parsed_Schema) -> Option<Self> where Self: Sized;
+    fn np_get_default<'default>(schema_addr: usize, ptr: &'default Vec<NP_Parsed_Schema>) -> Option<Self> where Self: Sized;
     fn np_get_default_from_bytes<'default>(address: usize, bytes: &'default [u8]) -> Option<Self> where Self: Sized;
 }
 
 
 impl NP_BigEndian for i8 {
 
-    fn np_get_default<'default>(ptr: &'default NP_Parsed_Schema) -> Option<Self> {
-        match ptr {
+    fn np_get_default<'default>(schema: usize, ptr: &'default Vec<NP_Parsed_Schema>) -> Option<Self> {
+        match &ptr[schema] {
             NP_Parsed_Schema::Int8 { sortable: _, i: _, default } => { *default },
             _ => None
         }
@@ -368,7 +367,7 @@ impl NP_BigEndian for i8 {
             None
         } else {
             let mut slice: [u8; 1] = Default::default();
-            slice.copy_from_slice(&bytes[(address + 1)..(address + 2)]);
+            slice.copy_from_slice(&bytes[(address + 2)..(address + 3)]);
             Some(i8::from_be_bytes(slice))
         }
     }
@@ -393,7 +392,7 @@ fn i8_schema_parsing_works() -> Result<(), NP_Error> {
 
 #[test]
 fn i8_default_value_works() -> Result<(), NP_Error> {
-    let schema = "{\"type\":\"i8\",\"default\":56}";
+    let schema = "{\"type\":\"int8\",\"default\":56}";
     let factory = crate::NP_Factory::new(schema)?;
     let buffer = factory.empty_buffer(None);
     assert_eq!(buffer.get::<i8>(&[])?.unwrap(), 56i8);
@@ -421,8 +420,8 @@ fn i8_set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
 
 impl NP_BigEndian for i16 {
 
-    fn np_get_default<'default>(ptr: &'default NP_Parsed_Schema) -> Option<Self> {
-        match ptr {
+    fn np_get_default<'default>(schema: usize, ptr: &'default Vec<NP_Parsed_Schema>) -> Option<Self> {
+        match &ptr[schema] {
             NP_Parsed_Schema::Int16 { sortable: _, i: _, default } => { *default },
             _ => None
         }
@@ -445,7 +444,7 @@ impl NP_BigEndian for i16 {
             None
         } else {
             let mut slice: [u8; 2] = Default::default();
-            slice.copy_from_slice(&bytes[(address + 1)..(address + 3)]);
+            slice.copy_from_slice(&bytes[(address + 2)..(address + 4)]);
             Some(i16::from_be_bytes(slice))
         }
     }
@@ -471,7 +470,7 @@ fn i16_schema_parsing_works() -> Result<(), NP_Error> {
 
 #[test]
 fn i16_default_value_works() -> Result<(), NP_Error> {
-    let schema = "{\"type\":\"i16\",\"default\":293}";
+    let schema = "{\"type\":\"int16\",\"default\":293}";
     let factory = crate::NP_Factory::new(schema)?;
     let buffer = factory.empty_buffer(None);
     assert_eq!(buffer.get::<i16>(&[])?.unwrap(), 293i16);
@@ -483,7 +482,7 @@ fn i16_default_value_works() -> Result<(), NP_Error> {
 
 #[test]
 fn i16_set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
-    let schema = "{\"type\":\"i16\"}";
+    let schema = "{\"type\":\"int16\"}";
     let factory = crate::NP_Factory::new(schema)?;
     let mut buffer = factory.empty_buffer(None);
     buffer.set(&[], 293i16)?;
@@ -500,8 +499,8 @@ fn i16_set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
 impl NP_BigEndian for i32 {
            
 
-    fn np_get_default<'default>(ptr: &'default NP_Parsed_Schema) -> Option<Self> {
-        match ptr {
+    fn np_get_default<'default>(schema: usize, ptr: &'default Vec<NP_Parsed_Schema>) -> Option<Self> {
+        match &ptr[schema] {
             NP_Parsed_Schema::Int32 { sortable: _, i: _, default } => { *default },
             _ => None
         }
@@ -524,7 +523,7 @@ impl NP_BigEndian for i32 {
             None
         } else {
             let mut slice: [u8; 4] = Default::default();
-            slice.copy_from_slice(&bytes[(address + 1)..(address + 5)]);
+            slice.copy_from_slice(&bytes[(address + 2)..(address + 6)]);
             Some(i32::from_be_bytes(slice))
         }
     }
@@ -578,8 +577,8 @@ impl NP_BigEndian for i64 {
 
            
 
-    fn np_get_default<'default>(ptr: &'default NP_Parsed_Schema) -> Option<Self> {
-        match ptr {
+    fn np_get_default<'default>(schema: usize, ptr: &'default Vec<NP_Parsed_Schema>) -> Option<Self> {
+        match &ptr[schema] {
             NP_Parsed_Schema::Int64 { sortable: _, i: _, default } => { *default },
             _ => None
         }
@@ -602,7 +601,7 @@ impl NP_BigEndian for i64 {
             None
         } else {
             let mut slice: [u8; 8] = Default::default();
-            slice.copy_from_slice(&bytes[(address + 1)..(address + 9)]);
+            slice.copy_from_slice(&bytes[(address + 2)..(address + 10)]);
             Some(i64::from_be_bytes(slice))
         }
     }
@@ -628,7 +627,7 @@ fn i64_schema_parsing_works() -> Result<(), NP_Error> {
 
 #[test]
 fn i64_default_value_works() -> Result<(), NP_Error> {
-    let schema = "{\"type\":\"i64\",\"default\":293}";
+    let schema = "{\"type\":\"int64\",\"default\":293}";
     let factory = crate::NP_Factory::new(schema)?;
     let buffer = factory.empty_buffer(None);
     assert_eq!(buffer.get::<i64>(&[])?.unwrap(), 293i64);
@@ -640,7 +639,7 @@ fn i64_default_value_works() -> Result<(), NP_Error> {
 
 #[test]
 fn i64_set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
-    let schema = "{\"type\":\"i64\"}";
+    let schema = "{\"type\":\"int64\"}";
     let factory = crate::NP_Factory::new(schema)?;
     let mut buffer = factory.empty_buffer(None);
     buffer.set(&[], 293i64)?;
@@ -658,8 +657,8 @@ impl NP_BigEndian for u8 {
 
            
 
-    fn np_get_default<'default>(ptr: &'default NP_Parsed_Schema) -> Option<Self> {
-        match ptr {
+    fn np_get_default<'default>(schema: usize, ptr: &'default Vec<NP_Parsed_Schema>) -> Option<Self> {
+        match &ptr[schema] {
             NP_Parsed_Schema::Uint8 { sortable: _, i: _, default } => { *default },
             _ => None
         }
@@ -682,7 +681,7 @@ impl NP_BigEndian for u8 {
             None
         } else {
             let mut slice: [u8; 1] = Default::default();
-            slice.copy_from_slice(&bytes[(address + 1)..(address + 2)]);
+            slice.copy_from_slice(&bytes[(address + 2)..(address + 3)]);
             Some(u8::from_be_bytes(slice))
         }
     }
@@ -708,7 +707,7 @@ fn u8_schema_parsing_works() -> Result<(), NP_Error> {
 
 #[test]
 fn u8_default_value_works() -> Result<(), NP_Error> {
-    let schema = "{\"type\":\"u8\",\"default\":198}";
+    let schema = "{\"type\":\"uint8\",\"default\":198}";
     let factory = crate::NP_Factory::new(schema)?;
     let buffer = factory.empty_buffer(None);
     assert_eq!(buffer.get::<u8>(&[])?.unwrap(), 198u8);
@@ -718,7 +717,7 @@ fn u8_default_value_works() -> Result<(), NP_Error> {
 
 #[test]
 fn u8_set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
-    let schema = "{\"type\":\"u8\"}";
+    let schema = "{\"type\":\"uint8\"}";
     let factory = crate::NP_Factory::new(schema)?;
     let mut buffer = factory.empty_buffer(None);
     buffer.set(&[], 198u8)?;
@@ -736,8 +735,8 @@ impl NP_BigEndian for u16 {
 
 
 
-    fn np_get_default<'default>(ptr: &'default NP_Parsed_Schema) -> Option<Self> {
-        match ptr {
+    fn np_get_default<'default>(schema: usize, ptr: &'default Vec<NP_Parsed_Schema>) -> Option<Self> {
+        match &ptr[schema] {
             NP_Parsed_Schema::Uint16 { sortable: _, i: _, default } => { *default },
             _ => None
         }
@@ -760,7 +759,7 @@ impl NP_BigEndian for u16 {
             None
         } else {
             let mut slice: [u8; 2] = Default::default();
-            slice.copy_from_slice(&bytes[(address + 1)..(address + 3)]);
+            slice.copy_from_slice(&bytes[(address + 2)..(address + 4)]);
             Some(u16::from_be_bytes(slice))
         }
     }
@@ -814,8 +813,8 @@ impl NP_BigEndian for u32 {
 
         
 
-    fn np_get_default<'default>(ptr: &'default NP_Parsed_Schema) -> Option<Self> {
-        match ptr {
+    fn np_get_default<'default>(schema: usize, ptr: &'default Vec<NP_Parsed_Schema>) -> Option<Self> {
+        match &ptr[schema] {
             NP_Parsed_Schema::Uint32 { sortable: _, i: _, default } => { *default },
             _ => None
         }
@@ -838,7 +837,7 @@ impl NP_BigEndian for u32 {
             None
         } else {
             let mut slice: [u8; 4] = Default::default();
-            slice.copy_from_slice(&bytes[(address + 1)..(address + 5)]);
+            slice.copy_from_slice(&bytes[(address + 2)..(address + 6)]);
             Some(u32::from_be_bytes(slice))
         }
     }
@@ -891,8 +890,8 @@ fn u32_set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
 impl NP_BigEndian for u64 {
 
            
-    fn np_get_default<'default>(ptr: &'default NP_Parsed_Schema) -> Option<Self> {
-        match ptr {
+    fn np_get_default<'default>(schema: usize, ptr: &'default Vec<NP_Parsed_Schema>) -> Option<Self> {
+        match &ptr[schema] {
             NP_Parsed_Schema::Uint64 { sortable: _, i: _, default } => { *default },
             _ => None
         }
@@ -915,7 +914,7 @@ impl NP_BigEndian for u64 {
             None
         } else {
             let mut slice: [u8; 8] = Default::default();
-            slice.copy_from_slice(&bytes[(address + 1)..(address + 9)]);
+            slice.copy_from_slice(&bytes[(address + 2)..(address + 10)]);
             Some(u64::from_be_bytes(slice))
         }
     }
@@ -967,8 +966,8 @@ fn u64_set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
 impl NP_BigEndian for f32 {
 
 
-    fn np_get_default<'default>(ptr: &'default NP_Parsed_Schema) -> Option<Self> {
-        match ptr {
+    fn np_get_default<'default>(schema: usize, ptr: &'default Vec<NP_Parsed_Schema>) -> Option<Self> {
+        match &ptr[schema] {
             NP_Parsed_Schema::Float { sortable: _, i: _, default } => { *default },
             _ => None
         }
@@ -991,7 +990,7 @@ impl NP_BigEndian for f32 {
             None
         } else {
             let mut slice: [u8; 4] = Default::default();
-            slice.copy_from_slice(&bytes[(address + 1)..(address + 5)]);
+            slice.copy_from_slice(&bytes[(address + 2)..(address + 6)]);
             Some(f32::from_be_bytes(slice))
         }
     }
@@ -1043,8 +1042,8 @@ fn float_set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
 
 impl NP_BigEndian for f64 {
 
-    fn np_get_default<'default>(ptr: &'default NP_Parsed_Schema) -> Option<Self> {
-        match ptr {
+    fn np_get_default<'default>(schema: usize, ptr: &'default Vec<NP_Parsed_Schema>) -> Option<Self> {
+        match &ptr[schema] {
             NP_Parsed_Schema::Double { sortable: _, i: _, default } => { *default },
             _ => None
         }
@@ -1067,7 +1066,7 @@ impl NP_BigEndian for f64 {
             None
         } else {
             let mut slice: [u8; 8] = Default::default();
-            slice.copy_from_slice(&bytes[(address + 1)..(address + 9)]);
+            slice.copy_from_slice(&bytes[(address + 2)..(address + 10)]);
             Some(f64::from_be_bytes(slice))
         }
     }

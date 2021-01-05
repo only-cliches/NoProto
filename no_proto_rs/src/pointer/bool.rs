@@ -67,9 +67,8 @@ impl<'value> NP_Value<'value> for bool {
         Ok(NP_JSON::Dictionary(schema_json))
     }
 
-    fn default_value(schema: &NP_Parsed_Schema) -> Option<Self> {
-
-        match schema {
+    fn default_value(_depth: usize, addr: usize, schema: &Vec<NP_Parsed_Schema>) -> Option<Self> {
+        match &schema[addr] {
             NP_Parsed_Schema::Boolean { default, .. } => {
                 match default {
                     Some(x) => Some(*x),
@@ -212,7 +211,7 @@ impl<'value> NP_Value<'value> for bool {
         schema.push(NP_Parsed_Schema::Boolean {
             i: NP_TypeKeys::Boolean,
             sortable: true,
-            default: match bytes[address] {
+            default: match bytes[address + 1] {
                 0 => None,
                 1 => Some(true),
                 2 => Some(false),

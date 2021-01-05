@@ -418,7 +418,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// new_buffer.list_push(&[], "!")?;
     /// 
     /// // get iterator of root (list item)
-    /// new_buffer.get_iter(&[])?.unwrap().into_iter().for_each(|item| {
+    /// new_buffer.get_collection(&[])?.unwrap().into_iter().for_each(|item| {
     ///     match item.index {
     ///         0 => assert_eq!(item.get::<&str>().unwrap(), None),
     ///         1 => assert_eq!(item.get::<&str>().unwrap(), Some("hello")),
@@ -458,7 +458,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// new_buffer.list_push(&["tags"], "rocket")?;
     /// 
     /// // get iterator of root (table)
-    /// new_buffer.get_iter(&[])?.unwrap().into_iter().for_each(|item| {
+    /// new_buffer.get_collection(&[])?.unwrap().into_iter().for_each(|item| {
     ///     
     ///     match item.key {
     ///         "name" => assert_eq!(item.get::<&str>().unwrap(), Some("Bill Kerman")),
@@ -470,7 +470,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// });
     /// 
     /// // we can also loop through items of the tags list
-    /// new_buffer.get_iter(&["tags"])?.unwrap().into_iter().for_each(|item| {
+    /// new_buffer.get_collection(&["tags"])?.unwrap().into_iter().for_each(|item| {
     ///     assert_eq!(item.index, 0);
     ///     assert_eq!(item.get::<&str>().unwrap(), Some("rocket"));
     /// });
@@ -496,7 +496,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// new_buffer.set(&["sport"], "soccor")?;
     /// 
     /// // get iterator of root (map)
-    /// new_buffer.get_iter(&[])?.unwrap().into_iter().for_each(|item| {
+    /// new_buffer.get_collection(&[])?.unwrap().into_iter().for_each(|item| {
     ///     
     ///     match item.key {
     ///         "color" => assert_eq!(item.get::<&str>().unwrap(), Some("blue")),
@@ -530,7 +530,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// new_buffer.set(&["2"], false)?;
     /// 
     /// // get iterator of root (tuple item)
-    /// new_buffer.get_iter(&[])?.unwrap().into_iter().for_each(|item| {
+    /// new_buffer.get_collection(&[])?.unwrap().into_iter().for_each(|item| {
     ///     match item.index {
     ///         0 => assert_eq!(item.get::<&str>().unwrap(), Some("hello")),
     ///         1 => assert_eq!(item.get::<u8>().unwrap(), None),
@@ -542,7 +542,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// # Ok::<(), NP_Error>(()) 
     /// ```
     /// 
-    pub fn get_iter<'iter>(&'iter self, path: &'iter [&str]) -> Result<Option<NP_Generic_Iterator<'iter>>, NP_Error> {
+    pub fn get_collection<'iter>(&'iter self, path: &'iter [&str]) -> Result<Option<NP_Generic_Iterator<'iter>>, NP_Error> {
 
         let value = NP_Cursor::select(&self.memory, self.cursor.clone(), false, false, path)?;
 
@@ -583,7 +583,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// new_buffer.list_push(&[], "rocket")?;
     /// 
     /// // get iterator of root (list item)
-    /// new_buffer.get_iter(&[])?.unwrap().into_iter().for_each(|item| {
+    /// new_buffer.get_collection(&[])?.unwrap().into_iter().for_each(|item| {
     ///     match item.index {
     ///         0 => assert_eq!(item.get::<&str>().unwrap(), None),
     ///         1 => assert_eq!(item.get::<&str>().unwrap(), None),
@@ -601,7 +601,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// new_buffer.list_push(&[], "rocket")?;
     /// 
     /// // get iterator of root (list item)
-    /// new_buffer.get_iter(&[])?.unwrap().into_iter().for_each(|item| {
+    /// new_buffer.get_collection(&[])?.unwrap().into_iter().for_each(|item| {
     ///     match item.index {
     ///         0 => assert_eq!(item.get::<&str>().unwrap(), Some("launch")),
     ///         1 => assert_eq!(item.get::<&str>().unwrap(), Some("this")),
@@ -1034,7 +1034,7 @@ impl<'buffer> NP_Buffer<'buffer> {
                         Ok(Some(x))
                     },
                     None => { // no value found here, return default from schema
-                        match X::default_value(&self.memory.get_schema(x.schema_addr)) {
+                        match X::default_value(0, x.schema_addr, &self.memory.get_schemas()) {
                             Some(y) => {
                                 Ok(Some(y))
                             },
@@ -1207,7 +1207,7 @@ impl<'buffer> NP_Buffer<'buffer> {
         let root = NP_Cursor::new(self.memory.root, 0, 0);
         let real_bytes = NP_Cursor::calc_size(0, &root, &self.memory)? + self.memory.root;
         let total_size = self.memory.read_bytes().len() - self.memory.root + 1;
-        println!("{} {}", total_size, real_bytes);
+
         if total_size >= real_bytes {
             return Ok(NP_Size_Data {
                 current_buffer: total_size,
@@ -1253,7 +1253,7 @@ impl<'item> NP_Item<'item> {
                     Ok(Some(x))
                 },
                 None => {
-                    match X::default_value(&self.memory.get_schema(cursor.schema_addr)) {
+                    match X::default_value(0, cursor.schema_addr, &self.memory.get_schemas()) {
                         Some(y) => {
                             Ok(Some(y))
                         },

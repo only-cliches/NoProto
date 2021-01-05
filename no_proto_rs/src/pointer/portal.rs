@@ -91,7 +91,7 @@ impl<'value> NP_Value<'value> for NP_Portal {
         (false, schema)
     }
 
-    fn default_value(_schema: &'value NP_Parsed_Schema) -> Option<Self> where Self: Sized {
+    fn default_value(_depth: usize, _schema_addr: usize, _schemas: &Vec<NP_Parsed_Schema>) -> Option<Self> {
         None
     }
 

@@ -401,7 +401,7 @@ impl<'value> NP_Value<'value> for NP_Tuple<'value> {
      
     }
 
-    fn default_value(_schema: &NP_Parsed_Schema) -> Option<Self> {
+    fn default_value(_depth: usize, _addr: usize, _schema: &Vec<NP_Parsed_Schema>) -> Option<Self> {
         None
     }
 

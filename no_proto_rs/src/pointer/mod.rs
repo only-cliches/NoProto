@@ -508,6 +508,7 @@ impl<'cursor> NP_Cursor {
         }
     }
 
+
     /// Set default for this value.  Not related to the schema default, this is the default value for this data type
     /// 
     pub fn set_schema_default<M: NP_Memory>(cursor: NP_Cursor, memory: &M) -> Result<(), NP_Error> {
@@ -656,7 +657,7 @@ pub trait NP_Value<'value> {
 
     /// Get the default value from the schema
     /// 
-    fn default_value(_schema: &'value NP_Parsed_Schema) -> Option<Self> where Self: Sized;
+    fn default_value(depth: usize, scham_addr: usize, schema: &'value Vec<NP_Parsed_Schema>) -> Option<Self> where Self: Sized;
 
     /// Convert this type into a JSON value (recursive for collections)
     /// 
