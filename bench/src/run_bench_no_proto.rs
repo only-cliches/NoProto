@@ -164,30 +164,3 @@ impl NoProtoBench {
         Ok(new_buffer.close())
     }
 }
-
-
-
-/*
-        // 0.4.2 API
-        let mut new_buffer = user_factory.empty_buffer(None, Some(NP_Size::U16));
-
-        new_buffer.set("initialized", true)?;
-        new_buffer.set("location", String::from("http://arstechnica.com"))?;
-        new_buffer.set("fruit", 2u8)?;
-
-        for x in 0..3 {
-
-            new_buffer.set(format!("list.{}.name", x).as_str(), String::from("Hello, world!"))?;
-            new_buffer.set(format!("list.{}.rating", x).as_str(), 3.1415432432445543543 + (x as f32))?;
-            new_buffer.set(format!("list.{}.postfix", x).as_str(), String::from("!"))?;
-
-            new_buffer.set(format!("list.{}.sibling.time", x).as_str(), 123456 + (x as u32))?;
-            new_buffer.set(format!("list.{}.sibling.ratio", x).as_str(), 3.14159 + (x as f32))?;
-            new_buffer.set(format!("list.{}.sibling.size", x).as_str(), 10000 + (x as u16))?;
-
-            new_buffer.set(format!("list.{}.sibling.parent.id", x).as_str(), 0xABADCAFEABADCAFE + (x as u64))?;
-            new_buffer.set(format!("list.{}.sibling.parent.count", x).as_str(), 10000 + (x as u16))?;
-            new_buffer.set(format!("list.{}.sibling.parent.prefix", x).as_str(), String::from("@"))?;
-            new_buffer.set(format!("list.{}.sibling.parent.length", x).as_str(), 1000000 + (x as u32))?;
-        }
-*/

@@ -6,7 +6,7 @@
 use crate::schema::NP_TypeKeys;
 use crate::NP_Size_Data;
 use crate::{NP_Memory_Writable, buffer::NP_Buffer};
-use crate::{memory::NP_Memory_ReadOnly, utils::opt_err};
+use crate::{memory::NP_Memory_ReadOnly};
 use crate::collection::tuple::NP_Tuple;
 
 use crate::{pointer::{NP_Scalar}};
@@ -98,10 +98,10 @@ impl<'buffer> NP_Buffer_RO<'buffer> {
     /// 
     pub fn json_encode(&self, path: &[&str]) -> Result<NP_JSON, NP_Error> {
 
-        let value_cursor = self.select(self.cursor.clone(), false, path)?;
+        let value_cursor = NP_Cursor::select(&self.memory, self.cursor.clone(), false, false, path)?;
 
         if let Some(x) = value_cursor {
-            Ok(NP_Cursor::json_encode(&x, &self.memory))
+            Ok(NP_Cursor::json_encode(0, &x, &self.memory))
         } else {
             Ok(NP_JSON::Null)
         }
@@ -211,7 +211,7 @@ impl<'buffer> NP_Buffer_RO<'buffer> {
     /// 
     pub fn move_cursor(&mut self, path: &[&str]) -> Result<bool, NP_Error> {
 
-        let value_cursor = self.select(self.cursor.clone(), false, path)?;
+        let value_cursor = NP_Cursor::select(&self.memory, self.cursor.clone(), false, false, path)?;
 
         let cursor = if let Some(x) = value_cursor {
             x
@@ -379,7 +379,7 @@ impl<'buffer> NP_Buffer_RO<'buffer> {
     /// 
     pub fn get_iter<'iter>(&'iter self, path: &'iter [&str]) -> Result<Option<NP_Generic_Iterator<'iter>>, NP_Error> {
 
-        let value = self.select(self.cursor.clone(), false, path)?;
+        let value = NP_Cursor::select(&self.memory, self.cursor.clone(), false, false, path)?;
 
         let value = if let Some(x) = value {
             x
@@ -509,7 +509,7 @@ impl<'buffer> NP_Buffer_RO<'buffer> {
     /// ```
     /// 
     pub fn length(&self, path: &[&str]) -> Result<Option<usize>, NP_Error> {
-        let value_cursor = self.select(self.cursor.clone(), false, path)?;
+        let value_cursor = NP_Cursor::select(&self.memory, self.cursor.clone(), false, false, path)?;
 
         let found_cursor = if let Some(x) = value_cursor {
             x
@@ -612,7 +612,7 @@ impl<'buffer> NP_Buffer_RO<'buffer> {
     /// 
     pub fn get_schema_type(&self, path: &[&str]) -> Result<Option<NP_TypeKeys>, NP_Error> {
 
-        match self.select(self.cursor.clone(), true, path)? {
+        match NP_Cursor::select(&self.memory, self.cursor.clone(), false, true, path)? {
             Some(x) => {
                 Ok(Some(*self.memory.get_schema(x.schema_addr).get_type_key()))
             }
@@ -661,7 +661,7 @@ impl<'buffer> NP_Buffer_RO<'buffer> {
     /// 
     pub fn get_schema_default<'get, X: 'get>(&'get self, path: &[&str]) -> Result<Option<X>, NP_Error> where X: NP_Value<'get> + NP_Scalar<'get> {
 
-        match self.select(self.cursor.clone(), true, path)? {
+        match NP_Cursor::select(&self.memory, self.cursor.clone(), false, true, path)? {
             Some(x) => {
                                 
                 // type does not match schema
@@ -712,7 +712,7 @@ impl<'buffer> NP_Buffer_RO<'buffer> {
     /// ```
     /// 
     pub fn get<'get, X: 'get>(&'get self, path: &[&str]) -> Result<Option<X>, NP_Error> where X: NP_Value<'get> + NP_Scalar<'get> {
-        let value_cursor = self.select(self.cursor.clone(), false, path)?;
+        let value_cursor = NP_Cursor::select(&self.memory, self.cursor.clone(), false, false, path)?;
 
         match value_cursor {
             Some(x) => {
@@ -792,7 +792,7 @@ impl<'buffer> NP_Buffer_RO<'buffer> {
         let new_bytes = NP_Memory_Writable::new(Some(capacity), self.memory.schema, self.memory.root);
         let new_root  = NP_Cursor::new(self.memory.root, 0, 0);
 
-        NP_Cursor::compact(old_root, &self.memory, new_root, &new_bytes)?;
+        NP_Cursor::compact(0, old_root, &self.memory, new_root, &new_bytes)?;
 
         self.cursor = NP_Cursor::new(self.memory.root, 0, 0);
 
@@ -827,7 +827,7 @@ impl<'buffer> NP_Buffer_RO<'buffer> {
     pub fn calc_bytes<'bytes>(&self) -> Result<NP_Size_Data, NP_Error> {
 
         let root = NP_Cursor::new(self.memory.root, 0, 0);
-        let real_bytes = NP_Cursor::calc_size(&root, &self.memory)? + self.memory.root;
+        let real_bytes = NP_Cursor::calc_size(0, &root, &self.memory)? + self.memory.root;
         let total_size = self.memory.read_bytes().len() - self.memory.root + 1;
         if total_size >= real_bytes {
             return Ok(NP_Size_Data {
@@ -837,83 +837,6 @@ impl<'buffer> NP_Buffer_RO<'buffer> {
             });
         } else {
             return Err(NP_Error::new("Error calculating bytes!"));
-        }
-    }
-
-
-    fn select(&self, cursor: NP_Cursor, schema_query: bool, path: &[&str]) -> Result<Option<NP_Cursor>, NP_Error> {
-
-        let mut loop_cursor = cursor;
-
-        let mut path_index = 0usize;
-
-        let mut loop_count = 0u16;
-        
-        loop {
-
-            loop_count += 1;
-            
-            if path.len() == path_index {
-                return Ok(Some(loop_cursor));
-            }
-
-            if loop_count > 256 {
-                return Err(NP_Error::new("Select overflow"))
-            }
-
-            // now select into collections
-            match &self.memory.get_schema(loop_cursor.schema_addr) {
-                NP_Parsed_Schema::Table { columns, .. } => {
-                    if let Some(next) = NP_Table::select(loop_cursor, columns, path[path_index], false, schema_query, &self.memory)? {
-                        loop_cursor = next;
-                        path_index += 1;
-                    } else {
-                        return Ok(None);
-                    }
-                },
-                NP_Parsed_Schema::Tuple { values, .. } => {
-                    match path[path_index].parse::<usize>() {
-                        Ok(x) => {
-                            if let Some(next) = NP_Tuple::select(loop_cursor, values, x, false, schema_query, &self.memory)? {
-                                loop_cursor = next;
-                                path_index += 1;
-                            } else {
-                                return Ok(None);
-                            }
-                        },
-                        Err(_e) => {
-                            return Err(NP_Error::new("Need a number to index into tuple, string found!"))
-                        }
-                    }
-                },
-                NP_Parsed_Schema::List { .. } => {
-                    match path[path_index].parse::<usize>() {
-                        Ok(x) => {
-                            if let Some(next) = NP_List::select(loop_cursor, x, false, schema_query, &self.memory)? {
-                                loop_cursor = opt_err(next.1)?;
-                                path_index += 1;
-                            } else {
-                                return Ok(None);
-                            }
-                        },
-                        Err(_e) => {
-                            return Err(NP_Error::new("Need a number to index into list, string found!"))
-                        }
-                    }
-                },
-                NP_Parsed_Schema::Map {  .. } => {
-                    if let Some(next) = NP_Map::select(loop_cursor, path[path_index], false, schema_query, &self.memory)? {
-                        loop_cursor = next;
-                        path_index += 1;
-                    } else {
-                        return Ok(None);
-                    }
-
-                },
-                _ => { // we've reached a scalar value but not at the end of the path
-                    return Ok(None);
-                }
-            }
         }
     }
 }

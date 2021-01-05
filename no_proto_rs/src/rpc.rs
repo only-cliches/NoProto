@@ -534,7 +534,7 @@ impl<'fact> NP_RPC_Factory<'fact> {
             author: author_addr,
             method_hash,
             spec: spec,
-            empty: NP_Factory::new_compiled(&[0u8])
+            empty: NP_Factory::new_compiled(&[0u8])?
         })
     }
 
@@ -823,7 +823,7 @@ impl<'fact> NP_RPC_Factory<'fact> {
             // it's safe because the spec.bytes will live as long as the RPC_Factory which will live as long as this spec object
             // also the spec.bytes is treated as immutable, it won't be modified in any way so shouldn't be moved around in memory
             spec.specs.push(NP_RPC_Spec::MSG { 
-                factory: NP_Factory::new_compiled_ptr(&spec.bytes.read()[offset..(offset + schema_len)] as *const [u8]) 
+                factory: NP_Factory::new_compiled_ptr(&spec.bytes.read()[offset..(offset + schema_len)] as *const [u8])? 
             });
             offset += schema_len;
         }
@@ -872,7 +872,7 @@ impl<'fact> NP_RPC_Factory<'fact> {
             author: author_addr,
             method_hash,
             spec: spec,
-            empty: NP_Factory::new_compiled(&[0u8])
+            empty: NP_Factory::new_compiled(&[0u8])?
         })
     }
 

@@ -196,7 +196,7 @@ impl<'value> NP_Value<'value> for String {
     }
 
 
-    fn get_size<M: NP_Memory>(cursor: &NP_Cursor, memory: &M) -> Result<usize, NP_Error> {
+    fn get_size<M: NP_Memory>(_depth:usize, cursor: &NP_Cursor, memory: &M) -> Result<usize, NP_Error> {
 
         let c_value = cursor.get_value(memory);
         let value_addr = c_value.get_addr_value() as usize;
@@ -316,7 +316,7 @@ impl<'value> NP_Value<'value> for String {
         return Ok((has_fixed_size, schema_data, schema));
     }
 
-    fn to_json<M: NP_Memory>(cursor: &NP_Cursor, memory: &'value M) -> NP_JSON {
+    fn to_json<M: NP_Memory>(_depth:usize, cursor: &NP_Cursor, memory: &'value M) -> NP_JSON {
 
         match Self::into_value(cursor, memory) {
             Ok(x) => match x {
@@ -524,12 +524,12 @@ impl<'value> NP_Value<'value> for NP_String<'value> {
         }
     }
 
-    fn to_json<M: NP_Memory>(cursor: &NP_Cursor, memory: &'value M) -> NP_JSON {
-        String::to_json(cursor, memory)
+    fn to_json<M: NP_Memory>(depth:usize, cursor: &NP_Cursor, memory: &'value M) -> NP_JSON {
+        String::to_json(depth, cursor, memory)
     }
 
-    fn get_size<M: NP_Memory>(cursor: &NP_Cursor, memory: &M) -> Result<usize, NP_Error> {
-        String::get_size(cursor, memory)
+    fn get_size<M: NP_Memory>(depth:usize, cursor: &NP_Cursor, memory: &M) -> Result<usize, NP_Error> {
+        String::get_size(depth, cursor, memory)
     }
 
     fn from_json_to_schema(schema: Vec<NP_Parsed_Schema>, _json_schema: &Box<NP_JSON>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {
@@ -548,22 +548,32 @@ fn schema_parsing_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"string\",\"default\":\"hello\"}";
     let factory = crate::NP_Factory::new(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
+    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    assert_eq!(schema, factory2.schema.to_json()?.stringify());
 
     let schema = "{\"type\":\"string\",\"size\":10}";
     let factory = crate::NP_Factory::new(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
+    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    assert_eq!(schema, factory2.schema.to_json()?.stringify());
 
     let schema = "{\"type\":\"string\",\"lowercase\":true}";
     let factory = crate::NP_Factory::new(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
+    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    assert_eq!(schema, factory2.schema.to_json()?.stringify());
 
     let schema = "{\"type\":\"string\",\"uppercase\":true}";
     let factory = crate::NP_Factory::new(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
+    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    assert_eq!(schema, factory2.schema.to_json()?.stringify());
 
     let schema = "{\"type\":\"string\"}";
     let factory = crate::NP_Factory::new(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
+    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    assert_eq!(schema, factory2.schema.to_json()?.stringify());
 
     Ok(())
 }

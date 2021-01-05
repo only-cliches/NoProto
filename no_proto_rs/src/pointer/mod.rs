@@ -22,6 +22,7 @@ pub mod ulid;
 pub mod uuid;
 pub mod option;
 pub mod date;
+pub mod portal;
 
 use core::{fmt::{Debug}};
 
@@ -36,7 +37,7 @@ use crate::{schema::{NP_TypeKeys}, collection::{map::NP_Map, table::NP_Table, li
 use alloc::{string::String, vec::Vec, borrow::ToOwned};
 use bytes::NP_Bytes;
 
-use self::{date::NP_Date, geo::NP_Geo, option::NP_Enum, string::NP_String, ulid::{NP_ULID, _NP_ULID}, uuid::{NP_UUID, _NP_UUID}};
+use self::{portal::NP_Portal, date::NP_Date, geo::NP_Geo, option::NP_Enum, string::NP_String, ulid::{NP_ULID}, uuid::{NP_UUID}};
 
 #[doc(hidden)]
 #[derive(Debug, Copy, Clone)]
@@ -157,54 +158,8 @@ impl NP_Pointer_Bytes for NP_Pointer_Map_Item {
     }
 }
 
-#[repr(C)]
-#[derive(Debug)]
-#[doc(hidden)]
-#[allow(missing_docs)]
-pub struct NP_Map_Bytes {
-    head: [u8; 2]
-}
 
-#[allow(missing_docs)]
-impl NP_Map_Bytes {
-    #[inline(always)]
-    pub fn set_head(&mut self, head: u16) {
-        self.head = head.to_be_bytes();
-    }
-    #[inline(always)]
-    pub fn get_head(&self) -> u16 {
-        u16::from_be_bytes(self.head)
-    }
-}
 
-#[repr(C)]
-#[derive(Debug)]
-#[doc(hidden)]
-#[allow(missing_docs)]
-pub struct NP_List_Bytes {
-    head: [u8; 2],
-    tail: [u8; 2]
-}
-
-#[allow(missing_docs)]
-impl NP_List_Bytes {
-    #[inline(always)]
-    pub fn set_head(&mut self, head: u16) {
-        self.head = head.to_be_bytes();
-    }
-    #[inline(always)]
-    pub fn get_head(&self) -> u16 {
-        u16::from_be_bytes(self.head)
-    }
-    #[inline(always)]
-    pub fn set_tail(&mut self, tail: u16) {
-        self.tail = tail.to_be_bytes();
-    }
-    #[inline(always)]
-    pub fn get_tail(&self) -> u16 {
-        u16::from_be_bytes(self.tail)
-    }
-}
 
 // holds 4 u16 addresses and a next value (10 bytes)
 #[repr(C)]
@@ -276,6 +231,88 @@ impl<'cursor> NP_Cursor {
                     unsafe { &mut *(ptr.add(self.buff_addr) as *mut NP_Pointer_Scalar) }
                 }
             }                   
+        }
+    }
+
+    /// Given a starting cursor, select into the buffer at a new location
+    /// 
+    pub fn select<M: NP_Memory>(memory: &M, cursor: NP_Cursor, make_path: bool, schema_query: bool, path: &[&str]) -> Result<Option<NP_Cursor>, NP_Error> {
+
+        let mut loop_cursor = cursor;
+    
+        let mut path_index = 0usize;
+        
+        let mut loop_count = 0u16;
+    
+        loop {
+    
+            loop_count += 1;
+            
+            if path.len() == path_index {
+                return Ok(Some(loop_cursor));
+            }
+    
+            if loop_count > 256 {
+                return Err(NP_Error::new("Select overflow"))
+            }
+    
+            // now select into collections
+            match memory.get_schema(loop_cursor.schema_addr) {
+                NP_Parsed_Schema::Table { columns, .. } => {
+                    if let Some(next) = NP_Table::select(loop_cursor, columns, path[path_index], make_path, schema_query, memory)? {
+                        loop_cursor = next;
+                        path_index += 1;
+                    } else {
+                        return Ok(None);
+                    }
+                },
+                NP_Parsed_Schema::Tuple { values, .. } => {
+                    match path[path_index].parse::<usize>() {
+                        Ok(x) => {
+                            if let Some(next) = NP_Tuple::select(loop_cursor, values, x, make_path, schema_query, memory)? {
+                                loop_cursor = next;
+                                path_index += 1;
+                            } else {
+                                return Ok(None);
+                            }
+                        },
+                        Err(_e) => {
+                            return Err(NP_Error::new("Need a number to index into tuple, string found!"))
+                        }
+                    }
+                },
+                NP_Parsed_Schema::List { .. } => {
+                    match path[path_index].parse::<usize>() {
+                        Ok(x) => {
+                            if let Some(next) = NP_List::select(loop_cursor, x, make_path, schema_query, memory)? {
+                                loop_cursor = opt_err(next.1)?;
+                                path_index += 1;
+                            } else {
+                                return Ok(None);
+                            }
+                        },
+                        Err(_e) => {
+                            return Err(NP_Error::new("Need a number to index into list, string found!"))
+                        }
+                    }
+                },
+                NP_Parsed_Schema::Map {  .. } => {
+                    if let Some(next) = NP_Map::select(loop_cursor, path[path_index], make_path, schema_query, memory)? {
+                        loop_cursor = next;
+                        path_index += 1;
+                    } else {
+                        return Ok(None);
+                    }
+    
+                },
+                NP_Parsed_Schema::Portal { schema, parent_schema, .. } => {
+                    loop_cursor.schema_addr = *schema;
+                    loop_cursor.parent_schema_addr = *parent_schema;
+                },
+                _ => { // we've reached a scalar value but not at the end of the path
+                    return Ok(None);
+                }
+            }
         }
     }
 
@@ -400,67 +437,73 @@ impl<'cursor> NP_Cursor {
     /// Exports this pointer and all it's descendants into a JSON object.
     /// This will create a copy of the underlying data and return default values where there isn't data.
     /// 
-    pub fn json_encode<M: NP_Memory>(cursor: &NP_Cursor, memory: &M) -> NP_JSON {
+    pub fn json_encode<M: NP_Memory>(depth: usize, cursor: &NP_Cursor, memory: &M) -> NP_JSON {
+
+        if depth > 255 { return NP_JSON::Null }
 
         match memory.get_schema(cursor.schema_addr).get_type_key() {
             NP_TypeKeys::None           => { NP_JSON::Null },
             NP_TypeKeys::Any            => { NP_JSON::Null },
-            NP_TypeKeys::UTF8String     => { NP_String::to_json(cursor, memory) },
-            NP_TypeKeys::Bytes          => {  NP_Bytes::to_json(cursor, memory) },
-            NP_TypeKeys::Int8           => {        i8::to_json(cursor, memory) },
-            NP_TypeKeys::Int16          => {       i16::to_json(cursor, memory) },
-            NP_TypeKeys::Int32          => {       i32::to_json(cursor, memory) },
-            NP_TypeKeys::Int64          => {       i64::to_json(cursor, memory) },
-            NP_TypeKeys::Uint8          => {        u8::to_json(cursor, memory) },
-            NP_TypeKeys::Uint16         => {       u16::to_json(cursor, memory) },
-            NP_TypeKeys::Uint32         => {       u32::to_json(cursor, memory) },
-            NP_TypeKeys::Uint64         => {       u64::to_json(cursor, memory) },
-            NP_TypeKeys::Float          => {       f32::to_json(cursor, memory) },
-            NP_TypeKeys::Double         => {       f64::to_json(cursor, memory) },
-            NP_TypeKeys::Decimal        => {    NP_Dec::to_json(cursor, memory) },
-            NP_TypeKeys::Boolean        => {      bool::to_json(cursor, memory) },
-            NP_TypeKeys::Geo            => {    NP_Geo::to_json(cursor, memory) },
-            NP_TypeKeys::Uuid           => {  _NP_UUID::to_json(cursor, memory) },
-            NP_TypeKeys::Ulid           => {  _NP_ULID::to_json(cursor, memory) },
-            NP_TypeKeys::Date           => {   NP_Date::to_json(cursor, memory) },
-            NP_TypeKeys::Enum           => {   NP_Enum::to_json(cursor, memory) },
-            NP_TypeKeys::Table          => {   NP_Table::to_json(cursor, memory) },
-            NP_TypeKeys::Map            => {   NP_Map::to_json(cursor, memory) },
-            NP_TypeKeys::List           => {   NP_List::to_json(cursor, memory)},
-            NP_TypeKeys::Tuple          => {  NP_Tuple::to_json(cursor, memory)}
+            NP_TypeKeys::UTF8String     => { NP_String::to_json(depth, cursor, memory) },
+            NP_TypeKeys::Bytes          => {  NP_Bytes::to_json(depth, cursor, memory) },
+            NP_TypeKeys::Int8           => {        i8::to_json(depth, cursor, memory) },
+            NP_TypeKeys::Int16          => {       i16::to_json(depth, cursor, memory) },
+            NP_TypeKeys::Int32          => {       i32::to_json(depth, cursor, memory) },
+            NP_TypeKeys::Int64          => {       i64::to_json(depth, cursor, memory) },
+            NP_TypeKeys::Uint8          => {        u8::to_json(depth, cursor, memory) },
+            NP_TypeKeys::Uint16         => {       u16::to_json(depth, cursor, memory) },
+            NP_TypeKeys::Uint32         => {       u32::to_json(depth, cursor, memory) },
+            NP_TypeKeys::Uint64         => {       u64::to_json(depth, cursor, memory) },
+            NP_TypeKeys::Float          => {       f32::to_json(depth, cursor, memory) },
+            NP_TypeKeys::Double         => {       f64::to_json(depth, cursor, memory) },
+            NP_TypeKeys::Decimal        => {    NP_Dec::to_json(depth, cursor, memory) },
+            NP_TypeKeys::Boolean        => {      bool::to_json(depth, cursor, memory) },
+            NP_TypeKeys::Geo            => {    NP_Geo::to_json(depth, cursor, memory) },
+            NP_TypeKeys::Uuid           => {   NP_UUID::to_json(depth, cursor, memory) },
+            NP_TypeKeys::Ulid           => {   NP_ULID::to_json(depth, cursor, memory) },
+            NP_TypeKeys::Date           => {   NP_Date::to_json(depth, cursor, memory) },
+            NP_TypeKeys::Enum           => {   NP_Enum::to_json(depth, cursor, memory) },
+            NP_TypeKeys::Table          => {  NP_Table::to_json(depth, cursor, memory) },
+            NP_TypeKeys::Map            => {    NP_Map::to_json(depth, cursor, memory) },
+            NP_TypeKeys::List           => {   NP_List::to_json(depth, cursor, memory) },
+            NP_TypeKeys::Tuple          => {  NP_Tuple::to_json(depth, cursor, memory) },
+            NP_TypeKeys::Portal         => { NP_Portal::to_json(depth, cursor, memory) }
         }
 
     }
 
     /// Compact from old cursor and memory into new cursor and memory
     /// 
-    pub fn compact<M: NP_Memory, M2: NP_Memory>(from_cursor: NP_Cursor, from_memory: &M, to_cursor: NP_Cursor, to_memory: &M2) -> Result<NP_Cursor, NP_Error> {
+    pub fn compact<M: NP_Memory, M2: NP_Memory>(depth: usize, from_cursor: NP_Cursor, from_memory: &M, to_cursor: NP_Cursor, to_memory: &M2) -> Result<NP_Cursor, NP_Error> {
+
+        if depth > 255 { return Err(NP_Error::new("Too much depth!"))}
 
         match from_memory.get_schema(from_cursor.schema_addr).get_type_key() {
             NP_TypeKeys::Any           => { Ok(to_cursor) }
-            NP_TypeKeys::UTF8String    => { NP_String::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-            NP_TypeKeys::Bytes         => {  NP_Bytes::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-            NP_TypeKeys::Int8          => {        i8::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-            NP_TypeKeys::Int16         => {       i16::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-            NP_TypeKeys::Int32         => {       i32::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-            NP_TypeKeys::Int64         => {       i64::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-            NP_TypeKeys::Uint8         => {        u8::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-            NP_TypeKeys::Uint16        => {       u16::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-            NP_TypeKeys::Uint32        => {       u32::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-            NP_TypeKeys::Uint64        => {       u64::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-            NP_TypeKeys::Float         => {       f32::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-            NP_TypeKeys::Double        => {       f64::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-            NP_TypeKeys::Decimal       => {    NP_Dec::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-            NP_TypeKeys::Boolean       => {      bool::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-            NP_TypeKeys::Geo           => {    NP_Geo::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-            NP_TypeKeys::Uuid          => {  _NP_UUID::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-            NP_TypeKeys::Ulid          => {  _NP_ULID::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-            NP_TypeKeys::Date          => {   NP_Date::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-            NP_TypeKeys::Enum          => {   NP_Enum::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-            NP_TypeKeys::Table         => {  NP_Table::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-            NP_TypeKeys::Map           => {    NP_Map::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-            NP_TypeKeys::List          => {   NP_List::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
-            NP_TypeKeys::Tuple         => {  NP_Tuple::do_compact(from_cursor, from_memory, to_cursor, to_memory) }
+            NP_TypeKeys::UTF8String    => { NP_String::do_compact(depth, from_cursor, from_memory, to_cursor, to_memory) }
+            NP_TypeKeys::Bytes         => {  NP_Bytes::do_compact(depth, from_cursor, from_memory, to_cursor, to_memory) }
+            NP_TypeKeys::Int8          => {        i8::do_compact(depth, from_cursor, from_memory, to_cursor, to_memory) }
+            NP_TypeKeys::Int16         => {       i16::do_compact(depth, from_cursor, from_memory, to_cursor, to_memory) }
+            NP_TypeKeys::Int32         => {       i32::do_compact(depth, from_cursor, from_memory, to_cursor, to_memory) }
+            NP_TypeKeys::Int64         => {       i64::do_compact(depth, from_cursor, from_memory, to_cursor, to_memory) }
+            NP_TypeKeys::Uint8         => {        u8::do_compact(depth, from_cursor, from_memory, to_cursor, to_memory) }
+            NP_TypeKeys::Uint16        => {       u16::do_compact(depth, from_cursor, from_memory, to_cursor, to_memory) }
+            NP_TypeKeys::Uint32        => {       u32::do_compact(depth, from_cursor, from_memory, to_cursor, to_memory) }
+            NP_TypeKeys::Uint64        => {       u64::do_compact(depth, from_cursor, from_memory, to_cursor, to_memory) }
+            NP_TypeKeys::Float         => {       f32::do_compact(depth, from_cursor, from_memory, to_cursor, to_memory) }
+            NP_TypeKeys::Double        => {       f64::do_compact(depth, from_cursor, from_memory, to_cursor, to_memory) }
+            NP_TypeKeys::Decimal       => {    NP_Dec::do_compact(depth, from_cursor, from_memory, to_cursor, to_memory) }
+            NP_TypeKeys::Boolean       => {      bool::do_compact(depth, from_cursor, from_memory, to_cursor, to_memory) }
+            NP_TypeKeys::Geo           => {    NP_Geo::do_compact(depth, from_cursor, from_memory, to_cursor, to_memory) }
+            NP_TypeKeys::Uuid          => {   NP_UUID::do_compact(depth, from_cursor, from_memory, to_cursor, to_memory) }
+            NP_TypeKeys::Ulid          => {   NP_ULID::do_compact(depth, from_cursor, from_memory, to_cursor, to_memory) }
+            NP_TypeKeys::Date          => {   NP_Date::do_compact(depth, from_cursor, from_memory, to_cursor, to_memory) }
+            NP_TypeKeys::Enum          => {   NP_Enum::do_compact(depth, from_cursor, from_memory, to_cursor, to_memory) }
+            NP_TypeKeys::Table         => {  NP_Table::do_compact(depth, from_cursor, from_memory, to_cursor, to_memory) }
+            NP_TypeKeys::Map           => {    NP_Map::do_compact(depth, from_cursor, from_memory, to_cursor, to_memory) }
+            NP_TypeKeys::List          => {   NP_List::do_compact(depth, from_cursor, from_memory, to_cursor, to_memory) }
+            NP_TypeKeys::Tuple         => {  NP_Tuple::do_compact(depth, from_cursor, from_memory, to_cursor, to_memory) }
+            NP_TypeKeys::Portal        => { NP_Portal::do_compact(depth, from_cursor, from_memory, to_cursor, to_memory) }
             _ => { Err(NP_Error::new("unreachable")) }
         }
     }
@@ -478,6 +521,7 @@ impl<'cursor> NP_Cursor {
             NP_TypeKeys::Map         => { return Err(NP_Error::new("unreachable")); },
             NP_TypeKeys::List        => { return Err(NP_Error::new("unreachable")); },
             NP_TypeKeys::Tuple       => { return Err(NP_Error::new("unreachable")); },
+            NP_TypeKeys::Portal      => { return Err(NP_Error::new("Clone type does not have a default type")); },
             NP_TypeKeys::UTF8String  => {     String::set_value(cursor, memory, opt_err(String::schema_default(schema))?)?; },
             NP_TypeKeys::Bytes       => {   NP_Bytes::set_value(cursor, memory, opt_err(NP_Bytes::schema_default(schema))?)?; },
             NP_TypeKeys::Int8        => {         i8::set_value(cursor, memory, opt_err(i8::schema_default(schema))?)?; },
@@ -504,12 +548,16 @@ impl<'cursor> NP_Cursor {
 
     /// Calculate the number of bytes used by this pointer and it's descendants.
     /// 
-    pub fn calc_size<M: NP_Memory>(cursor: &NP_Cursor, memory: &M) -> Result<usize, NP_Error> {
+    pub fn calc_size<M: NP_Memory>(depth: usize, cursor: &NP_Cursor, memory: &M) -> Result<usize, NP_Error> {
+
+        if depth > 255 { return Err(NP_Error::new("Depth error!")) }
         
         let value = cursor.get_value(memory);
-    
+
+        let type_key = memory.get_schema(cursor.schema_addr).get_type_key();
+
         // size of pointer
-        let base_size = value.get_size();
+        let base_size = if *type_key == NP_TypeKeys::Portal { 0 } else { value.get_size() };
 
         // pointer is in buffer but has no value set
         if value.get_addr_value() == 0 { // no value, just base size
@@ -517,32 +565,33 @@ impl<'cursor> NP_Cursor {
         }
 
         // get the size of the value based on schema
-        let type_size = match memory.get_schema(cursor.schema_addr).get_type_key() {
+        let type_size = match type_key {
             NP_TypeKeys::None         => { Ok(0) },
             NP_TypeKeys::Any          => { Ok(0) },
-            NP_TypeKeys::UTF8String   => { NP_String::get_size(cursor, memory) },
-            NP_TypeKeys::Bytes        => {  NP_Bytes::get_size(cursor, memory) },
-            NP_TypeKeys::Int8         => {        i8::get_size(cursor, memory) },
-            NP_TypeKeys::Int16        => {       i16::get_size(cursor, memory) },
-            NP_TypeKeys::Int32        => {       i32::get_size(cursor, memory) },
-            NP_TypeKeys::Int64        => {       i64::get_size(cursor, memory) },
-            NP_TypeKeys::Uint8        => {        u8::get_size(cursor, memory) },
-            NP_TypeKeys::Uint16       => {       u16::get_size(cursor, memory) },
-            NP_TypeKeys::Uint32       => {       u32::get_size(cursor, memory) },
-            NP_TypeKeys::Uint64       => {       u64::get_size(cursor, memory) },
-            NP_TypeKeys::Float        => {       f32::get_size(cursor, memory) },
-            NP_TypeKeys::Double       => {       f64::get_size(cursor, memory) },
-            NP_TypeKeys::Decimal      => {    NP_Dec::get_size(cursor, memory) },
-            NP_TypeKeys::Boolean      => {      bool::get_size(cursor, memory) },
-            NP_TypeKeys::Geo          => {    NP_Geo::get_size(cursor, memory) },
-            NP_TypeKeys::Uuid         => {  _NP_UUID::get_size(cursor, memory) },
-            NP_TypeKeys::Ulid         => {  _NP_ULID::get_size(cursor, memory) },
-            NP_TypeKeys::Date         => {   NP_Date::get_size(cursor, memory) },
-            NP_TypeKeys::Enum         => {   NP_Enum::get_size(cursor, memory) },
-            NP_TypeKeys::Table        => {  NP_Table::get_size(cursor, memory) },
-            NP_TypeKeys::Map          => {    NP_Map::get_size(cursor, memory) },
-            NP_TypeKeys::List         => {   NP_List::get_size(cursor, memory) },
-            NP_TypeKeys::Tuple        => {  NP_Tuple::get_size(cursor, memory) }
+            NP_TypeKeys::UTF8String   => { NP_String::get_size(depth, cursor, memory) },
+            NP_TypeKeys::Bytes        => {  NP_Bytes::get_size(depth, cursor, memory) },
+            NP_TypeKeys::Int8         => {        i8::get_size(depth, cursor, memory) },
+            NP_TypeKeys::Int16        => {       i16::get_size(depth, cursor, memory) },
+            NP_TypeKeys::Int32        => {       i32::get_size(depth, cursor, memory) },
+            NP_TypeKeys::Int64        => {       i64::get_size(depth, cursor, memory) },
+            NP_TypeKeys::Uint8        => {        u8::get_size(depth, cursor, memory) },
+            NP_TypeKeys::Uint16       => {       u16::get_size(depth, cursor, memory) },
+            NP_TypeKeys::Uint32       => {       u32::get_size(depth, cursor, memory) },
+            NP_TypeKeys::Uint64       => {       u64::get_size(depth, cursor, memory) },
+            NP_TypeKeys::Float        => {       f32::get_size(depth, cursor, memory) },
+            NP_TypeKeys::Double       => {       f64::get_size(depth, cursor, memory) },
+            NP_TypeKeys::Decimal      => {    NP_Dec::get_size(depth, cursor, memory) },
+            NP_TypeKeys::Boolean      => {      bool::get_size(depth, cursor, memory) },
+            NP_TypeKeys::Geo          => {    NP_Geo::get_size(depth, cursor, memory) },
+            NP_TypeKeys::Uuid         => {   NP_UUID::get_size(depth, cursor, memory) },
+            NP_TypeKeys::Ulid         => {   NP_ULID::get_size(depth, cursor, memory) },
+            NP_TypeKeys::Date         => {   NP_Date::get_size(depth, cursor, memory) },
+            NP_TypeKeys::Enum         => {   NP_Enum::get_size(depth, cursor, memory) },
+            NP_TypeKeys::Table        => {  NP_Table::get_size(depth, cursor, memory) },
+            NP_TypeKeys::Map          => {    NP_Map::get_size(depth, cursor, memory) },
+            NP_TypeKeys::List         => {   NP_List::get_size(depth, cursor, memory) },
+            NP_TypeKeys::Tuple        => {  NP_Tuple::get_size(depth, cursor, memory) },
+            NP_TypeKeys::Portal       => { NP_Portal::get_size(depth, cursor, memory) }
         }?;
 
         Ok(type_size + base_size)
@@ -611,15 +660,15 @@ pub trait NP_Value<'value> {
 
     /// Convert this type into a JSON value (recursive for collections)
     /// 
-    fn to_json<M: NP_Memory>(_cursor: &NP_Cursor, _memory: &'value M) -> NP_JSON;
+    fn to_json<M: NP_Memory>(depth: usize, cursor: &NP_Cursor, memory: &'value M) -> NP_JSON;
 
     /// Calculate the size of this pointer and it's children (recursive for collections)
     /// 
-    fn get_size<M: NP_Memory>(cursor: &'value NP_Cursor, memory: &'value M) -> Result<usize, NP_Error>;
+    fn get_size<M: NP_Memory>(depth: usize, cursor: &'value NP_Cursor, memory: &'value M) -> Result<usize, NP_Error>;
     
     /// Handle copying from old pointer/buffer to new pointer/buffer (recursive for collections)
     /// 
-    fn do_compact<M: NP_Memory, M2: NP_Memory>(from_cursor: NP_Cursor, from_memory: &'value M, to_cursor: NP_Cursor, to_memory: &'value M2) -> Result<NP_Cursor, NP_Error> where Self: 'value + Sized {
+    fn do_compact<M: NP_Memory, M2: NP_Memory>(_depth: usize, from_cursor: NP_Cursor, from_memory: &'value M, to_cursor: NP_Cursor, to_memory: &'value M2) -> Result<NP_Cursor, NP_Error> where Self: 'value + Sized {
 
         match Self::into_value(&from_cursor, from_memory)? {
             Some(x) => {
@@ -631,6 +680,8 @@ pub trait NP_Value<'value> {
         Ok(to_cursor)
     }
 }
+
+
 
 
 

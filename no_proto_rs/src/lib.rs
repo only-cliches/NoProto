@@ -1,6 +1,6 @@
 #![warn(missing_docs)]
 #![allow(non_camel_case_types)]
-#![no_std]
+// #![no_std]
 
 //! ## Simple & Performant Serialization with RPC
 //! Performance of Protocol Buffers with flexibility of JSON
@@ -13,6 +13,7 @@
 //! - Safely accept untrusted buffers
 //! - `no_std` support, WASM ready
 //! - Native byte-wise sorting
+//! - Supports recursive data types
 //! - Extensive Documentation & Testing
 //! - Passes Miri compiler safety checks
 //! - Easily mutate, add or delete values in existing buffers
@@ -30,6 +31,14 @@
 //! Like Protocol Buffers schemas are seperate from the data buffers and are required to read, create or update data buffers.
 //! 
 //! Byte-wise sorting comes in the box and is a first class operation. Two NoProto buffers can be compared at the byte level *without deserializing* and a correct ordering between the buffer's internal values will be the result.  This is extremely useful for storing ordered keys in databases. 
+//! 
+//! *Compared to Apache Avro*
+//! - Far more space efficient
+//! - Significantly faster serialization & deserialization
+//! - Supports more native types (like unsigned ints)
+//! - Updates without deserializng/serializing
+//! - Works with `no_std`.
+//! - Safely handle untrusted data.
 //! 
 //! *Compared to Protocol Buffers*
 //! - Comparable serialization & deserialization performance
@@ -63,6 +72,7 @@
 //! | Format           | Zero-Copy | Size Limit | Mutable | Schemas | Language Agnostic | No Compiling    | Byte-wise Sorting |
 //! |------------------|-----------|------------|---------|---------|-------------------|-----------------|-------------------|
 //! | **NoProto**      | ✓         | ~64KB      | ✓       | ✓       | ✓                 | ✓               | ✓                 |
+//! | Apache Avro      | 𐄂         | Unlimited  | 𐄂       | ✓       | ✓                 | ✓               | ✓                 |
 //! | JSON             | 𐄂         | Unlimited  | ✓       | 𐄂       | ✓                 | ✓               | 𐄂                 |
 //! | BSON             | 𐄂         | ~16MB      | ✓       | 𐄂       | ✓                 | ✓               | 𐄂                 |
 //! | MessagePack      | 𐄂         | Unlimited  | ✓       | 𐄂       | ✓                 | ✓               | 𐄂                 |
@@ -211,7 +221,7 @@
 //! 
 //! MIT License
 //! 
-//! Copyright (c) 2020 Scott Lott
+//! Copyright (c) 2021 Scott Lott
 //! 
 //! Permission is hereby granted, free of charge, to any person obtaining a copy
 //! of this software and associated documentation files (the "Software"), to deal
@@ -230,6 +240,11 @@
 //! LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 //! OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 //! SOFTWARE.
+//! 
+#[cfg(test)]
+#[macro_use]
+extern crate std;
+
 
 pub mod pointer;
 pub mod collection;
@@ -365,7 +380,9 @@ impl<'fact> NP_Factory<'fact> {
 
         let parsed_value = json_decode(json_schema.into())?;
 
-        let (is_sortable, schema_bytes, schema) = NP_Schema::from_json(Vec::new(), &parsed_value)?;
+        let (is_sortable, schema_bytes, mut schema) = NP_Schema::from_json(Vec::new(), &parsed_value)?;
+
+        schema = NP_Schema::resolve_portals(schema)?;
 
         Ok(Self {
             schema_bytes: NP_Schema_Bytes::Owned(schema_bytes),
@@ -380,32 +397,36 @@ impl<'fact> NP_Factory<'fact> {
     /// Create a new factory from a compiled schema byte array.
     /// The byte schemas are at least an order of magnitude faster to parse than JSON schemas.
     /// 
-    pub fn new_compiled(schema_bytes: &'fact [u8]) -> Self {
+    pub fn new_compiled(schema_bytes: &'fact [u8]) -> Result<Self, NP_Error> {
         
-        let (is_sortable, schema) = NP_Schema::from_bytes(Vec::new(), 0, schema_bytes);
+        let (is_sortable, mut schema) = NP_Schema::from_bytes(Vec::new(), 0, schema_bytes);
 
-        Self {
+        schema = NP_Schema::resolve_portals(schema)?;
+
+        Ok(Self {
             schema_bytes: NP_Schema_Bytes::Borrwed(schema_bytes),
             schema:  NP_Schema { 
                 is_sortable: is_sortable,
                 parsed: schema
             }
-        }
+        })
     }
 
     /// Generate factory from *const [u8], probably not safe to use generally speaking
     #[doc(hidden)]
-    pub fn new_compiled_ptr(schema_bytes: *const [u8]) -> Self {
+    pub fn new_compiled_ptr(schema_bytes: *const [u8]) -> Result<Self, NP_Error> {
         
-        let (is_sortable, schema) = NP_Schema::from_bytes(Vec::new(), 0, unsafe { &*schema_bytes });
+        let (is_sortable, mut schema) = NP_Schema::from_bytes(Vec::new(), 0, unsafe { &*schema_bytes });
 
-        Self {
+        schema = NP_Schema::resolve_portals(schema)?;
+
+        Ok(Self {
             schema_bytes: NP_Schema_Bytes::Borrwed(unsafe { &*schema_bytes }),
             schema:  NP_Schema { 
                 is_sortable: is_sortable,
                 parsed: schema
             }
-        }
+        })
     }
 
     /// Get a copy of the compiled schema byte array

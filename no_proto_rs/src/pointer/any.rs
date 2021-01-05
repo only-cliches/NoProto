@@ -32,13 +32,13 @@ impl<'value> NP_Value<'value> for NP_Any {
     fn into_value<M: NP_Memory>(cursor: &NP_Cursor, memory: &'value M) -> Result<Option<Self>, NP_Error> where Self: Sized {
         Err(NP_Error::new("Type (Any) doesn't support .into()!"))
     }
-    fn to_json<M: NP_Memory>(cursor: &NP_Cursor, memory: &'value M) -> NP_JSON {
+    fn to_json<M: NP_Memory>(depth:usize, cursor: &NP_Cursor, memory: &'value M) -> NP_JSON {
         NP_JSON::Null
     }
-    fn get_size<M: NP_Memory>(_cursor: &NP_Cursor, _memory: &M) -> Result<usize, NP_Error> {
+    fn get_size<M: NP_Memory>(depth:usize, _cursor: &NP_Cursor, _memory: &M) -> Result<usize, NP_Error> {
         Ok(0)
     }
-    fn do_compact<M: NP_Memory, M2: NP_Memory>(from_cursor: NP_Cursor, from_memory: &'value M, to_cursor: NP_Cursor, to_memory: &'value M2) -> Result<NP_Cursor, NP_Error> where Self: 'value + Sized {
+    fn do_compact<M: NP_Memory, M2: NP_Memory>(depth:usize, from_cursor: NP_Cursor, from_memory: &'value M, to_cursor: NP_Cursor, to_memory: &'value M2) -> Result<NP_Cursor, NP_Error> where Self: 'value + Sized {
         Err(NP_Error::new("Cannot compact an ANY field!"))
     }
     fn from_json_to_schema(mut schema: Vec<NP_Parsed_Schema>, _json_schema: &Box<NP_JSON>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {
@@ -78,6 +78,7 @@ fn schema_parsing_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"any\"}";
     let factory = crate::NP_Factory::new(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
-    
+    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    assert_eq!(schema, factory2.schema.to_json()?.stringify());
     Ok(())
 }

@@ -811,7 +811,7 @@ impl<'value> NP_Value<'value> for NP_Dec {
         })
     }
 
-    fn to_json<M: NP_Memory>(cursor: &NP_Cursor, memory: &'value M) -> NP_JSON {
+    fn to_json<M: NP_Memory>(_depth:usize, cursor: &NP_Cursor, memory: &'value M) -> NP_JSON {
 
         let exp = match memory.get_schema(cursor.schema_addr) {
             NP_Parsed_Schema::Decimal { exp, .. } => {
@@ -857,7 +857,7 @@ impl<'value> NP_Value<'value> for NP_Dec {
         }
     }
 
-    fn get_size<M: NP_Memory>(cursor: &NP_Cursor, memory: &M) -> Result<usize, NP_Error> {
+    fn get_size<M: NP_Memory>(_depth:usize, cursor: &NP_Cursor, memory: &M) -> Result<usize, NP_Error> {
         
         let c_value = cursor.get_value(memory);
 
@@ -949,10 +949,14 @@ fn schema_parsing_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"decimal\",\"exp\":3,\"default\":203.293}";
     let factory = crate::NP_Factory::new(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
+    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    assert_eq!(schema, factory2.schema.to_json()?.stringify());
 
     let schema = "{\"type\":\"decimal\",\"exp\":3}";
     let factory = crate::NP_Factory::new(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
+    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    assert_eq!(schema, factory2.schema.to_json()?.stringify());
     
     Ok(())
 }
@@ -963,6 +967,8 @@ fn default_value_works() -> Result<(), NP_Error> {
     let factory = crate::NP_Factory::new(schema)?;
     let buffer = factory.empty_buffer(None);
     assert_eq!(buffer.get::<NP_Dec>(&[])?.unwrap(), NP_Dec::new(203293, 3));
+    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    assert_eq!(schema, factory2.schema.to_json()?.stringify());
 
     Ok(())
 }

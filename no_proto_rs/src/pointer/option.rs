@@ -230,7 +230,7 @@ impl<'value> NP_Value<'value> for NP_Enum {
         }
     }
 
-    fn to_json<M: NP_Memory>(cursor: &NP_Cursor, memory: &'value M) -> NP_JSON {
+    fn to_json<M: NP_Memory>(_depth:usize, cursor: &NP_Cursor, memory: &'value M) -> NP_JSON {
 
         match Self::into_value(cursor, memory) {
             Ok(x) => {
@@ -284,7 +284,7 @@ impl<'value> NP_Value<'value> for NP_Enum {
         }
     }
 
-    fn get_size<M: NP_Memory>(cursor: &NP_Cursor, memory: &M) -> Result<usize, NP_Error> {
+    fn get_size<M: NP_Memory>(_depth:usize, cursor: &NP_Cursor, memory: &M) -> Result<usize, NP_Error> {
         let c_value = cursor.get_value(memory);
 
         let value_address = c_value.get_addr_value() as usize;
@@ -412,10 +412,14 @@ fn schema_parsing_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"option\",\"default\":\"hello\",\"choices\":[\"hello\",\"world\"]}";
     let factory = crate::NP_Factory::new(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
+    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    assert_eq!(schema, factory2.schema.to_json()?.stringify());
 
     let schema = "{\"type\":\"option\",\"choices\":[\"hello\",\"world\"]}";
     let factory = crate::NP_Factory::new(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
+    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    assert_eq!(schema, factory2.schema.to_json()?.stringify());
     
     Ok(())
 }

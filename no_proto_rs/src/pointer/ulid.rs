@@ -191,7 +191,7 @@ impl<'value> NP_Value<'value> for NP_ULID {
         None
     }
 
-    fn to_json<M: NP_Memory>(cursor: &NP_Cursor, memory: &'value M) -> NP_JSON {
+    fn to_json<M: NP_Memory>(_depth:usize, cursor: &NP_Cursor, memory: &'value M) -> NP_JSON {
 
         match Self::into_value(cursor, memory) {
             Ok(x) => {
@@ -210,7 +210,7 @@ impl<'value> NP_Value<'value> for NP_ULID {
         }
     }
 
-    fn get_size<M: NP_Memory>(cursor: &NP_Cursor, memory: &M) -> Result<usize, NP_Error> {
+    fn get_size<M: NP_Memory>(_depth:usize, cursor: &NP_Cursor, memory: &M) -> Result<usize, NP_Error> {
 
         let c_value = cursor.get_value(memory);
 
@@ -315,12 +315,12 @@ impl<'value> NP_Value<'value> for &NP_ULID {
         })
     }
 
-    fn to_json<M: NP_Memory>(cursor: &NP_Cursor, memory: &'value M) -> NP_JSON {
-        NP_ULID::to_json(cursor, memory)
+    fn to_json<M: NP_Memory>(depth:usize, cursor: &NP_Cursor, memory: &'value M) -> NP_JSON {
+        NP_ULID::to_json(depth, cursor, memory)
     }
 
-    fn get_size<M: NP_Memory>(cursor: &NP_Cursor, memory: &M) -> Result<usize, NP_Error> {
-        NP_ULID::get_size(cursor, memory)
+    fn get_size<M: NP_Memory>(depth:usize, cursor: &NP_Cursor, memory: &M) -> Result<usize, NP_Error> {
+        NP_ULID::get_size(depth, cursor, memory)
     }
 
     fn from_json_to_schema(schema: Vec<NP_Parsed_Schema>, _json_schema: &Box<NP_JSON>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {
@@ -338,6 +338,8 @@ fn schema_parsing_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"ulid\"}";
     let factory = crate::NP_Factory::new(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
+    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    assert_eq!(schema, factory2.schema.to_json()?.stringify());
     
     Ok(())
 }

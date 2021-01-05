@@ -42,7 +42,7 @@ impl<'memory> NP_Memory_Writable<'memory> {
         Self {
             root: self.root,
             bytes: UnsafeCell::new(self.read_bytes().to_vec()),
-            schema: self.schema.clone()
+            schema: self.schema
         }
     }
 
@@ -259,7 +259,7 @@ impl<'memory> NP_Memory_ReadOnly<'memory> {
         Self {
             root: self.root,
             bytes: self.bytes.clone(),
-            schema: self.schema.clone()
+            schema: self.schema
         }
     }
 

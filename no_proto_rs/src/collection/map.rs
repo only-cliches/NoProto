@@ -1,5 +1,4 @@
 use alloc::string::String;
-use crate::{pointer::NP_Map_Bytes};
 use crate::pointer::NP_Cursor;
 use crate::{json_flex::JSMAP};
 use crate::pointer::{NP_Value};
@@ -9,6 +8,26 @@ use alloc::string::ToString;
 use alloc::vec::Vec;
 use alloc::boxed::Box;
 use alloc::borrow::ToOwned;
+
+#[repr(C)]
+#[derive(Debug)]
+#[doc(hidden)]
+#[allow(missing_docs)]
+pub struct NP_Map_Bytes {
+    head: [u8; 2]
+}
+
+#[allow(missing_docs)]
+impl NP_Map_Bytes {
+    #[inline(always)]
+    pub fn set_head(&mut self, head: u16) {
+        self.head = head.to_be_bytes();
+    }
+    #[inline(always)]
+    pub fn get_head(&self) -> u16 {
+        u16::from_be_bytes(self.head)
+    }
+}
 
 #[doc(hidden)]
 #[derive(Debug, Clone, Copy)]
@@ -186,7 +205,7 @@ impl<'map> NP_Map<'map> {
 
 impl<'value> NP_Value<'value> for NP_Map<'value> {
 
-    fn to_json<M: NP_Memory>(cursor: &NP_Cursor, memory: &'value M) -> NP_JSON {
+    fn to_json<M: NP_Memory>(depth:usize, cursor: &NP_Cursor, memory: &'value M) -> NP_JSON {
         let c_value = cursor.get_value(memory);
 
         if c_value.get_addr_value() == 0 {
@@ -198,7 +217,7 @@ impl<'value> NP_Value<'value> for NP_Map<'value> {
         let mut map_iter = NP_Map::new_iter(&cursor, memory);
 
         while let Some((key, item)) = NP_Map::step_iter(&mut map_iter, memory) {
-            json_map.insert(String::from(key), NP_Cursor::json_encode(&item, memory));     
+            json_map.insert(String::from(key), NP_Cursor::json_encode(depth + 1, &item, memory));     
         }
 
         NP_JSON::Dictionary(json_map)
@@ -221,7 +240,7 @@ impl<'value> NP_Value<'value> for NP_Map<'value> {
         Ok(NP_JSON::Dictionary(schema_json))
     }
 
-    fn get_size<M: NP_Memory>(cursor: &NP_Cursor, memory: &'value M) -> Result<usize, NP_Error> {
+    fn get_size<M: NP_Memory>(depth:usize, cursor: &NP_Cursor, memory: &'value M) -> Result<usize, NP_Error> {
 
         let c_value = cursor.get_value(memory);
 
@@ -237,7 +256,7 @@ impl<'value> NP_Value<'value> for NP_Map<'value> {
             let key_size = item.get_value(memory).get_key_size(memory);
             acc_size += 1; // length byte
             acc_size += key_size;
-            acc_size += NP_Cursor::calc_size(&item, memory)?;
+            acc_size += NP_Cursor::calc_size(depth + 1, &item, memory)?;
         }
 
 
@@ -247,7 +266,7 @@ impl<'value> NP_Value<'value> for NP_Map<'value> {
 
 
 
-    fn do_compact<M: NP_Memory, M2: NP_Memory>(from_cursor: NP_Cursor, from_memory: &'value M, to_cursor: NP_Cursor, to_memory: &'value M2) -> Result<NP_Cursor, NP_Error> where Self: 'value + Sized {
+    fn do_compact<M: NP_Memory, M2: NP_Memory>(depth:usize, from_cursor: NP_Cursor, from_memory: &'value M, to_cursor: NP_Cursor, to_memory: &'value M2) -> Result<NP_Cursor, NP_Error> where Self: 'value + Sized {
 
         let from_value = from_cursor.get_value(from_memory);
 
@@ -259,7 +278,7 @@ impl<'value> NP_Value<'value> for NP_Map<'value> {
 
         while let Some((key, item)) = Self::step_iter(&mut map_iter, from_memory) {
             let new_item = Self::insert(&to_cursor, to_memory, key)?;
-            NP_Cursor::compact(item.clone(), from_memory, new_item, to_memory)?;    
+            NP_Cursor::compact(depth + 1, item.clone(), from_memory, new_item, to_memory)?;    
         }
 
 
@@ -316,7 +335,8 @@ fn schema_parsing_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"map\",\"value\":{\"type\":\"string\"}}";
     let factory = crate::NP_Factory::new(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
-    
+    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    assert_eq!(schema, factory2.schema.to_json()?.stringify());
     Ok(())
 }
 
