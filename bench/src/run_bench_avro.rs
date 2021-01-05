@@ -201,9 +201,11 @@ impl AvroBench {
     }
 
     pub fn decode_one_bench(base: u128) -> String {
-        let start = SystemTime::now();
+        
 
         let schema = Self::get_schema();
+
+        let start = SystemTime::now();
 
         let buffer = Self::encode_single(&schema);
 
