@@ -18,7 +18,7 @@ use crate::alloc::borrow::ToOwned;
 
 /// The address location of the root pointer.
 #[doc(hidden)]
-pub const DEFAULT_ROOT_PTR_ADDR: usize = 1;
+pub const DEFAULT_ROOT_PTR_ADDR: usize = 2;
 /// Maximum size of list collections
 #[doc(hidden)]
 pub const LIST_MAX_SIZE: usize = core::u16::MAX as usize;
@@ -1118,7 +1118,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// 
     /// The first argument, new_capacity, is the capacity of the underlying Vec<u8> that we'll be copying the data into.  The default is the size of the old buffer.
     /// 
-    /// **WARNING** Your cursor location and backup will be reset to the root.
+    /// **WARNING** Your cursor location will be reset to the root.
     /// 
     /// ```
     /// use no_proto::error::NP_Error;
@@ -1167,7 +1167,7 @@ impl<'buffer> NP_Buffer<'buffer> {
 
         let old_root = NP_Cursor::new(self.memory.root, 0, 0);
 
-        let new_bytes = NP_Memory_Writable::new(Some(capacity), self.memory.schema, self.memory.root);
+        let new_bytes = NP_Memory_Writable::new_owned(Some(capacity), self.memory.schema.get().clone(), self.memory.root);
         let new_root  = NP_Cursor::new(self.memory.root, 0, 0);
 
         NP_Cursor::compact(0, old_root, &self.memory, new_root, &new_bytes)?;
@@ -1206,7 +1206,7 @@ impl<'buffer> NP_Buffer<'buffer> {
 
         let root = NP_Cursor::new(self.memory.root, 0, 0);
         let real_bytes = NP_Cursor::calc_size(0, &root, &self.memory)? + self.memory.root;
-        let total_size = self.memory.read_bytes().len() - self.memory.root + 1;
+        let total_size = self.memory.read_bytes().len();
 
         if total_size >= real_bytes {
             return Ok(NP_Size_Data {

@@ -28,11 +28,28 @@ pub trait NP_Memory {
 }
 
 #[doc(hidden)]
+#[derive(Debug, Clone)]
+pub enum SchemaVec<'vec> {
+    Owned(Vec<NP_Parsed_Schema>),
+    Borrowed(&'vec Vec<NP_Parsed_Schema>)
+}
+
+impl<'vec> SchemaVec<'vec> {
+    /// Borrow the underlying schema vec
+    pub fn get(&'vec self) -> &'vec Vec<NP_Parsed_Schema> {
+        match &self {
+            SchemaVec::Owned(x) => x,
+            SchemaVec::Borrowed(x) => *x
+        }
+    }
+}
+
+#[doc(hidden)]
 #[derive(Debug)]
 pub struct NP_Memory_Writable<'memory> {
     bytes: UnsafeCell<Vec<u8>>,
     pub root: usize,
-    pub schema: &'memory Vec<NP_Parsed_Schema>
+    pub schema: SchemaVec<'memory>
 }
 
 #[doc(hidden)]
@@ -42,7 +59,7 @@ impl<'memory> NP_Memory_Writable<'memory> {
         Self {
             root: self.root,
             bytes: UnsafeCell::new(self.read_bytes().to_vec()),
-            schema: self.schema
+            schema: self.schema.clone()
         }
     }
 
@@ -52,7 +69,17 @@ impl<'memory> NP_Memory_Writable<'memory> {
         Self {
             root,
             bytes: UnsafeCell::new(bytes),
-            schema: schema
+            schema: SchemaVec::Borrowed(schema)
+        }
+    }
+
+    #[inline(always)]
+    pub fn existing_owned(bytes: Vec<u8>, schema: Vec<NP_Parsed_Schema>, root: usize) -> Self {
+
+        Self {
+            root,
+            bytes: UnsafeCell::new(bytes),
+            schema: SchemaVec::Owned(schema)
         }
     }
 
@@ -65,13 +92,32 @@ impl<'memory> NP_Memory_Writable<'memory> {
 
         let mut new_bytes = Vec::with_capacity(use_size);
 
-        // size, root pointer
-        new_bytes.extend(&[0u8; 3]);
+        // is_packed, size, root pointer
+        new_bytes.extend(&[0u8; 4]);
 
         Self {
             root,
             bytes: UnsafeCell::new(new_bytes),
-            schema: schema,
+            schema: SchemaVec::Borrowed(schema)
+        }
+    }
+
+    #[inline(always)]
+    pub fn new_owned(capacity: Option<usize>, schema: Vec<NP_Parsed_Schema>, root: usize) -> Self {
+        let use_size = match capacity {
+            Some(x) => x,
+            None => 1024
+        };
+
+        let mut new_bytes = Vec::with_capacity(use_size);
+
+        // is_packed, size, root pointer
+        new_bytes.extend(&[0u8; 4]);
+
+        Self {
+            root,
+            bytes: UnsafeCell::new(new_bytes),
+            schema: SchemaVec::Owned(schema)
         }
     }
 
@@ -91,12 +137,12 @@ impl<'memory> NP_Memory for NP_Memory_Writable<'memory> {
 
     #[inline(always)]
     fn get_schemas(&self) -> &Vec<NP_Parsed_Schema> {
-        self.schema
+        self.schema.get()
     }
 
     #[inline(always)]
     fn get_schema(&self, idx: usize) -> &NP_Parsed_Schema {
-        &self.schema[idx]
+        &self.schema.get()[idx]
     }
 
     #[inline(always)]

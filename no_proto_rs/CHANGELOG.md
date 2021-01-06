@@ -1,3 +1,8 @@
+# 0.8.1
+- Added `union` type with docs and tests to go with it.
+- Added docs and more tests for `portal` type.
+- Added packed buffer feature that allows schemas to be included with buffers.
+
 # 0.8.0 January 5, 2021
 - Added new recursive data types with new `portal` type.
 - Compiled schemas were not preserving default values correctly, it is now fixed and tested.

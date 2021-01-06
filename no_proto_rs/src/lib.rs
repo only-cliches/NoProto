@@ -266,6 +266,7 @@ mod utils;
 #[macro_use]
 extern crate alloc;
 
+use core::ops::{Deref, DerefMut};
 use crate::buffer_ro::NP_Buffer_RO;
 use crate::memory::NP_Memory;
 use crate::json_flex::NP_JSON;
@@ -351,7 +352,7 @@ pub struct NP_Factory<'fact> {
 }
 
 /// The schema bytes container
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum NP_Schema_Bytes<'bytes> {
     /// Borrwed schema
     Borrwed(&'bytes [u8]),
@@ -540,5 +541,93 @@ impl<'fact> NP_Factory<'fact> {
     /// 
     pub fn empty_buffer<'buffer>(&'buffer self, capacity: Option<usize>) -> NP_Buffer<'buffer> {
         NP_Buffer::_new(NP_Memory_Writable::new(capacity, &self.schema.parsed, DEFAULT_ROOT_PTR_ADDR))
+    }
+
+    /// Convert a regular buffer into a packed buffer
+    /// The schema is stored in a very compact, binary format.  A JSON version of the schema can be exported at anytime.
+    /// 
+    /// You can optionally store buffers with their schema attached so you don't have to track the schema seperatly
+    /// 
+    pub fn pack_buffer<'open>(&self, buffer: NP_Buffer) -> NP_Packed_Buffer<'open> {
+        NP_Packed_Buffer {
+            buffer: NP_Buffer::_new(NP_Memory_Writable::existing_owned(buffer.close(), self.schema.parsed.clone(), DEFAULT_ROOT_PTR_ADDR)),
+            schema_bytes: self.compile_schema().to_vec(),
+            schema: self.schema.clone()
+        }
+    }
+}
+
+/// Packed Buffer Container
+pub struct NP_Packed_Buffer<'packed> {
+    buffer: NP_Buffer<'packed>,
+    schema_bytes: Vec<u8>,
+    /// Schema data for this packed buffer
+    pub schema: NP_Schema
+}
+
+impl<'packed> NP_Packed_Buffer<'packed> {
+
+    /// Open a packed buffer
+    pub fn open(buffer: Vec<u8>) -> Result<Self, NP_Error> {
+        if buffer[0] != 1 {
+            return Err(NP_Error::new("Trying to use open_packed_buffer on non packed buffer!"))
+        }
+
+        let schema_len = u16::from_be_bytes(unsafe { *((&buffer[1..3]) as *const [u8] as *const [u8; 2]) }) as usize;
+
+        let schema_bytes = &buffer[3..(3 + schema_len)];
+
+        let (is_sortable, mut schema) = NP_Schema::from_bytes(Vec::new(), 0, schema_bytes);
+
+        schema = NP_Schema::resolve_portals(schema)?;
+
+        let buffer_bytes = &buffer[(3 + schema_len)..];
+
+        Ok(Self {
+            buffer: NP_Buffer::_new(NP_Memory_Writable::existing_owned(buffer_bytes.to_vec(), schema.clone(), DEFAULT_ROOT_PTR_ADDR)),
+            schema_bytes: schema_bytes.to_vec(),
+            schema: NP_Schema {
+                is_sortable: is_sortable,
+                parsed: schema
+            }
+        })
+    }
+
+    /// Close this buffer and pack it
+    pub fn close_packed(self) -> Vec<u8> {
+        let mut new_buffer: Vec<u8> = Vec::new();
+        new_buffer.push(1); // indicate this is a packed buffer
+        let schema = self.compile_schema();
+        // schema size
+        new_buffer.extend_from_slice(&(schema.len() as u16).to_be_bytes());
+        // schema data
+        new_buffer.extend_from_slice(self.compile_schema());
+        // buffer data
+        new_buffer.extend(self.buffer.close());
+        new_buffer
+    }
+
+    /// Convert this packed buffer into a regular buffer
+    pub fn into_buffer(self) -> NP_Buffer<'packed> {
+        self.buffer
+    }
+
+    /// Get the schema bytes for this packed buffer
+    pub fn compile_schema(&self) -> &[u8] {
+        &self.schema_bytes[..]
+    }
+}
+
+impl<'packed> Deref for NP_Packed_Buffer<'packed> {
+    type Target = NP_Buffer<'packed>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.buffer
+    }
+}
+
+impl<'packed> DerefMut for NP_Packed_Buffer<'packed> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.buffer
     }
 }

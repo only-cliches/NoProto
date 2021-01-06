@@ -147,6 +147,41 @@ fn schema_parsing_works() -> Result<(), NP_Error> {
     Ok(())
 }
 
+
+#[test]
+fn infinite_recursion() -> Result<(), NP_Error> {
+    let schema = r#"{
+        "type": "table",
+        "columns": [
+            ["street", {"type": "string"}],
+            ["city"  , {"type": "string"}],
+            ["nested", {"type": "portal", "to": "nested"}]
+        ]
+    }"#;
+    let factory = crate::NP_Factory::new(schema)?;
+    let mut buffer = factory.empty_buffer(None);
+
+    match buffer.set(&["nested","nested", "nested"], "hello infinite") {
+        Ok(_done) => {
+            panic!()
+        },
+        Err(_e) => {
+            // should hit select overflow, if it doesn't we havea  problem
+        }
+    }
+
+    match buffer.get::<&str>(&["nested","nested", "nested"]) {
+        Ok(_done) => {
+            panic!()
+        },
+        Err(_e) => {
+            // should hit select overflow, if it doesn't we havea  problem
+        }
+    }
+
+    Ok(())
+}
+
 #[test]
 fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = r#"{

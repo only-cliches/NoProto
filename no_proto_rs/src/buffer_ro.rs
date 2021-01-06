@@ -828,7 +828,7 @@ impl<'buffer> NP_Buffer_RO<'buffer> {
 
         let root = NP_Cursor::new(self.memory.root, 0, 0);
         let real_bytes = NP_Cursor::calc_size(0, &root, &self.memory)? + self.memory.root;
-        let total_size = self.memory.read_bytes().len() - self.memory.root + 1;
+        let total_size = self.memory.read_bytes().len();
         if total_size >= real_bytes {
             return Ok(NP_Size_Data {
                 current_buffer: total_size,

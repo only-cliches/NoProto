@@ -465,19 +465,25 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     buffer.set(&["name"], "hello")?;
     assert_eq!(buffer.get::<&str>(&["name"])?, Some("hello"));
     assert_eq!(buffer.calc_bytes()?.after_compaction, buffer.calc_bytes()?.current_buffer);
-    assert_eq!(buffer.calc_bytes()?.after_compaction, 20usize);
+    assert_eq!(buffer.calc_bytes()?.after_compaction, 21usize);
     buffer.del(&[])?;
     buffer.compact(None)?;
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 3usize);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);
 
     // good values are preserved through compaction
     let mut buffer = factory.empty_buffer(None);
     buffer.set(&["name"], "hello")?;
     assert_eq!(buffer.get::<&str>(&["name"])?, Some("hello"));
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 20usize);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 21usize);
     buffer.compact(None)?;
     assert_eq!(buffer.get::<&str>(&["name"])?, Some("hello"));
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 20usize);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 21usize);
+
+    println!("{:?}", buffer.read_bytes());
+    let packed = factory.pack_buffer(buffer);
+    println!("{:?}", packed.schema.to_json()?.stringify().len());
+    println!("{:?}", packed.compile_schema().len());
+    println!("{:?}", packed.close_packed());
 
     Ok(())
 }

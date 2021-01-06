@@ -864,3 +864,7 @@
 //!
 //! # Ok::<(), NP_Error>(()) 
 //! ```
+//! 
+//! ### Portal (Collection/Scalar)
+//! 
+//! 

@@ -23,6 +23,7 @@ pub mod uuid;
 pub mod option;
 pub mod date;
 pub mod portal;
+pub mod union;
 
 use core::{fmt::{Debug}};
 
@@ -37,7 +38,7 @@ use crate::{schema::{NP_TypeKeys}, collection::{map::NP_Map, table::NP_Table, li
 use alloc::{string::String, vec::Vec, borrow::ToOwned};
 use bytes::NP_Bytes;
 
-use self::{portal::NP_Portal, date::NP_Date, geo::NP_Geo, option::NP_Enum, string::NP_String, ulid::{NP_ULID}, uuid::{NP_UUID}};
+use self::{date::NP_Date, geo::NP_Geo, option::NP_Enum, portal::NP_Portal, string::NP_String, ulid::{NP_ULID}, union::NP_Union, uuid::{NP_UUID}};
 
 #[doc(hidden)]
 #[derive(Debug, Copy, Clone)]
@@ -197,8 +198,8 @@ pub struct NP_Cursor {
     pub buff_addr: usize,
     /// The address of the schema for this cursor
     pub schema_addr: NP_Schema_Addr,
-    /// the values of the buffer pointer
-    pub parent_schema_addr: usize
+    /// the parent schema address (so we know if we're in a collection type)
+    pub parent_schema_addr: NP_Schema_Addr
 }
 
 impl<'cursor> NP_Cursor {
@@ -304,6 +305,14 @@ impl<'cursor> NP_Cursor {
                         return Ok(None);
                     }
     
+                },
+                NP_Parsed_Schema::Union { types, .. } => {
+                    if let Some(next) = NP_Union::select(loop_cursor, types, path[path_index], make_path, schema_query, memory)? {
+                        loop_cursor = next;
+                        path_index += 1;
+                    } else {
+                        return Ok(None);
+                    }
                 },
                 NP_Parsed_Schema::Portal { schema, parent_schema, .. } => {
                     loop_cursor.schema_addr = *schema;
@@ -467,7 +476,8 @@ impl<'cursor> NP_Cursor {
             NP_TypeKeys::Map            => {    NP_Map::to_json(depth, cursor, memory) },
             NP_TypeKeys::List           => {   NP_List::to_json(depth, cursor, memory) },
             NP_TypeKeys::Tuple          => {  NP_Tuple::to_json(depth, cursor, memory) },
-            NP_TypeKeys::Portal         => { NP_Portal::to_json(depth, cursor, memory) }
+            NP_TypeKeys::Portal         => { NP_Portal::to_json(depth, cursor, memory) },
+            NP_TypeKeys::Union          => {  NP_Union::to_json(depth, cursor, memory) },
         }
 
     }
@@ -504,6 +514,7 @@ impl<'cursor> NP_Cursor {
             NP_TypeKeys::List          => {   NP_List::do_compact(depth, from_cursor, from_memory, to_cursor, to_memory) }
             NP_TypeKeys::Tuple         => {  NP_Tuple::do_compact(depth, from_cursor, from_memory, to_cursor, to_memory) }
             NP_TypeKeys::Portal        => { NP_Portal::do_compact(depth, from_cursor, from_memory, to_cursor, to_memory) }
+            NP_TypeKeys::Union         => {  NP_Union::do_compact(depth, from_cursor, from_memory, to_cursor, to_memory) }
             _ => { Err(NP_Error::new("unreachable")) }
         }
     }
@@ -523,6 +534,7 @@ impl<'cursor> NP_Cursor {
             NP_TypeKeys::List        => { return Err(NP_Error::new("unreachable")); },
             NP_TypeKeys::Tuple       => { return Err(NP_Error::new("unreachable")); },
             NP_TypeKeys::Portal      => { return Err(NP_Error::new("Clone type does not have a default type")); },
+            NP_TypeKeys::Union       => { return Err(NP_Error::new("Union type does not have a default type")); },
             NP_TypeKeys::UTF8String  => {     String::set_value(cursor, memory, opt_err(String::schema_default(schema))?)?; },
             NP_TypeKeys::Bytes       => {   NP_Bytes::set_value(cursor, memory, opt_err(NP_Bytes::schema_default(schema))?)?; },
             NP_TypeKeys::Int8        => {         i8::set_value(cursor, memory, opt_err(i8::schema_default(schema))?)?; },
@@ -592,7 +604,8 @@ impl<'cursor> NP_Cursor {
             NP_TypeKeys::Map          => {    NP_Map::get_size(depth, cursor, memory) },
             NP_TypeKeys::List         => {   NP_List::get_size(depth, cursor, memory) },
             NP_TypeKeys::Tuple        => {  NP_Tuple::get_size(depth, cursor, memory) },
-            NP_TypeKeys::Portal       => { NP_Portal::get_size(depth, cursor, memory) }
+            NP_TypeKeys::Portal       => { NP_Portal::get_size(depth, cursor, memory) },
+            NP_TypeKeys::Union        => {  NP_Union::get_size(depth, cursor, memory) },
         }?;
 
         Ok(type_size + base_size)
