@@ -475,10 +475,10 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     buffer.set(&["0"], "hello")?;
     assert_eq!(buffer.get::<&str>(&["0"])?, Some("hello"));
     assert_eq!(buffer.calc_bytes()?.after_compaction, buffer.calc_bytes()?.current_buffer);
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 20usize);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 21usize);
     buffer.del(&[])?;
     buffer.compact(None)?;
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 3usize);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);
 
     Ok(())
 }
@@ -488,12 +488,12 @@ fn sorting_tuples_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"tuple\",\"values\":[{\"type\":\"string\",\"size\":10},{\"type\":\"uuid\"},{\"type\":\"uint8\"}],\"sorted\":true}";
     let factory = crate::NP_Factory::new(schema)?;
     let mut buffer = factory.empty_buffer(None);
-    assert_eq!(buffer.read_bytes(), &[0u8, 0, 3, 0, 13, 0, 23, 0, 39, 0, 0, 0, 0, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+    assert_eq!(buffer.read_bytes(), &[0, 0, 0, 4, 0, 14, 0, 24, 0, 40, 0, 0, 0, 0, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
     buffer.set(&["0"], "hello")?;
     let uuid = crate::pointer::uuid::NP_UUID::generate(22);
     buffer.set(&["1"], &uuid)?;
     buffer.set(&["2"], 20u8)?;
-    assert_eq!(buffer.read_bytes(), &[0u8, 0, 3, 0, 13, 0, 23, 0, 39, 0, 0, 0, 0, 104, 101, 108, 108, 111, 32, 32, 32, 32, 32, 76, 230, 170, 176, 120, 208, 69, 186, 109, 122, 100, 179, 210, 224, 68, 195, 20]);
+    assert_eq!(buffer.read_bytes(), &[0, 0, 0, 4, 0, 14, 0, 24, 0, 40, 0, 0, 0, 0, 104, 101, 108, 108, 111, 32, 32, 32, 32, 32, 76, 230, 170, 176, 120, 208, 69, 186, 109, 122, 100, 179, 210, 224, 68, 195, 20]);
 
     Ok(())
 }

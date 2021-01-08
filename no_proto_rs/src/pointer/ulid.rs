@@ -351,14 +351,14 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let factory = crate::NP_Factory::new(schema)?;
     let mut buffer = factory.empty_buffer(None);
     let set_value = NP_ULID::generate(1606680515909, 212);
-    buffer.set(&[], &set_value)?;
+    buffer.set(&[] as &[&str], &set_value)?;
     assert_eq!(buffer.get::<&NP_ULID>(&[])?, Some(&(NP_ULID::generate(1606680515909, 212))));
     assert_eq!(buffer.get::<&NP_ULID>(&[])?.unwrap().to_string(), "1ERASY5A5VKANC1CJGRZXYW8");
     buffer.del(&[])?;
     assert_eq!(buffer.get::<&NP_ULID>(&[])?, None);
 
     buffer.compact(None)?;
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 3usize);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);
 
     Ok(())
 }

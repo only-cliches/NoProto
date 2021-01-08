@@ -21,9 +21,6 @@ use crate::memory::{NP_Memory};
 use crate::{json_flex::NP_JSON};
 use crate::alloc::borrow::ToOwned;
 
-/// The address location of the root pointer.
-#[doc(hidden)]
-pub const DEFAULT_ROOT_PTR_ADDR: usize = 1;
 /// Maximum size of list collections
 #[doc(hidden)]
 pub const LIST_MAX_SIZE: usize = core::u16::MAX as usize;
@@ -125,7 +122,7 @@ impl<'buffer> NP_Buffer_RO<'buffer> {
     /// let new_buffer = factory.open_buffer_ro(new_buffer.read_bytes());
     /// // close buffer and get bytes
     /// let bytes: Vec<u8> = new_buffer.close();
-    /// assert_eq!([0, 0, 3, 0, 5, 104, 101, 108, 108, 111].to_vec(), bytes);
+    /// assert_eq!([0, 0, 0, 4, 0, 5, 104, 101, 108, 108, 111].to_vec(), bytes);
     /// 
     /// # Ok::<(), NP_Error>(()) 
     /// ```
@@ -161,11 +158,11 @@ impl<'buffer> NP_Buffer_RO<'buffer> {
     /// new_buffer.set(&["1"], "hello")?;
     /// 
     /// // the buffer with it's vtables take up 20 bytes!
-    /// assert_eq!(new_buffer.read_bytes().len(), 20usize);
+    /// assert_eq!(new_buffer.read_bytes().len(), 21usize);
     /// 
     /// // close buffer and get sortable bytes
     /// let bytes: Vec<u8> = factory.open_buffer_ro(new_buffer.read_bytes()).close_sortable()?;
-    /// // with close_sortable() we only get the bytes we care about!
+    /// // with close_sortable() we only get the 8 bytes we care about!
     /// assert_eq!([55, 104, 101, 108, 108, 111, 32].to_vec(), bytes);
     /// 
     /// // you can always re open the sortable buffers with this call
@@ -188,7 +185,7 @@ impl<'buffer> NP_Buffer_RO<'buffer> {
                         vtables +=1;
                         length -= 4;
                     }
-                    let root_offset = DEFAULT_ROOT_PTR_ADDR + 2 + (vtables * 10);
+                    let root_offset = self.memory.get_root() + 2 + (vtables * 10);
 
                     let closed_vec = self.memory.dump();
                     
@@ -816,8 +813,8 @@ impl<'buffer> NP_Buffer_RO<'buffer> {
     /// let mut new_buffer = factory.empty_buffer(None);
     /// new_buffer.set(&[], "hello")?;
     /// assert_eq!(NP_Size_Data {
-    ///     current_buffer: 10,
-    ///     after_compaction: 10,
+    ///     current_buffer: 11,
+    ///     after_compaction: 11,
     ///     wasted_bytes: 0
     /// }, factory.open_buffer_ro(new_buffer.read_bytes()).calc_bytes()?);
     /// 

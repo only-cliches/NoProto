@@ -1,4 +1,4 @@
-use crate::buffer::{VTABLE_BYTES, VTABLE_SIZE};
+use crate::{buffer::{VTABLE_BYTES, VTABLE_SIZE}};
 use alloc::string::String;
 use crate::pointer::{NP_Vtable};
 use crate::{pointer::{NP_Cursor}, schema::{NP_Parsed_Schema, NP_Schema_Addr}};
@@ -479,11 +479,14 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     assert_eq!(buffer.get::<&str>(&["name"])?, Some("hello"));
     assert_eq!(buffer.calc_bytes()?.current_buffer, 21usize);
 
-    println!("{:?}", buffer.read_bytes());
-    let packed = factory.pack_buffer(buffer);
-    println!("{:?}", packed.schema.to_json()?.stringify().len());
-    println!("{:?}", packed.compile_schema().len());
-    println!("{:?}", packed.close_packed());
+    // println!("{:?}", buffer.read_bytes());
+    // let packed = factory.pack_buffer(buffer);
+    // println!("{:?}", packed.schema.to_json()?.stringify().len());
+    // println!("{:?}", packed.compile_schema().len());
+    // let closed = packed.close_packed();
+
+    // let opened = NP_Packed_Buffer::open(closed)?;
+    // println!("{:?}", opened.get::<&str>(&["name"])?);
 
     Ok(())
 }

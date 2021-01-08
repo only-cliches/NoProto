@@ -15,7 +15,10 @@
 //! let uuid = NP_UUID::generate(50);
 //! new_buffer.set(&[], &uuid)?;
 //! 
-//! assert_eq!("48E6AAB0-7DF5-409F-4D57-4D969FA065EE", new_buffer.get::<&NP_UUID>(&[])?.unwrap().to_string());
+//! let b_uuid: Option<NP_UUID> = new_buffer.get::<NP_UUID>(&[])?;
+//! assert_eq!(Some(uuid), b_uuid);
+//! 
+//! assert_eq!("48E6AAB0-7DF5-409F-4D57-4D969FA065EE", b_uuid.unwrap().to_string());
 //!
 //! # Ok::<(), NP_Error>(()) 
 //! ```
@@ -93,7 +96,7 @@ impl NP_UUID {
         }
 
         uuid
-    }// 503 760 4833
+    }
 
     /// Convert a string UUID into it's byte values
     /// 
@@ -344,14 +347,14 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let factory = crate::NP_Factory::new(schema)?;
     let mut buffer = factory.empty_buffer(None);
     let set_value = NP_UUID::generate(212);
-    buffer.set(&[], &set_value)?;
+    buffer.set(&[] as &[&str], &set_value)?;
     assert_eq!(buffer.get::<&NP_UUID>(&[])?, Some(&NP_UUID::generate(212)));
     assert_eq!(buffer.get::<&NP_UUID>(&[])?.unwrap().to_string(), "9EE6AAB0-2C94-41FE-FB88-42F73253F217");
     buffer.del(&[])?;
     assert_eq!(buffer.get::<&NP_UUID>(&[])?, None);
 
     buffer.compact(None)?;
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 3usize);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);
 
     Ok(())
 }

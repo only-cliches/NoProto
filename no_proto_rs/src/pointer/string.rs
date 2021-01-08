@@ -593,7 +593,7 @@ fn fixed_size_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"string\",\"size\": 20}";
     let factory = crate::NP_Factory::new(schema)?;
     let mut buffer = factory.empty_buffer(None);
-    buffer.set(&[], "hello there this sentence is long")?;
+    buffer.set(&[] as &[&str], "hello there this sentence is long")?;
     assert_eq!(buffer.get::<&str>(&[])?.unwrap(), "hello there this sen");
 
     Ok(())
@@ -613,7 +613,7 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     assert_eq!(buffer.get::<&str>(&[])?, None);
 
     buffer.compact(None)?;
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 3usize);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);
 
     Ok(())
 }

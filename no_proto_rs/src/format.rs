@@ -18,14 +18,16 @@
 //! | List Item    | 5                |
 //!  
 //! 
-//! The first byte of every buffer is a version/size number to be used by later version of NoProto.  The next 2 bytes of every buffer is the root pointer, these bytes should contain the address of the root object in the buffer.
+//! The first byte of every buffer is a flag to show if the buffer is packed with it's schema or not.  Packed buffers start with a "1", non packed buffers start with a "0".
+//! 
+//! The second byte of every buffer is a version/size number to be used by later version of NoProto.  The next 2 bytes of every buffer is the root pointer, these bytes should contain the address of the root object in the buffer.
 //! 
 //! Most of the time these bytes will point to the data immediately following them, but it's possible to clear the root object causing these bytes to be zero, or to update the root data which would cause this address to update to something else.
 //! 
 //! For example, here is a buffer with u16 address size that contains the string `hello`, it's schema is just `{type: "string"}`.
 //! 
 //! ```text
-//! [0,         0, 3,          0, 5, 104, 101, 108, 108, 111]
+//! [0,0,       0, 4,          0, 5, 104, 101, 108, 108, 111]
 //! [   root pointer, string length,   h,   e,   l,   l,   o]
 //! ```
 //! 
@@ -102,9 +104,9 @@
 //! let mut new_buffer = factory.empty_buffer(None);
 //! new_buffer.set(&["age"], 20u8)?;
 //!
-//! assert_eq!(vec![0, 0, 3, 0, 13, 0, 0, 0, 0, 0, 0, 0, 0, 20], new_buffer.close());
+//! assert_eq!(vec![0, 0, 0, 4, 0, 14, 0, 0, 0, 0, 0, 0, 0, 0, 20], new_buffer.close());
 //! 
-//! // [0,    0, 3, 0, 13, 0, 0, 0, 0, 0, 0, 0, 0,    20]
+//! // [0,0,  0, 4, 0, 14, 0, 0, 0, 0, 0, 0, 0, 0,    20]
 //! // [  root ptr,                        vtable,  data]
 //!
 //! # Ok::<(), NP_Error>(()) 
@@ -127,9 +129,9 @@
 //!
 //! let mut new_buffer = factory.empty_buffer(None);
 //! new_buffer.set(&["4"], 20u8)?;
-//! assert_eq!(vec![0, 0, 3, 0, 7, 0, 7, 0, 12, 0, 0, 4, 20], new_buffer.close());
+//! assert_eq!(vec![0, 0, 0, 4, 0, 8, 0, 8, 0, 13, 0, 0, 4, 20], new_buffer.close());
 //! 
-//! // [0,     0, 3,  0, 7, 0, 7,   0, 12, 0, 0, 4,    20]
+//! // [0,0,   0, 4,  0, 8, 0, 8,   0, 13, 0, 0, 4,    20]
 //! // [   root ptr,  head, tail,    list item ptr,  data]
 //!
 //! # Ok::<(), NP_Error>(()) 
@@ -150,9 +152,9 @@
 //!
 //! let mut new_buffer = factory.empty_buffer(None);
 //! new_buffer.set(&["age"], 20u8)?;
-//! assert_eq!(vec![0, 0, 3, 0, 13, 0, 0, 0, 9, 3, 97, 103, 101, 20], new_buffer.close());
+//! assert_eq!(vec![0, 0, 0, 4, 0, 14, 0, 0, 0, 10, 3, 97, 103, 101, 20], new_buffer.close());
 //! 
-//! // [0,    0, 3,   0, 13, 0, 0, 0, 9,  3, 97, 103, 101,     20]
+//! // [0,0,  0, 4,   0, 14, 0, 0, 0,10,  3, 97, 103, 101,     20]
 //! // [  root ptr,        map item ptr,      a,   g,   e,   data]
 //!
 //! # Ok::<(), NP_Error>(()) 
@@ -186,9 +188,9 @@
 //! let mut new_buffer = factory.empty_buffer(None);
 //! new_buffer.set(&["0"], 20u8)?;
 //! new_buffer.set(&["1"], "hello")?;
-//! assert_eq!(vec![0, 0, 3, 0, 13, 0, 14, 0, 0, 0, 0, 0, 0, 20, 0, 5, 104, 101, 108, 108, 111], new_buffer.close());
+//! assert_eq!(vec![0, 0, 0, 4, 0, 14, 0, 15, 0, 0, 0, 0, 0, 0, 20, 0, 5, 104, 101, 108, 108, 111], new_buffer.close());
 //! 
-//! // [0,     0, 3, 0, 13, 0, 14, 0, 0, 0, 0, 0, 0,  20, 0, 5, 104, 101, 108, 108, 111]
+//! // [0,0,   0, 4, 0, 14, 0, 15, 0, 0, 0, 0, 0, 0,  20, 0, 5, 104, 101, 108, 108, 111]
 //! // [   root ptr,                         vtable,  u8,         h,   e,   l,   l,   o]
 //!
 //! # Ok::<(), NP_Error>(()) 
@@ -214,9 +216,9 @@
 //!
 //! let mut new_buffer = factory.empty_buffer(None);
 //! new_buffer.set(&[], -2023830i32)?;
-//! assert_eq!(vec![0, 0, 3, 127, 225, 30, 106], new_buffer.close());
+//! assert_eq!(vec![0, 0, 0, 4, 127, 225, 30, 106], new_buffer.close());
 //! 
-//! // [0,     0, 3, 127, 225, 30, 106]
+//! // [0,0,   0, 4, 127, 225, 30, 106]
 //! // [   root ptr,              data]
 //!
 //! # Ok::<(), NP_Error>(()) 
@@ -238,9 +240,9 @@
 //!
 //! let mut new_buffer = factory.empty_buffer(None);
 //! new_buffer.set(&[], 28378u32)?;
-//! assert_eq!(vec![0, 0, 3, 0, 0, 110, 218], new_buffer.close());
+//! assert_eq!(vec![0, 0, 0, 4, 0, 0, 110, 218], new_buffer.close());
 //! 
-//! // [0,    0, 3, 0, 0, 110, 218]
+//! // [0,0,  0, 4, 0, 0, 110, 218]
 //! // [  root ptr,           data]
 //!
 //! # Ok::<(), NP_Error>(()) 
@@ -262,9 +264,9 @@
 //!
 //! let mut new_buffer = factory.empty_buffer(None);
 //! new_buffer.set(&[], 2.389988f32)?;
-//! assert_eq!(vec![0, 0, 3, 64, 24, 245, 144], new_buffer.close());
+//! assert_eq!(vec![0, 0, 0, 4, 64, 24, 245, 144], new_buffer.close());
 //! 
-//! // [0,    0, 3, 64, 24, 245, 144]
+//! // [0,0,  0, 4, 64, 24, 245, 144]
 //! // [  root ptr,             data]
 //!
 //! # Ok::<(), NP_Error>(()) 
@@ -288,9 +290,9 @@
 //!
 //! let mut new_buffer = factory.empty_buffer(None);
 //! new_buffer.set(&[], NP_Enum::new("red"))?;
-//! assert_eq!(vec![0, 0, 3, 2], new_buffer.close());
+//! assert_eq!(vec![0, 0, 0, 4, 2], new_buffer.close());
 //! 
-//! // [0,    0, 3,      2]
+//! // [0,0,  0, 4,      2]
 //! // [  root ptr,   data]
 //!
 //! # Ok::<(), NP_Error>(()) 
@@ -310,9 +312,9 @@
 //!
 //! let mut new_buffer = factory.empty_buffer(None);
 //! new_buffer.set(&[], true)?;
-//! assert_eq!(vec![0, 0, 3, 1], new_buffer.close());
+//! assert_eq!(vec![0, 0, 0, 4, 1], new_buffer.close());
 //! 
-//! // [0,    0, 3,      1]
+//! // [0,0,  0, 4,      1]
 //! // [  root ptr,   data]
 //!
 //! # Ok::<(), NP_Error>(()) 
@@ -340,9 +342,9 @@
 //!
 //! let mut new_buffer = factory.empty_buffer(None);
 //! new_buffer.set(&[], NP_Dec::new(200, 0))?;
-//! assert_eq!(vec![0, 0, 3, 128, 0, 0, 0, 0, 0, 78, 32], new_buffer.close());
+//! assert_eq!(vec![0, 0, 0, 4, 128, 0, 0, 0, 0, 0, 78, 32], new_buffer.close());
 //! 
-//! // [0,     0, 3, 128, 0, 0, 0, 0, 0, 78, 32]
+//! // [0,0,   0, 4, 128, 0, 0, 0, 0, 0, 78, 32]
 //! // [   root ptr,                       data]
 //!
 //! # Ok::<(), NP_Error>(()) 
@@ -390,9 +392,9 @@
 //!
 //! let mut new_buffer = factory.empty_buffer(None);
 //! new_buffer.set(&[], NP_Geo::new(8, 41.303921, -81.901693))?;
-//! assert_eq!(vec![0, 0, 3, 152, 158, 122, 106, 79, 46, 203, 30], new_buffer.close());
+//! assert_eq!(vec![0, 0, 0, 4, 152, 158, 122, 106, 79, 46, 203, 30], new_buffer.close());
 //! 
-//! // [0,     0, 3, 152, 158, 122, 106, 79, 46, 203, 30]
+//! // [0,0,   0, 4, 152, 158, 122, 106, 79, 46, 203, 30]
 //! // [   root ptr,           latitude,       longitude]
 //!
 //! # Ok::<(), NP_Error>(()) 
@@ -416,9 +418,9 @@
 //! let mut new_buffer = factory.empty_buffer(None);
 //! let uuid = NP_UUID::generate(32);
 //! new_buffer.set(&[], &uuid)?;
-//! assert_eq!(vec![0, 0, 3, 202, 230, 170, 176, 127, 103, 66, 13, 89, 65, 221, 4, 153, 160, 117, 252], new_buffer.close());
+//! assert_eq!(vec![0, 0, 0, 4, 202, 230, 170, 176, 127, 103, 66, 13, 89, 65, 221, 4, 153, 160, 117, 252], new_buffer.close());
 //! 
-//! // [0,     0, 3, 202, 230, 170, 176, 127, 103, 66, 13, 89, 65, 221, 4, 153, 160, 117, 252]
+//! // [0,0,   0, 4, 202, 230, 170, 176, 127, 103, 66, 13, 89, 65, 221, 4, 153, 160, 117, 252]
 //! // [   root ptr,                              UUID                                       ]
 //!
 //! # Ok::<(), NP_Error>(()) 
@@ -449,9 +451,9 @@
 //!
 //! let mut new_buffer = factory.empty_buffer(None);
 //! new_buffer.set(&[], "hello, world!")?;
-//! assert_eq!(vec![0, 0, 3, 0, 13, 104, 101, 108, 108, 111, 44, 32, 119, 111, 114, 108, 100, 33], new_buffer.close());
+//! assert_eq!(vec![0, 0, 0, 4, 0, 13, 104, 101, 108, 108, 111, 44, 32, 119, 111, 114, 108, 100, 33], new_buffer.close());
 //! 
-//! // [0,     0, 3,   0, 13, 104, 101, 108, 108, 111, 44, 32, 119, 111, 114, 108, 100, 33]
+//! // [0,0,   0, 4,   0, 13, 104, 101, 108, 108, 111, 44, 32, 119, 111, 114, 108, 100, 33]
 //! // [   root ptr,  length,   h,   e,   l,   l,   o,  ,,   ,   w,   o,   r,   l,   d,  !]
 //!
 //! # Ok::<(), NP_Error>(()) 
@@ -471,9 +473,9 @@
 //!
 //! let mut new_buffer = factory.empty_buffer(None);
 //! new_buffer.set(&[], NP_Date::new(1598490738507))?;
-//! assert_eq!(vec![0, 0, 3, 0, 0, 1, 116, 45, 120, 255, 75], new_buffer.close());
+//! assert_eq!(vec![0, 0, 0, 4, 0, 0, 1, 116, 45, 120, 255, 75], new_buffer.close());
 //! 
-//! // [0,     0, 3, 0, 0, 1, 116, 45, 120, 255, 75]
+//! // [0,0,   0, 4, 0, 0, 1, 116, 45, 120, 255, 75]
 //! // [   root ptr,           timestamp           ]
 //!
 //! # Ok::<(), NP_Error>(()) 
@@ -866,5 +868,7 @@
 //! ```
 //! 
 //! ### Portal (Collection/Scalar)
+//! 
+//! ### Union (Collection/Scalar)
 //! 
 //! 

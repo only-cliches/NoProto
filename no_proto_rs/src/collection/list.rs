@@ -532,10 +532,10 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     buffer.set(&["10"], "hello, world")?;
     assert_eq!(buffer.get::<&str>(&["10"])?, Some("hello, world"));
     assert_eq!(buffer.calc_bytes()?.after_compaction, buffer.calc_bytes()?.current_buffer);
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 26usize);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 27usize);
     buffer.del(&[])?;
     buffer.compact(None)?;
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 3usize);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);
 
     // values preserved through compaction
     let mut buffer = factory.empty_buffer(None);
@@ -544,12 +544,12 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     assert_eq!(buffer.get::<&str>(&["10"])?, Some("hello, world"));
     assert_eq!(buffer.get::<&str>(&["12"])?, Some("hello, world2"));
     assert_eq!(buffer.calc_bytes()?.after_compaction, buffer.calc_bytes()?.current_buffer);
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 46usize);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 47usize);
     buffer.compact(None)?;
     assert_eq!(buffer.get::<&str>(&["10"])?, Some("hello, world"));
     assert_eq!(buffer.get::<&str>(&["12"])?, Some("hello, world2"));
     assert_eq!(buffer.calc_bytes()?.after_compaction, buffer.calc_bytes()?.current_buffer);
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 46usize);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 47usize);
 
     Ok(())
 }

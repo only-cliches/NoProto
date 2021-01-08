@@ -121,7 +121,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// new_buffer.set(&[], "hello")?;
     /// // close buffer and get bytes
     /// let bytes: Vec<u8> = new_buffer.close();
-    /// assert_eq!([0, 0, 3, 0, 5, 104, 101, 108, 108, 111].to_vec(), bytes);
+    /// assert_eq!([0, 0, 0, 4, 0, 5, 104, 101, 108, 108, 111].to_vec(), bytes);
     /// 
     /// # Ok::<(), NP_Error>(()) 
     /// ```
@@ -156,12 +156,12 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// new_buffer.set(&["0"], 55u8)?;
     /// new_buffer.set(&["1"], "hello")?;
     /// 
-    /// // the buffer with it's vtables take up 20 bytes!
-    /// assert_eq!(new_buffer.read_bytes().len(), 20usize);
+    /// // the buffer with it's vtables take up 21 bytes!
+    /// assert_eq!(new_buffer.read_bytes().len(), 21usize);
     /// 
     /// // close buffer and get sortable bytes
     /// let bytes: Vec<u8> = new_buffer.close_sortable()?;
-    /// // with close_sortable() we only get the bytes we care about!
+    /// // with close_sortable() we only get the 8 value bytes we care about!
     /// assert_eq!([55, 104, 101, 108, 108, 111, 32].to_vec(), bytes);
     /// 
     /// // you can always re open the sortable buffers with this call
@@ -184,7 +184,7 @@ impl<'buffer> NP_Buffer<'buffer> {
                         vtables +=1;
                         length -= 4;
                     }
-                    let root_offset = DEFAULT_ROOT_PTR_ADDR + 2 + (vtables * 10);
+                    let root_offset =  self.memory.root + 2 + (vtables * 10);
 
                     let closed_vec = self.memory.dump();
                     
@@ -1071,16 +1071,16 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// new_buffer.set(&[], "hello")?;
     /// // using 9 bytes
     /// assert_eq!(NP_Size_Data {
-    ///     current_buffer: 10,
-    ///     after_compaction: 10,
+    ///     current_buffer: 11,
+    ///     after_compaction: 11,
     ///     wasted_bytes: 0
     /// }, new_buffer.calc_bytes()?);
     /// // update the value
     /// new_buffer.set(&[], "hello, world")?;
     /// // now using 25 bytes, with 7 bytes of wasted space
     /// assert_eq!(NP_Size_Data {
-    ///     current_buffer: 24,
-    ///     after_compaction: 17,
+    ///     current_buffer: 25,
+    ///     after_compaction: 18,
     ///     wasted_bytes: 7
     /// }, new_buffer.calc_bytes()?);
     /// // compact to save space
@@ -1094,8 +1094,8 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// })?;
     /// // back down to 18 bytes with no wasted bytes
     /// assert_eq!(NP_Size_Data {
-    ///     current_buffer: 17,
-    ///     after_compaction: 17,
+    ///     current_buffer: 18,
+    ///     after_compaction: 18,
     ///     wasted_bytes: 0
     /// }, new_buffer.calc_bytes()?);
     /// 
@@ -1134,24 +1134,24 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// new_buffer.set(&[], "hello")?;
     /// // using 11 bytes
     /// assert_eq!(NP_Size_Data {
-    ///     current_buffer: 10,
-    ///     after_compaction: 10,
+    ///     current_buffer: 11,
+    ///     after_compaction: 11,
     ///     wasted_bytes: 0
     /// }, new_buffer.calc_bytes()?);
     /// // update the value
     /// new_buffer.set(&[], "hello, world")?;
     /// // now using 25 bytes, with 7 bytes of wasted bytes
     /// assert_eq!(NP_Size_Data {
-    ///     current_buffer: 24,
-    ///     after_compaction: 17,
+    ///     current_buffer: 25,
+    ///     after_compaction: 18,
     ///     wasted_bytes: 7
     /// }, new_buffer.calc_bytes()?);
     /// // compact to save space
     /// new_buffer.compact(None)?;
     /// // back down to 18 bytes with no wasted bytes
     /// assert_eq!(NP_Size_Data {
-    ///     current_buffer: 17,
-    ///     after_compaction: 17,
+    ///     current_buffer: 18,
+    ///     after_compaction: 18,
     ///     wasted_bytes: 0
     /// }, new_buffer.calc_bytes()?);
     /// 
@@ -1194,8 +1194,8 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// let mut new_buffer = factory.empty_buffer(None);
     /// new_buffer.set(&[], "hello")?;
     /// assert_eq!(NP_Size_Data {
-    ///     current_buffer: 10,
-    ///     after_compaction: 10,
+    ///     current_buffer: 11,
+    ///     after_compaction: 11,
     ///     wasted_bytes: 0
     /// }, new_buffer.calc_bytes()?);
     /// 
@@ -1280,7 +1280,7 @@ impl<'item> NP_Item<'item> {
                     X::set_value(item, self.memory, value)?;
                 }
                 NP_Parsed_Schema::Table { columns, .. } => {
-                    let item = opt_err(NP_Table::select(self.parent.clone(), columns, self.key, true, false, self.memory)?)?;
+                    let item = opt_err(NP_Table::select(self.parent.clone(), columns, &self.key, true, false, self.memory)?)?;
                     X::set_value(item, self.memory, value)?;
                 },
                 NP_Parsed_Schema::Tuple { values, .. } => {

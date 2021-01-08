@@ -16,7 +16,7 @@ use alloc::borrow::ToOwned;
 
 use super::{NP_Cursor};
 
-/// Defines the behavior of the clone data type
+/// Defines the behavior of the portal data type
 pub struct NP_Portal();
 
 
@@ -166,7 +166,7 @@ fn infinite_recursion() -> Result<(), NP_Error> {
             panic!()
         },
         Err(_e) => {
-            // should hit select overflow, if it doesn't we havea  problem
+            // should hit select overflow, if it doesn't we have a problem
         }
     }
 
@@ -175,7 +175,7 @@ fn infinite_recursion() -> Result<(), NP_Error> {
             panic!()
         },
         Err(_e) => {
-            // should hit select overflow, if it doesn't we havea  problem
+            // should hit select overflow, if it doesn't we have a problem
         }
     }
 

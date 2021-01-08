@@ -36,7 +36,7 @@ pub enum SchemaVec<'vec> {
 
 impl<'vec> SchemaVec<'vec> {
     /// Borrow the underlying schema vec
-    pub fn get(&'vec self) -> &'vec Vec<NP_Parsed_Schema> {
+    pub fn get(&self) -> &Vec<NP_Parsed_Schema> {
         match &self {
             SchemaVec::Owned(x) => x,
             SchemaVec::Borrowed(x) => *x

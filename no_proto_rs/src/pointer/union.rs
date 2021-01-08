@@ -18,7 +18,7 @@ use alloc::borrow::ToOwned;
 
 use super::{NP_Cursor, NP_Scalar};
 
-/// Defines the behavior of the clone data type
+/// Defines the behavior of the union data type
 pub struct NP_Union(String);
 
 
@@ -47,8 +47,20 @@ impl NP_Union {
                     cursor.parent_schema_addr = cursor.schema_addr;
                     cursor.schema_addr = schema_value.2;
                     return Ok(Some(cursor))
-                } else {
+                }
 
+                let mut union_value = cursor.get_value(memory);
+
+                let addr_value = union_value.get_addr_value();
+
+                if addr_value == 0 { // no value here
+                    if make_path { // need to make a new value
+
+                    } else { // found nothing
+                        return Ok(None)
+                    }
+                } else { // value exists
+                    
                 }
 
                 todo!()
@@ -291,52 +303,52 @@ fn schema_parsing_works() -> Result<(), NP_Error> {
     Ok(())
 }
 
-#[test]
-fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
-    let schema = r#"{
-        "type": "union",
-        "default": "uknown",
-        "types": [
-            ["uknown", {"type": "bool", "default": true}],
-            ["unemployed", {"type": "bool"}],
-            ["employed", {"type": "string"}],
-            ["school", {"type": "string"}],
-            ["selfemployed", {"type": "bool"}]
-        ]
-    }"#;
-    let factory = crate::NP_Factory::new(schema)?;
-    let mut buffer = factory.empty_buffer(None);
+// #[test]
+// fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
+//     let schema = r#"{
+//         "type": "union",
+//         "default": "uknown",
+//         "types": [
+//             ["uknown", {"type": "bool", "default": true}],
+//             ["unemployed", {"type": "bool"}],
+//             ["employed", {"type": "string"}],
+//             ["school", {"type": "string"}],
+//             ["selfemployed", {"type": "bool"}]
+//         ]
+//     }"#;
+//     let factory = crate::NP_Factory::new(schema)?;
+//     let mut buffer = factory.empty_buffer(None);
 
-    buffer.set(&["nested", "street"], "hello street")?;
-    buffer.set(&["nested", "nested", "nested", "nested", "street"], "hello street 2")?;
+//     buffer.set(&["nested", "street"], "hello street")?;
+//     buffer.set(&["nested", "nested", "nested", "nested", "street"], "hello street 2")?;
 
-    assert_eq!("hello street", buffer.get::<&str>(&["nested", "street"])?.unwrap());
-    assert_eq!("hello street 2", buffer.get::<&str>(&["nested", "nested", "nested", "nested", "street"])?.unwrap());
-    assert_eq!(buffer.calc_bytes()?.current_buffer, buffer.calc_bytes()?.after_compaction);
-    buffer.del(&["nested", "street"])?;
-    buffer.compact(None)?;
-    assert_eq!("hello street 2", buffer.get::<&str>(&["nested", "nested", "nested", "nested", "street"])?.unwrap());
-    assert_eq!(None, buffer.get::<&str>(&["nested", "street"])?);
+//     assert_eq!("hello street", buffer.get::<&str>(&["nested", "street"])?.unwrap());
+//     assert_eq!("hello street 2", buffer.get::<&str>(&["nested", "nested", "nested", "nested", "street"])?.unwrap());
+//     assert_eq!(buffer.calc_bytes()?.current_buffer, buffer.calc_bytes()?.after_compaction);
+//     buffer.del(&["nested", "street"])?;
+//     buffer.compact(None)?;
+//     assert_eq!("hello street 2", buffer.get::<&str>(&["nested", "nested", "nested", "nested", "street"])?.unwrap());
+//     assert_eq!(None, buffer.get::<&str>(&["nested", "street"])?);
 
 
-    let schema = r#"{
-        "type": "table",
-        "types": [
-            ["username", {"type": "string"}],
-            ["email"  , {"type": "string"}],
-            ["address", {"type": "table", "types": [
-                ["street", {"type": "string"}],
-                ["city", {"type": "string"}],
-                ["more", {"type": "portal", "to": "address"}]
-            ]}]
-        ]
-    }"#;
-    let factory = crate::NP_Factory::new(schema)?;
-    let mut buffer = factory.empty_buffer(None);
+//     let schema = r#"{
+//         "type": "table",
+//         "types": [
+//             ["username", {"type": "string"}],
+//             ["email"  , {"type": "string"}],
+//             ["address", {"type": "table", "types": [
+//                 ["street", {"type": "string"}],
+//                 ["city", {"type": "string"}],
+//                 ["more", {"type": "portal", "to": "address"}]
+//             ]}]
+//         ]
+//     }"#;
+//     let factory = crate::NP_Factory::new(schema)?;
+//     let mut buffer = factory.empty_buffer(None);
 
-    buffer.set(&["address", "more", "more","more", "more","more", "more","more", "more", "street"], "hello")?;
+//     buffer.set(&["address", "more", "more","more", "more","more", "more","more", "more", "street"], "hello")?;
 
-    assert_eq!("hello", buffer.get::<&str>(&["address", "more", "more","more", "more","more", "more","more", "more", "street"])?.unwrap());
+//     assert_eq!("hello", buffer.get::<&str>(&["address", "more", "more","more", "more","more", "more","more", "more", "street"])?.unwrap());
 
-    Ok(())
-}
+//     Ok(())
+// }

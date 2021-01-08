@@ -1278,7 +1278,7 @@ fn rpc_test() -> Result<(), NP_Error> {
     let get_count: NP_RPC_Request = rpc_factory.new_request("get_count")?;
     // close request
     let count_req_bytes: Vec<u8> = get_count.rpc_close();
-    assert_eq!(count_req_bytes.len(), 10);
+    assert_eq!(count_req_bytes.len(), 11);
 
     // === SEND count_req_bytes to SERVER ===
 
@@ -1289,12 +1289,12 @@ fn rpc_test() -> Result<(), NP_Error> {
     // generate a response
     let mut count_response: NP_RPC_Response = a_request.new_response()?;
     // set response data
-    count_response.data.set(&[], 20u32)?;
+    count_response.data.set(&[] as &[&str], 20u32)?;
     // set response kind
     count_response.kind = NP_ResponseKinds::Ok;
     // close response
     let respond_bytes = count_response.rpc_close()?;
-    assert_eq!(respond_bytes.len(), 15);
+    assert_eq!(respond_bytes.len(), 16);
 
     // === SEND respond_bytes to CLIENT ====
 
@@ -1313,7 +1313,7 @@ fn rpc_test() -> Result<(), NP_Error> {
     // === CLIENT ===
     // generate request
     let mut del_user: NP_RPC_Request = rpc_factory.new_request("user.del_user")?;
-    del_user.data.set(&[], 50u32)?;
+    del_user.data.set(&[] as &[&str], 50u32)?;
     let del_user_bytes: Vec<u8> = del_user.rpc_close();
 
     // === SEND del_user_bytes to SERVER ===

@@ -934,7 +934,7 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     });
 
     buffer.compact(None)?;
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 3usize);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);
 
     Ok(())
 }

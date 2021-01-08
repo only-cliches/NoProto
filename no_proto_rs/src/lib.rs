@@ -35,6 +35,7 @@
 //! *Compared to Apache Avro*
 //! - Far more space efficient
 //! - Significantly faster serialization & deserialization
+//! - All values are optional (no void or null type)
 //! - Supports more native types (like unsigned ints)
 //! - Updates without deserializng/serializing
 //! - Works with `no_std`.
@@ -44,6 +45,7 @@
 //! - Comparable serialization & deserialization performance
 //! - Updating buffers is an order of magnitude faster
 //! - Schemas are dynamic at runtime, no compilation step
+//! - All values are optional
 //! - Supports more types and better nested type support
 //! - Byte-wise sorting is first class operation
 //! - Updates without deserializng/serializing
@@ -279,6 +281,7 @@ use alloc::string::String;
 use memory::{NP_Memory_ReadOnly, NP_Memory_Writable};
 use schema::NP_Parsed_Schema;
 
+
 /// Factories are created from schemas.  Once you have a factory you can use it to create new buffers or open existing ones.
 /// 
 /// The easiest way to create a factory is to pass a JSON string schema into the static `new` method.  [Learn about schemas here.](./schema/index.html)
@@ -473,8 +476,8 @@ impl<'fact> NP_Factory<'fact> {
     /// new_buffer.set(&["0"], 55u8)?;
     /// new_buffer.set(&["1"], "hello")?;
     /// 
-    /// // the buffer with it's vtables take up 20 bytes!
-    /// assert_eq!(new_buffer.read_bytes().len(), 20usize);
+    /// // the buffer with it's vtables take up 21 bytes!
+    /// assert_eq!(new_buffer.read_bytes().len(), 21usize);
     /// 
     /// // close buffer and get sortable bytes
     /// let bytes: Vec<u8> = new_buffer.close_sortable()?;
@@ -543,10 +546,11 @@ impl<'fact> NP_Factory<'fact> {
         NP_Buffer::_new(NP_Memory_Writable::new(capacity, &self.schema.parsed, DEFAULT_ROOT_PTR_ADDR))
     }
 
-    /// Convert a regular buffer into a packed buffer
-    /// The schema is stored in a very compact, binary format.  A JSON version of the schema can be exported at anytime.
+    /// Convert a regular buffer into a packed buffer. A "packed" buffer contains the schema and the buffer data together.
     /// 
-    /// You can optionally store buffers with their schema attached so you don't have to track the schema seperatly
+    /// You can optionally store buffers with their schema attached so you don't have to track the schema seperatly.
+    /// 
+    /// The schema is stored in a very compact, binary format.  A JSON version of the schema can be generated from the binary version at any time.
     /// 
     pub fn pack_buffer<'open>(&self, buffer: NP_Buffer) -> NP_Packed_Buffer<'open> {
         NP_Packed_Buffer {
@@ -570,7 +574,7 @@ impl<'packed> NP_Packed_Buffer<'packed> {
     /// Open a packed buffer
     pub fn open(buffer: Vec<u8>) -> Result<Self, NP_Error> {
         if buffer[0] != 1 {
-            return Err(NP_Error::new("Trying to use open_packed_buffer on non packed buffer!"))
+            return Err(NP_Error::new("Trying to use NP_Packed_Buffer::open on non packed buffer!"))
         }
 
         let schema_len = u16::from_be_bytes(unsafe { *((&buffer[1..3]) as *const [u8] as *const [u8; 2]) }) as usize;

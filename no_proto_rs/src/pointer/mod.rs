@@ -297,7 +297,7 @@ impl<'cursor> NP_Cursor {
                         }
                     }
                 },
-                NP_Parsed_Schema::Map {  .. } => {
+                NP_Parsed_Schema::Map { .. } => {
                     if let Some(next) = NP_Map::select(loop_cursor, path[path_index], make_path, schema_query, memory)? {
                         loop_cursor = next;
                         path_index += 1;

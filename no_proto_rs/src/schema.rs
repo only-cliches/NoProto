@@ -124,10 +124,12 @@
 //! | [`geo4`](#geo4-geo8-geo16)             | [`NP_Geo`](../pointer/geo/struct.NP_Geo.html)                            | -                |✓                 | 4 bytes         | 1.1km resolution (city) geographic coordinate                            |
 //! | [`geo8`](#geo4-geo8-geo16)             | [`NP_Geo`](../pointer/geo/struct.NP_Geo.html)                            | -                |✓                 | 8 bytes         | 11mm resolution (marble) geographic coordinate                           |
 //! | [`geo16`](#geo4-geo8-geo16)            | [`NP_Geo`](../pointer/geo/struct.NP_Geo.html)                            | -                |✓                 | 16 bytes        | 110 microns resolution (grain of sand) geographic coordinate             |
-//! | [`ulid`](#ulid)                        | [`NP_ULID`](../pointer/ulid/struct.NP_ULID.html)                         | &NP_ULID         |✓                 | 16 bytes        | 6 bytes for the timestamp, 10 bytes of randomness.                       |
+//! | [`ulid`](#ulid)                        | [`NP_ULID`](../pointer/ulid/struct.NP_ULID.html)                         | &NP_ULID         |✓                 | 16 bytes        | 6 bytes for the timestamp (5,224 years), 10 bytes of randomness (1.1e24) |
 //! | [`uuid`](#uuid)                        | [`NP_UUID`](../pointer/uuid/struct.NP_UUID.html)                         | &NP_UUID         |✓                 | 16 bytes        | v4 UUID, 2e37 possible UUIDs                                             |
 //! | [`date`](#date)                        | [`NP_Date`](../pointer/date/struct.NP_Date.html)                         | -                |✓                 | 8 bytes         | Good to store unix epoch (in milliseconds) until the year 584,866,263    |
-//!  
+//! | [`portal`](#portal)                    | -                                                                        | -                |𐄂                 | 0 bytes         | A type that just points to another type in the buffer.                   | 
+//! | [`union`](#union)                      | [`NP_Union`](../pointer/union/struct.NP_Union.html)                      | -                |𐄂                 | 1 byte+         | A single byte storing the union choice, followed by the union value.     | 
+//! 
 //! - \* `sorting` must be set to `true` in the schema for this object to enable sorting.
 //! - \*\* String & Bytes can be bytewise sorted only if they have a `size` property in the schema
 //! 
@@ -557,6 +559,15 @@
 //! More Details:
 //! - [Using NP_Date data type](../pointer/date/struct.NP_Date.html)
 //!  
+//! ## portal
+//! Portals allow types to be "teleported" from one part of a schema to another.
+//! 
+//! You can use these for duplicating a type many times in a schema or for recursive data types.
+//! 
+//! Recursion works up to 255 levels of depth.
+//! 
+//! ## union
+//! Union values allow multiple types to be defined for a single value in the buffer.  Only one of the possible types in a union can be set at a time.
 //! 
 //! ## Next Step
 //! 
