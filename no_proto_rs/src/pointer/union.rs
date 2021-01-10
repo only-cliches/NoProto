@@ -236,6 +236,10 @@ impl<'value> NP_Value<'value> for NP_Union {
         (false, schema_parsed)
     }
 
+    fn set_from_json<'set, M: NP_Memory>(depth: usize, apply_null: bool, cursor: NP_Cursor, memory: &'set M, value: &Box<NP_JSON>) -> Result<(), NP_Error> where Self: 'set + Sized {
+        todo!()
+    }
+
     fn default_value(_depth: usize, _schema_addr: usize, _schemas: &Vec<NP_Parsed_Schema>) -> Option<Self> {
         todo!()
     }

@@ -150,6 +150,32 @@ impl<'value> NP_Value<'value> for NP_Bytes {
         NP_Borrow_Bytes::set_value(cursor, memory, &value)
     }
     
+    fn set_from_json<'set, M: NP_Memory>(_depth: usize, _apply_null: bool, cursor: NP_Cursor, memory: &'set M, value: &Box<NP_JSON>) -> Result<(), NP_Error> where Self: 'set + Sized {
+        match &**value {
+            NP_JSON::Array(bytes) => {
+                let mut target: Vec<u8> = Vec::new();
+
+                bytes.iter().for_each(|json| {
+                    match json {
+                        NP_JSON::Integer(x) => {
+                            target.push(*x as u8);
+                        },
+                        NP_JSON::Float(x) => {
+                            target.push(*x as u8);
+                        },
+                        _ => {
+                            target.push(0);
+                        }
+                    }
+                });
+
+                Self::set_value(cursor, memory, target)?;
+            },
+            _ => { }
+        }
+
+        Ok(())
+    }
 
     fn into_value<M: NP_Memory>(cursor: &NP_Cursor, memory: &'value M) -> Result<Option<Self>, NP_Error> where Self: Sized {
         match NP_Borrow_Bytes::into_value(cursor, memory)? {
@@ -197,8 +223,8 @@ impl<'value> NP_Value<'value> for NP_Bytes {
     }
     fn get_size<M: NP_Memory>(_depth:usize, cursor: &NP_Cursor, memory: &M) -> Result<usize, NP_Error> {
 
-        let c_value = cursor.get_value(memory);
-        let value_addr = c_value.get_addr_value() as usize;
+        let c_value = || { cursor.get_value(memory) };
+        let value_addr = c_value().get_addr_value() as usize;
         
         // empty value
         if value_addr == 0 {
@@ -351,6 +377,10 @@ impl<'value> NP_Value<'value> for NP_Borrow_Bytes<'value> {
         NP_Bytes::schema_to_json(schema, address)
     }
 
+    fn set_from_json<'set, M: NP_Memory>(_depth: usize, _apply_null: bool, _cursor: NP_Cursor, _memory: &'set M, _value: &Box<NP_JSON>) -> Result<(), NP_Error> where Self: 'set + Sized {
+        Ok(())
+    }
+
     fn default_value(_depth: usize, addr: usize, schema: &'value Vec<NP_Parsed_Schema>) -> Option<Self> {
         match &schema[addr] {
             NP_Parsed_Schema::Bytes { default, .. } => {
@@ -466,9 +496,9 @@ impl<'value> NP_Value<'value> for NP_Borrow_Bytes<'value> {
 
     fn into_value<M: NP_Memory>(cursor: &NP_Cursor, memory: &'value M) -> Result<Option<Self>, NP_Error> where Self: Sized {
 
-        let c_value = cursor.get_value(memory);
+        let c_value = || { cursor.get_value(memory) };
 
-        let value_addr = c_value.get_addr_value() as usize;
+        let value_addr = c_value().get_addr_value() as usize;
         // empty value
         if value_addr == 0 {
             return Ok(None);

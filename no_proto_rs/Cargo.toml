@@ -2,7 +2,7 @@
 name = "no_proto"
 license = "MIT"
 version = "0.8.0"
-description = "Simple, Performant & Safe Zero-Copy Serialization with RPC.  Performance of Protocol Buffers with flexibility of JSON."
+description = "Flexible, Fast & Compact Serialization with RPC"
 homepage = "https://github.com/only-cliches/NoProto"
 repository = "https://github.com/only-cliches/NoProto"
 documentation="https://docs.rs/crate/no_proto/"
@@ -10,8 +10,8 @@ authors = ["Scott Lott <me@scottlott.com>"]
 readme = "README.md"
 edition = "2018"
 exclude = []
-categories = ["data-structures", "embedded", "encoding", "no-std"]
-keywords = ["protocol-buffers", "grpc", "avro", "serialization", "json"]
+categories = ["data-structures", "embedded", "encoding", "no-std", "database"]
+keywords = ["protocol-buffers", "grpc", "avro", "database", "json"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

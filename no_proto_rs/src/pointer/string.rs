@@ -150,6 +150,17 @@ impl<'value> NP_Value<'value> for String {
         }
     }
 
+    fn set_from_json<'set, M: NP_Memory>(_depth: usize, _apply_null: bool, cursor: NP_Cursor, memory: &'set M, value: &Box<NP_JSON>) -> Result<(), NP_Error> where Self: 'set + Sized {
+        match &**value {
+            NP_JSON::String(value) => {
+                Self::set_value(cursor, memory, value.clone())?;
+            },
+            _ => {}
+        }
+
+        Ok(())
+    }
+
     fn from_bytes_to_schema(mut schema: Vec<NP_Parsed_Schema>, address: usize, bytes: &[u8]) -> (bool, Vec<NP_Parsed_Schema>) {
 
         // case byte
@@ -198,8 +209,8 @@ impl<'value> NP_Value<'value> for String {
 
     fn get_size<M: NP_Memory>(_depth:usize, cursor: &NP_Cursor, memory: &M) -> Result<usize, NP_Error> {
 
-        let c_value = cursor.get_value(memory);
-        let value_addr = c_value.get_addr_value() as usize;
+        let c_value = || { cursor.get_value(memory) };
+        let value_addr = c_value().get_addr_value() as usize;
 
         // empty value
         if value_addr == 0 {
@@ -367,6 +378,11 @@ impl<'value> NP_Value<'value> for NP_String<'value> {
         String::schema_to_json(_schema, _address)
     }
 
+    fn set_from_json<'set, M: NP_Memory>(_depth: usize, _apply_null: bool, _cursor: NP_Cursor, _memory: &'set M, _value: &Box<NP_JSON>) -> Result<(), NP_Error> where Self: 'set + Sized {
+
+        Ok(())
+    }
+
     fn set_value<'set, M: NP_Memory>(cursor: NP_Cursor, memory: &'set M, value: Self) -> Result<NP_Cursor, NP_Error> where Self: 'set + Sized {
 
         let c_value = || { cursor.get_value(memory) };
@@ -491,9 +507,9 @@ impl<'value> NP_Value<'value> for NP_String<'value> {
 
     fn into_value<M: NP_Memory>(cursor: &NP_Cursor, memory: &'value M) -> Result<Option<Self>, NP_Error> where Self: Sized {
 
-        let c_value = cursor.get_value(memory);
+        let c_value = || { cursor.get_value(memory) };
 
-        let value_addr = c_value.get_addr_value() as usize;
+        let value_addr = c_value().get_addr_value() as usize;
         // empty value
         if value_addr == 0 {
             return Ok(None);

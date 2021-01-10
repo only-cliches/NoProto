@@ -176,9 +176,9 @@ impl<'table> NP_Table<'table> {
 impl<'value> NP_Value<'value> for NP_Table<'value> {
 
     fn to_json<M: NP_Memory>(depth:usize, cursor: &NP_Cursor, memory: &'value M) -> NP_JSON {
-        let c_value = cursor.get_value(memory);
+        let c_value = || { cursor.get_value(memory) };
 
-        if c_value.get_addr_value() == 0 { return NP_JSON::Null };
+        if c_value().get_addr_value() == 0 { return NP_JSON::Null };
 
         let mut json_map = JSMAP::new();
 
@@ -197,6 +197,43 @@ impl<'value> NP_Value<'value> for NP_Table<'value> {
 
     fn type_idx() -> (&'value str, NP_TypeKeys) { ("table", NP_TypeKeys::Table) }
     fn self_type_idx(&self) -> (&'value str, NP_TypeKeys) { ("table", NP_TypeKeys::Table) }
+
+    fn set_from_json<'set, M: NP_Memory>(depth: usize, apply_null: bool, cursor: NP_Cursor, memory: &'set M, value: &Box<NP_JSON>) -> Result<(), NP_Error> where Self: 'set + Sized {
+        
+        match memory.get_schema(cursor.schema_addr) {
+            NP_Parsed_Schema::Table { columns, .. } => {
+                for col in columns.iter() {
+                    let json_col = &value[col.1.clone()];
+                    match json_col {
+                        NP_JSON::Null => {
+                            if apply_null {
+                                match NP_Table::select(cursor, columns, &col.1, false, false, memory)? {
+                                    Some(x) => {
+                                        NP_Cursor::delete(x, memory)?;
+                                    },
+                                    None => { }
+                                }
+                            }
+                        },
+                        _ => {
+                            match NP_Table::select(cursor, columns, &col.1, true, false, memory)? {
+                                Some(x) => {
+                                    NP_Cursor::set_from_json(depth + 1, apply_null, x, memory, &Box::new(json_col.clone()))?;
+                                },
+                                None => { 
+                                    return Err(NP_Error::new("Failed to find column value!"))
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            _ => {}
+        }
+
+        
+        Ok(())
+    }
 
     fn from_bytes_to_schema(mut schema: Vec<NP_Parsed_Schema>, address: usize, bytes: &[u8]) -> (bool, Vec<NP_Parsed_Schema>) {
         let column_len = bytes[address + 1];
@@ -274,15 +311,15 @@ impl<'value> NP_Value<'value> for NP_Table<'value> {
  
     fn get_size<M: NP_Memory>(depth:usize, cursor: &NP_Cursor, memory: &'value M) -> Result<usize, NP_Error> {
 
-        let c_value = cursor.get_value(memory);
+        let c_value = || { cursor.get_value(memory) };
 
-        if c_value.get_addr_value() == 0 {
+        if c_value().get_addr_value() == 0 {
             return Ok(0) 
         }
 
         let mut acc_size = 0usize;
 
-        let mut nex_vtable = c_value.get_addr_value() as usize;
+        let mut nex_vtable = c_value().get_addr_value() as usize;
         let mut loop_max = 65usize;
         while nex_vtable > 0 && loop_max > 0 {
             acc_size += 10;
@@ -447,7 +484,7 @@ impl<'value> NP_Value<'value> for NP_Table<'value> {
 
 #[test]
 fn schema_parsing_works() -> Result<(), NP_Error> {
-    let schema = "{\"type\":\"table\",\"columns\":[[\"age\",{\"type\":\"uint8\"}],[\"tags\",{\"type\":\"list\",\"of\":{\"type\":\"string\"}}],[\"name\",{\"type\":\"string\",\"size\":10}]]}";
+    let schema = r#"{"type":"table","columns":[["age",{"type":"uint8"}],["tags",{"type":"list","of":{"type":"string"}}],["name",{"type":"string","size":10}]]}"#;
     let factory = crate::NP_Factory::new(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
     let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
@@ -457,7 +494,7 @@ fn schema_parsing_works() -> Result<(), NP_Error> {
 
 #[test]
 fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
-    let schema = "{\"type\":\"table\",\"columns\":[[\"age\",{\"type\":\"uint8\"}],[\"name\",{\"type\":\"string\"}]]}";
+    let schema = r#"{"type":"table","columns":[["age",{"type":"uint8"}],["name",{"type":"string"}]]}"#;
     let factory = crate::NP_Factory::new(schema)?;
 
     // compaction removes cleared values
@@ -472,7 +509,7 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
 
     // good values are preserved through compaction
     let mut buffer = factory.empty_buffer(None);
-    buffer.set(&["name"], "hello")?;
+    buffer.set(&crate::np_path!("name"), "hello")?;
     assert_eq!(buffer.get::<&str>(&["name"])?, Some("hello"));
     assert_eq!(buffer.calc_bytes()?.current_buffer, 21usize);
     buffer.compact(None)?;
@@ -513,12 +550,26 @@ fn test_vtables() -> Result<(), NP_Error> {
     buffer.set(&["car"], "Chevy")?;
     buffer.set(&["rating"], 98u8)?;
 
-    let new_buffer = factory.open_buffer(buffer.close());
+    let mut new_buffer = factory.open_buffer(buffer.close());
     assert_eq!(new_buffer.get::<u8>(&["age"])?.unwrap(), 20u8);
     assert_eq!(new_buffer.get::<&str>(&["name"])?.unwrap(), "hello");
     assert_eq!(new_buffer.get::<&str>(&["color"])?.unwrap(), "blue");
     assert_eq!(new_buffer.get::<&str>(&["car"])?.unwrap(), "Chevy");
     assert_eq!(new_buffer.get::<u8>(&["rating"])?.unwrap(), 98u8);
+
+    new_buffer.set_with_json(&[], r#"{"value": {
+        "age": 50, 
+        "name": "Jimmy", 
+        "color": "orange", 
+        "car": "Audi", 
+        "rating": 20
+    }}"#)?;
+
+    assert_eq!(new_buffer.get::<u8>(&["age"])?.unwrap(), 50u8);
+    assert_eq!(new_buffer.get::<&str>(&["name"])?.unwrap(), "Jimmy");
+    assert_eq!(new_buffer.get::<&str>(&["color"])?.unwrap(), "orange");
+    assert_eq!(new_buffer.get::<&str>(&["car"])?.unwrap(), "Audi");
+    assert_eq!(new_buffer.get::<u8>(&["rating"])?.unwrap(), 20u8);
 
     Ok(())
 }

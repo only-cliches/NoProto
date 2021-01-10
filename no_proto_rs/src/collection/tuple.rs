@@ -203,9 +203,9 @@ impl<'tuple> NP_Tuple<'tuple> {
 impl<'value> NP_Value<'value> for NP_Tuple<'value> {
 
     fn to_json<M: NP_Memory>(depth:usize, cursor: &NP_Cursor, memory: &'value M) -> NP_JSON {
-        let c_value = cursor.get_value(memory);
+        let c_value = || { cursor.get_value(memory) };
 
-        if c_value.get_addr_value() == 0 { return NP_JSON::Null };
+        if c_value().get_addr_value() == 0 { return NP_JSON::Null };
 
         let mut json_list = Vec::new();
 
@@ -248,17 +248,46 @@ impl<'value> NP_Value<'value> for NP_Tuple<'value> {
         Ok(NP_JSON::Dictionary(schema_json))
     }
 
+    fn set_from_json<'set, M: NP_Memory>(depth: usize, apply_null: bool, cursor: NP_Cursor, memory: &'set M, value: &Box<NP_JSON>) -> Result<(), NP_Error> where Self: 'set + Sized {
+        
+        match memory.get_schema(cursor.schema_addr) {
+            NP_Parsed_Schema::Tuple { values, .. } => {
+
+                match &**value {
+                    NP_JSON::Array(list) => {
+                        for (idx, tuple_item) in list.iter().enumerate() {
+                            match NP_Tuple::select(cursor, values, idx, true, false, memory)? {
+                                Some(x) => {
+                                    NP_Cursor::set_from_json(depth + 1, apply_null, x, memory, &Box::new(tuple_item.clone()))?;
+                                },
+                                None => { 
+                                    return Err(NP_Error::new("Failed to find column value!"))
+                                }
+                            }
+                        }
+                    },
+                    _ => { }
+                }
+                
+            },
+            _ => {}
+        }
+
+        
+        Ok(())
+    }
+
     fn get_size<M: NP_Memory>(depth:usize, cursor: &NP_Cursor, memory: &'value M) -> Result<usize, NP_Error> {
 
-        let c_value = cursor.get_value(memory);
+        let c_value = || { cursor.get_value(memory) };
 
-        if c_value.get_addr_value() == 0 {
+        if c_value().get_addr_value() == 0 {
             return Ok(0) 
         }
 
         let mut acc_size = 0usize;
 
-        let mut nex_vtable = c_value.get_addr_value() as usize;
+        let mut nex_vtable = c_value().get_addr_value() as usize;
         let mut loop_max = 65usize;
         while nex_vtable > 0 && loop_max > 0 {
             acc_size += 10;
@@ -469,7 +498,7 @@ fn schema_parsing_works() -> Result<(), NP_Error> {
 
 #[test]
 fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
-    let schema = "{\"type\":\"tuple\",\"values\":[{\"type\":\"string\"},{\"type\":\"uuid\"},{\"type\":\"uint8\"}]}";
+    let schema = r#"{"type":"tuple","values":[{"type":"string"},{"type":"uuid"},{"type":"uint8"}]}"#;
     let factory = crate::NP_Factory::new(schema)?;
     let mut buffer = factory.empty_buffer(None);
     buffer.set(&["0"], "hello")?;
@@ -480,12 +509,17 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     buffer.compact(None)?;
     assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);
 
+    buffer.set_with_json(&[], r#"{"value": ["bar", "1ED3C129-2943-4CCE-8904-53C0487FF18E", 50]}"#)?;
+    assert_eq!(buffer.get::<&str>(&["0"])?, Some("bar"));
+    assert_eq!(buffer.get::<crate::pointer::uuid::NP_UUID>(&["1"])?, Some(crate::pointer::uuid::NP_UUID::from_string("1ED3C129-2943-4CCE-8904-53C0487FF18E")));
+    assert_eq!(buffer.get::<u8>(&["2"])?, Some(50u8));
+
     Ok(())
 }
 
 #[test]
 fn sorting_tuples_works() -> Result<(), NP_Error> {
-    let schema = "{\"type\":\"tuple\",\"values\":[{\"type\":\"string\",\"size\":10},{\"type\":\"uuid\"},{\"type\":\"uint8\"}],\"sorted\":true}";
+    let schema = r#"{"type":"tuple","values":[{"type":"string","size":10},{"type":"uuid"},{"type":"uint8"}],"sorted":true}"#;
     let factory = crate::NP_Factory::new(schema)?;
     let mut buffer = factory.empty_buffer(None);
     assert_eq!(buffer.read_bytes(), &[0, 0, 0, 4, 0, 14, 0, 24, 0, 40, 0, 0, 0, 0, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);

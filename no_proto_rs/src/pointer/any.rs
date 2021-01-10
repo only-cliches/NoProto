@@ -26,6 +26,10 @@ impl<'value> NP_Value<'value> for NP_Any {
         Ok(NP_JSON::Dictionary(schema_json))
     }
 
+    fn set_from_json<'set, M: NP_Memory>(depth: usize, apply_null: bool, cursor: NP_Cursor, memory: &'set M, value: &Box<NP_JSON>) -> Result<(), NP_Error> where Self: 'set + Sized {
+        Err(NP_Error::new("Can't set JSON at any type!"))
+    }
+
     fn set_value<'set, M: NP_Memory>(cursor: NP_Cursor, memory: &'set M, value: Self) -> Result<NP_Cursor, NP_Error> where Self: 'set + Sized {
         Err(NP_Error::new("Can't use .set() with (Any), must cast first with NP_Any::cast<T>(pointer)."))
     }

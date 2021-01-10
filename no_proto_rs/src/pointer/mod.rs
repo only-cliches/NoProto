@@ -38,7 +38,7 @@ use crate::{schema::{NP_TypeKeys}, collection::{map::NP_Map, table::NP_Table, li
 use alloc::{string::String, vec::Vec, borrow::ToOwned};
 use bytes::NP_Bytes;
 
-use self::{date::NP_Date, geo::NP_Geo, option::NP_Enum, portal::NP_Portal, string::NP_String, ulid::{NP_ULID}, union::NP_Union, uuid::{NP_UUID}};
+use self::{date::NP_Date, geo::NP_Geo, option::NP_Enum, portal::NP_Portal, ulid::{NP_ULID}, union::NP_Union, uuid::{NP_UUID}};
 
 #[doc(hidden)]
 #[derive(Debug, Copy, Clone)]
@@ -453,7 +453,7 @@ impl<'cursor> NP_Cursor {
         match memory.get_schema(cursor.schema_addr).get_type_key() {
             NP_TypeKeys::None           => { NP_JSON::Null },
             NP_TypeKeys::Any            => { NP_JSON::Null },
-            NP_TypeKeys::UTF8String     => { NP_String::to_json(depth, cursor, memory) },
+            NP_TypeKeys::UTF8String     => {    String::to_json(depth, cursor, memory) },
             NP_TypeKeys::Bytes          => {  NP_Bytes::to_json(depth, cursor, memory) },
             NP_TypeKeys::Int8           => {        i8::to_json(depth, cursor, memory) },
             NP_TypeKeys::Int16          => {       i16::to_json(depth, cursor, memory) },
@@ -490,7 +490,7 @@ impl<'cursor> NP_Cursor {
 
         match from_memory.get_schema(from_cursor.schema_addr).get_type_key() {
             NP_TypeKeys::Any           => { Ok(to_cursor) }
-            NP_TypeKeys::UTF8String    => { NP_String::do_compact(depth, from_cursor, from_memory, to_cursor, to_memory) }
+            NP_TypeKeys::UTF8String    => {    String::do_compact(depth, from_cursor, from_memory, to_cursor, to_memory) }
             NP_TypeKeys::Bytes         => {  NP_Bytes::do_compact(depth, from_cursor, from_memory, to_cursor, to_memory) }
             NP_TypeKeys::Int8          => {        i8::do_compact(depth, from_cursor, from_memory, to_cursor, to_memory) }
             NP_TypeKeys::Int16         => {       i16::do_compact(depth, from_cursor, from_memory, to_cursor, to_memory) }
@@ -559,6 +559,76 @@ impl<'cursor> NP_Cursor {
         Ok(())
     }
 
+    /// Set a JSON value into the buffer
+    pub fn set_from_json<M: NP_Memory>(depth: usize, apply_null: bool, cursor: NP_Cursor, memory: &M, json: &Box<NP_JSON>) -> Result<(), NP_Error> {
+
+        if depth > 255 { return Err(NP_Error::new("Too much depth!")) }
+
+        // if apply_null is true, we should delete values where we find "null" or "undefined"
+        // if apply_null && **json == NP_JSON::Null {
+        //     NP_Cursor::delete(cursor, memory)?;
+        //     return Ok(())
+        // }
+
+        match memory.get_schema(cursor.schema_addr).get_type_key() {
+            NP_TypeKeys::None           => { Ok(()) },
+            NP_TypeKeys::Any            => { Ok(()) },
+            NP_TypeKeys::UTF8String     => {    String::set_from_json(depth, apply_null, cursor, memory, json) },
+            NP_TypeKeys::Bytes          => {  NP_Bytes::set_from_json(depth, apply_null, cursor, memory, json) },
+            NP_TypeKeys::Int8           => {        i8::set_from_json(depth, apply_null, cursor, memory, json) },
+            NP_TypeKeys::Int16          => {       i16::set_from_json(depth, apply_null, cursor, memory, json) },
+            NP_TypeKeys::Int32          => {       i32::set_from_json(depth, apply_null, cursor, memory, json) },
+            NP_TypeKeys::Int64          => {       i64::set_from_json(depth, apply_null, cursor, memory, json) },
+            NP_TypeKeys::Uint8          => {        u8::set_from_json(depth, apply_null, cursor, memory, json) },
+            NP_TypeKeys::Uint16         => {       u16::set_from_json(depth, apply_null, cursor, memory, json) },
+            NP_TypeKeys::Uint32         => {       u32::set_from_json(depth, apply_null, cursor, memory, json) },
+            NP_TypeKeys::Uint64         => {       u64::set_from_json(depth, apply_null, cursor, memory, json) },
+            NP_TypeKeys::Float          => {       f32::set_from_json(depth, apply_null, cursor, memory, json) },
+            NP_TypeKeys::Double         => {       f64::set_from_json(depth, apply_null, cursor, memory, json) },
+            NP_TypeKeys::Decimal        => {    NP_Dec::set_from_json(depth, apply_null, cursor, memory, json) },
+            NP_TypeKeys::Boolean        => {      bool::set_from_json(depth, apply_null, cursor, memory, json) },
+            NP_TypeKeys::Geo            => {    NP_Geo::set_from_json(depth, apply_null, cursor, memory, json) },
+            NP_TypeKeys::Uuid           => {   NP_UUID::set_from_json(depth, apply_null, cursor, memory, json) },
+            NP_TypeKeys::Ulid           => {   NP_ULID::set_from_json(depth, apply_null, cursor, memory, json) },
+            NP_TypeKeys::Date           => {   NP_Date::set_from_json(depth, apply_null, cursor, memory, json) },
+            NP_TypeKeys::Enum           => {   NP_Enum::set_from_json(depth, apply_null, cursor, memory, json) },
+            NP_TypeKeys::Table          => {  NP_Table::set_from_json(depth, apply_null, cursor, memory, json) },
+            NP_TypeKeys::Map            => {    NP_Map::set_from_json(depth, apply_null, cursor, memory, json) },
+            NP_TypeKeys::List           => {   NP_List::set_from_json(depth, apply_null, cursor, memory, json) },
+            NP_TypeKeys::Tuple          => {  NP_Tuple::set_from_json(depth, apply_null, cursor, memory, json) },
+            NP_TypeKeys::Portal         => { NP_Portal::set_from_json(depth, apply_null, cursor, memory, json) },
+            NP_TypeKeys::Union          => {  NP_Union::set_from_json(depth, apply_null, cursor, memory, json) },
+        }
+    }
+
+    /// Delete the value at this cursor
+    pub fn delete<M: NP_Memory>(cursor: NP_Cursor, memory: &M) -> Result<bool, NP_Error> {
+
+        if cursor.buff_addr == 0 {
+            return Ok(false)
+        }
+
+        let is_sortable = match memory.get_schema(0) {
+            NP_Parsed_Schema::Tuple { sortable , ..} => *sortable,
+            _ => false
+        };
+        
+        if is_sortable {
+            match memory.get_schema(cursor.schema_addr) {
+                NP_Parsed_Schema::Table { .. } => { return Ok(false) },
+                NP_Parsed_Schema::Tuple { .. } => { return Ok(false) },
+                NP_Parsed_Schema::List { .. } => { return Ok(false) },
+                NP_Parsed_Schema::Map { .. } => { return Ok(false) },
+                _ => NP_Cursor::set_schema_default(cursor, memory)?
+            }
+        } else {
+            // clear value address in buffer
+            cursor.get_value(memory).set_addr_value(0);
+        }
+
+        Ok(true)
+    }
+
     /// Calculate the number of bytes used by this pointer and it's descendants.
     /// 
     pub fn calc_size<M: NP_Memory>(depth: usize, cursor: &NP_Cursor, memory: &M) -> Result<usize, NP_Error> {
@@ -581,7 +651,7 @@ impl<'cursor> NP_Cursor {
         let type_size = match type_key {
             NP_TypeKeys::None         => { Ok(0) },
             NP_TypeKeys::Any          => { Ok(0) },
-            NP_TypeKeys::UTF8String   => { NP_String::get_size(depth, cursor, memory) },
+            NP_TypeKeys::UTF8String   => {    String::get_size(depth, cursor, memory) },
             NP_TypeKeys::Bytes        => {  NP_Bytes::get_size(depth, cursor, memory) },
             NP_TypeKeys::Int8         => {        i8::get_size(depth, cursor, memory) },
             NP_TypeKeys::Int16        => {       i16::get_size(depth, cursor, memory) },
@@ -644,8 +714,6 @@ pub trait NP_Value<'value> {
     /// 
     fn schema_to_json(schema: &Vec<NP_Parsed_Schema>, address: usize)-> Result<NP_JSON, NP_Error>;
 
-
-
     /// Parse JSON schema into schema
     ///
     fn from_json_to_schema(schema: Vec<NP_Parsed_Schema>, json_schema: &Box<NP_JSON>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error>;
@@ -660,6 +728,10 @@ pub trait NP_Value<'value> {
         let message = "This type doesn't support set_value!".to_owned();
         Err(NP_Error::new(message.as_str()))
     }
+
+    /// Set value from JSON
+    /// 
+    fn set_from_json<'set, M: NP_Memory>(depth: usize, apply_null: bool, cursor: NP_Cursor, memory: &'set M, value: &Box<NP_JSON>) -> Result<(), NP_Error> where Self: 'set + Sized;
 
     /// Pull the data from the buffer and convert into type
     /// 

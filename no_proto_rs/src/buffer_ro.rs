@@ -3,6 +3,8 @@
 //! 
 //! 
 
+use alloc::string::String;
+use crate::json_flex::JSMAP;
 use crate::schema::NP_TypeKeys;
 use crate::NP_Size_Data;
 use crate::{NP_Memory_Writable, buffer::NP_Buffer};
@@ -87,8 +89,8 @@ impl<'buffer> NP_Buffer_RO<'buffer> {
     /// 
     /// let new_buffer = factory.open_buffer_ro(new_buffer.read_bytes());
     /// 
-    /// assert_eq!("{\"age\":30,\"name\":\"Jeb Kermin\"}", new_buffer.json_encode(&[])?.stringify());
-    /// assert_eq!("\"Jeb Kermin\"", new_buffer.json_encode(&["name"])?.stringify());
+    /// assert_eq!(r#"{"value":{"age":30,"name":"Jeb Kermin"}}"#, new_buffer.json_encode(&[])?.stringify());
+    /// assert_eq!(r#"{"value":"Jeb Kermin"}"#, new_buffer.json_encode(&["name"])?.stringify());
     /// 
     /// # Ok::<(), NP_Error>(()) 
     /// ```
@@ -98,7 +100,12 @@ impl<'buffer> NP_Buffer_RO<'buffer> {
         let value_cursor = NP_Cursor::select(&self.memory, self.cursor.clone(), false, false, path)?;
 
         if let Some(x) = value_cursor {
-            Ok(NP_Cursor::json_encode(0, &x, &self.memory))
+
+            let mut json_map = JSMAP::new();
+
+            json_map.insert(String::from("value"), NP_Cursor::json_encode(0, &x, &self.memory));
+    
+            Ok(NP_JSON::Dictionary(json_map))
         } else {
             Ok(NP_JSON::Null)
         }

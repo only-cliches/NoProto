@@ -37,7 +37,7 @@ impl NP_List_Bytes {
 }
 
 #[doc(hidden)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 struct List_Item {
     index: usize,
     buff_addr: usize
@@ -48,8 +48,8 @@ struct List_Item {
 #[doc(hidden)]
 #[derive(Debug)]
 pub struct NP_List {
+    next: Option<List_Item>,
     current: Option<List_Item>,
-    previous: Option<List_Item>,
     index: usize,
     count: usize,
     tail: Option<List_Item>,
@@ -102,12 +102,12 @@ impl NP_List {
             return Ok(Some((index, Some(new_cursor))))
         }
 
-        // is cursor in front of or equal to head
+        
         let head = NP_Cursor::new(list_data().get_head() as usize, schema_of, list_cursor.schema_addr);
 
         let head_index = head.get_value(memory).get_index() as usize;
 
-        if head_index > index { // index is in front of head
+        if head_index > index { // index is in front of head, replace head
             let new_cursor_addr = memory.malloc_borrow(&[0u8; 5])?; // malloc list item
             let new_cursor = NP_Cursor::new(new_cursor_addr, schema_of, list_cursor.schema_addr);
             let new_cursor_value = new_cursor.get_value(memory);
@@ -125,7 +125,7 @@ impl NP_List {
         let tail_value = || { tail.get_value(memory) };
         let tail_index = tail_value().get_index() as usize;
 
-        if tail_index < index { // index is in front of head
+        if tail_index < index { // index is behind tail
             let new_cursor_addr = memory.malloc_borrow(&[0u8; 5])?; // malloc list item
             let new_cursor = NP_Cursor::new(new_cursor_addr, schema_of, list_cursor.schema_addr);
             let new_cursor_value = new_cursor.get_value(memory);
@@ -136,7 +136,6 @@ impl NP_List {
         } else if tail_index == index { // index is equal to head
             return Ok(Some((index, Some(tail))))
         }
-
 
         // the index is somewhere in the list
         let mut list_iter = Self::new_iter(&list_cursor, memory, false, head_index as usize);
@@ -158,29 +157,26 @@ impl NP_List {
 
     #[inline(always)]
     pub fn make_item_in_loop<M: NP_Memory>(self, memory: &M) -> Result<NP_Cursor, NP_Error> {
-        
-        let list_value = self.list.get_value(memory);
-        let list_data = Self::get_list(list_value.get_addr_value() as usize, memory);
+
+        let list_data = || { Self::get_list(self.list.get_value(memory).get_addr_value() as usize, memory) };
 
         let new_cursor_addr = memory.malloc_borrow(&[0u8; 5])?; // malloc list item
         let new_cursor = NP_Cursor::new(new_cursor_addr, self.schema_of, self.list.schema_addr);
         let new_cursor_value = new_cursor.get_value(memory);
-        new_cursor_value.set_index(self.index as u8);
+        new_cursor_value.set_index(self.index as u8 - 1);
 
 
         if let Some(current) = self.current {
-            if let Some(prev) = self.previous { // adjusting in list
-        
-                // set NEXT of previous to new cursor
-                let prev_cursor = NP_Cursor::new(prev.buff_addr, self.schema_of, self.list.schema_addr);
-                let prev_cursor_value = prev_cursor.get_value(memory);
-                prev_cursor_value.set_next_addr(new_cursor_addr as u16);
 
-                // set NEXT of this cursor to CURRENT
-                new_cursor_value.set_next_addr(current.buff_addr as u16);
-            } else { // replacing head
-                new_cursor_value.set_next_addr(list_data.get_head());
-                list_data.set_head(new_cursor_addr as u16);
+            // set NEXT of CURRENT cursor to the new cursor
+            let curr_cursor = NP_Cursor::new(current.buff_addr, self.schema_of, self.list.schema_addr);
+            let prev_cursor_value = curr_cursor.get_value(memory);
+            prev_cursor_value.set_next_addr(new_cursor_addr as u16);
+
+            if let Some(next) = self.next {
+                new_cursor_value.set_next_addr(next.buff_addr as u16);
+            } else { // replace tail
+                list_data().set_tail(new_cursor_addr as u16);
             }
 
             Ok(new_cursor)
@@ -234,84 +230,81 @@ impl NP_List {
                 return Self {
                     current: None,
                     count: 0,
-                    previous: None,
+                    next: Some(List_Item { index: head_cursor.get_value(memory).get_index() as usize, buff_addr: head_cursor.buff_addr}),
                     head: Some(List_Item { index: head_cursor.get_value(memory).get_index() as usize, buff_addr: head_cursor.buff_addr}),
                     tail: Some(List_Item { index: tail_cursor.get_value(memory).get_index() as usize, buff_addr: tail_cursor.buff_addr}),
                     only_real,
                     index: starting_index,
                     schema_of,
-                    list: list_cursor.clone()
+                    list: list_cursor.clone(),
                 }
             }           
         }
 
         Self {
             current: None,
-            previous: None,
             head: None,
             tail: None,
             count: 0,
             only_real,
             index: starting_index,
             schema_of,
-            list: list_cursor.clone()
+            list: list_cursor.clone(),
+            next: None,
         }
     }
 
     #[inline(always)]
     pub fn step_iter<M: NP_Memory>(&mut self, memory: &M) -> Option<(usize, Option<NP_Cursor>)> {
 
-        if self.count > 260 {
+        if self.count > 255 {
             return None;
         }
 
-        match self.head {
-            Some(head) => {
+        self.count += 1;
 
-                self.count += 1;
+        match self.next {
+            Some(next) => {
 
-                match self.current {
-                    Some(current) => { // subsequent iterations
-                        let current_cursor = NP_Cursor::new(current.buff_addr, self.schema_of, self.list.schema_addr);
-                        let value = current_cursor.get_value(memory);
-                        let next_addr = value.get_next_addr() as usize;
+                if self.only_real {
+                    self.current = self.next;
+                    let this_cursor = NP_Cursor::new(next.buff_addr, self.schema_of, self.list.schema_addr);
+                    let this_value = this_cursor.get_value(memory);
+                    let next_addr = this_value.get_next_addr() as usize;
+                    self.index = this_value.get_index() as usize;
 
-                        if next_addr == 0 {
-                            return None;
-                        }
+                    if next_addr != 0 {
+                        let next_cursor = NP_Cursor::new(next_addr, self.schema_of, self.list.schema_addr);
+                        let next_index = next_cursor.get_value(memory).get_index() as usize;
+                        self.next = Some(List_Item { index: next_index, buff_addr: next_addr });
+                    } else {
+                        self.next = None;
+                    }
+                    Some((self.index, Some(this_cursor)))
+                } else {
 
-                        if self.only_real {    
+                    if next.index > self.index {
+                        self.index += 1;
+                        Some((self.index - 1, None))
+                    } else if next.index == self.index {
+                        self.current = self.next;
+                        let this_cursor = NP_Cursor::new(next.buff_addr, self.schema_of, self.list.schema_addr);
+                        let this_value = this_cursor.get_value(memory);
+
+                        let next_addr = this_value.get_next_addr() as usize;
+                        self.index += 1;
+    
+                        if next_addr != 0 {
                             let next_cursor = NP_Cursor::new(next_addr, self.schema_of, self.list.schema_addr);
-                            let next_index = next_cursor.get_value(memory).get_index();
-                            self.index = next_index as usize;
-                            self.previous = self.current.clone();
-                            self.current = Some(List_Item { buff_addr: next_addr, index: next_index as usize});
-                            Some((next_index as usize, Some(next_cursor)))
+                            let next_index = next_cursor.get_value(memory).get_index() as usize;
+                            self.next = Some(List_Item { index: next_index, buff_addr: next_addr });
                         } else {
-                            if current.index > self.index {
-                                self.index += 1;
-                                Some((self.index - 1, None))
-                            } else if current.index == self.index {
-                                let next_cursor = NP_Cursor::new(next_addr, self.schema_of, self.list.schema_addr);
-                                let next_index = next_cursor.get_value(memory).get_index();
-                                self.index += 1;
-                                self.previous = self.current.clone();
-                                self.current = Some(List_Item { buff_addr: next_addr, index: next_index as usize});
-                                Some((self.index - 1, Some(NP_Cursor::new(current.buff_addr, self.schema_of, self.list.schema_addr))))
-                            } else {
-                                None
-                            }
+                            self.next = None;
                         }
-                    },
-                    None => { // first iteration
-                        self.current = Some(head);
-                        if self.only_real || head.index == 0 {
-                            self.index = head.index;
-                            Some((head.index, Some(NP_Cursor::new(head.buff_addr, self.schema_of, self.list.schema_addr))))
-                        } else {
-                            self.index = 0;
-                            Some((0, None))
-                        }
+
+                        Some((self.index - 1, Some(this_cursor)))
+                    } else {
+                        None
                     }
                 }
             },
@@ -376,9 +369,9 @@ impl NP_List {
 impl<'value> NP_Value<'value> for NP_List {
 
     fn to_json<M: NP_Memory>(depth:usize, cursor: &NP_Cursor, memory: &'value M) -> NP_JSON {
-        let c_value = cursor.get_value(memory);
+        let c_value = || { cursor.get_value(memory) };
 
-        if c_value.get_addr_value() == 0 {
+        if c_value().get_addr_value() == 0 {
             return NP_JSON::Null
         }
 
@@ -415,11 +408,38 @@ impl<'value> NP_Value<'value> for NP_List {
         Ok(NP_JSON::Dictionary(schema_json))
     }
 
+    fn set_from_json<'set, M: NP_Memory>(depth: usize, apply_null: bool, cursor: NP_Cursor, memory: &'set M, value: &Box<NP_JSON>) -> Result<(), NP_Error> where Self: 'set + Sized {
+
+        match &**value {
+            NP_JSON::Array(list) => {
+                for (idx, list_item) in list.iter().enumerate() {
+                    match NP_List::select(cursor, idx, true, false, memory)? {
+                        Some(x) => {
+                            match x.1 {
+                                Some(list_value) => {
+                                    NP_Cursor::set_from_json(depth + 1, apply_null, list_value, memory, &Box::new(list_item.clone()))?;
+                                },
+                                None => { }
+                            }
+                        },
+                        None => { 
+                            return Err(NP_Error::new("Failed to find column value!"))
+                        }
+                    }
+                }
+            },
+            _ => { }
+        }
+        
+
+        Ok(())
+    }
+
     fn get_size<M: NP_Memory>(depth:usize, cursor: &NP_Cursor, memory: &M) -> Result<usize, NP_Error> {
 
-        let c_value = cursor.get_value(memory);
+        let c_value = || { cursor.get_value(memory) };
 
-        if c_value.get_addr_value() == 0 {
+        if c_value().get_addr_value() == 0 {
             return Ok(0) 
         }
 
@@ -514,7 +534,7 @@ impl<'value> NP_Value<'value> for NP_List {
 
 #[test]
 fn schema_parsing_works() -> Result<(), NP_Error> {
-    let schema = "{\"type\":\"list\",\"of\":{\"type\":\"string\"}}";
+    let schema = r#"{"type":"list","of":{"type":"string"}}"#;
     let factory = crate::NP_Factory::new(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
     let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
@@ -524,7 +544,7 @@ fn schema_parsing_works() -> Result<(), NP_Error> {
 
 #[test]
 fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
-    let schema = "{\"type\":\"list\",\"of\":{\"type\":\"string\"}}";
+    let schema = r#"{"type":"list","of":{"type":"string"}}"#;
     let factory = crate::NP_Factory::new(schema)?;
 
     // compaction removes values no longer in buffer
@@ -551,12 +571,17 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     assert_eq!(buffer.calc_bytes()?.after_compaction, buffer.calc_bytes()?.current_buffer);
     assert_eq!(buffer.calc_bytes()?.current_buffer, 47usize);
 
+    buffer.set_with_json(&[], r#"{"value": ["light", "this", "candle"]}"#)?;
+    assert_eq!(buffer.get::<&str>(&["0"])?, Some("light"));
+    assert_eq!(buffer.get::<&str>(&["1"])?, Some("this"));
+    assert_eq!(buffer.get::<&str>(&["2"])?, Some("candle"));
+
     Ok(())
 }
 
 #[test]
 fn parseing_works() -> Result<(), NP_Error> {
-    let schema = "{\"type\":\"list\",\"of\":{\"type\":\"string\"}}";
+    let schema = r#"{"type":"list","of":{"type":"string"}}"#;
     let factory = crate::NP_Factory::new(schema)?;
 
     // compaction removes values no longer in buffer

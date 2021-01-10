@@ -124,7 +124,7 @@
 //! | [`geo4`](#geo4-geo8-geo16)             | [`NP_Geo`](../pointer/geo/struct.NP_Geo.html)                            | -                |✓                 | 4 bytes         | 1.1km resolution (city) geographic coordinate                            |
 //! | [`geo8`](#geo4-geo8-geo16)             | [`NP_Geo`](../pointer/geo/struct.NP_Geo.html)                            | -                |✓                 | 8 bytes         | 11mm resolution (marble) geographic coordinate                           |
 //! | [`geo16`](#geo4-geo8-geo16)            | [`NP_Geo`](../pointer/geo/struct.NP_Geo.html)                            | -                |✓                 | 16 bytes        | 110 microns resolution (grain of sand) geographic coordinate             |
-//! | [`ulid`](#ulid)                        | [`NP_ULID`](../pointer/ulid/struct.NP_ULID.html)                         | &NP_ULID         |✓                 | 16 bytes        | 6 bytes for the timestamp (5,224 years), 10 bytes of randomness (1.1e24) |
+//! | [`ulid`](#ulid)                        | [`NP_ULID`](../pointer/ulid/struct.NP_ULID.html)                         | &NP_ULID         |✓                 | 16 bytes        | 6 bytes for the timestamp (5,224 years), 10 bytes of randomness (1.2e24) |
 //! | [`uuid`](#uuid)                        | [`NP_UUID`](../pointer/uuid/struct.NP_UUID.html)                         | &NP_UUID         |✓                 | 16 bytes        | v4 UUID, 2e37 possible UUIDs                                             |
 //! | [`date`](#date)                        | [`NP_Date`](../pointer/date/struct.NP_Date.html)                         | -                |✓                 | 8 bytes         | Good to store unix epoch (in milliseconds) until the year 584,866,263    |
 //! | [`portal`](#portal)                    | -                                                                        | -                |𐄂                 | 0 bytes         | A type that just points to another type in the buffer.                   | 
@@ -560,11 +560,45 @@
 //! - [Using NP_Date data type](../pointer/date/struct.NP_Date.html)
 //!  
 //! ## portal
-//! Portals allow types to be "teleported" from one part of a schema to another.
+//! Portals allow types/schemas to be "teleported" from one part of a schema to another.
 //! 
 //! You can use these for duplicating a type many times in a schema or for recursive data types.
 //! 
+//! The one required property is `to`, it should be a dot notated path to the type being teleported.  If `to` is an empty string, the root is used.
+//! 
 //! Recursion works up to 255 levels of depth.
+//! 
+//! - **Bytewise Sorting**: Not Supported
+//! - **Compaction**: Same behavior as type being teleported.
+//! - **Schema Mutations**: None
+//! 
+//! ```json
+//! {
+//!     "type": "table",
+//!     "columns": [
+//!         ["value", {"type": "u8"}],
+//!         ["next", {"type": "portal", "to": ""}]
+//!     ]
+//! }
+//! ```
+//! 
+//! With the above schema, values can be stored at `value`, `next.value`, `next.next.next.value`, etc.
+//! 
+//! Here is an example where `portal` is used to replicate a type.
+//! 
+//! ```json
+//! {
+//!     "type": "table",
+//!     "columns": [
+//!         ["username", {"type": "string"}],
+//!         ["email", {"type": "portal", "to": "username"}]
+//!     ]
+//! }
+//! ```
+//! 
+//! In the schema above `username` and `email` are both resolved to the `string` type.
+//! 
+//! Even though tables are the only type used in the examples above, the `portal` type will work with any collection type.
 //! 
 //! ## union
 //! Union values allow multiple types to be defined for a single value in the buffer.  Only one of the possible types in a union can be set at a time.
@@ -576,7 +610,7 @@
 //! [Go to NP_Factory docs](../struct.NP_Factory.html)
 //! 
 
-use crate::pointer::{NP_Cursor, union::NP_Union};
+use crate::{np_path, pointer::{NP_Cursor, union::NP_Union}};
 use alloc::string::String;
 use core::{fmt::Debug};
 use crate::{buffer::DEFAULT_ROOT_PTR_ADDR, json_flex::NP_JSON, memory::NP_Memory_Writable, pointer::{portal::{NP_Portal}, ulid::NP_ULID, uuid::NP_UUID}};
@@ -899,8 +933,8 @@ impl NP_Schema {
             match schema {
                 NP_Parsed_Schema::Portal { path, .. } => {
                     let root_cursor = NP_Cursor::new(temp_memory.root, 0, 0);
-                    let str_path: Vec<&str> = path.split(".").filter(|s| s.len() > 0).collect();
-                    match NP_Cursor::select(&temp_memory, root_cursor, false, true, &str_path[..])? {
+                    let str_path = np_path!(path);
+                    match NP_Cursor::select(&temp_memory, root_cursor, false, true, &str_path)? {
                         Some(next) => {
                             completed.push(NP_Parsed_Schema::Portal {
                                 path: path.clone(),
@@ -961,6 +995,7 @@ impl NP_Schema {
     /// Given a valid JSON schema, parse and validate, then provide a compiled byte schema.
     /// 
     /// If you need a quick way to convert JSON to schema bytes without firing up an NP_Factory, this will do the trick.
+    /// 
     pub fn from_json(schema: Vec<NP_Parsed_Schema>, json_schema: &Box<NP_JSON>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {
 
         match &json_schema["type"] {
@@ -972,7 +1007,6 @@ impl NP_Schema {
                     "utf8"     => {    String::from_json_to_schema(schema, &json_schema) },
                     "utf-8"    => {    String::from_json_to_schema(schema, &json_schema) },
                     "bytes"    => {  NP_Bytes::from_json_to_schema(schema, &json_schema) },
-                    "u8[]"     => {  NP_Bytes::from_json_to_schema(schema, &json_schema) },
                     "[u8]"     => {  NP_Bytes::from_json_to_schema(schema, &json_schema) },
                     "i8"       => {        i8::from_json_to_schema(schema, &json_schema) },
                     "int8"     => {        i8::from_json_to_schema(schema, &json_schema) },

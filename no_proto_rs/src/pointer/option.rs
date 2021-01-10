@@ -140,9 +140,20 @@ impl<'value> NP_Value<'value> for NP_Enum {
         Ok(NP_JSON::Dictionary(schema_json))
     }
 
+    fn set_from_json<'set, M: NP_Memory>(_depth: usize, _apply_null: bool, cursor: NP_Cursor, memory: &'set M, value: &Box<NP_JSON>) -> Result<(), NP_Error> where Self: 'set + Sized {
+        match &**value {
+            NP_JSON::String(x) => {
+                Self::set_value(cursor, memory, Self::new(x.clone()))?;
+            },
+            _ => { }
+        }
+
+        Ok(())
+    }
+
     fn set_value<'set, M: NP_Memory>(cursor: NP_Cursor, memory: &'set M, value: Self) -> Result<NP_Cursor, NP_Error> where Self: 'set + Sized {
 
-        let c_value = cursor.get_value(memory);
+        let c_value = || { cursor.get_value(memory) };
 
         match &memory.get_schema(cursor.schema_addr) {
             NP_Parsed_Schema::Enum { i: _, choices, default: _, sortable: _} => {
@@ -166,7 +177,7 @@ impl<'value> NP_Value<'value> for NP_Enum {
         
                 let bytes = value_num as u8;
 
-                let mut addr_value = c_value.get_addr_value() as usize;
+                let mut addr_value = c_value().get_addr_value() as usize;
         
                 if addr_value != 0 { // existing value, replace
         
@@ -178,7 +189,7 @@ impl<'value> NP_Value<'value> for NP_Enum {
                 } else { // new value
         
                     addr_value = memory.malloc_borrow(&[bytes])?;
-                    c_value.set_addr_value(addr_value as u16);
+                    c_value().set_addr_value(addr_value as u16);
 
                     return Ok(cursor);
                 }     
@@ -189,9 +200,9 @@ impl<'value> NP_Value<'value> for NP_Enum {
 
     fn into_value<M: NP_Memory>(cursor: &NP_Cursor, memory: &'value M) -> Result<Option<Self>, NP_Error> where Self: Sized {
 
-        let c_value = cursor.get_value(memory);
+        let c_value = || { cursor.get_value(memory) };
 
-        let value_addr = c_value.get_addr_value() as usize;
+        let value_addr = c_value().get_addr_value() as usize;
 
         // empty value
         if value_addr == 0 {
@@ -285,9 +296,9 @@ impl<'value> NP_Value<'value> for NP_Enum {
     }
 
     fn get_size<M: NP_Memory>(_depth:usize, cursor: &NP_Cursor, memory: &M) -> Result<usize, NP_Error> {
-        let c_value = cursor.get_value(memory);
+        let c_value = || { cursor.get_value(memory) };
 
-        let value_address = c_value.get_addr_value() as usize;
+        let value_address = c_value().get_addr_value() as usize;
 
         if value_address == 0 {
             return Ok(0) 

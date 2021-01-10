@@ -107,6 +107,18 @@ impl<'value> NP_Value<'value> for NP_Portal {
         }
     }
 
+    fn set_from_json<'set, M: NP_Memory>(depth: usize, apply_null: bool, cursor: NP_Cursor, memory: &'set M, value: &Box<NP_JSON>) -> Result<(), NP_Error> where Self: 'set + Sized {
+        match memory.get_schema(cursor.schema_addr) {
+            NP_Parsed_Schema::Portal { schema, parent_schema, .. } => {
+                let mut next = cursor.clone();
+                next.schema_addr = *schema;
+                next.parent_schema_addr = *parent_schema;
+                NP_Cursor::set_from_json(depth + 1, apply_null, next, memory, value)
+            },
+            _ => { Ok(()) }
+        }
+    }
+
     fn get_size<M: NP_Memory>(depth:usize, cursor: &'value NP_Cursor, memory: &'value M) -> Result<usize, NP_Error> {
         match memory.get_schema(cursor.schema_addr) {
             NP_Parsed_Schema::Portal { schema, parent_schema, .. } => {
@@ -205,6 +217,12 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     buffer.compact(None)?;
     assert_eq!("hello street 2", buffer.get::<&str>(&["nested", "nested", "nested", "nested", "street"])?.unwrap());
     assert_eq!(None, buffer.get::<&str>(&["nested", "street"])?);
+
+    // testing set with JSON
+    buffer.set_with_json(&[], r#"{"value":{"street": "foo", "nested": {"street": "foo2"}}}"#)?;
+
+    assert_eq!(Some("foo"), buffer.get::<&str>(&["street"])?);
+    assert_eq!(Some("foo2"), buffer.get::<&str>(&["nested", "street"])?);
 
 
     let schema = r#"{

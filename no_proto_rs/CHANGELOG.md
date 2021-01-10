@@ -1,7 +1,12 @@
-# 0.8.1
+# 0.9.0
 - Added `union` type with docs and tests to go with it.
 - Added docs and more tests for `portal` type.
 - Added packed buffer feature that allows schemas to be included with buffers.
+- Added `np_path` macro to make it easy to use dot notated strings as path like this: `some.path.here`.
+- Added `set_from_json` method to allow buffer values to be set with JSON.  This enables 100% interop with JSON.
+- ULID was not printing correctly according to spec, it is now.
+- Fixed issues with list type loops and inserts.
+- `json_encode` now always provides valid, parsable JSON.
 
 # 0.8.0 January 5, 2021
 - Added new recursive data types with new `portal` type.

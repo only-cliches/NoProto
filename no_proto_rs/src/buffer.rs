@@ -1,5 +1,8 @@
 //! Top level abstraction for buffer objects
 
+use alloc::prelude::v1::Box;
+use crate::{json_decode, json_flex::JSMAP};
+use alloc::string::String;
 use crate::{NP_Size_Data, schema::NP_TypeKeys};
 use crate::{memory::NP_Memory_Writable, utils::opt_err};
 use crate::collection::tuple::NP_Tuple;
@@ -87,8 +90,8 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// new_buffer.set(&["name"], "Jeb Kermin");
     /// new_buffer.set(&["age"], 30u8);
     /// 
-    /// assert_eq!("{\"age\":30,\"name\":\"Jeb Kermin\"}", new_buffer.json_encode(&[])?.stringify());
-    /// assert_eq!("\"Jeb Kermin\"", new_buffer.json_encode(&["name"])?.stringify());
+    /// assert_eq!(r#"{"value":{"age":30,"name":"Jeb Kermin"}}"#, new_buffer.json_encode(&[])?.stringify());
+    /// assert_eq!(r#"{"value":"Jeb Kermin"}"#, new_buffer.json_encode(&["name"])?.stringify());
     /// 
     /// # Ok::<(), NP_Error>(()) 
     /// ```
@@ -98,7 +101,12 @@ impl<'buffer> NP_Buffer<'buffer> {
         let value_cursor = NP_Cursor::select(&self.memory, self.cursor.clone(), false, false, path)?;
 
         if let Some(x) = value_cursor {
-            Ok(NP_Cursor::json_encode(0, &x, &self.memory))
+
+            let mut json_map = JSMAP::new();
+
+            json_map.insert(String::from("value"), NP_Cursor::json_encode(0, &x, &self.memory));
+    
+            Ok(NP_JSON::Dictionary(json_map))
         } else {
             Ok(NP_JSON::Null)
         }
@@ -130,8 +138,9 @@ impl<'buffer> NP_Buffer<'buffer> {
         self.memory.dump()
     }
 
-    /// If the buffer is sortable, this provides only the sortable elements of the buffer.
-    /// There is typically 10 bytes or more in front of the buffer that are identical between all the sortable buffers for a given schema.
+    /// If the buffer is sortable, this provides only the sortable bytes of the buffer.<br/>
+    /// 
+    /// There is typically 10 or more bytes in the beginning of the buffer that are identical between all the sortable buffers for a given schema.  These bytes are typically needed for NoProto to access the data.  Since the leading bytes are identical between all sortable buffers of the same schema, they can be generated as needed.
     /// 
     /// This calculates how many leading identical bytes there are and returns only the bytes following them.  This allows your sortable buffers to be only as large as they need to be.
     /// 
@@ -156,12 +165,12 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// new_buffer.set(&["0"], 55u8)?;
     /// new_buffer.set(&["1"], "hello")?;
     /// 
-    /// // the buffer with it's vtables take up 21 bytes!
+    /// // the buffer takes up 21 bytes!
     /// assert_eq!(new_buffer.read_bytes().len(), 21usize);
     /// 
     /// // close buffer and get sortable bytes
     /// let bytes: Vec<u8> = new_buffer.close_sortable()?;
-    /// // with close_sortable() we only get the 8 value bytes we care about!
+    /// // with close_sortable() we only get the 8 sortable bytes we care about!
     /// assert_eq!([55, 104, 101, 108, 108, 111, 32].to_vec(), bytes);
     /// 
     /// // you can always re open the sortable buffers with this call
@@ -372,7 +381,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// # Ok::<(), NP_Error>(()) 
     /// ```
     /// 
-    pub fn set<X: 'buffer>(&mut self, path: &[&str], value: X) -> Result<bool, NP_Error> where X: NP_Value<'buffer> + NP_Scalar<'buffer> {
+    pub fn set<'set, X: 'set>(&mut self, path: &[&str], value: X) -> Result<bool, NP_Error> where X: NP_Value<'set> + NP_Scalar<'set> {
         let value_cursor = NP_Cursor::select(&self.memory, self.cursor.clone(), true, false, path)?;
         match value_cursor {
             Some(x) => {
@@ -388,6 +397,63 @@ impl<'buffer> NP_Buffer<'buffer> {
                 }
 
                 X::set_value(x, &self.memory, value)?;
+                Ok(true)
+            }
+            None => Ok(false)
+        }
+    }
+
+    /// Set value with JSON
+    /// 
+    /// This works with all types including portals.
+    /// 
+    /// Data that doesn't align with the schema will be ignored.  `Null` and `undefined` values will be ignored.
+    /// 
+    /// Partial updates just merge the provided values into the buffer, you only need to provide the values you'd like changed.
+    /// 
+    /// Using the `.set()` method is way more performant.  I recommend only using this on the client side of your application.
+    /// 
+    /// ```
+    /// use no_proto::error::NP_Error;
+    /// use no_proto::NP_Factory;
+    /// use no_proto::NP_Size_Data;
+    /// 
+    /// let factory: NP_Factory = NP_Factory::new(r#"{
+    ///    "type": "list",
+    ///     "of": {"type": "string"}
+    /// }"#)?;
+    /// 
+    /// let mut new_buffer = factory.empty_buffer(None);
+    /// new_buffer.set_with_json(&[], r#"{"value": ["foo", "bar", null, "baz"]}"#)?;
+    ///    
+    /// assert_eq!(new_buffer.length(&[])?, Some(4));
+    /// assert_eq!(new_buffer.get::<&str>(&["0"])?, Some("foo"));
+    /// assert_eq!(new_buffer.get::<&str>(&["1"])?, Some("bar"));
+    /// assert_eq!(new_buffer.get::<&str>(&["2"])?, None);
+    /// assert_eq!(new_buffer.get::<&str>(&["3"])?, Some("baz"));
+    /// 
+    /// new_buffer.set_with_json(&["2"], r#"{"value": "bazzy"}"#)?;
+    /// assert_eq!(new_buffer.get::<&str>(&["2"])?, Some("bazzy"));
+    /// 
+    /// 
+    /// # Ok::<(), NP_Error>(()) 
+    /// ```
+    /// 
+    pub fn set_with_json<S: Into<String>>(&mut self, path: &[&str], json_value: S) -> Result<bool, NP_Error> {
+        let value_cursor = NP_Cursor::select(&self.memory, self.cursor.clone(), true, false, path)?;
+        match value_cursor {
+            Some(x) => {
+                let parsed = json_decode(json_value.into())?;
+
+                match parsed["value"] {
+                    NP_JSON::Null => {
+                        return Err(NP_Error::new(".set_with_json requires `value` property!"))
+                    },
+                    _ => {
+                        NP_Cursor::set_from_json(0, false, x, &self.memory, &Box::new(parsed["value"].clone()))?;
+                    }
+                }
+                
                 Ok(true)
             }
             None => Ok(false)
@@ -860,28 +926,10 @@ impl<'buffer> NP_Buffer<'buffer> {
     pub fn del(&mut self, path: &[&str]) -> Result<bool, NP_Error> {
 
         let value_cursor = NP_Cursor::select(&self.memory, self.cursor.clone(), false, false, path)?;
-
-        let is_sortable = match &self.memory.get_schema(0) {
-            NP_Parsed_Schema::Tuple { sortable , ..} => *sortable,
-            _ => false
-        };
         
         match value_cursor {
             Some(x) => {
-                if is_sortable {
-                    match &self.memory.get_schema(x.schema_addr) {
-                        NP_Parsed_Schema::Table { .. } => { return Ok(false) },
-                        NP_Parsed_Schema::Tuple { .. } => { return Ok(false) },
-                        NP_Parsed_Schema::List { .. } => { return Ok(false) },
-                        NP_Parsed_Schema::Map { .. } => { return Ok(false) },
-                        _ => NP_Cursor::set_schema_default(x, &self.memory)?
-                    }
-                } else {
-                    // clear value address in buffer
-                    x.get_value(&self.memory).set_addr_value(0);
-                }
-
-                Ok(true)
+                NP_Cursor::delete(x, &self.memory)
             }
             None => Ok(false)
         }

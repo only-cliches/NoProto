@@ -98,10 +98,10 @@ impl NP_UUID {
         uuid
     }
 
-    /// Convert a string UUID into it's byte values
+    /// Create a UUID from a string representation
     /// 
-    pub fn from_string(uuid: &str) -> NP_UUID {
-        let cleaned: String = String::from(uuid).replace("-", "");
+    pub fn from_string<S: AsRef<str>>(uuid: S) -> NP_UUID {
+        let cleaned: String = String::from(uuid.as_ref()).replace("-", "").to_uppercase();
 
         let mut value: [u8; 16] = [0; 16];
 
@@ -177,6 +177,18 @@ impl<'value> NP_Value<'value> for NP_UUID {
         _NP_UUID::set_value(cursor, memory, &value)
     }
 
+    fn set_from_json<'set, M: NP_Memory>(_depth: usize, _apply_null: bool, cursor: NP_Cursor, memory: &'set M, value: &Box<NP_JSON>) -> Result<(), NP_Error> where Self: 'set + Sized {
+
+        match &**value {
+            NP_JSON::String(value) => {
+                Self::set_value(cursor, memory, NP_UUID::from_string(&value))?;
+            },
+            _ => {}
+        }
+
+        Ok(())
+    }
+
     fn default_value(_depth: usize, _scham_addr: usize,_schema: &Vec<NP_Parsed_Schema>) -> Option<Self> {
         None
     }
@@ -209,9 +221,9 @@ impl<'value> NP_Value<'value> for NP_UUID {
 
     fn get_size<M: NP_Memory>(_depth:usize, cursor: &NP_Cursor, memory: &M) -> Result<usize, NP_Error> {
 
-        let c_value = cursor.get_value(memory);
+        let c_value = || { cursor.get_value(memory) };
 
-        if c_value.get_addr_value() == 0 {
+        if c_value().get_addr_value() == 0 {
             Ok(0) 
         } else {
             Ok(16)
@@ -266,9 +278,9 @@ impl<'value> NP_Value<'value> for &NP_UUID {
     }
 
     fn set_value<'set, M: NP_Memory>(cursor: NP_Cursor, memory: &'set M, value: Self) -> Result<NP_Cursor, NP_Error> where Self: 'set + Sized {
-        let c_value = cursor.get_value(memory);
+        let c_value = || {cursor.get_value(memory)};
 
-        let mut value_address = c_value.get_addr_value() as usize;
+        let mut value_address = c_value().get_addr_value() as usize;
 
         if value_address != 0 { // existing value, replace
             let bytes = value.value;
@@ -282,8 +294,8 @@ impl<'value> NP_Value<'value> for &NP_UUID {
         } else { // new value
 
             value_address = memory.malloc_borrow(&value.value)?;
-            c_value.set_addr_value(value_address as u16);
-        }                    
+            c_value().set_addr_value(value_address as u16);
+        }
         
         Ok(cursor)
     }
@@ -292,11 +304,16 @@ impl<'value> NP_Value<'value> for &NP_UUID {
         None
     }
 
+    fn set_from_json<'set, M: NP_Memory>(_depth: usize, _apply_null: bool, _cursor: NP_Cursor, _memory: &'set M, _value: &Box<NP_JSON>) -> Result<(), NP_Error> where Self: 'set + Sized {
+
+        Ok(())
+    }
+
     fn into_value<M: NP_Memory>(cursor: &NP_Cursor, memory: &'value M) -> Result<Option<Self>, NP_Error> where Self: Sized {
 
-        let c_value = cursor.get_value(memory);
+        let c_value = || { cursor.get_value(memory) };
 
-        let value_addr = c_value.get_addr_value();
+        let value_addr = c_value().get_addr_value();
 
         // empty value
         if value_addr == 0 {
@@ -350,6 +367,7 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     buffer.set(&[] as &[&str], &set_value)?;
     assert_eq!(buffer.get::<&NP_UUID>(&[])?, Some(&NP_UUID::generate(212)));
     assert_eq!(buffer.get::<&NP_UUID>(&[])?.unwrap().to_string(), "9EE6AAB0-2C94-41FE-FB88-42F73253F217");
+    assert_eq!(set_value.value, NP_UUID::from_string("9EE6AAB0-2C94-41FE-FB88-42F73253F217").value);
     buffer.del(&[])?;
     assert_eq!(buffer.get::<&NP_UUID>(&[])?, None);
 

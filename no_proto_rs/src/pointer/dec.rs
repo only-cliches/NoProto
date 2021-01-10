@@ -733,12 +733,34 @@ impl<'value> NP_Value<'value> for NP_Dec {
         }
     }
 
+    fn set_from_json<'set, M: NP_Memory>(_depth: usize, _apply_null: bool, cursor: NP_Cursor, memory: &'set M, value: &Box<NP_JSON>) -> Result<(), NP_Error> where Self: 'set + Sized {
+        match &**value {
+            NP_JSON::Dictionary(map) => {
+                if let Some(NP_JSON::Dictionary(parts)) = map.get("parts") {
+                    if let Some(NP_JSON::Integer(num)) = parts.get("num") {
+                        if let Some(NP_JSON::Integer(exp)) = parts.get("exp") {
+                            Self::set_value(cursor, memory, NP_Dec::new(*num, *exp as u8))?;
+                        } else {
+                            return Err(NP_Error::new("Decimal types require a `parts.exp` property!"))
+                        }
+                    } else {
+                        return Err(NP_Error::new("Decimal types require a `parts.num` property!"))
+                    }
+                } else {
+                    return Err(NP_Error::new("Decimal types require a `parts` property!"))
+                }
+            },
+            _ => {}
+        }
+
+        Ok(())
+    }
+
     fn set_value<'set, M: NP_Memory>(cursor: NP_Cursor, memory: &'set M, value: Self) -> Result<NP_Cursor, NP_Error> where Self: 'set + Sized {
 
+        let c_value = || { cursor.get_value(memory) };
 
-        let c_value = cursor.get_value(memory);
-
-        let mut value_address = c_value.get_addr_value() as usize;
+        let mut value_address = c_value().get_addr_value() as usize;
 
         let exp = match memory.get_schema(cursor.schema_addr) {
             NP_Parsed_Schema::Decimal { i: _, sortable: _, default: _, exp} => {
@@ -774,7 +796,7 @@ impl<'value> NP_Value<'value> for NP_Dec {
             be_bytes[0] = to_unsigned(be_bytes[0]);
 
             value_address = memory.malloc_borrow(&be_bytes)?;
-            c_value.set_addr_value(value_address as u16);
+            c_value().set_addr_value(value_address as u16);
 
         }
 
@@ -783,9 +805,9 @@ impl<'value> NP_Value<'value> for NP_Dec {
 
     fn into_value<M: NP_Memory>(cursor: &NP_Cursor, memory: &'value M) -> Result<Option<Self>, NP_Error> where Self: Sized {
 
-        let c_value = cursor.get_value(memory);
+        let c_value = || { cursor.get_value(memory) };
 
-        let value_addr = c_value.get_addr_value() as usize;
+        let value_addr = c_value().get_addr_value() as usize;
 
         // empty value
         if value_addr == 0 {
@@ -826,8 +848,12 @@ impl<'value> NP_Value<'value> for NP_Dec {
                     Some(y) => {
                         let mut object = JSMAP::new();
 
-                        object.insert("num".to_owned(), NP_JSON::Integer(y.num));
-                        object.insert("exp".to_owned(), NP_JSON::Integer(exp as i64));
+                        let mut parts = JSMAP::new();
+
+                        parts.insert("num".to_owned(), NP_JSON::Integer(y.num));
+                        parts.insert("exp".to_owned(), NP_JSON::Integer(exp as i64));
+                        object.insert("value".to_owned(), NP_JSON::Float(y.to_float()));
+                        object.insert("parts".to_owned(), NP_JSON::Dictionary(parts));
                         
                         NP_JSON::Dictionary(object)
                     },
@@ -836,9 +862,12 @@ impl<'value> NP_Value<'value> for NP_Dec {
                             NP_Parsed_Schema::Decimal { i: _, sortable: _, default, exp} => {
                                 if let Some(d) = default {
                                     let mut object = JSMAP::new();
+                                    let mut parts = JSMAP::new();
 
-                                    object.insert("num".to_owned(), NP_JSON::Integer(d.num.clone()));
-                                    object.insert("exp".to_owned(), NP_JSON::Integer(*exp as i64));
+                                    parts.insert("num".to_owned(), NP_JSON::Integer(d.num.clone()));
+                                    parts.insert("exp".to_owned(), NP_JSON::Integer(*exp as i64));
+                                    object.insert("value".to_owned(), NP_JSON::Float(d.to_float()));
+                                    object.insert("parts".to_owned(), NP_JSON::Dictionary(parts));
                                     
                                     NP_JSON::Dictionary(object)
                                 } else {
@@ -858,9 +887,9 @@ impl<'value> NP_Value<'value> for NP_Dec {
 
     fn get_size<M: NP_Memory>(_depth:usize, cursor: &NP_Cursor, memory: &M) -> Result<usize, NP_Error> {
         
-        let c_value = cursor.get_value(memory);
+        let c_value = || { cursor.get_value(memory) };
 
-        if c_value.get_addr_value() == 0 {
+        if c_value().get_addr_value() == 0 {
             Ok(0) 
         } else {
             Ok(core::mem::size_of::<i64>())

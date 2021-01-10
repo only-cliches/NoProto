@@ -148,7 +148,9 @@ impl Default for NP_Geo_Bytes {
 
 impl<'value> NP_Value<'value> for NP_Geo_Bytes {
 
-
+    fn set_from_json<'set, M: NP_Memory>(_depth: usize, _apply_null: bool, _cursor: NP_Cursor, _memory: &'set M, _value: &Box<NP_JSON>) -> Result<(), NP_Error> where Self: 'set + Sized {
+        Ok(())
+    }
     
     fn default_value(_depth: usize, _addr: usize, _schema: &Vec<NP_Parsed_Schema>) -> Option<Self> {
         None
@@ -166,9 +168,9 @@ impl<'value> NP_Value<'value> for NP_Geo_Bytes {
     }
     fn get_size<M: NP_Memory>(_depth:usize, cursor: &NP_Cursor, memory: &M) -> Result<usize, NP_Error> {
 
-        let c_value = cursor.get_value(memory);
+        let c_value = || { cursor.get_value(memory) };
 
-        if c_value.get_addr_value() == 0 {
+        if c_value().get_addr_value() == 0 {
             return Ok(0) 
         } else {
             let size = match memory.get_schema(cursor.schema_addr) {
@@ -183,9 +185,9 @@ impl<'value> NP_Value<'value> for NP_Geo_Bytes {
 
     fn into_value<M: NP_Memory>(cursor: &NP_Cursor, memory: &'value M) -> Result<Option<Self>, NP_Error> where Self: Sized {
 
-        let c_value = cursor.get_value(memory);
+        let c_value = || { cursor.get_value(memory) };
 
-        let value_addr = c_value.get_addr_value() as usize;
+        let value_addr = c_value().get_addr_value() as usize;
 
         // empty value
         if value_addr == 0 {
@@ -425,6 +427,41 @@ impl<'value> NP_Value<'value> for NP_Geo {
         }
     }
 
+    fn set_from_json<'set, M: NP_Memory>(_depth: usize, _apply_null: bool, cursor: NP_Cursor, memory: &'set M, value: &Box<NP_JSON>) -> Result<(), NP_Error> where Self: 'set + Sized {
+        
+        let size = match memory.get_schema(cursor.schema_addr) {
+            NP_Parsed_Schema::Geo { size, .. } => *size,
+            _ => 0
+        };
+
+        match &**value {
+            NP_JSON::Dictionary(map) => {
+                let mut value = NP_Geo::new(size, 0.0, 0.0);
+
+                if let Some(NP_JSON::Integer(lat)) = map.get("lat") {
+                    value.lat = *lat as f64;
+                }
+
+                if let Some(NP_JSON::Float(lat)) = map.get("lat") {
+                    value.lat = *lat as f64;
+                }
+
+                if let Some(NP_JSON::Integer(lng)) = map.get("lng") {
+                    value.lng = *lng as f64;
+                }
+
+                if let Some(NP_JSON::Float(lng)) = map.get("lng") {
+                    value.lng = *lng as f64;
+                }
+
+                Self::set_value(cursor, memory, value)?;
+            },
+            _ => { }
+        }
+
+        Ok(())
+    }
+
     fn type_idx() -> (&'value str, NP_TypeKeys) { ("geo", NP_TypeKeys::Geo) }
     fn self_type_idx(&self) -> (&'value str, NP_TypeKeys) { ("geo", NP_TypeKeys::Geo) }
 
@@ -448,8 +485,6 @@ impl<'value> NP_Value<'value> for NP_Geo {
             },
             _ => Err(NP_Error::new("unreachable"))
         }
-
-
     }
 
     fn set_value<'set, M: NP_Memory>(cursor: NP_Cursor, memory: &'set M, value: Self) -> Result<NP_Cursor, NP_Error> where Self: 'set + Sized {
@@ -584,9 +619,9 @@ impl<'value> NP_Value<'value> for NP_Geo {
 
     fn into_value<M: NP_Memory>(cursor: &NP_Cursor, memory: &'value M) -> Result<Option<Self>, NP_Error> where Self: Sized {
 
-        let c_value = cursor.get_value(memory);
+        let c_value = || { cursor.get_value(memory) };
 
-        let value_addr = c_value.get_addr_value() as  usize;
+        let value_addr = c_value().get_addr_value() as  usize;
 
         // empty value
         if value_addr == 0 {
@@ -694,9 +729,9 @@ impl<'value> NP_Value<'value> for NP_Geo {
 
     fn get_size<M: NP_Memory>(_depth:usize, cursor: &NP_Cursor, memory: &M) -> Result<usize, NP_Error> {
 
-        let c_value = cursor.get_value(memory);
+        let c_value = || { cursor.get_value(memory) };
 
-        let value_addr = c_value.get_addr_value();
+        let value_addr = c_value().get_addr_value();
 
         if value_addr == 0 {
             return Ok(0) 

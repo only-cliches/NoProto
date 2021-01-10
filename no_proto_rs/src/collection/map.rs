@@ -206,9 +206,9 @@ impl<'map> NP_Map<'map> {
 impl<'value> NP_Value<'value> for NP_Map<'value> {
 
     fn to_json<M: NP_Memory>(depth:usize, cursor: &NP_Cursor, memory: &'value M) -> NP_JSON {
-        let c_value = cursor.get_value(memory);
+        let c_value = || { cursor.get_value(memory) };
 
-        if c_value.get_addr_value() == 0 {
+        if c_value().get_addr_value() == 0 {
             return NP_JSON::Null
         }
 
@@ -221,6 +221,25 @@ impl<'value> NP_Value<'value> for NP_Map<'value> {
         }
 
         NP_JSON::Dictionary(json_map)
+    }
+
+    fn set_from_json<'set, M: NP_Memory>(depth: usize, apply_null: bool, cursor: NP_Cursor, memory: &'set M, value: &Box<NP_JSON>) -> Result<(), NP_Error> where Self: 'set + Sized {
+        
+        match &**value {
+            NP_JSON::Dictionary(json_map) => {
+                for js_item in json_map.values.iter() {
+                    match NP_Map::select(cursor, &js_item.0, true, false, memory)? {
+                        Some(value) => {
+                            NP_Cursor::set_from_json(depth + 1, apply_null, value, memory, &Box::new(js_item.1.clone()))?;
+                        },
+                        None => { }
+                    }
+                }
+            },
+            _ => { }
+        }
+    
+        Ok(())
     }
 
     fn type_idx() -> (&'value str, NP_TypeKeys) { ("map", NP_TypeKeys::Map) }
@@ -242,9 +261,9 @@ impl<'value> NP_Value<'value> for NP_Map<'value> {
 
     fn get_size<M: NP_Memory>(depth:usize, cursor: &NP_Cursor, memory: &'value M) -> Result<usize, NP_Error> {
 
-        let c_value = cursor.get_value(memory);
+        let c_value = || { cursor.get_value(memory) };
 
-        if c_value.get_addr_value() == 0 {
+        if c_value().get_addr_value() == 0 {
             return Ok(0) 
         }
 
@@ -332,7 +351,7 @@ impl<'value> NP_Value<'value> for NP_Map<'value> {
 
 #[test]
 fn schema_parsing_works() -> Result<(), NP_Error> {
-    let schema = "{\"type\":\"map\",\"value\":{\"type\":\"string\"}}";
+    let schema = r#"{"type":"map","value":{"type":"string"}}"#;
     let factory = crate::NP_Factory::new(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
     let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
@@ -342,7 +361,7 @@ fn schema_parsing_works() -> Result<(), NP_Error> {
 
 #[test]
 fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
-    let schema = "{\"type\":\"map\",\"value\":{\"type\":\"string\"}}";
+    let schema = r#"{"type":"map","value":{"type":"string"}}"#;
     let factory = crate::NP_Factory::new(schema)?;
 
     // compaction works
@@ -366,6 +385,10 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     assert_eq!(buffer.get::<&str>(&["name"])?, Some("hello, world"));
     assert_eq!(buffer.get::<&str>(&["name2"])?, Some("hello, world2"));
     assert_eq!(buffer.calc_bytes()?.current_buffer, 56usize);
+
+    buffer.set_with_json(&[], r#"{"value": {"foo": "bar", "foo2": "bar2"}}"#)?;
+    assert_eq!(buffer.get::<&str>(&["foo"])?, Some("bar"));
+    assert_eq!(buffer.get::<&str>(&["foo2"])?, Some("bar2"));
 
     Ok(())
 }
