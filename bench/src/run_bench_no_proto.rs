@@ -29,7 +29,7 @@ impl NoProtoBench {
     
         for _x in 0..LOOPS {
             let new_buffer = NoProtoBench::encode_single(&factory)?;
-            assert_eq!(new_buffer.len(), 208);
+            assert_eq!(new_buffer.len(), 209);
         }
     
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
@@ -50,7 +50,7 @@ impl NoProtoBench {
 
             // new_buff.compact(None)?;
 
-            assert_eq!(new_buff.close().len(), 208);
+            assert_eq!(new_buff.close().len(), 209);
         }
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");

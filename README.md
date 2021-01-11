@@ -205,17 +205,17 @@ The format and data used in the benchmarks were taken from the `flatbuffers` ben
 | Library            | Encode | Decode All | Decode 1 | Update 1 | Size (bytes) | Size (Zlib) |
 |--------------------|--------|------------|----------|----------|--------------|-------------|
 | **Runtime Libs**   |        |            |          |          |              |             |
-| *NoProto*          |   1057 |       1437 |    47619 |    12195 |          208 |         166 |
-| Apache Avro        |    138 |         51 |       52 |       37 |          702 |         336 |
-| FlexBuffers        |    401 |        855 |    23256 |      264 |          490 |         309 |
-| JSON               |    550 |        438 |      544 |      396 |          439 |         184 |
+| *NoProto*          |    920 |       1397 |    41667 |    10526 |          209 |         167 |
+| Apache Avro        |    140 |         51 |       51 |       37 |          702 |         337 |
+| FlexBuffers        |    399 |        843 |    22727 |      265 |          490 |         309 |
+| JSON               |    546 |        436 |      533 |      400 |          439 |         184 |
 | BSON               |    115 |        103 |      109 |       80 |          414 |         216 |
-| MessagePack        |    135 |        222 |      237 |      119 |          296 |         187 |
+| MessagePack        |    136 |        223 |      236 |      121 |          296 |         187 |
 | **Compiled Libs**  |        |            |          |          |              |             |
-| Flatbuffers        |   1046 |      14706 |   250000 |     1065 |          264 |         181 |
-| Bincode            |   5882 |       8772 |     9524 |     4016 |          163 |         129 |
-| Protobuf           |    859 |       1140 |     1163 |      480 |          154 |         141 |
-| Prost              |   1225 |       1866 |     1984 |      962 |          154 |         142 |
+| Flatbuffers        |   1062 |      14925 |   250000 |     1057 |          264 |         181 |
+| Bincode            |   5882 |       8621 |     9174 |     4000 |          163 |         129 |
+| Protobuf           |    876 |       1140 |     1155 |      474 |          154 |         141 |
+| Prost              |   1361 |       1855 |     1942 |      966 |          154 |         142 |
 
 - **Encode**: Transfer a collection of fields of test data into a serialized `Vec<u8>`.
 - **Decode All**: Deserialize the test object from the `Vec<u8>` into all fields.
