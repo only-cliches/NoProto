@@ -1,7 +1,7 @@
 [package]
 name = "no_proto"
 license = "MIT"
-version = "0.8.0"
+version = "0.9.0"
 description = "Flexible, Fast & Compact Serialization with RPC"
 homepage = "https://github.com/only-cliches/NoProto"
 repository = "https://github.com/only-cliches/NoProto"
