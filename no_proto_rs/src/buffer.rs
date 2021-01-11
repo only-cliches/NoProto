@@ -293,7 +293,7 @@ impl<'buffer> NP_Buffer<'buffer> {
         }
     }
 
-    /// Set the max value allowed for the specific data type at the given key.
+    /// Set the min value allowed for the specific data type at the given key.
     /// 
     /// String & Byte types only work if a `size` property is set in the schema.
     /// 
@@ -353,7 +353,7 @@ impl<'buffer> NP_Buffer<'buffer> {
 
     /// Used to set scalar values inside the buffer.
     /// 
-    /// The type that you cast the request to will be compared to the schema, if it doesn't match the schema the request will fail.
+    /// The type that you set with will be compared to the schema, if it doesn't match the schema the request will fail.
     /// 
     /// ```
     /// use no_proto::error::NP_Error;
@@ -409,9 +409,9 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// 
     /// Data that doesn't align with the schema will be ignored.  `Null` and `undefined` values will be ignored.
     /// 
-    /// Partial updates just merge the provided values into the buffer, you only need to provide the values you'd like changed.
+    /// Partial updates just merge the provided values into the buffer, you only need to provide the values you'd like changed.  This method cannot be used to delete values.
     /// 
-    /// Using the `.set()` method is way more performant.  I recommend only using this on the client side of your application.
+    /// Using the `.set()` method is far more performant.  I recommend only using this on the client side of your application.
     /// 
     /// ```
     /// use no_proto::error::NP_Error;
@@ -860,7 +860,6 @@ impl<'buffer> NP_Buffer<'buffer> {
                 {
                     let mut map_iter = NP_Map::new_iter(&found_cursor, &self.memory);
 
-                    // key is maybe in map
                     while let Some((_ikey, _item)) = map_iter.step_iter(&self.memory) {
                         count += 1;
                     }
@@ -943,7 +942,6 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// use no_proto::NP_Factory;
     /// use no_proto::schema::NP_TypeKeys;
     /// 
-    /// // a list where each item is a map where each key has a value containing a list of strings
     /// let factory: NP_Factory = NP_Factory::new(r#"{
     ///    "type": "tuple",
     ///    "values": [
@@ -1103,7 +1101,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// 
     /// The first argument, new_capacity, is the capacity of the underlying Vec<u8> that we'll be copying the data into.  The default is the size of the old buffer.
     /// 
-    /// **WARNING** Your cursor location and backup will be reset to the root.
+    /// **WARNING** Your cursor location will be reset to the root.
     /// 
     /// ```
     /// use no_proto::error::NP_Error;

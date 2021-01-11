@@ -533,7 +533,7 @@ impl<'cursor> NP_Cursor {
             NP_TypeKeys::Map         => { return Err(NP_Error::new("unreachable")); },
             NP_TypeKeys::List        => { return Err(NP_Error::new("unreachable")); },
             NP_TypeKeys::Tuple       => { return Err(NP_Error::new("unreachable")); },
-            NP_TypeKeys::Portal      => { return Err(NP_Error::new("Clone type does not have a default type")); },
+            NP_TypeKeys::Portal      => { return Err(NP_Error::new("Portal type does not have a default type")); },
             NP_TypeKeys::Union       => { return Err(NP_Error::new("Union type does not have a default type")); },
             NP_TypeKeys::UTF8String  => {     String::set_value(cursor, memory, opt_err(String::schema_default(schema))?)?; },
             NP_TypeKeys::Bytes       => {   NP_Bytes::set_value(cursor, memory, opt_err(NP_Bytes::schema_default(schema))?)?; },
@@ -602,6 +602,9 @@ impl<'cursor> NP_Cursor {
     }
 
     /// Delete the value at this cursor
+    /// 
+    /// Returns `true` if something was deleted, `false` otherwise.
+    /// 
     pub fn delete<M: NP_Memory>(cursor: NP_Cursor, memory: &M) -> Result<bool, NP_Error> {
 
         if cursor.buff_addr == 0 {
@@ -617,8 +620,8 @@ impl<'cursor> NP_Cursor {
             match memory.get_schema(cursor.schema_addr) {
                 NP_Parsed_Schema::Table { .. } => { return Ok(false) },
                 NP_Parsed_Schema::Tuple { .. } => { return Ok(false) },
-                NP_Parsed_Schema::List { .. } => { return Ok(false) },
-                NP_Parsed_Schema::Map { .. } => { return Ok(false) },
+                NP_Parsed_Schema::List  { .. } => { return Ok(false) },
+                NP_Parsed_Schema::Map   { .. } => { return Ok(false) },
                 _ => NP_Cursor::set_schema_default(cursor, memory)?
             }
         } else {
