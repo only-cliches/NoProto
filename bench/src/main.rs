@@ -124,7 +124,7 @@ fn main() {
     println!("//! | FlexBuffers        | {} |     {} |   {} |   {} |          {} |         {} |", flx_enc, flx_dec, flx_dec1, flx_up, flx_size.0, flx_size.1);
     println!("//! | JSON               | {} |     {} |   {} |   {} |          {} |         {} |", json_enc, json_dec, json_dec1, json_up, json_size.0, json_size.1);
     println!("//! | BSON               | {} |     {} |   {} |   {} |          {} |         {} |", bson_enc, bson_dec, bson_dec1, bson_up, bson_size.0, bson_size.1);
-    println!("//! | Raw BSON           | {} |     {} |   {} |   {} |          {} |         {} |", rbso_enc, rbso_dec, rbso_dec1, rbso_up, rbso_size.0, rbso_size.1);
+    // println!("//! | Raw BSON           | {} |     {} |   {} |   {} |          {} |         {} |", rbso_enc, rbso_dec, rbso_dec1, rbso_up, rbso_size.0, rbso_size.1);
     println!("//! | MessagePack        | {} |     {} |   {} |   {} |          {} |         {} |", msg_enc, msg_dec, msg_dec1, msg_up, msg_size.0, msg_size.1);
     println!("//! | **Compiled Libs**  |        |            |          |          |              |             |");
     println!("//! | Flatbuffers        | {} |     {} |   {} |   {} |          {} |         {} |", fb_enc, fb_dec, fb_dec1, fb_up, fb_size.0, fb_size.1);
