@@ -74,11 +74,12 @@ impl FlatBufferBench {
 
 
     pub fn update_bench(base: u128) -> String  {
-        let buffer = Self::encode_single(&mut FlatBufferBuilder::new());
-
-        let start = SystemTime::now();
 
         let mut fbb: FlatBufferBuilder = FlatBufferBuilder::new();
+
+        let buffer = Self::encode_single(&mut fbb);
+
+        let start = SystemTime::now();
 
         for _x in 0..LOOPS {
             let container = get_root_as_foo_bar_container(&buffer[..]);
