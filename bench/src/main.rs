@@ -9,7 +9,8 @@ use crate::run_bench_bincode::BincodeBench;
 use crate::run_bench_avro::AvroBench;
 use crate::run_bench_prost::ProstBench;
 use crate::run_bench_flexbuffers::FlexBench;
-use crate::run_bench_rawbson::RawBSONBench;
+// use crate::run_bench_rawbson::RawBSONBench;
+use crate::run_bench_abomonation::AbomBench;
 pub const LOOPS: usize = 1_000_000;
 
 mod bench_fb;
@@ -22,6 +23,8 @@ extern crate bson;
 extern crate rmp;
 extern crate serde;
 extern crate bincode;
+#[macro_use] 
+extern crate abomonation;
 
 mod run_bench_no_proto;
 mod run_bench_protocol_buffers;
@@ -34,6 +37,7 @@ mod run_bench_prost;
 mod run_bench_avro;
 mod run_bench_flexbuffers;
 mod run_bench_rawbson;
+mod run_bench_abomonation;
 
 /*
 1,000,000 iterations
@@ -55,7 +59,8 @@ fn main() {
     let pro_size = ProstBench::size_bench();
     let avro_size = AvroBench::size_bench();
     let flx_size = FlexBench::size_bench();
-    let rbso_size = RawBSONBench::size_bench();
+    let abo_size = AbomBench::size_bench();
+    // let rbso_size = RawBSONBench::size_bench();
 
     println!("\n======== ENCODE BENCHMARK ========");
     
@@ -69,7 +74,8 @@ fn main() {
     let pro_enc = ProstBench::encode_bench(base);
     let avro_enc = AvroBench::encode_bench(base);
     let flx_enc = FlexBench::encode_bench(base);
-    let rbso_enc = RawBSONBench::encode_bench(base);
+    let abo_enc = AbomBench::encode_bench(base);
+    // let rbso_enc = RawBSONBench::encode_bench(base);
 
     println!("\n======== DECODE BENCHMARK ========");
 
@@ -83,7 +89,8 @@ fn main() {
     let pro_dec = ProstBench::decode_bench(base);
     let avro_dec = AvroBench::decode_bench(base);
     let flx_dec = FlexBench::decode_bench(base);
-    let rbso_dec = RawBSONBench::decode_bench(base);
+    let abo_dec = AbomBench::decode_bench(base);
+    // let rbso_dec = RawBSONBench::decode_bench(base);
 
     println!("\n====== DECODE ONE BENCHMARK ======");
 
@@ -97,7 +104,8 @@ fn main() {
     let pro_dec1 = ProstBench::decode_one_bench(base);
     let avro_dec1 = AvroBench::decode_one_bench(base);
     let flx_dec1 = FlexBench::decode_one_bench(base);
-    let rbso_dec1 = RawBSONBench::decode_one_bench(base);
+    let abo_dec1 = AbomBench::decode_one_bench(base);
+    // let rbso_dec1 = RawBSONBench::decode_one_bench(base);
 
     println!("\n====== UPDATE ONE BENCHMARK ======");
 
@@ -111,7 +119,8 @@ fn main() {
     let pro_up = ProstBench::update_bench(base);
     let avro_up = AvroBench::update_bench(base);
     let flx_up = FlexBench::update_bench(base);
-    let rbso_up = RawBSONBench::update_bench(base);
+    let abo_up = AbomBench::update_bench(base);
+    // let rbso_up = RawBSONBench::update_bench(base);
 
     println!("\n\n");
 
@@ -131,5 +140,6 @@ fn main() {
     println!("//! | Bincode            | {} |     {} |   {} |   {} |          {} |         {} |", bn_enc, bn_dec, bn_dec1, bn_up, bn_size.0, bn_size.1);
     println!("//! | Protobuf           | {} |     {} |   {} |   {} |          {} |         {} |", pb_enc, pb_dec, pb_dec1, pb_up, pb_size.0, pb_size.1);
     println!("//! | Prost              | {} |     {} |   {} |   {} |          {} |         {} |", pro_enc, pro_dec, pro_dec1, pro_up, pro_size.0, pro_size.1);
+    println!("//! | Abomonation        | {} |     {} |   {} |   {} |          {} |         {} |", abo_enc, abo_dec, abo_dec1, abo_up, abo_size.0, abo_size.1);
 }
 

@@ -17,7 +17,7 @@ impl RawBSONBench {
 
     pub fn size_bench() -> (usize, usize) {
 
-        let (encoded, doc) = Self::encode_single();
+        let encoded = Self::encode_single();
 
         let mut e = ZlibEncoder::new(Vec::new(), Compression::default());
         e.write(&encoded[..]).unwrap();
@@ -31,7 +31,7 @@ impl RawBSONBench {
         let start = SystemTime::now();
 
         for _x in 0..LOOPS {
-            let (buffer, doc) = Self::encode_single();
+            let buffer = Self::encode_single();
             assert_eq!(buffer.len(), 414);
         }
 
@@ -41,7 +41,7 @@ impl RawBSONBench {
     }
 
     #[inline(always)]
-    fn encode_single() -> (Vec<u8>, Document) {
+    fn encode_single() -> Vec<u8> {
         let mut bson_object = doc!{
             "fruit": 2i32,
             "initialized": true,
@@ -66,12 +66,12 @@ impl RawBSONBench {
 
         let mut byte_array : Vec<u8> = vec![];
         bson_object.to_writer(&mut byte_array).unwrap();
-        return (byte_array, bson_object)
+        return byte_array
     }
 
 
     pub fn update_bench(base: u128) -> String  {
-        let (buffer, doc) = Self::encode_single();
+        let buffer = Self::encode_single();
 
         let start = SystemTime::now();
 
@@ -94,7 +94,7 @@ impl RawBSONBench {
     }
 
     pub fn decode_one_bench(base: u128) -> String  {
-        let (buffer, doc) = Self::encode_single();
+        let buffer = Self::encode_single();
 
         let start = SystemTime::now();
 
@@ -110,47 +110,12 @@ impl RawBSONBench {
     }
 
     pub fn decode_bench(base: u128) -> String  {
-        let (buffer, doc_ ) = Self::encode_single();
+        let buffer = Self::encode_single();
 
         let start = SystemTime::now();
 
         for _x in 0..LOOPS {
             let container = DocRef::new(&buffer[..]).unwrap();
-
-let new_doc = doc!{"list": ["allocations", "are", "slow"]};
-
-// iterating through list of items
-for (i, item ) in new_doc.get_array("list").unwrap().iter().enumerate() {
-    // item is &Bson type
-    match i {
-        0 => assert_eq!(item.as_str().unwrap(), "allocations"),
-        1 => assert_eq!(item.as_str().unwrap(), "are"),
-        2 => assert_eq!(item.as_str().unwrap(), "slow"),
-        _ => {}
-    }
-}
-
-let mut byte_array : Vec<u8> = vec![];
-new_doc.to_writer(&mut byte_array).unwrap();
-
-let ref_dec = DocRef::new(&byte_array[..]).unwrap();
-
-for (i, item ) in ref_dec.get_array("list").unwrap().iter().enumerate() {
-    // item is &ArrayRef?  This code doesn't work....
-}
-
-// instead you seem to have to do something like this...
-let list = ref_dec.get_array("list").unwrap().unwrap();
-
-for i in 0..3 { // how would I get the array length if I didn't know it?
-    match i {
-        0 => assert_eq!(list.get_str(i).unwrap().unwrap(), "allocations"),
-        1 => assert_eq!(list.get_str(i).unwrap().unwrap(), "are"),
-        2 => assert_eq!(list.get_str(i).unwrap().unwrap(), "slow"),
-        _ => {}
-    }
-}
-
 
             assert_eq!(container.get_str("location").unwrap().unwrap(), "http://arstechnica.com");
             assert_eq!(container.get_i32("fruit").unwrap().unwrap(), 2i32);

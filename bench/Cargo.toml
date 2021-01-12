@@ -7,6 +7,8 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+abomonation = "0.7.3"
+abomonation_derive = "0.5.0"
 avro-rs = "0.12.0"
 bincode = "1.3.1"
 bson = "1.1.0"
