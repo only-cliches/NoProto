@@ -23,6 +23,76 @@ Benchmarks can be ran with `cargo run --release`.
 
 # Benchmarks Histry
 
+## Jan 12, 20201
+### 0.9.1
+M1 Macbook Air with 8GB RAM (Native)
+```
+========= SIZE BENCHMARK =========
+NoProto:     size: 209b, zlib: 167b
+Flatbuffers: size: 264b, zlib: 181b
+Bincode:     size: 163b, zlib: 129b
+Protobuf:    size: 154b, zlib: 141b
+MessagePack: size: 296b, zlib: 187b
+JSON:        size: 439b, zlib: 184b
+BSON:        size: 414b, zlib: 216b
+Prost:       size: 154b, zlib: 142b
+Avro:        size: 702b, zlib: 337b
+Flexbuffers: size: 490b, zlib: 309b
+Raw BSON:    size: 414b, zlib: 216b
+
+======== ENCODE BENCHMARK ========
+NoProto:          1032 ops/ms 1.00
+Flatbuffers:      3195 ops/ms 3.09
+Bincode:          6135 ops/ms 5.94
+Protobuf:          981 ops/ms 0.95
+MessagePack:       156 ops/ms 0.15
+JSON:              618 ops/ms 0.60
+BSON:              131 ops/ms 0.13
+Prost:            1567 ops/ms 1.52
+Avro:              158 ops/ms 0.15
+Flexbuffers:       447 ops/ms 0.43
+Raw BSON:          130 ops/ms 0.13
+
+======== DECODE BENCHMARK ========
+NoProto:          1608 ops/ms 1.00
+Flatbuffers:     16393 ops/ms 10.15
+Bincode:          9804 ops/ms 6.07
+Protobuf:         1245 ops/ms 0.77
+MessagePack:       253 ops/ms 0.16
+JSON:              489 ops/ms 0.30
+BSON:              117 ops/ms 0.07
+Prost:            2105 ops/ms 1.31
+Avro:               58 ops/ms 0.04
+Flexbuffers:       943 ops/ms 0.59
+Raw BSON:          441 ops/ms 0.27
+
+====== DECODE ONE BENCHMARK ======
+NoProto:         47619 ops/ms 1.00
+Flatbuffers:    250000 ops/ms 4.58
+Bincode:         10204 ops/ms 0.22
+Protobuf:         1264 ops/ms 0.03
+MessagePack:       264 ops/ms 0.01
+JSON:              587 ops/ms 0.01
+BSON:              125 ops/ms 0.00
+Prost:            2304 ops/ms 0.05
+Avro:               57 ops/ms 0.00
+Flexbuffers:     25000 ops/ms 0.54
+Raw BSON:        18519 ops/ms 0.41
+
+====== UPDATE ONE BENCHMARK ======
+NoProto:         11628 ops/ms 1.00
+Flatbuffers:      2506 ops/ms 0.22
+Bincode:          4525 ops/ms 0.39
+Protobuf:          546 ops/ms 0.05
+MessagePack:       134 ops/ms 0.01
+JSON:              433 ops/ms 0.04
+BSON:               91 ops/ms 0.01
+Prost:            1064 ops/ms 0.09
+Avro:               40 ops/ms 0.00
+Flexbuffers:       294 ops/ms 0.03
+Raw BSON:           90 ops/ms 0.01
+```
+
 ## Jan 10, 2021
 ### v0.9.0
 M1 Macbook Air with 8GB RAM (Native)
