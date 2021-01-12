@@ -20,6 +20,17 @@ enum Fruit {
 pub struct AvroBench();
 
 impl AvroBench {
+    pub fn setup_bench() -> u128 {
+        let start = SystemTime::now();
+    
+        let factory = Self::get_schema();
+    
+        let time = SystemTime::now().duration_since(start).expect("Time went backwards");
+
+        println!("Avro:     setup: {:?}", time.as_micros() as f64 / 1000f64);
+        time.as_micros()
+    }
+
     fn get_schema() -> Schema {
         let foo_bar_container = r#"
         {

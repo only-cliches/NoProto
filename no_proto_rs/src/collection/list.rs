@@ -423,7 +423,7 @@ impl<'value> NP_Value<'value> for NP_List {
                             }
                         },
                         None => { 
-                            return Err(NP_Error::new("Failed to find column value!"))
+                            return Err(NP_Error::new("Failed to find field value!"))
                         }
                     }
                 }

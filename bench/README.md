@@ -21,6 +21,12 @@ A single object is encoded, then the library should decode, update one property 
 
 Benchmarks can be ran with `cargo run --release`.
 
+## Benchmark Rules
+It's challenging to provide a level playing field for every library and implementation. As much as possible, the following guidelines are followed with building the benchmarks:
+
+1. **Allocation is avoided wherever possible.**  With serialization and deserialization the cost of allocation is usually the most expensive part of encoding or decoding a message.  If a library provides an API that avoids allocation, that one is used where possible.
+2. **Dynamic Array types must be used**.  Some libraries can avoid allocation by using a fixed size array in the benchmark, isntead of a dynamic one.  Since almost every library/format supports lists that can change in size, this optimization is not allowed even if it's possible.  The spirit of the benchmark is to test how quickly a dynamically sized array of items can be encoded/decoded, not a fixed size array (even though a fixed size is used).
+
 # Benchmarks Histry
 
 ## Jan 12, 20201

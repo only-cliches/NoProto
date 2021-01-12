@@ -1,7 +1,7 @@
-//! Collections: NP_Table, NP_Tuple, NP_List & NP_Map
+//! Collections: NP_Struct, NP_Tuple, NP_List & NP_Map
 
-/// Table data type
-pub mod table;
+/// Struct data type
+pub mod struc;
 /// Map data type
 pub mod map;
 /// List data type

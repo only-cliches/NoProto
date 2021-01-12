@@ -336,11 +336,11 @@ fn schema_parsing_works() -> Result<(), NP_Error> {
 
 
 //     let schema = r#"{
-//         "type": "table",
+//         "type": "struct",
 //         "types": [
 //             ["username", {"type": "string"}],
 //             ["email"  , {"type": "string"}],
-//             ["address", {"type": "table", "types": [
+//             ["address", {"type": "struct", "types": [
 //                 ["street", {"type": "string"}],
 //                 ["city", {"type": "string"}],
 //                 ["more", {"type": "portal", "to": "address"}]

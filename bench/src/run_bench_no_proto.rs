@@ -5,12 +5,27 @@ use std::io::prelude::*;
 use flate2::Compression;
 use flate2::write::ZlibEncoder;
 use std::time::{SystemTime};
+
+static SCHEMA: [u8; 135] = [21u8, 4, 4, 108, 105, 115, 116, 0, 83, 23, 21, 4, 4, 110, 97, 109, 101, 0, 6, 2, 0, 0, 0, 0, 0, 6, 114, 97, 116, 105, 110, 103, 0, 2, 12, 0, 7, 112, 111, 115, 116, 102, 105, 120, 0, 6, 2, 0, 0, 1, 0, 0, 7, 115, 105, 98, 108, 105, 110, 103, 0, 30, 21, 3, 4, 116, 105, 109, 101, 0, 2, 10, 0, 5, 114, 97, 116, 105, 111, 0, 2, 12, 0, 4, 115, 105, 122, 101, 0, 2, 9, 0, 11, 105, 110, 105, 116, 105, 97, 108, 105, 122, 101, 100, 0, 2, 15, 0, 8, 108, 111, 99, 97, 116, 105, 111, 110, 0, 6, 2, 0, 0, 0, 0, 0, 5, 102, 114, 117, 105, 116, 0, 2, 8, 0];
+
 pub struct NoProtoBench();
 
 impl NoProtoBench {
 
+    pub fn setup_bench() -> u128 {
+        let start = SystemTime::now();
+    
+        let factory = Self::get_factory().unwrap();
+    
+        let time = SystemTime::now().duration_since(start).expect("Time went backwards");
+
+        println!("NoProto:     setup: {:?}", time.as_micros() as f64 / 1000f64);
+        time.as_micros()
+    }
+
     pub fn size_bench() -> (usize, usize) {
         let factory = NoProtoBench::get_factory().unwrap();
+
         let encoded = Self::encode_single(&factory).unwrap();
 
         let mut e = ZlibEncoder::new(Vec::new(), Compression::default());
@@ -61,27 +76,29 @@ impl NoProtoBench {
 
     #[inline(always)]
     fn get_factory<'get>() -> Result<NP_Factory<'get>, NP_Error> {
-        NP_Factory::new(r#"{
-            "type": "table",
-            "columns": [
-                ["list",   {"type": "list", "of": {
-                    "type": "table",
-                    "columns": [
-                        ["name", {"type": "string"}],
-                        ["rating", {"type": "float"}],
-                        ["postfix", {"type": "string", "size": 1}],
-                        ["sibling", {"type": "table", "columns": [
-                            ["time", {"type": "u32"}],
-                            ["ratio", {"type": "float"}],
-                            ["size", {"type": "u16"}]
-                        ]}]
-                    ]
-                }}],
-                ["initialized", {"type": "bool"}],
-                ["location", {"type": "string"}],
-                ["fruit", {"type": "u8"}]
-            ]
-        }"#)
+        
+        NP_Factory::new_compiled(&SCHEMA)
+        // NP_Factory::new(r#"{
+        //     "type": "table",
+        //     "columns": [
+        //         ["list",   {"type": "list", "of": {
+        //             "type": "table",
+        //             "columns": [
+        //                 ["name", {"type": "string"}],
+        //                 ["rating", {"type": "float"}],
+        //                 ["postfix", {"type": "string", "size": 1}],
+        //                 ["sibling", {"type": "table", "columns": [
+        //                     ["time", {"type": "u32"}],
+        //                     ["ratio", {"type": "float"}],
+        //                     ["size", {"type": "u16"}]
+        //                 ]}]
+        //             ]
+        //         }}],
+        //         ["initialized", {"type": "bool"}],
+        //         ["location", {"type": "string"}],
+        //         ["fruit", {"type": "u8"}]
+        //     ]
+        // }"#)
     }
 
     pub fn decode_one_bench() -> Result<(u128, String), NP_Error> {

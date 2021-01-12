@@ -32,8 +32,8 @@
 //!     // used by tuple types
 //!     values?: NP_Schema[]
 //! 
-//!     // used by table types
-//!     columns?: [string, NP_Schema][];
+//!     // used by struct types
+//!     fields?: [string, NP_Schema][];
 //! 
 //!     // used by option/enum types
 //!     choices?: string[];
@@ -59,25 +59,25 @@
 //! However, you will likely want to store more complicated objects, so that's easy to do as well.
 //! ```json
 //! {
-//!     "type": "table",
-//!     "columns": [
-//!         ["userID",   {"type": "string"}], // userID column contains a string
-//!         ["password", {"type": "string"}], // password column contains a string
-//!         ["email",    {"type": "string"}], // email column contains a string
-//!         ["age",      {"type": "u8"}]     // age column contains a Uint8 number (0 - 255)
+//!     "type": "struct",
+//!     "fields": [
+//!         ["userID",   {"type": "string"}], // userID field contains a string
+//!         ["password", {"type": "string"}], // password field contains a string
+//!         ["email",    {"type": "string"}], // email field contains a string
+//!         ["age",      {"type": "u8"}]     // age field contains a Uint8 number (0 - 255)
 //!     ]
 //! }
 //! ```
 //! 
 //! There are multiple collection types, and they can be nested.
 //! 
-//! For example, this is a list of tables.  Every item in the list is a table with two columns: id and title.  Both columns are a string type.
+//! For example, this is a list of tables.  Every item in the list is a struct with two fields: id and title.  Both fields are a string type.
 //! ```json
 //! {
 //!     "type": "list",
 //!     "of": {
-//!         "type": "table",
-//!         "columns": [
+//!         "type": "struct",
+//!         "fields": [
 //!             ["id",    {type: "string"}]
 //!             ["title", {type: "string"}]
 //!         ]
@@ -101,7 +101,7 @@
 //! 
 //! | Schema Type                            | Rust Type                                                                | Zero Copy Type   |Bytewise Sorting  | Bytes (Size)    | Limits / Notes                                                           |
 //! |----------------------------------------|--------------------------------------------------------------------------|------------------|------------------|-----------------|--------------------------------------------------------------------------|
-//! | [`table`](#table)                      | [`NP_Table`](../collection/table/struct.NP_Table.html)                   | -                |𐄂                 | 2 bytes - ~64Kb | Set of vtables with up to 255 named columns.                             |
+//! | [`struct`](#struct)                    | [`NP_Struct`](../collection/table/struct.NP_Struct.html)                 | -                |𐄂                 | 2 bytes - ~64Kb | Set of vtables with up to 255 named fields.                             |
 //! | [`list`](#list)                        | [`NP_List`](../collection/list/struct.NP_List.html)                      | -                |𐄂                 | 4 bytes - ~64Kb | Linked list with integer indexed values and  up to 255 items.            |
 //! | [`map`](#map)                          | [`NP_Map`](../collection/map/struct.NP_Map.html)                         | -                |𐄂                 | 2 bytes - ~64Kb | Linked list with `&str` keys, up to 255 items.                           |
 //! | [`tuple`](#tuple)                      | [`NP_Tuple`](../collection/tuple/struct.NP_Tuple.html)                   | -                |✓ *               | 2 bytes - ~64Kb | Static sized collection of specific values.  Up to 255 values.           |
@@ -163,30 +163,30 @@
 //! 
 //! Every schema type maps exactly to a native data type in your code.
 //! 
-//! ## table
-//! Tables represnt a fixed number of named columns, with each column having it's own data type.
+//! ## struct
+//! Structs represnt a fixed number of named fields, with each field having it's own data type.
 //! 
 //! - **Bytewise Sorting**: Unsupported
-//! - **Compaction**: Columns without values will be removed from the buffer durring compaction.  If a column never had a value set it's using *zero* space in the buffer.
-//! - **Schema Mutations**: The ordering of items in the `columns` property must always remain the same.  It's safe to add new columns to the bottom of the column list or rename columns, but never to remove columns.  Column types cannot be changed safely.  If you need to depreciate a column, set it's name to an empty string. 
+//! - **Compaction**: Fields without values will be removed from the buffer durring compaction.  If a field never had a value set it's using *zero* space in the buffer.
+//! - **Schema Mutations**: The ordering of items in the `fields` property must always remain the same.  It's safe to add new fields to the bottom of the field list or rename fields, but never to remove fields.  field types cannot be changed safely.  If you need to depreciate a field, set it's name to an empty string. 
 //! 
-//! Table schemas have a single required property called `columns`.  The `columns` property is an array of arrays that represent all possible columns in the table and their data types.  Any type can be used in columns, including other tables.  Tables cannot have more than 255 columns, and the colum names cannot be longer than 255 UTF8 bytes.
+//! Struct schemas have a single required property called `fields`.  The `fields` property is an array of arrays that represent all possible fields in the struct and their data types.  Any type can be used in fields, including other structs.  Structs cannot have more than 255 fields, and the field names cannot be longer than 255 UTF8 bytes.
 //! 
-//! Tables do not store the column names in the buffer, only the column index, so this is a very efficient way to store associated data.
+//! Structs do not store the field names in the buffer, only the field index, so this is a very efficient way to store associated data.
 //! 
-//! If you need flexible column names use a `map` type instead.
+//! If you need flexible field names use a `map` type instead.
 //! 
 //! ```json
 //! {
-//!     "type": "table",
-//!     "columns": [ // can have between 1 and 255 columns
-//!         ["column name",  {"type": "data type for this column"}],
+//!     "type": "struct",
+//!     "fields": [ // can have between 1 and 255 fields
+//!         ["field name",  {"type": "data type for this field"}],
 //!         ["name",         {"type": "string"}],
 //!         ["tags",         {"type": "list", "of": { // nested list of strings
 //!             "type": "string"
 //!         }}],
 //!         ["age",          {"type": "u8"}], // Uint8 number
-//!         ["meta",         {"type": "table", columns: [ // nested table
+//!         ["meta",         {"type": "struct", fields: [ // nested table
 //!             ["favorite_color",  {"type": "string"}],
 //!             ["favorite_sport",  {"type": "string"}]
 //!         ]}]
@@ -573,8 +573,8 @@
 //! 
 //! ```json
 //! {
-//!     "type": "table",
-//!     "columns": [
+//!     "type": "struct",
+//!     "fields": [
 //!         ["value", {"type": "u8"}],
 //!         ["next", {"type": "portal", "to": ""}]
 //!     ]
@@ -587,8 +587,8 @@
 //! 
 //! ```json
 //! {
-//!     "type": "table",
-//!     "columns": [
+//!     "type": "struct",
+//!     "fields": [
 //!         ["username", {"type": "string"}],
 //!         ["email", {"type": "portal", "to": "username"}]
 //!     ]
@@ -617,7 +617,7 @@ use crate::pointer::geo::NP_Geo;
 use crate::pointer::dec::NP_Dec;
 use crate::collection::tuple::NP_Tuple;
 use crate::pointer::bytes::NP_Bytes;
-use crate::collection::{list::NP_List, table::NP_Table, map::NP_Map};
+use crate::collection::{list::NP_List, struc::NP_Struct, map::NP_Map};
 use crate::pointer::{option::NP_Enum, NP_Value};
 use crate::error::NP_Error;
 use alloc::vec::Vec;
@@ -649,7 +649,7 @@ pub enum NP_TypeKeys {
     Ulid       = 18,
     Date       = 19,
     Enum       = 20,
-    Table      = 21,
+    Struct     = 21,
     Map        = 22, 
     List       = 23,
     Tuple      = 24,
@@ -689,7 +689,7 @@ impl NP_TypeKeys {
             NP_TypeKeys::Ulid       => {   NP_ULID::type_idx() }
             NP_TypeKeys::Date       => {   NP_Date::type_idx() }
             NP_TypeKeys::Enum       => {   NP_Enum::type_idx() }
-            NP_TypeKeys::Table      => {  NP_Table::type_idx() }
+            NP_TypeKeys::Struct      => {  NP_Struct::type_idx() }
             NP_TypeKeys::Map        => {    NP_Map::type_idx() }
             NP_TypeKeys::List       => {   NP_List::type_idx() }
             NP_TypeKeys::Tuple      => {  NP_Tuple::type_idx() },
@@ -743,7 +743,7 @@ pub enum NP_Parsed_Schema {
     Enum       { sortable: bool, i:NP_TypeKeys, default: Option<NP_Enum>, choices: Vec<NP_Enum> },
     Uuid       { sortable: bool, i:NP_TypeKeys },
     Ulid       { sortable: bool, i:NP_TypeKeys },
-    Table      { sortable: bool, i:NP_TypeKeys, columns: Vec<(u8, String, NP_Schema_Addr)> },
+    Struct     { sortable: bool, i:NP_TypeKeys, fields: Vec<(u8, String, NP_Schema_Addr)> },
     Map        { sortable: bool, i:NP_TypeKeys, value: NP_Schema_Addr}, 
     List       { sortable: bool, i:NP_TypeKeys, of: NP_Schema_Addr },
     Tuple      { sortable: bool, i:NP_TypeKeys, values: Vec<NP_Schema_Addr>},
@@ -777,7 +777,7 @@ impl NP_Parsed_Schema {
             NP_Parsed_Schema::Ulid       { i, .. }     => { i }
             NP_Parsed_Schema::Date       { i, .. }     => { i }
             NP_Parsed_Schema::Enum       { i, .. }     => { i }
-            NP_Parsed_Schema::Table      { i, .. }     => { i }
+            NP_Parsed_Schema::Struct      { i, .. }     => { i }
             NP_Parsed_Schema::Map        { i, .. }     => { i }
             NP_Parsed_Schema::List       { i, .. }     => { i }
             NP_Parsed_Schema::Tuple      { i, .. }     => { i }
@@ -811,7 +811,7 @@ impl NP_Parsed_Schema {
             NP_Parsed_Schema::Ulid       { i, .. }     => { i.into_type_idx() }
             NP_Parsed_Schema::Date       { i, .. }     => { i.into_type_idx() }
             NP_Parsed_Schema::Enum       { i, .. }     => { i.into_type_idx() }
-            NP_Parsed_Schema::Table      { i, .. }     => { i.into_type_idx() }
+            NP_Parsed_Schema::Struct      { i, .. }     => { i.into_type_idx() }
             NP_Parsed_Schema::Map        { i, .. }     => { i.into_type_idx() }
             NP_Parsed_Schema::List       { i, .. }     => { i.into_type_idx() }
             NP_Parsed_Schema::Tuple      { i, .. }     => { i.into_type_idx() }
@@ -843,7 +843,7 @@ impl NP_Parsed_Schema {
             NP_Parsed_Schema::Ulid       { sortable, .. }     => { *sortable }
             NP_Parsed_Schema::Date       { sortable, .. }     => { *sortable }
             NP_Parsed_Schema::Enum       { sortable, .. }     => { *sortable }
-            NP_Parsed_Schema::Table      { sortable, .. }     => { *sortable }
+            NP_Parsed_Schema::Struct      { sortable, .. }     => { *sortable }
             NP_Parsed_Schema::Map        { sortable, .. }     => { *sortable }
             NP_Parsed_Schema::List       { sortable, .. }     => { *sortable }
             NP_Parsed_Schema::Tuple      { sortable, .. }     => { *sortable }
@@ -896,7 +896,7 @@ impl NP_Schema {
             NP_Parsed_Schema::Ulid       { .. }      => {   NP_ULID::schema_to_json(parsed_schema, address) }
             NP_Parsed_Schema::Date       { .. }      => {   NP_Date::schema_to_json(parsed_schema, address) }
             NP_Parsed_Schema::Enum       { .. }      => {   NP_Enum::schema_to_json(parsed_schema, address) }
-            NP_Parsed_Schema::Table      { .. }      => {  NP_Table::schema_to_json(parsed_schema, address) }
+            NP_Parsed_Schema::Struct      { .. }      => {  NP_Struct::schema_to_json(parsed_schema, address) }
             NP_Parsed_Schema::Map        { .. }      => {    NP_Map::schema_to_json(parsed_schema, address) }
             NP_Parsed_Schema::List       { .. }      => {   NP_List::schema_to_json(parsed_schema, address) }
             NP_Parsed_Schema::Tuple      { .. }      => {  NP_Tuple::schema_to_json(parsed_schema, address) }
@@ -978,7 +978,7 @@ impl NP_Schema {
             NP_TypeKeys::Ulid       => {      NP_ULID::from_bytes_to_schema(cache, address, bytes) }
             NP_TypeKeys::Date       => {      NP_Date::from_bytes_to_schema(cache, address, bytes) }
             NP_TypeKeys::Enum       => {      NP_Enum::from_bytes_to_schema(cache, address, bytes) }
-            NP_TypeKeys::Table      => {     NP_Table::from_bytes_to_schema(cache, address, bytes) }
+            NP_TypeKeys::Struct      => {     NP_Struct::from_bytes_to_schema(cache, address, bytes) }
             NP_TypeKeys::Map        => {       NP_Map::from_bytes_to_schema(cache, address, bytes) }
             NP_TypeKeys::List       => {      NP_List::from_bytes_to_schema(cache, address, bytes) }
             NP_TypeKeys::Tuple      => {     NP_Tuple::from_bytes_to_schema(cache, address, bytes) }
@@ -1037,7 +1037,8 @@ impl NP_Schema {
                     "date"     => {   NP_Date::from_json_to_schema(schema, &json_schema) },
                     "enum"     => {   NP_Enum::from_json_to_schema(schema, &json_schema) },
                     "option"   => {   NP_Enum::from_json_to_schema(schema, &json_schema) },
-                    "table"    => {  NP_Table::from_json_to_schema(schema, &json_schema) },
+                    "struct"   => { NP_Struct::from_json_to_schema(schema, &json_schema) },
+                    "table"    => { NP_Struct::from_json_to_schema(schema, &json_schema) },
                     "list"     => {   NP_List::from_json_to_schema(schema, &json_schema) },
                     "map"      => {    NP_Map::from_json_to_schema(schema, &json_schema) },
                     "tuple"    => {  NP_Tuple::from_json_to_schema(schema, &json_schema) },

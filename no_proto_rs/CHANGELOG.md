@@ -1,3 +1,8 @@
+# 0.9.1
+- Changed "struct" type "struct" type.  Old code should still work with "struct".
+
+
+
 # 0.9.0 January 10, 2021
 - Started adding `union` type, isn't fully implmented yet.
 - Added docs and more tests for `portal` type.

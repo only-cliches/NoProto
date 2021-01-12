@@ -15,7 +15,7 @@ use crate::{pointer::{NP_Scalar}};
 use crate::{collection::map::NP_Map};
 use crate::{pointer::NP_Value};
 use crate::pointer::NP_Cursor;
-use crate::{schema::NP_Parsed_Schema, collection::table::NP_Table};
+use crate::{schema::NP_Parsed_Schema, collection::struc::NP_Struct};
 use alloc::vec::Vec;
 use crate::{collection::{list::NP_List}};
 use crate::error::NP_Error;
@@ -76,8 +76,8 @@ impl<'buffer> NP_Buffer_RO<'buffer> {
     /// use no_proto::NP_Size_Data;
     /// 
     /// let factory: NP_Factory = NP_Factory::new(r#"{
-    ///    "type": "table",
-    ///    "columns": [
+    ///    "type": "struct",
+    ///    "fields": [
     ///         ["age", {"type": "uint8"}],
     ///         ["name", {"type": "string"}]
     ///     ]
@@ -272,15 +272,15 @@ impl<'buffer> NP_Buffer_RO<'buffer> {
     /// # Ok::<(), NP_Error>(()) 
     /// ```
     /// 
-    /// ## Table Example
+    /// ## Struct Example
     /// ```
     /// use no_proto::error::NP_Error;
     /// use no_proto::NP_Factory;
     /// use no_proto::NP_Size_Data;
     /// 
     /// let factory: NP_Factory = NP_Factory::new(r#"{
-    ///    "type": "table",
-    ///    "columns": [
+    ///    "type": "struct",
+    ///    "fields": [
     ///         ["age", {"type": "uint8"}],
     ///         ["name", {"type": "string"}],
     ///         ["job", {"type": "string"}],
@@ -303,7 +303,7 @@ impl<'buffer> NP_Buffer_RO<'buffer> {
     ///         "name" => assert_eq!(item.get::<&str>().unwrap(), Some("Bill Kerman")),
     ///         "age" =>  assert_eq!(item.get::<u8>().unwrap(), Some(20)),
     ///         "job" => assert_eq!(item.get::<&str>().unwrap(), None),
-    ///         "tags" => { /* tags column is list, can't do anything with it here */ },
+    ///         "tags" => { /* tags field is list, can't do anything with it here */ },
     ///         _ => { panic!() }
     ///     };
     /// });
@@ -456,8 +456,8 @@ impl<'buffer> NP_Buffer_RO<'buffer> {
     /// use no_proto::NP_Size_Data;
     /// 
     /// let factory: NP_Factory = NP_Factory::new(r#"{
-    ///    "type": "table",
-    ///    "columns": [
+    ///    "type": "struct",
+    ///    "fields": [
     ///         ["age", {"type": "u8"}],
     ///         ["name", {"type": "string"}]
     ///     ]
@@ -556,8 +556,8 @@ impl<'buffer> NP_Buffer_RO<'buffer> {
 
                 Ok(Some(count))
             },
-            NP_Parsed_Schema::Table { columns, ..} => {
-                Ok(Some(columns.len()))
+            NP_Parsed_Schema::Struct { fields, ..} => {
+                Ok(Some(fields.len()))
             },
             NP_Parsed_Schema::Tuple { values, .. } => {
                 Ok(Some(values.len()))
@@ -851,8 +851,8 @@ pub struct NP_Item<'item> {
     pub index: usize,
     /// Key at this index
     pub key: &'item str,
-    /// Column at this index
-    pub col: &'item str,
+    /// Field at this index
+    pub field: &'item str,
     /// Cursor value
     cursor: Option<NP_Cursor>,
     memory: &'item NP_Memory_ReadOnly<'item>
@@ -905,8 +905,8 @@ pub enum NP_Iterator_Collection<'col> {
     Map(NP_Map<'col>),
     /// List
     List(NP_List),
-    /// Table
-    Table(NP_Table<'col>),
+    /// Struct
+    Struc(NP_Struct<'col>),
     /// Tuple
     Tuple(NP_Tuple<'col>)
 }
@@ -915,9 +915,9 @@ pub enum NP_Iterator_Collection<'col> {
 impl<'col> NP_Iterator_Collection<'col> {
     pub fn new<M: NP_Memory>(cursor: NP_Cursor, memory: &'col M) -> Result<Self, NP_Error> {
         match &memory.get_schema(cursor.schema_addr) {
-            NP_Parsed_Schema::Table { .. } => {
-                let table = NP_Table::new_iter(&cursor, memory);
-                Ok(NP_Iterator_Collection::Table(table))
+            NP_Parsed_Schema::Struct { .. } => {
+                let struc = NP_Struct::new_iter(&cursor, memory);
+                Ok(NP_Iterator_Collection::Struc(struc))
             },
             NP_Parsed_Schema::List { .. } => {
                 let list = NP_List::new_iter(&cursor, memory, false, 0);
@@ -963,28 +963,28 @@ impl<'it> Iterator for NP_Generic_Iterator<'it> {
             NP_Iterator_Collection::Map(x) => {
                 if let Some(next_item) = x.step_iter(self.memory) {
                     self.index += 1;
-                    Some(NP_Item { memory: self.memory, key: next_item.0, col: next_item.0, index: self.index - 1, cursor: Some(next_item.1) })
+                    Some(NP_Item { memory: self.memory, key: next_item.0, field: next_item.0, index: self.index - 1, cursor: Some(next_item.1) })
                 } else {
                     None
                 }
             },
             NP_Iterator_Collection::List(x) => {
                 if let Some(next_item) = x.step_iter(self.memory) {
-                    Some(NP_Item { memory: self.memory, key: "", col: "", index: next_item.0, cursor: next_item.1 })
+                    Some(NP_Item { memory: self.memory, key: "", field: "", index: next_item.0, cursor: next_item.1 })
                 } else {
                     None
                 }
             },
-            NP_Iterator_Collection::Table(x) => {
+            NP_Iterator_Collection::Struc(x) => {
                 if let Some(next_item) = x.step_iter(self.memory) {
-                    Some(NP_Item { memory: self.memory, key: next_item.1, col: next_item.1, index: next_item.0, cursor: next_item.2 })
+                    Some(NP_Item { memory: self.memory, key: next_item.1, field: next_item.1, index: next_item.0, cursor: next_item.2 })
                 } else {
                     None
                 }
             },
             NP_Iterator_Collection::Tuple(x) => {
                 if let Some(next_item) = x.step_iter(self.memory) {
-                    Some(NP_Item { memory: self.memory, key: "", col: "", index: next_item.0, cursor: next_item.1 })
+                    Some(NP_Item { memory: self.memory, key: "", field: "", index: next_item.0, cursor: next_item.1 })
                 } else {
                     None
                 }

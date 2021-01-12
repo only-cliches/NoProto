@@ -42,7 +42,7 @@
 //! // Some valid messages
 //! {"msg": "user_id", "type": "u32"}
 //! 
-//! {"msg": "address", "type": "table", "columns": [
+//! {"msg": "address", "type": "struct", "fields": [
 //!     ["street", {"type": "string"}],
 //!     ["city", {"type": "string"}]
 //! ]}

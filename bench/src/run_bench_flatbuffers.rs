@@ -21,6 +21,17 @@ pub struct FlatBufferBench();
 
 impl FlatBufferBench {
 
+    pub fn setup_bench() -> u128 {
+        let start = SystemTime::now();
+    
+        let factory = FlatBufferBuilder::new();
+    
+        let time = SystemTime::now().duration_since(start).expect("Time went backwards");
+
+        println!("Flatbuffers:  setup: {:?}", time.as_micros() as f64 / 1000f64);
+        time.as_micros()
+    }
+
     pub fn size_bench() -> (usize, usize) {
 
         let encoded = Self::encode_single(&mut FlatBufferBuilder::new());

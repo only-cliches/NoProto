@@ -38,7 +38,7 @@
 //! - Native byte-wise sorting
 //! - Supports recursive data types
 //! - Supports most common native data types
-//! - Supports collections (list, map, table & tuple)
+//! - Supports collections (list, map, struct & tuple)
 //! - Supports arbitrary nesting of collection types
 //! - Schemas support default values and non destructive updates
 //! - Transport agnostic [RPC Framework](https://docs.rs/no_proto/latest/no_proto/rpc/index.html).
@@ -134,14 +134,14 @@
 //! ```rust
 //! use no_proto::error::NP_Error;
 //! use no_proto::NP_Factory;
-//! use no_proto::collection::table::NP_Table;
+//! use no_proto::collection::table::NP_Struct;
 //! 
 //! // JSON is used to describe schema for the factory
 //! // Each factory represents a single schema
 //! // One factory can be used to serialize/deserialize any number of buffers
 //! let user_factory = NP_Factory::new(r#"{
-//!     "type": "table",
-//!     "columns": [
+//!     "type": "struct",
+//!     "fields": [
 //!         ["name",   {"type": "string"}],
 //!         ["age",    {"type": "u16", "default": 0}],
 //!         ["tags",   {"type": "list", "of": {
@@ -154,13 +154,13 @@
 //! // create a new empty buffer
 //! let mut user_buffer = user_factory.empty_buffer(None); // optional capacity
 //! 
-//! // set an internal value of the buffer, set the  "name" column
+//! // set an internal value of the buffer, set the  "name" field
 //! user_buffer.set(&["name"], "Billy Joel")?;
 //! 
 //! // assign nested internal values, sets the first tag element
 //! user_buffer.set(&["tags", "0"], "first tag")?;
 //! 
-//! // get an internal value of the buffer from the "name" column
+//! // get an internal value of the buffer from the "name" field
 //! let name = user_buffer.get::<&str>(&["name"])?;
 //! assert_eq!(name, Some("Billy Joel"));
 //! 
@@ -257,9 +257,9 @@
 //! If your data changes so often that schemas don't really make sense or the format you use must be self describing, JSON/BSON/MessagePack is a better choice.   Although I'd argue that if you *can* make schemas work you should.  Once you can use a format with schemas you save a ton of space in the resulting buffers and performance far better.
 //! 
 //! ## Limitations
-//! - Collections (Map, Tuple, List & Table) cannot have more than 255 columns/items.  You can nest to get more capacity, for example a list of lists can have up to 255 * 255 items.
+//! - Collections (Map, Tuple, List & Struct) cannot have more than 255 items.  You can nest to get more capacity, for example a list of lists can have up to 255 * 255 items.
 //! - You cannot nest more than 255 levels deep.
-//! - Table colum names cannot be longer than 255 UTF8 bytes.
+//! - Struct field names cannot be longer than 255 UTF8 bytes.
 //! - Enum/Option types are limited to 255 options and each option cannot be more than 255 UTF8 Bytes.
 //! - Map keys cannot be larger than 255 UTF8 bytes.
 //! - Buffers cannot be larger than 2^16 bytes or ~64KB.
@@ -339,8 +339,8 @@ use schema::NP_Parsed_Schema;
 /// assert_eq!(&np_path!("some.crazy.path"), &["some", "crazy", "path"]);
 /// 
 /// let user_factory = NP_Factory::new(r#"{
-///     "type": "table",
-///     "columns": [
+///     "type": "struct",
+///     "fields": [
 ///         ["name",   {"type": "string"}],
 ///         ["todos",  {"type": "list", "of": {"type": "string"}}]
 ///     ]
@@ -381,8 +381,8 @@ macro_rules! np_path {
 /// use no_proto::NP_Factory;
 /// 
 /// let user_factory = NP_Factory::new(r#"{
-///     "type": "table",
-///     "columns": [
+///     "type": "struct",
+///     "fields": [
 ///         ["name",   {"type": "string"}],
 ///         ["pass",   {"type": "string"}],
 ///         ["age",    {"type": "uint16"}],
@@ -395,7 +395,7 @@ macro_rules! np_path {
 /// // create new buffer
 /// let mut user_buffer = user_factory.empty_buffer(None); // optional capacity, optional address size
 ///    
-/// // set the "name" column of the table
+/// // set the "name" field of the struct
 /// user_buffer.set(&["name"], "Billy Joel")?;
 /// 
 /// // set the first todo
@@ -407,9 +407,9 @@ macro_rules! np_path {
 /// // open existing buffer for reading
 /// let user_buffer_2 = user_factory.open_buffer(user_vec);
 /// 
-/// // read column value
-/// let name_column = user_buffer_2.get::<&str>(&["name"])?;
-/// assert_eq!(name_column, Some("Billy Joel"));
+/// // read field value
+/// let name_field = user_buffer_2.get::<&str>(&["name"])?;
+/// assert_eq!(name_field, Some("Billy Joel"));
 /// 
 /// 
 /// // read first todo

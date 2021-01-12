@@ -33,7 +33,7 @@ use crate::NP_Parsed_Schema;
 use crate::{json_flex::NP_JSON};
 use crate::memory::{NP_Memory};
 use crate::NP_Error;
-use crate::{schema::{NP_TypeKeys}, collection::{map::NP_Map, table::NP_Table, list::NP_List, tuple::NP_Tuple}};
+use crate::{schema::{NP_TypeKeys}, collection::{map::NP_Map, struc::NP_Struct, list::NP_List, tuple::NP_Tuple}};
 
 use alloc::{string::String, vec::Vec, borrow::ToOwned};
 use bytes::NP_Bytes;
@@ -228,7 +228,7 @@ impl<'cursor> NP_Cursor {
                 NP_Parsed_Schema::Map { .. } => {
                     unsafe { &mut *(ptr.add(self.buff_addr) as *mut NP_Pointer_Map_Item) }
                 },
-                _ => { // parent is scalar, table or tuple
+                _ => { // parent is scalar, struct or tuple
                     unsafe { &mut *(ptr.add(self.buff_addr) as *mut NP_Pointer_Scalar) }
                 }
             }                   
@@ -259,8 +259,8 @@ impl<'cursor> NP_Cursor {
     
             // now select into collections
             match memory.get_schema(loop_cursor.schema_addr) {
-                NP_Parsed_Schema::Table { columns, .. } => {
-                    if let Some(next) = NP_Table::select(loop_cursor, columns, path[path_index], make_path, schema_query, memory)? {
+                NP_Parsed_Schema::Struct { fields, .. } => {
+                    if let Some(next) = NP_Struct::select(loop_cursor, fields, path[path_index], make_path, schema_query, memory)? {
                         loop_cursor = next;
                         path_index += 1;
                     } else {
@@ -348,9 +348,9 @@ impl<'cursor> NP_Cursor {
             NP_Parsed_Schema::Enum       { .. } => {    NP_Enum::set_value(cursor, memory, opt_err(  NP_Enum::np_max_value(&cursor, memory))?)?; } ,
             NP_Parsed_Schema::Uuid       { .. } => {    NP_UUID::set_value(cursor, memory, opt_err(  NP_UUID::np_max_value(&cursor, memory))?)?; } ,
             NP_Parsed_Schema::Ulid       { .. } => {    NP_ULID::set_value(cursor, memory, opt_err(  NP_ULID::np_max_value(&cursor, memory))?)?; } ,
-            NP_Parsed_Schema::Table      { .. } => {
-                let mut table = NP_Table::new_iter(&cursor, memory);
-                while let Some((_index, _key, item)) = table.step_iter(memory) {
+            NP_Parsed_Schema::Struct      { .. } => {
+                let mut struc = NP_Struct::new_iter(&cursor, memory);
+                while let Some((_index, _key, item)) = struc.step_iter(memory) {
                     if let Some(item_cursor) = item {
                         NP_Cursor::set_max(item_cursor.clone(), memory)?;
                     }
@@ -407,9 +407,9 @@ impl<'cursor> NP_Cursor {
             NP_Parsed_Schema::Enum       { .. } => {    NP_Enum::set_value(cursor, memory, opt_err(  NP_Enum::np_min_value(&cursor, memory))?)?; } ,
             NP_Parsed_Schema::Uuid       { .. } => {    NP_UUID::set_value(cursor, memory, opt_err(  NP_UUID::np_min_value(&cursor, memory))?)?; } ,
             NP_Parsed_Schema::Ulid       { .. } => {    NP_ULID::set_value(cursor, memory, opt_err(  NP_ULID::np_min_value(&cursor, memory))?)?; } ,
-            NP_Parsed_Schema::Table      { .. } => {
-                let mut table = NP_Table::new_iter(&cursor, memory);
-                while let Some((_index, _key, item)) = table.step_iter(memory) {
+            NP_Parsed_Schema::Struct      { .. } => {
+                let mut struc = NP_Struct::new_iter(&cursor, memory);
+                while let Some((_index, _key, item)) = struc.step_iter(memory) {
                     if let Some(item_cursor) = item {
                         NP_Cursor::set_min(item_cursor.clone(), memory)?;
                     }
@@ -472,7 +472,7 @@ impl<'cursor> NP_Cursor {
             NP_TypeKeys::Ulid           => {   NP_ULID::to_json(depth, cursor, memory) },
             NP_TypeKeys::Date           => {   NP_Date::to_json(depth, cursor, memory) },
             NP_TypeKeys::Enum           => {   NP_Enum::to_json(depth, cursor, memory) },
-            NP_TypeKeys::Table          => {  NP_Table::to_json(depth, cursor, memory) },
+            NP_TypeKeys::Struct          => {  NP_Struct::to_json(depth, cursor, memory) },
             NP_TypeKeys::Map            => {    NP_Map::to_json(depth, cursor, memory) },
             NP_TypeKeys::List           => {   NP_List::to_json(depth, cursor, memory) },
             NP_TypeKeys::Tuple          => {  NP_Tuple::to_json(depth, cursor, memory) },
@@ -509,7 +509,7 @@ impl<'cursor> NP_Cursor {
             NP_TypeKeys::Ulid          => {   NP_ULID::do_compact(depth, from_cursor, from_memory, to_cursor, to_memory) }
             NP_TypeKeys::Date          => {   NP_Date::do_compact(depth, from_cursor, from_memory, to_cursor, to_memory) }
             NP_TypeKeys::Enum          => {   NP_Enum::do_compact(depth, from_cursor, from_memory, to_cursor, to_memory) }
-            NP_TypeKeys::Table         => {  NP_Table::do_compact(depth, from_cursor, from_memory, to_cursor, to_memory) }
+            NP_TypeKeys::Struct         => {  NP_Struct::do_compact(depth, from_cursor, from_memory, to_cursor, to_memory) }
             NP_TypeKeys::Map           => {    NP_Map::do_compact(depth, from_cursor, from_memory, to_cursor, to_memory) }
             NP_TypeKeys::List          => {   NP_List::do_compact(depth, from_cursor, from_memory, to_cursor, to_memory) }
             NP_TypeKeys::Tuple         => {  NP_Tuple::do_compact(depth, from_cursor, from_memory, to_cursor, to_memory) }
@@ -529,7 +529,7 @@ impl<'cursor> NP_Cursor {
         match schema.get_type_key() {
             NP_TypeKeys::None        => { return Err(NP_Error::new("unreachable")); },
             NP_TypeKeys::Any         => { return Err(NP_Error::new("unreachable")); },
-            NP_TypeKeys::Table       => { return Err(NP_Error::new("unreachable")); },
+            NP_TypeKeys::Struct       => { return Err(NP_Error::new("unreachable")); },
             NP_TypeKeys::Map         => { return Err(NP_Error::new("unreachable")); },
             NP_TypeKeys::List        => { return Err(NP_Error::new("unreachable")); },
             NP_TypeKeys::Tuple       => { return Err(NP_Error::new("unreachable")); },
@@ -592,7 +592,7 @@ impl<'cursor> NP_Cursor {
             NP_TypeKeys::Ulid           => {   NP_ULID::set_from_json(depth, apply_null, cursor, memory, json) },
             NP_TypeKeys::Date           => {   NP_Date::set_from_json(depth, apply_null, cursor, memory, json) },
             NP_TypeKeys::Enum           => {   NP_Enum::set_from_json(depth, apply_null, cursor, memory, json) },
-            NP_TypeKeys::Table          => {  NP_Table::set_from_json(depth, apply_null, cursor, memory, json) },
+            NP_TypeKeys::Struct          => {  NP_Struct::set_from_json(depth, apply_null, cursor, memory, json) },
             NP_TypeKeys::Map            => {    NP_Map::set_from_json(depth, apply_null, cursor, memory, json) },
             NP_TypeKeys::List           => {   NP_List::set_from_json(depth, apply_null, cursor, memory, json) },
             NP_TypeKeys::Tuple          => {  NP_Tuple::set_from_json(depth, apply_null, cursor, memory, json) },
@@ -618,7 +618,7 @@ impl<'cursor> NP_Cursor {
         
         if is_sortable {
             match memory.get_schema(cursor.schema_addr) {
-                NP_Parsed_Schema::Table { .. } => { return Ok(false) },
+                NP_Parsed_Schema::Struct { .. } => { return Ok(false) },
                 NP_Parsed_Schema::Tuple { .. } => { return Ok(false) },
                 NP_Parsed_Schema::List  { .. } => { return Ok(false) },
                 NP_Parsed_Schema::Map   { .. } => { return Ok(false) },
@@ -673,7 +673,7 @@ impl<'cursor> NP_Cursor {
             NP_TypeKeys::Ulid         => {   NP_ULID::get_size(depth, cursor, memory) },
             NP_TypeKeys::Date         => {   NP_Date::get_size(depth, cursor, memory) },
             NP_TypeKeys::Enum         => {   NP_Enum::get_size(depth, cursor, memory) },
-            NP_TypeKeys::Table        => {  NP_Table::get_size(depth, cursor, memory) },
+            NP_TypeKeys::Struct        => {  NP_Struct::get_size(depth, cursor, memory) },
             NP_TypeKeys::Map          => {    NP_Map::get_size(depth, cursor, memory) },
             NP_TypeKeys::List         => {   NP_List::get_size(depth, cursor, memory) },
             NP_TypeKeys::Tuple        => {  NP_Tuple::get_size(depth, cursor, memory) },

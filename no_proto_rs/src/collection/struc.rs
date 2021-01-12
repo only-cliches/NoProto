@@ -14,7 +14,7 @@ use core::{result::Result};
 /// 
 #[doc(hidden)]
 #[derive(Debug)]
-pub struct NP_Table<'table> {
+pub struct NP_Struct<'table> {
     index: usize,
     v_table: Option<&'table mut NP_Vtable>,
     v_table_addr: usize,
@@ -23,16 +23,16 @@ pub struct NP_Table<'table> {
 }
 
 #[allow(missing_docs)]
-impl<'table> NP_Table<'table> {
+impl<'table> NP_Struct<'table> {
 
     #[inline(always)]
-    pub fn select<M: NP_Memory>(mut table_cursor: NP_Cursor, columns: &Vec<(u8, String, usize)>,  key: &str, make_path: bool, schema_query: bool, memory: &M) -> Result<Option<NP_Cursor>, NP_Error> {
+    pub fn select<M: NP_Memory>(mut table_cursor: NP_Cursor, fields: &Vec<(u8, String, usize)>,  key: &str, make_path: bool, schema_query: bool, memory: &M) -> Result<Option<NP_Cursor>, NP_Error> {
        
-        match columns.iter().position(|val| { val.1 == key }) {
+        match fields.iter().position(|val| { val.1 == key }) {
             Some(x) => {
 
                 if schema_query {
-                    return Ok(Some(NP_Cursor::new(0, columns[x].2, table_cursor.schema_addr)));
+                    return Ok(Some(NP_Cursor::new(0, fields[x].2, table_cursor.schema_addr)));
                 }
 
                 let v_table =  x / VTABLE_SIZE; // which vtable
@@ -72,7 +72,7 @@ impl<'table> NP_Table<'table> {
 
                 let item_address = vtable_address + (v_table_idx * 2);
 
-                Ok(Some(NP_Cursor::new(item_address, columns[x].2, table_cursor.schema_addr)))
+                Ok(Some(NP_Cursor::new(item_address, fields[x].2, table_cursor.schema_addr)))
             },
             None => Ok(None)
         }
@@ -132,9 +132,9 @@ impl<'table> NP_Table<'table> {
     pub fn step_iter<M: NP_Memory>(&mut self, memory: &'table M) -> Option<(usize, &'table str, Option<NP_Cursor>)> {
 
         match &memory.get_schema(self.table.schema_addr) {
-            NP_Parsed_Schema::Table { columns, .. } => {
+            NP_Parsed_Schema::Struct { fields, .. } => {
 
-                if columns.len() <= self.index {
+                if fields.len() <= self.index {
                     return None;
                 }
 
@@ -163,9 +163,9 @@ impl<'table> NP_Table<'table> {
 
                 if self.v_table_addr != 0 {
                     let item_address = self.v_table_addr + (v_table_idx * 2);
-                    Some((this_index, columns[this_index].1.as_str(), Some(NP_Cursor::new(item_address, columns[this_index].2, self.table.schema_addr))))
+                    Some((this_index, fields[this_index].1.as_str(), Some(NP_Cursor::new(item_address, fields[this_index].2, self.table.schema_addr))))
                 } else {
-                    Some((this_index, columns[this_index].1.as_str(), None))
+                    Some((this_index, fields[this_index].1.as_str(), None))
                 }
             },
             _ => None
@@ -173,7 +173,7 @@ impl<'table> NP_Table<'table> {
     }
 }
 
-impl<'value> NP_Value<'value> for NP_Table<'value> {
+impl<'value> NP_Value<'value> for NP_Struct<'value> {
 
     fn to_json<M: NP_Memory>(depth:usize, cursor: &NP_Cursor, memory: &'value M) -> NP_JSON {
         let c_value = || { cursor.get_value(memory) };
@@ -182,9 +182,9 @@ impl<'value> NP_Value<'value> for NP_Table<'value> {
 
         let mut json_map = JSMAP::new();
 
-        let mut table = NP_Table::new_iter(&cursor, memory);
+        let mut struc = NP_Struct::new_iter(&cursor, memory);
 
-        while let Some((_index, key, item)) = table.step_iter(memory) {
+        while let Some((_index, key, item)) = struc.step_iter(memory) {
             if let Some(real) = item {
                 json_map.insert(String::from(key), NP_Cursor::json_encode(depth + 1, &real, memory));  
             } else {
@@ -195,19 +195,19 @@ impl<'value> NP_Value<'value> for NP_Table<'value> {
         NP_JSON::Dictionary(json_map)
     }
 
-    fn type_idx() -> (&'value str, NP_TypeKeys) { ("table", NP_TypeKeys::Table) }
-    fn self_type_idx(&self) -> (&'value str, NP_TypeKeys) { ("table", NP_TypeKeys::Table) }
+    fn type_idx() -> (&'value str, NP_TypeKeys) { ("struct", NP_TypeKeys::Struct) }
+    fn self_type_idx(&self) -> (&'value str, NP_TypeKeys) { ("struct", NP_TypeKeys::Struct) }
 
     fn set_from_json<'set, M: NP_Memory>(depth: usize, apply_null: bool, cursor: NP_Cursor, memory: &'set M, value: &Box<NP_JSON>) -> Result<(), NP_Error> where Self: 'set + Sized {
         
         match memory.get_schema(cursor.schema_addr) {
-            NP_Parsed_Schema::Table { columns, .. } => {
-                for col in columns.iter() {
+            NP_Parsed_Schema::Struct { fields, .. } => {
+                for col in fields.iter() {
                     let json_col = &value[col.1.clone()];
                     match json_col {
                         NP_JSON::Null => {
                             if apply_null {
-                                match NP_Table::select(cursor, columns, &col.1, false, false, memory)? {
+                                match NP_Struct::select(cursor, fields, &col.1, false, false, memory)? {
                                     Some(x) => {
                                         NP_Cursor::delete(x, memory)?;
                                     },
@@ -216,12 +216,12 @@ impl<'value> NP_Value<'value> for NP_Table<'value> {
                             }
                         },
                         _ => {
-                            match NP_Table::select(cursor, columns, &col.1, true, false, memory)? {
+                            match NP_Struct::select(cursor, fields, &col.1, true, false, memory)? {
                                 Some(x) => {
                                     NP_Cursor::set_from_json(depth + 1, apply_null, x, memory, &Box::new(json_col.clone()))?;
                                 },
                                 None => { 
-                                    return Err(NP_Error::new("Failed to find column value!"))
+                                    return Err(NP_Error::new("Failed to find field value!"))
                                 }
                             }
                         }
@@ -236,17 +236,17 @@ impl<'value> NP_Value<'value> for NP_Table<'value> {
     }
 
     fn from_bytes_to_schema(mut schema: Vec<NP_Parsed_Schema>, address: usize, bytes: &[u8]) -> (bool, Vec<NP_Parsed_Schema>) {
-        let column_len = bytes[address + 1];
+        let fields_count = bytes[address + 1];
 
-        let mut parsed_columns: Vec<(u8, String,  NP_Schema_Addr)> = Vec::new();
+        let mut parsed_fields: Vec<(u8, String,  NP_Schema_Addr)> = Vec::new();
 
         let table_schema_addr = schema.len();
 
-        schema.push(NP_Parsed_Schema::Table {
-            i: NP_TypeKeys::Table,
+        schema.push(NP_Parsed_Schema::Struct {
+            i: NP_TypeKeys::Struct,
             sortable: false,
-            // columns_mapped: Vec::new(),
-            columns: Vec::new()
+            // fields_mapped: Vec::new(),
+            fields: Vec::new()
         });
 
         let mut schema_parsed = schema;
@@ -255,7 +255,7 @@ impl<'value> NP_Value<'value> for NP_Table<'value> {
 
         let mut hash_map = Vec::new();
 
-        for x in 0..column_len as usize {
+        for x in 0..fields_count as usize {
             let col_name_len = bytes[offset] as usize;
             let col_name_bytes = &bytes[(offset + 1)..(offset + 1 + col_name_len)];
             let col_name = unsafe { core::str::from_utf8_unchecked(col_name_bytes) };
@@ -267,10 +267,10 @@ impl<'value> NP_Value<'value> for NP_Table<'value> {
                 bytes[offset + 1]
             ]) as usize;
 
-            let column_addr = schema_parsed.len();
+            let field_addr = schema_parsed.len();
             let (_, schema) = NP_Schema::from_bytes(schema_parsed, offset + 2, bytes);
             schema_parsed = schema;
-            parsed_columns.push((x as u8, col_name.to_string(), column_addr));
+            parsed_fields.push((x as u8, col_name.to_string(), field_addr));
             // hash_map.insert(col_name, x).unwrap_or_default();
             hash_map.push(col_name.to_string());
             offset += schema_size + 2;
@@ -278,11 +278,11 @@ impl<'value> NP_Value<'value> for NP_Table<'value> {
 
         // hash_map.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
 
-        schema_parsed[table_schema_addr] = NP_Parsed_Schema::Table {
-            i: NP_TypeKeys::Table,
-            // columns_mapped: hash_map,
+        schema_parsed[table_schema_addr] = NP_Parsed_Schema::Struct {
+            i: NP_TypeKeys::Struct,
+            // fields_mapped: hash_map,
             sortable: false,
-            columns: parsed_columns
+            fields: parsed_fields
         };
 
         (false, schema_parsed)
@@ -292,19 +292,19 @@ impl<'value> NP_Value<'value> for NP_Table<'value> {
         let mut schema_json = JSMAP::new();
         schema_json.insert("type".to_owned(), NP_JSON::String(Self::type_idx().0.to_string()));
 
-        let columns: Vec<NP_JSON> = match &schema[address] {
-            NP_Parsed_Schema::Table { columns, .. } => {
-                columns.into_iter().map(|column| {
+        let fields: Vec<NP_JSON> = match &schema[address] {
+            NP_Parsed_Schema::Struct { fields, .. } => {
+                fields.into_iter().map(|field| {
                     let mut cols: Vec<NP_JSON> = Vec::new();
-                    cols.push(NP_JSON::String(column.1.to_string()));
-                    cols.push(NP_Schema::_type_to_json(&schema, column.2).unwrap_or(NP_JSON::Null));
+                    cols.push(NP_JSON::String(field.1.to_string()));
+                    cols.push(NP_Schema::_type_to_json(&schema, field.2).unwrap_or(NP_JSON::Null));
                     NP_JSON::Array(cols)
                 }).collect()
             },
             _ => Vec::new()
         };
 
-        schema_json.insert("columns".to_owned(), NP_JSON::Array(columns));
+        schema_json.insert("fields".to_owned(), NP_JSON::Array(fields));
 
         Ok(NP_JSON::Dictionary(schema_json))
     }
@@ -328,9 +328,9 @@ impl<'value> NP_Value<'value> for NP_Table<'value> {
             loop_max -= 1;
         }
 
-        let mut table = Self::new_iter(&cursor, memory);
+        let mut struc = Self::new_iter(&cursor, memory);
 
-        while let Some((_index, _key, item)) = table.step_iter(memory) {
+        while let Some((_index, _key, item)) = struc.step_iter(memory) {
             if let Some(real) = item {
                 let add_size = NP_Cursor::calc_size(depth + 1, &real, memory)?;
                 if add_size > 2 {
@@ -360,15 +360,15 @@ impl<'value> NP_Value<'value> for NP_Table<'value> {
 
         let c: Vec<(u8, String, usize)>;
         let col_schemas = match &from_memory.get_schema(from_cursor.schema_addr) {
-            NP_Parsed_Schema::Table { columns, .. } => {
-                columns
+            NP_Parsed_Schema::Struct { fields, .. } => {
+                fields
             },
             _ => { c = Vec::new(); &c }
         };
 
-        let mut table = Self::new_iter(&from_cursor, from_memory);
+        let mut struc = Self::new_iter(&from_cursor, from_memory);
 
-        while let Some((idx, _key, item)) = table.step_iter(from_memory) {
+        while let Some((idx, _key, item)) = struc.step_iter(from_memory) {
            if let Some(real) = item {
 
                 let v_table =  idx / VTABLE_SIZE; // which vtable
@@ -391,72 +391,75 @@ impl<'value> NP_Value<'value> for NP_Table<'value> {
     fn from_json_to_schema(mut schema: Vec<NP_Parsed_Schema>, json_schema: &Box<NP_JSON>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {
 
         let mut schema_bytes: Vec<u8> = Vec::new();
-        schema_bytes.push(NP_TypeKeys::Table as u8);
+        schema_bytes.push(NP_TypeKeys::Struct as u8);
 
         let schema_table_addr = schema.len();
-        schema.push(NP_Parsed_Schema::Table {
-            i: NP_TypeKeys::Table,
+        schema.push(NP_Parsed_Schema::Struct {
+            i: NP_TypeKeys::Struct,
             sortable: false,
-            columns: Vec::new(),
-           //  columns_mapped: Vec::new()
+            fields: Vec::new(),
+           //  fields_mapped: Vec::new()
         });
 
-        let mut columns_mapped = Vec::new();
+        // let mut fields_mapped = Vec::new();
 
-        let mut columns: Vec<(u8, String, NP_Schema_Addr)> = Vec::new();
+        let mut fields: Vec<(u8, String, NP_Schema_Addr)> = Vec::new();
 
-        let mut column_data: Vec<(String, Vec<u8>)> = Vec::new();
+        let mut field_data: Vec<(String, Vec<u8>)> = Vec::new();
 
         let mut schema_parsed: Vec<NP_Parsed_Schema> = schema;
 
-        match &json_schema["columns"] {
-            NP_JSON::Array(cols) => {
-                let mut x: u8 = 0;
-                for col in cols {
-                    let column_name = match &col[0] {
-                        NP_JSON::String(x) => x.clone(),
-                        _ => "".to_owned()
-                    };
-                    if column_name.len() > 255 {
-                        return Err(NP_Error::new("Table column names cannot be longer than 255 characters!"))
-                    }
-
-                    let column_schema_addr = schema_parsed.len();
-                    columns.push((x, column_name.clone(), column_schema_addr));
-                    let (_is_sortable, column_type, schema_p) = NP_Schema::from_json(schema_parsed, &Box::new(col[1].clone()))?;
-                    schema_parsed = schema_p;
-                    // columns_mapped.insert(column_name.as_str(), x as usize)?;
-                    columns_mapped.push(column_name.to_string());
-                    column_data.push((column_name, column_type));
-                    x += 1;
-                }
-            },
-            _ => { 
-                return Err(NP_Error::new("Tables require a 'columns' property that is an array of schemas!"))
-            }
-        }
-
-        // columns_mapped.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
-
-        schema_parsed[schema_table_addr] = NP_Parsed_Schema::Table {
-            i: NP_TypeKeys::Table,
-            sortable: false,
-            columns: columns,
-            // columns_mapped
+        let json_fields = if let NP_JSON::Array(fields) = &json_schema["fields"] {
+            fields
+        } else if let NP_JSON::Array(fields) = &json_schema["columns"] {
+            fields
+        } else {
+            return Err(NP_Error::new("Structs require a 'fields' property that is an array of schemas!"))
         };
 
-        if column_data.len() > 255 {
-            return Err(NP_Error::new("Tables cannot have more than 255 columns!"))
+ 
+        let mut x: u8 = 0;
+        for col in json_fields {
+            let field_name = match &col[0] {
+                NP_JSON::String(x) => x.clone(),
+                _ => "".to_owned()
+            };
+            if field_name.len() > 255 {
+                return Err(NP_Error::new("Struct field names cannot be longer than 255 characters!"))
+            }
+
+            let field_schema_addr = schema_parsed.len();
+            fields.push((x, field_name.clone(), field_schema_addr));
+            let (_is_sortable, field_type, schema_p) = NP_Schema::from_json(schema_parsed, &Box::new(col[1].clone()))?;
+            schema_parsed = schema_p;
+            // fields_mapped.insert(field_name.as_str(), x as usize)?;
+            // fields_mapped.push(field_name.to_string());
+            field_data.push((field_name, field_type));
+            x += 1;
         }
 
-        if column_data.len() == 0 {
-            return Err(NP_Error::new("Tables must have at least one column!"))
+
+        // fields_mapped.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+
+        schema_parsed[schema_table_addr] = NP_Parsed_Schema::Struct {
+            i: NP_TypeKeys::Struct,
+            sortable: false,
+            fields: fields,
+            // fields_mapped
+        };
+
+        if field_data.len() > 255 {
+            return Err(NP_Error::new("Structs cannot have more than 255 fields!"))
         }
 
-        // number of columns
-        schema_bytes.push(column_data.len() as u8);
+        if field_data.len() == 0 {
+            return Err(NP_Error::new("Structs must have at least one field!"))
+        }
 
-        for col in column_data {
+        // number of fields
+        schema_bytes.push(field_data.len() as u8);
+
+        for col in field_data {
             // colum name
             let bytes = col.0.as_bytes().to_vec();
             schema_bytes.push(bytes.len() as u8);
@@ -466,7 +469,7 @@ impl<'value> NP_Value<'value> for NP_Table<'value> {
                 return Err(NP_Error::new("Schema overflow error!"))
             }
             
-            // column type
+            // field type
             schema_bytes.extend((col.1.len() as u16).to_be_bytes().to_vec());
             schema_bytes.extend(col.1);
         }
@@ -484,7 +487,7 @@ impl<'value> NP_Value<'value> for NP_Table<'value> {
 
 #[test]
 fn schema_parsing_works() -> Result<(), NP_Error> {
-    let schema = r#"{"type":"table","columns":[["age",{"type":"uint8"}],["tags",{"type":"list","of":{"type":"string"}}],["name",{"type":"string","size":10}]]}"#;
+    let schema = r#"{"type":"struct","fields":[["age",{"type":"uint8"}],["tags",{"type":"list","of":{"type":"string"}}],["name",{"type":"string","size":10}]]}"#;
     let factory = crate::NP_Factory::new(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
     let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
@@ -494,7 +497,7 @@ fn schema_parsing_works() -> Result<(), NP_Error> {
 
 #[test]
 fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
-    let schema = r#"{"type":"table","columns":[["age",{"type":"uint8"}],["name",{"type":"string"}]]}"#;
+    let schema = r#"{"type":"struct","fields":[["age",{"type":"uint8"}],["name",{"type":"string"}]]}"#;
     let factory = crate::NP_Factory::new(schema)?;
 
     // compaction removes cleared values
@@ -532,8 +535,8 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
 #[test]
 fn test_vtables() -> Result<(), NP_Error> {
     let factory = crate::NP_Factory::new(r#"{
-        "type": "table",
-        "columns": [
+        "type": "struct",
+        "fields": [
             ["age",    {"type": "u8"}],
             ["name",   {"type": "string"}],
             ["color",  {"type": "string"}],

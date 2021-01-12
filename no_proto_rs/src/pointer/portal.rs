@@ -163,8 +163,8 @@ fn schema_parsing_works() -> Result<(), NP_Error> {
 #[test]
 fn infinite_recursion() -> Result<(), NP_Error> {
     let schema = r#"{
-        "type": "table",
-        "columns": [
+        "type": "struct",
+        "fields": [
             ["street", {"type": "string"}],
             ["city"  , {"type": "string"}],
             ["nested", {"type": "portal", "to": "nested"}]
@@ -197,8 +197,8 @@ fn infinite_recursion() -> Result<(), NP_Error> {
 #[test]
 fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = r#"{
-        "type": "table",
-        "columns": [
+        "type": "struct",
+        "fields": [
             ["street", {"type": "string"}],
             ["city"  , {"type": "string"}],
             ["nested", {"type": "portal", "to": ""}]
@@ -226,11 +226,11 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
 
 
     let schema = r#"{
-        "type": "table",
-        "columns": [
+        "type": "struct",
+        "fields": [
             ["username", {"type": "string"}],
             ["email"  , {"type": "string"}],
-            ["address", {"type": "table", "columns": [
+            ["address", {"type": "struct", "fields": [
                 ["street", {"type": "string"}],
                 ["city", {"type": "string"}],
                 ["more", {"type": "portal", "to": "address"}]

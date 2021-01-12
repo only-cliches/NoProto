@@ -79,15 +79,15 @@
 //! Most data types have a known size ahead of time, some don't, and some have a size dependent on the schema.
 //! 
 //! 
-//! ### Table (Collection)
+//! ### Struct (Collection)
 //! 
-//! The table data type stores one or more vtables for the column values.  Each vtable is 10 bytes and contains:
-//! - 4 address (u16) pointers for the table column values
+//! The struct data type stores one or more vtables for field values.  Each vtable is 10 bytes and contains:
+//! - 4 address (u16) pointers for the field values
 //! - a trailing address(u16) of the next vtable (should be zero if no more vtables)
 //! 
-//! Each vtable can address up to 4 columns, so if there are 30 columns in a schema there may be as many as 8 vtables in the buffer: `30 / 4 = 7.5`
+//! Each vtable can address up to 4 fields, so if there are 30 fields in a schema there may be as many as 8 vtables in the buffer: `30 / 4 = 7.5`
 //! 
-//! Vtables are created as needed,  For example if there are 100 columns in the schema but the client only ever sets values to the first 4 columns there will only ever be 1 vtable in the buffer.
+//! Vtables are created as needed,  For example if there are 100 fields in the schema but the client only ever sets values to the first 4 fields there will only ever be 1 vtable in the buffer.
 //! 
 //! 
 //! ```
@@ -95,8 +95,8 @@
 //! use no_proto::NP_Factory;
 //! 
 //! let factory: NP_Factory = NP_Factory::new(r#"{
-//!     "type": "table",
-//!     "columns": [
+//!     "type": "struct",
+//!     "fields": [
 //!         ["age",  {"type": "u8"}]
 //!     ]
 //! }"#)?;
@@ -784,15 +784,15 @@
 //! 
 //! Collection based schemas nest schemas in a way that allows any type to be the child of any collection, including other collections.
 //! 
-//! ### Table (collection)
+//! ### Struct (collection)
 //! 
 //! ```
 //! use no_proto::error::NP_Error;
 //! use no_proto::NP_Factory;
 //! 
 //! let factory: NP_Factory = NP_Factory::new(r#"{
-//!     "type": "table",
-//!     "columns": [
+//!     "type": "struct",
+//!     "fields": [
 //!         ["age",  {"type": "u8"}],
 //!         ["name", {"type": "string"}]
 //!     ]
@@ -802,7 +802,7 @@
 //! assert_eq!(&[21, 2, 3, 97, 103, 101, 0, 2, 8, 0, 4, 110, 97, 109, 101, 0, 6, 2, 0, 0, 0, 0, 0], factory.compile_schema());
 //! 
 //! // [       21,            2, 3, 97, 103, 101,                     0, 2,           8, 0, 4, 110, 97, 109, 101,                      0, 6,   2, 0, 0, 0, 0, 0]
-//! // [data type, # of columns,     a,   g,   e, column schema size (u16),  column schema,      n,  a,   m,   e,  column schema size (u16),    column schema  ]
+//! // [data type,  # of fields,     a,   g,   e,  field schema size (u16),   field schema,      n,  a,   m,   e,   field schema size (u16),     field schema  ]
 //!
 //! # Ok::<(), NP_Error>(()) 
 //! ```

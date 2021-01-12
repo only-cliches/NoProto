@@ -47,6 +47,11 @@ mod run_bench_abomonation;
 
 fn main() {
 
+
+    NoProtoBench::setup_bench();
+    AvroBench::setup_bench();
+    FlatBufferBench::setup_bench();
+
     println!("\n========= SIZE BENCHMARK =========");
 
     let np_size = NoProtoBench::size_bench();

@@ -36,7 +36,7 @@
 - Native byte-wise sorting
 - Supports recursive data types
 - Supports most common native data types
-- Supports collections (list, map, table & tuple)
+- Supports collections (list, map, struct & tuple)
 - Supports arbitrary nesting of collection types
 - Schemas support default values and non destructive updates
 - Transport agnostic [RPC Framework](https://docs.rs/no_proto/latest/no_proto/rpc/index.html).
@@ -132,14 +132,14 @@ NoProto takes the performance advantages of compiled formats and implements them
 ```rust
 use no_proto::error::NP_Error;
 use no_proto::NP_Factory;
-use no_proto::collection::table::NP_Table;
+use no_proto::collection::table::NP_Struct;
 
 // JSON is used to describe schema for the factory
 // Each factory represents a single schema
 // One factory can be used to serialize/deserialize any number of buffers
 let user_factory = NP_Factory::new(r#"{
-    "type": "table",
-    "columns": [
+    "type": "struct",
+    "fields": [
         ["name",   {"type": "string"}],
         ["age",    {"type": "u16", "default": 0}],
         ["tags",   {"type": "list", "of": {

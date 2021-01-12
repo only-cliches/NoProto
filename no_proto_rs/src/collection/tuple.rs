@@ -38,7 +38,7 @@ impl<'tuple> NP_Tuple<'tuple> {
             return Ok(Some(NP_Cursor::new(0, values[index], tuple_cursor.schema_addr)));
         }
 
-        let column_schema_data = values[index];
+        let value_schema_data = values[index];
 
         let v_table =  index / VTABLE_SIZE; // which vtable
         let v_table_idx = index % VTABLE_SIZE; // which index on the selected vtable
@@ -77,7 +77,7 @@ impl<'tuple> NP_Tuple<'tuple> {
 
         let item_address = vtable_address + (v_table_idx * 2);
 
-        Ok(Some(NP_Cursor::new(item_address, column_schema_data, tuple_cursor.schema_addr)))
+        Ok(Some(NP_Cursor::new(item_address, value_schema_data, tuple_cursor.schema_addr)))
     }
 
     #[inline(always)]
@@ -209,9 +209,9 @@ impl<'value> NP_Value<'value> for NP_Tuple<'value> {
 
         let mut json_list = Vec::new();
 
-        let mut table = NP_Tuple::new_iter(&cursor, memory);
+        let mut tuple = NP_Tuple::new_iter(&cursor, memory);
 
-        while let Some((_idx, item)) = table.step_iter(memory) {
+        while let Some((_idx, item)) = tuple.step_iter(memory) {
             if let Some(real) = item {
                 json_list.push(NP_Cursor::json_encode(depth + 1, &real, memory));  
             } else {
@@ -296,9 +296,9 @@ impl<'value> NP_Value<'value> for NP_Tuple<'value> {
             loop_max -= 1;
         }
 
-        let mut table = Self::new_iter(&cursor, memory);
+        let mut tuple = Self::new_iter(&cursor, memory);
 
-        while let Some((_index, item)) = table.step_iter(memory) {
+        while let Some((_index, item)) = tuple.step_iter(memory) {
             if let Some(real) = item {
                 let add_size = NP_Cursor::calc_size(depth + 1, &real, memory)?;
                 if add_size > 2 {
@@ -324,17 +324,17 @@ impl<'value> NP_Value<'value> for NP_Tuple<'value> {
         let mut last_real_vtable = to_cursor_value.get_addr_value() as usize;
         let mut last_vtable_idx = 0usize;
 
-        let c: Vec<(u8, String, usize)>;
+        let c: Vec<usize>;
         let col_schemas = match &from_memory.get_schema(from_cursor.schema_addr) {
-            NP_Parsed_Schema::Table { columns, .. } => {
-                columns
+            NP_Parsed_Schema::Tuple { values, .. } => {
+                values
             },
             _ => { c = Vec::new(); &c }
         };
 
-        let mut table = Self::new_iter(&from_cursor, from_memory);
+        let mut tuple = Self::new_iter(&from_cursor, from_memory);
 
-        while let Some((idx, item)) = table.step_iter(from_memory) {
+        while let Some((idx, item)) = tuple.step_iter(from_memory) {
             if let Some(real) = item {
 
                 let v_table =  idx / VTABLE_SIZE; // which vtable
@@ -347,7 +347,7 @@ impl<'value> NP_Value<'value> for NP_Tuple<'value> {
                 }
 
                 let item_addr = last_real_vtable + (v_table_idx * 2);
-                NP_Cursor::compact(depth + 1, real.clone(), from_memory, NP_Cursor::new(item_addr, col_schemas[idx].2, to_cursor.schema_addr), to_memory)?;
+                NP_Cursor::compact(depth + 1, real.clone(), from_memory, NP_Cursor::new(item_addr, col_schemas[idx], to_cursor.schema_addr), to_memory)?;
             }            
         }
 
