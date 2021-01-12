@@ -9,6 +9,7 @@ use crate::run_bench_bincode::BincodeBench;
 use crate::run_bench_avro::AvroBench;
 use crate::run_bench_prost::ProstBench;
 use crate::run_bench_flexbuffers::FlexBench;
+use crate::run_bench_rawbson::RawBSONBench;
 pub const LOOPS: usize = 1_000_000;
 
 mod bench_fb;
@@ -32,6 +33,7 @@ mod run_bench_bincode;
 mod run_bench_prost;
 mod run_bench_avro;
 mod run_bench_flexbuffers;
+mod run_bench_rawbson;
 
 /*
 1,000,000 iterations
@@ -53,6 +55,7 @@ fn main() {
     let pro_size = ProstBench::size_bench();
     let avro_size = AvroBench::size_bench();
     let flx_size = FlexBench::size_bench();
+    let rbso_size = RawBSONBench::size_bench();
 
     println!("\n======== ENCODE BENCHMARK ========");
     
@@ -66,6 +69,7 @@ fn main() {
     let pro_enc = ProstBench::encode_bench(base);
     let avro_enc = AvroBench::encode_bench(base);
     let flx_enc = FlexBench::encode_bench(base);
+    let rbso_enc = RawBSONBench::encode_bench(base);
 
     println!("\n======== DECODE BENCHMARK ========");
 
@@ -79,6 +83,7 @@ fn main() {
     let pro_dec = ProstBench::decode_bench(base);
     let avro_dec = AvroBench::decode_bench(base);
     let flx_dec = FlexBench::decode_bench(base);
+    let rbso_dec = RawBSONBench::decode_bench(base);
 
     println!("\n====== DECODE ONE BENCHMARK ======");
 
@@ -92,6 +97,7 @@ fn main() {
     let pro_dec1 = ProstBench::decode_one_bench(base);
     let avro_dec1 = AvroBench::decode_one_bench(base);
     let flx_dec1 = FlexBench::decode_one_bench(base);
+    let rbso_dec1 = RawBSONBench::decode_one_bench(base);
 
     println!("\n====== UPDATE ONE BENCHMARK ======");
 
@@ -105,6 +111,7 @@ fn main() {
     let pro_up = ProstBench::update_bench(base);
     let avro_up = AvroBench::update_bench(base);
     let flx_up = FlexBench::update_bench(base);
+    let rbso_up = RawBSONBench::update_bench(base);
 
     println!("\n\n");
 
@@ -117,6 +124,7 @@ fn main() {
     println!("//! | FlexBuffers        | {} |     {} |   {} |   {} |          {} |         {} |", flx_enc, flx_dec, flx_dec1, flx_up, flx_size.0, flx_size.1);
     println!("//! | JSON               | {} |     {} |   {} |   {} |          {} |         {} |", json_enc, json_dec, json_dec1, json_up, json_size.0, json_size.1);
     println!("//! | BSON               | {} |     {} |   {} |   {} |          {} |         {} |", bson_enc, bson_dec, bson_dec1, bson_up, bson_size.0, bson_size.1);
+    println!("//! | Raw BSON           | {} |     {} |   {} |   {} |          {} |         {} |", rbso_enc, rbso_dec, rbso_dec1, rbso_up, rbso_size.0, rbso_size.1);
     println!("//! | MessagePack        | {} |     {} |   {} |   {} |          {} |         {} |", msg_enc, msg_dec, msg_dec1, msg_up, msg_size.0, msg_size.1);
     println!("//! | **Compiled Libs**  |        |            |          |          |              |             |");
     println!("//! | Flatbuffers        | {} |     {} |   {} |   {} |          {} |         {} |", fb_enc, fb_dec, fb_dec1, fb_up, fb_size.0, fb_size.1);
