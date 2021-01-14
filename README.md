@@ -1,4 +1,3 @@
-
 ## NoProto: Flexible, Fast & Compact Serialization with RPC
 
 <img src="https://github.com/only-cliches/NoProto/raw/master/logo_small.png"/>
@@ -9,7 +8,6 @@
 [![crates.io](https://img.shields.io/crates/v/no_proto.svg)](https://crates.io/crates/no_proto)
 [![docs.rs](https://docs.rs/no_proto/badge.svg)](https://docs.rs/no_proto/latest/no_proto/)
 [![GitHub stars](https://img.shields.io/github/stars/only-cliches/NoProto.svg?style=social&label=Star&maxAge=2592000)](https://GitHub.com/only-cliches/NoProto/stargazers/)
-
 ### Features  
 
 **Lightweight**<br/>
@@ -36,7 +34,7 @@
 - Native byte-wise sorting
 - Supports recursive data types
 - Supports most common native data types
-- Supports collections (list, map, table & tuple)
+- Supports collections (list, map, struct & tuple)
 - Supports arbitrary nesting of collection types
 - Schemas support default values and non destructive updates
 - Transport agnostic [RPC Framework](https://docs.rs/no_proto/latest/no_proto/rpc/index.html).
@@ -132,14 +130,13 @@ NoProto takes the performance advantages of compiled formats and implements them
 ```rust
 use no_proto::error::NP_Error;
 use no_proto::NP_Factory;
-use no_proto::collection::table::NP_Table;
 
 // JSON is used to describe schema for the factory
 // Each factory represents a single schema
 // One factory can be used to serialize/deserialize any number of buffers
 let user_factory = NP_Factory::new(r#"{
-    "type": "table",
-    "columns": [
+    "type": "struct",
+    "fields": [
         ["name",   {"type": "string"}],
         ["age",    {"type": "u16", "default": 0}],
         ["tags",   {"type": "list", "of": {
@@ -152,15 +149,19 @@ let user_factory = NP_Factory::new(r#"{
 // create a new empty buffer
 let mut user_buffer = user_factory.empty_buffer(None); // optional capacity
 
-// set an internal value of the buffer, set the  "name" column
+// set the "name" field
 user_buffer.set(&["name"], "Billy Joel")?;
 
-// assign nested internal values, sets the first tag element
-user_buffer.set(&["tags", "0"], "first tag")?;
-
-// get an internal value of the buffer from the "name" column
+// read the "name" field
 let name = user_buffer.get::<&str>(&["name"])?;
 assert_eq!(name, Some("Billy Joel"));
+
+// set a nested value, the first tag in the tag list
+user_buffer.set(&["tags", "0"], "first tag")?;
+
+// read the first tag from the tag list
+let tag = user_buffer.get::<&str>(&["tags", "0"])?;
+assert_eq!(tag, Some("first tag"));
 
 // close buffer and get internal bytes
 let user_bytes: Vec<u8> = user_buffer.close();
@@ -168,11 +169,11 @@ let user_bytes: Vec<u8> = user_buffer.close();
 // open the buffer again
 let user_buffer = user_factory.open_buffer(user_bytes);
 
-// get nested internal value, first tag from the tag list
-let tag = user_buffer.get::<&str>(&["tags", "0"])?;
-assert_eq!(tag, Some("first tag"));
+// read the "name" field again
+let name = user_buffer.get::<&str>(&["name"])?;
+assert_eq!(name, Some("Billy Joel"));
 
-// get nested internal value, the age field
+// get the age field
 let age = user_buffer.get::<u16>(&["age"])?;
 // returns default value from schema
 assert_eq!(age, Some(0u16));
@@ -205,17 +206,17 @@ The format and data used in the benchmarks were taken from the `flatbuffers` ben
 | Library            | Encode | Decode All | Decode 1 | Update 1 | Size (bytes) | Size (Zlib) |
 |--------------------|--------|------------|----------|----------|--------------|-------------|
 | **Runtime Libs**   |        |            |          |          |              |             |
-| *NoProto*          |    920 |       1397 |    41667 |    10526 |          209 |         167 |
-| Apache Avro        |    140 |         51 |       51 |       37 |          702 |         337 |
-| FlexBuffers        |    399 |        843 |    22727 |      265 |          490 |         309 |
-| JSON               |    546 |        436 |      533 |      400 |          439 |         184 |
-| BSON               |    115 |        103 |      109 |       80 |          414 |         216 |
-| MessagePack        |    136 |        223 |      236 |      121 |          296 |         187 |
+| *NoProto*          |   1028 |       1548 |    45455 |    11494 |          209 |         167 |
+| Apache Avro        |    155 |         57 |       56 |       40 |          702 |         333 |
+| FlexBuffers        |    448 |        949 |    24390 |      296 |          490 |         309 |
+| JSON               |    614 |        498 |      602 |      447 |          439 |         184 |
+| BSON               |    129 |        115 |      123 |       90 |          414 |         216 |
+| MessagePack        |    687 |        597 |      813 |      205 |          311 |         193 |
 | **Compiled Libs**  |        |            |          |          |              |             |
-| Flatbuffers        |   1062 |      14925 |   250000 |     1057 |          264 |         181 |
-| Bincode            |   5882 |       8621 |     9174 |     4000 |          163 |         129 |
-| Protobuf           |    876 |       1140 |     1155 |      474 |          154 |         141 |
-| Prost              |   1361 |       1855 |     1942 |      966 |          154 |         142 |
+| Flatbuffers        |   3257 |      16393 |   250000 |     2755 |          264 |         181 |
+| Bincode            |   6098 |       9434 |    10101 |     4425 |          163 |         129 |
+| Protobuf           |   1011 |       1242 |     1309 |      536 |          154 |         141 |
+| Prost              |   1504 |       2137 |     2165 |     1072 |          154 |         142 |
 
 - **Encode**: Transfer a collection of fields of test data into a serialized `Vec<u8>`.
 - **Decode All**: Deserialize the test object from the `Vec<u8>` into all fields.
@@ -236,7 +237,7 @@ If you need to work with data types that will change or be created at runtime, y
 The worse case failure mode for NoProto buffers is junk data.  While other formats can cause denial of service attacks or allow unsafe memory access, there is no such failure case with NoProto.  There is no way to construct a NoProto buffer that would cause any detrement in performance to the host application or lead to unsafe memory access.  Also, there is no panic causing code in the library, meaning it will never crash your application.
 
 3. Extremely Fast Updates<br/>
-If you have a workflow in your application that is read -> modify -> write with buffers, NoProto will usually outperform every other format, including Bincode and Flatbuffers. This is because NoProto never actually deserializes, it doesn't need to. This library was written with databases in mind, if you want to support client requests like "change username field to X", NoProto will do this faster than any other format, usually orders of magnitude faster. This includes complicated mutations like "push a value onto the end of this nested list".
+If you have a workflow in your application that is read -> modify -> write with buffers, NoProto will usually outperform every other format, including Bincode and Flatbuffers. This is because NoProto never actually deserializes, it doesn't need to.  This includes complicated mutations like pushing a value onto a list or adding a value into the middle of a list.
 
 4. Incremental Deserializing<br/>
 You only pay for the fields you read, no more. There is no deserializing step in NoProto, opening a buffer typically performs no operations (except for sorted buffers, which is opt in). Once you start asking for fields, the library will navigate the buffer using the format rules to get just what you asked for and nothing else. If you have a workflow in your application where you read a buffer and only grab a few fields inside it, NoProto will outperform most other libraries.
@@ -255,9 +256,9 @@ If you can safely compile all your data types into your application, all the buf
 If your data changes so often that schemas don't really make sense or the format you use must be self describing, JSON/BSON/MessagePack is a better choice.   Although I'd argue that if you *can* make schemas work you should.  Once you can use a format with schemas you save a ton of space in the resulting buffers and performance far better.
 
 ## Limitations
-- Collections (Map, Tuple, List & Table) cannot have more than 255 columns/items.  You can nest to get more capacity, for example a list of lists can have up to 255 * 255 items.
+- Collections (Map, Tuple, List & Struct) cannot have more than 255 items.  You can nest to get more capacity, for example a list of lists can have up to 255 * 255 items.
 - You cannot nest more than 255 levels deep.
-- Table colum names cannot be longer than 255 UTF8 bytes.
+- Struct field names cannot be longer than 255 UTF8 bytes.
 - Enum/Option types are limited to 255 options and each option cannot be more than 255 UTF8 Bytes.
 - Map keys cannot be larger than 255 UTF8 bytes.
 - Buffers cannot be larger than 2^16 bytes or ~64KB.
