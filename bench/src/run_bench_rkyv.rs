@@ -122,7 +122,7 @@ impl RkyvBench {
         let start = SystemTime::now();
 
         for _x in 0..LOOPS {
-            let decoded = unsafe { archived_ref::<FooBarContainer>(&buffer[..], pos) };
+            let decoded = unsafe { archived_value::<FooBarContainer>(&buffer[..], pos) };
             assert_eq!(decoded.location, "http://arstechnica.com");
         }
 
@@ -137,7 +137,7 @@ impl RkyvBench {
         let start = SystemTime::now();
 
         for _x in 0..LOOPS {
-            let decoded = unsafe { archived_ref::<FooBarContainer>(&buffer[..], pos) };
+            let decoded = unsafe { archived_value::<FooBarContainer>(&buffer[..], pos) };
 
             let mut loops = 0;
 
