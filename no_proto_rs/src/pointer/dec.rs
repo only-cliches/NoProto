@@ -49,7 +49,7 @@
 //! use no_proto::NP_Factory;
 //! use no_proto::pointer::dec::NP_Dec;
 //! 
-//! let factory: NP_Factory = NP_Factory::new(r#"{
+//! let factory: NP_Factory = NP_Factory::new_json(r#"{
 //!    "type": "dec",
 //!    "exp": 2
 //! }"#)?;
@@ -975,13 +975,13 @@ impl<'value> NP_Value<'value> for NP_Dec {
 #[test]
 fn schema_parsing_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"decimal\",\"exp\":3,\"default\":203.293}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
     let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
     assert_eq!(schema, factory2.schema.to_json()?.stringify());
 
     let schema = "{\"type\":\"decimal\",\"exp\":3}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
     let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
     assert_eq!(schema, factory2.schema.to_json()?.stringify());
@@ -992,7 +992,7 @@ fn schema_parsing_works() -> Result<(), NP_Error> {
 #[test]
 fn default_value_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"decimal\",\"exp\":3,\"default\":203.293}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     let buffer = factory.empty_buffer(None);
     assert_eq!(buffer.get::<NP_Dec>(&[])?.unwrap(), NP_Dec::new(203293, 3));
     let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
@@ -1005,7 +1005,7 @@ fn default_value_works() -> Result<(), NP_Error> {
 #[test]
 fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"decimal\",\"exp\": 3}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     let mut buffer = factory.empty_buffer(None);
     buffer.set(&[], NP_Dec::new(203293, 3))?;
     assert_eq!(buffer.get::<NP_Dec>(&[])?.unwrap(), NP_Dec::new(203293, 3));

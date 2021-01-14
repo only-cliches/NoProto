@@ -299,7 +299,7 @@ impl<'value> NP_Value<'value> for NP_Union {
 fn schema_parsing_works() -> Result<(), NP_Error> {
 
     let schema = r#"{"type":"union","types":[["value1",{"type":"string"}],["value2",{"type":"uint8"}]]}"#;
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
     let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
     assert_eq!(schema, factory2.schema.to_json()?.stringify());
@@ -320,7 +320,7 @@ fn schema_parsing_works() -> Result<(), NP_Error> {
 //             ["selfemployed", {"type": "bool"}]
 //         ]
 //     }"#;
-//     let factory = crate::NP_Factory::new(schema)?;
+//     let factory = crate::NP_Factory::new_json(schema)?;
 //     let mut buffer = factory.empty_buffer(None);
 
 //     buffer.set(&["nested", "street"], "hello street")?;
@@ -347,7 +347,7 @@ fn schema_parsing_works() -> Result<(), NP_Error> {
 //             ]}]
 //         ]
 //     }"#;
-//     let factory = crate::NP_Factory::new(schema)?;
+//     let factory = crate::NP_Factory::new_json(schema)?;
 //     let mut buffer = factory.empty_buffer(None);
 
 //     buffer.set(&["address", "more", "more","more", "more","more", "more","more", "more", "street"], "hello")?;

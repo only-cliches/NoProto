@@ -94,7 +94,7 @@
 //! use no_proto::error::NP_Error;
 //! use no_proto::NP_Factory;
 //! 
-//! let factory: NP_Factory = NP_Factory::new(r#"{
+//! let factory: NP_Factory = NP_Factory::new_json(r#"{
 //!     "type": "struct",
 //!     "fields": [
 //!         ["age",  {"type": "u8"}]
@@ -122,7 +122,7 @@
 //! use no_proto::error::NP_Error;
 //! use no_proto::NP_Factory;
 //! 
-//! let factory: NP_Factory = NP_Factory::new(r#"{
+//! let factory: NP_Factory = NP_Factory::new_json(r#"{
 //!     "type": "list",
 //!     "of": {"type": "u8"}
 //! }"#)?;
@@ -145,7 +145,7 @@
 //! use no_proto::error::NP_Error;
 //! use no_proto::NP_Factory;
 //! 
-//! let factory: NP_Factory = NP_Factory::new(r#"{
+//! let factory: NP_Factory = NP_Factory::new_json(r#"{
 //!     "type": "map",
 //!     "value": {"type": "u8"}
 //! }"#)?;
@@ -176,7 +176,7 @@
 //! use no_proto::error::NP_Error;
 //! use no_proto::NP_Factory;
 //! 
-//! let factory: NP_Factory = NP_Factory::new(r#"{
+//! let factory: NP_Factory = NP_Factory::new_json(r#"{
 //!    "type": "tuple",
 //!    "values": [
 //!        {"type": "u8"},
@@ -210,7 +210,7 @@
 //! use no_proto::error::NP_Error;
 //! use no_proto::NP_Factory;
 //! 
-//! let factory: NP_Factory = NP_Factory::new(r#"{
+//! let factory: NP_Factory = NP_Factory::new_json(r#"{
 //!    "type": "i32"
 //! }"#)?;
 //!
@@ -234,7 +234,7 @@
 //! use no_proto::error::NP_Error;
 //! use no_proto::NP_Factory;
 //! 
-//! let factory: NP_Factory = NP_Factory::new(r#"{
+//! let factory: NP_Factory = NP_Factory::new_json(r#"{
 //!    "type": "u32"
 //! }"#)?;
 //!
@@ -258,7 +258,7 @@
 //! use no_proto::error::NP_Error;
 //! use no_proto::NP_Factory;
 //! 
-//! let factory: NP_Factory = NP_Factory::new(r#"{
+//! let factory: NP_Factory = NP_Factory::new_json(r#"{
 //!    "type": "f32"
 //! }"#)?;
 //!
@@ -283,7 +283,7 @@
 //! use no_proto::NP_Factory;
 //! use no_proto::pointer::option::NP_Enum;
 //! 
-//! let factory: NP_Factory = NP_Factory::new(r#"{
+//! let factory: NP_Factory = NP_Factory::new_json(r#"{
 //!    "type": "option",
 //!    "choices": ["blue", "orange", "red"]
 //! }"#)?;
@@ -306,7 +306,7 @@
 //! use no_proto::error::NP_Error;
 //! use no_proto::NP_Factory;
 //! 
-//! let factory: NP_Factory = NP_Factory::new(r#"{
+//! let factory: NP_Factory = NP_Factory::new_json(r#"{
 //!    "type": "bool"
 //! }"#)?;
 //!
@@ -335,7 +335,7 @@
 //! use no_proto::NP_Factory;
 //! use no_proto::pointer::dec::NP_Dec;
 //! 
-//! let factory: NP_Factory = NP_Factory::new(r#"{
+//! let factory: NP_Factory = NP_Factory::new_json(r#"{
 //!    "type": "decimal",
 //!    "exp": 2
 //! }"#)?;
@@ -386,7 +386,7 @@
 //! use no_proto::NP_Factory;
 //! use no_proto::pointer::geo::NP_Geo;
 //! 
-//! let factory: NP_Factory = NP_Factory::new(r#"{
+//! let factory: NP_Factory = NP_Factory::new_json(r#"{
 //!    "type": "geo8"
 //! }"#)?;
 //!
@@ -411,7 +411,7 @@
 //! use no_proto::NP_Factory;
 //! use no_proto::pointer::uuid::NP_UUID;
 //! 
-//! let factory: NP_Factory = NP_Factory::new(r#"{
+//! let factory: NP_Factory = NP_Factory::new_json(r#"{
 //!    "type": "uuid"
 //! }"#)?;
 //!
@@ -445,7 +445,7 @@
 //! use no_proto::error::NP_Error;
 //! use no_proto::NP_Factory;
 //! 
-//! let factory: NP_Factory = NP_Factory::new(r#"{
+//! let factory: NP_Factory = NP_Factory::new_json(r#"{
 //!    "type": "string"
 //! }"#)?;
 //!
@@ -467,7 +467,7 @@
 //! use no_proto::NP_Factory;
 //! use no_proto::pointer::date::NP_Date;
 //! 
-//! let factory: NP_Factory = NP_Factory::new(r#"{
+//! let factory: NP_Factory = NP_Factory::new_json(r#"{
 //!    "type": "date"
 //! }"#)?;
 //!
@@ -503,7 +503,7 @@
 //! use no_proto::error::NP_Error;
 //! use no_proto::NP_Factory;
 //! 
-//! let factory: NP_Factory = NP_Factory::new(r#"{
+//! let factory: NP_Factory = NP_Factory::new_json(r#"{
 //!    "type": "i32",
 //!    "default": 56
 //! }"#)?;
@@ -513,7 +513,7 @@
 //! // [       6,           1,      0, 0, 0, 56]
 //! // [i32 type, has default,    default value]
 //! 
-//! let factory: NP_Factory = NP_Factory::new(r#"{
+//! let factory: NP_Factory = NP_Factory::new_json(r#"{
 //!    "type": "i32"
 //! }"#)?;
 //!
@@ -540,7 +540,7 @@
 //! use no_proto::NP_Factory;
 //! use no_proto::pointer::option::NP_Enum;
 //! 
-//! let factory: NP_Factory = NP_Factory::new(r#"{
+//! let factory: NP_Factory = NP_Factory::new_json(r#"{
 //!    "type": "option",
 //!    "choices": ["blue", "orange", "red"],
 //!    "default": "red"
@@ -551,7 +551,7 @@
 //! // [       20,                        3,            3, 4, 98, 108, 117, 101, 6, 111, 114, 97, 110, 103, 101, 3, 114, 101, 100]
 //! // [data type, 1 based index of default, # of options,     b,   l,   u,   e,      o,   r,  a,   n,   g,   e,      r,   e,   d]  
 //! 
-//! let factory: NP_Factory = NP_Factory::new(r#"{
+//! let factory: NP_Factory = NP_Factory::new_json(r#"{
 //!    "type": "option",
 //!    "choices": ["blue", "orange", "red"]
 //! }"#)?;
@@ -578,7 +578,7 @@
 //! use no_proto::NP_Factory;
 //! use no_proto::pointer::option::NP_Enum;
 //! 
-//! let factory: NP_Factory = NP_Factory::new(r#"{
+//! let factory: NP_Factory = NP_Factory::new_json(r#"{
 //!    "type": "bool",
 //!    "default": true
 //! }"#)?;
@@ -588,7 +588,7 @@
 //! // [       15,               1]
 //! // [data type, default is true]  
 //! 
-//! let factory: NP_Factory = NP_Factory::new(r#"{
+//! let factory: NP_Factory = NP_Factory::new_json(r#"{
 //!    "type": "bool",
 //!    "default": false
 //! }"#)?;
@@ -599,7 +599,7 @@
 //! // [data type, default is false]  
 //! 
 //! 
-//! let factory: NP_Factory = NP_Factory::new(r#"{
+//! let factory: NP_Factory = NP_Factory::new_json(r#"{
 //!    "type": "bool"
 //! }"#)?;
 //!
@@ -624,7 +624,7 @@
 //! use no_proto::NP_Factory;
 //! use no_proto::pointer::dec::NP_Dec;
 //! 
-//! let factory: NP_Factory = NP_Factory::new(r#"{
+//! let factory: NP_Factory = NP_Factory::new_json(r#"{
 //!    "type": "decimal",
 //!    "exp": 2
 //! }"#)?;
@@ -634,7 +634,7 @@
 //! // [       14,         2,                0]
 //! // [data type, expontent, no default value]
 //! 
-//! let factory: NP_Factory = NP_Factory::new(r#"{
+//! let factory: NP_Factory = NP_Factory::new_json(r#"{
 //!    "type": "decimal",
 //!    "exp": 2,
 //!    "default": 521.32
@@ -659,7 +659,7 @@
 //! use no_proto::NP_Factory;
 //! use no_proto::pointer::geo::NP_Geo;
 //! 
-//! let factory: NP_Factory = NP_Factory::new(r#"{
+//! let factory: NP_Factory = NP_Factory::new_json(r#"{
 //!    "type": "geo8"
 //! }"#)?;
 //!
@@ -669,7 +669,7 @@
 //! // [data type, geo size (4/8/16), no default value]
 //! 
 //! 
-//! let factory: NP_Factory = NP_Factory::new(r#"{
+//! let factory: NP_Factory = NP_Factory::new_json(r#"{
 //!    "type": "geo8",
 //!    "default": {"lat": 29.2, "lng": -19.2}
 //! }"#)?;
@@ -692,7 +692,7 @@
 //! use no_proto::NP_Factory;
 //! use no_proto::pointer::uuid::NP_UUID;
 //! 
-//! let factory: NP_Factory = NP_Factory::new(r#"{
+//! let factory: NP_Factory = NP_Factory::new_json(r#"{
 //!    "type": "uuid"
 //! }"#)?;
 //!
@@ -714,7 +714,7 @@
 //! use no_proto::error::NP_Error;
 //! use no_proto::NP_Factory;
 //! 
-//! let factory: NP_Factory = NP_Factory::new(r#"{
+//! let factory: NP_Factory = NP_Factory::new_json(r#"{
 //!    "type": "string"
 //! }"#)?;
 //!
@@ -723,7 +723,7 @@
 //! // [        2,                   0,             0, 0,                 0, 0]
 //! // [data type, uppercase/lowercase, fixed size (u16),  default size (u16) ]
 //!
-//! let factory: NP_Factory = NP_Factory::new(r#"{
+//! let factory: NP_Factory = NP_Factory::new_json(r#"{
 //!    "type": "string",
 //!    "size": 20
 //! }"#)?;
@@ -733,7 +733,7 @@
 //! // [        2,                   0,            0, 20,                 0, 0]
 //! // [data type, uppercase/lowercase, fixed size (u16),  default size (u16) ]
 //! 
-//! let factory: NP_Factory = NP_Factory::new(r#"{
+//! let factory: NP_Factory = NP_Factory::new_json(r#"{
 //!    "type": "string",
 //!    "size": 20,
 //!    "default": "hello"
@@ -758,7 +758,7 @@
 //! use no_proto::NP_Factory;
 //! use no_proto::pointer::date::NP_Date;
 //! 
-//! let factory: NP_Factory = NP_Factory::new(r#"{
+//! let factory: NP_Factory = NP_Factory::new_json(r#"{
 //!    "type": "date"
 //! }"#)?;
 //!
@@ -767,7 +767,7 @@
 //! // [       19,             0]
 //! // [data type, default flag ]
 //! 
-//! let factory: NP_Factory = NP_Factory::new(r#"{
+//! let factory: NP_Factory = NP_Factory::new_json(r#"{
 //!    "type": "date",
 //!    "default": 1604862252
 //! }"#)?;
@@ -790,7 +790,7 @@
 //! use no_proto::error::NP_Error;
 //! use no_proto::NP_Factory;
 //! 
-//! let factory: NP_Factory = NP_Factory::new(r#"{
+//! let factory: NP_Factory = NP_Factory::new_json(r#"{
 //!     "type": "struct",
 //!     "fields": [
 //!         ["age",  {"type": "u8"}],
@@ -813,7 +813,7 @@
 //! use no_proto::error::NP_Error;
 //! use no_proto::NP_Factory;
 //! 
-//! let factory: NP_Factory = NP_Factory::new(r#"{
+//! let factory: NP_Factory = NP_Factory::new_json(r#"{
 //!     "type": "list",
 //!     "of": {"type": "u8"}
 //! }"#)?;
@@ -832,7 +832,7 @@
 //! use no_proto::error::NP_Error;
 //! use no_proto::NP_Factory;
 //! 
-//! let factory: NP_Factory = NP_Factory::new(r#"{
+//! let factory: NP_Factory = NP_Factory::new_json(r#"{
 //!     "type": "map",
 //!     "value": {"type": "u8"}
 //! }"#)?;
@@ -851,7 +851,7 @@
 //! use no_proto::error::NP_Error;
 //! use no_proto::NP_Factory;
 //! 
-//! let factory: NP_Factory = NP_Factory::new(r#"{
+//! let factory: NP_Factory = NP_Factory::new_json(r#"{
 //!    "type": "tuple",
 //!    "values": [
 //!        {"type": "u8"},

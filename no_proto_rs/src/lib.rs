@@ -138,7 +138,7 @@
 //! // JSON is used to describe schema for the factory
 //! // Each factory represents a single schema
 //! // One factory can be used to serialize/deserialize any number of buffers
-//! let user_factory = NP_Factory::new(r#"{
+//! let user_factory = NP_Factory::new_json(r#"{
 //!     "type": "struct",
 //!     "fields": [
 //!         ["name",   {"type": "string"}],
@@ -295,7 +295,7 @@
 #[macro_use]
 extern crate std;
 
-
+pub mod idl;
 pub mod pointer;
 pub mod collection;
 pub mod buffer;
@@ -326,6 +326,7 @@ use crate::error::NP_Error;
 use buffer::{NP_Buffer, DEFAULT_ROOT_PTR_ADDR};
 use alloc::vec::Vec;
 use alloc::string::String;
+use idl::JS_Schema;
 use memory::{NP_Memory_ReadOnly, NP_Memory_Writable};
 use schema::NP_Parsed_Schema;
 
@@ -341,7 +342,7 @@ use schema::NP_Parsed_Schema;
 /// 
 /// assert_eq!(&np_path!("some.crazy.path"), &["some", "crazy", "path"]);
 /// 
-/// let user_factory = NP_Factory::new(r#"{
+/// let user_factory = NP_Factory::new_json(r#"{
 ///     "type": "struct",
 ///     "fields": [
 ///         ["name",   {"type": "string"}],
@@ -383,7 +384,7 @@ macro_rules! np_path {
 /// use no_proto::error::NP_Error;
 /// use no_proto::NP_Factory;
 /// 
-/// let user_factory = NP_Factory::new(r#"{
+/// let user_factory = NP_Factory::new_json(r#"{
 ///     "type": "struct",
 ///     "fields": [
 ///         ["name",   {"type": "string"}],
@@ -465,12 +466,32 @@ pub struct NP_Size_Data {
 }
 
 impl<'fact> NP_Factory<'fact> {
+
+    /// Generate a new factory from an ES6 schema
+    /// 
+    /// The operation will fail if the string can't be parsed or the schema is otherwise invalid.
+    /// 
+    pub fn new<S>(es6_schema: S) -> Result<Self, NP_Error> where S: Into<String> {
+        let idl = JS_Schema::new(es6_schema.into())?;
+
+        let (is_sortable, schema_bytes, mut schema) = NP_Schema::from_idl(Vec::new(), &idl, &idl.ast)?;
+        
+        schema = NP_Schema::resolve_portals(schema)?;
+
+        Ok(Self {
+            schema_bytes: NP_Schema_Bytes::Owned(schema_bytes),
+            schema:  NP_Schema {
+                is_sortable: is_sortable,
+                parsed: schema
+            }
+        }) 
+    }
     
-    /// Generate a new factory from the given schema.
+    /// Generate a new factory from the given JSON schema.
     /// 
     /// This operation will fail if the schema provided is invalid or if the schema is not valid JSON.  If it fails you should get a useful error message letting you know what the problem is.
     /// 
-    pub fn new<S>(json_schema: S) -> Result<Self, NP_Error> where S: Into<String> {
+    pub fn new_json<S>(json_schema: S) -> Result<Self, NP_Error> where S: Into<String> {
 
         let parsed_value = json_decode(json_schema.into())?;
 
@@ -552,7 +573,7 @@ impl<'fact> NP_Factory<'fact> {
     /// use no_proto::NP_Factory;
     /// use no_proto::NP_Size_Data;
     /// 
-    /// let factory: NP_Factory = NP_Factory::new(r#"{
+    /// let factory: NP_Factory = NP_Factory::new_json(r#"{
     ///    "type": "tuple",
     ///    "sorted": true,
     ///    "values": [

@@ -80,7 +80,7 @@ impl<'value> Default for NP_Any {
 #[test]
 fn schema_parsing_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"any\"}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
     let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
     assert_eq!(schema, factory2.schema.to_json()?.stringify());

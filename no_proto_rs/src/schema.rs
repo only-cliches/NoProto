@@ -1,14 +1,118 @@
-//! Schemas are JSON used to declare the shape of buffer objects
+//! Schemas are used to describe the shape and types of buffer objects
 //! 
-//! No Proto Schemas are JSON objects that describe how the data in a buffer is stored and what types of data is stored.  Schemas are required to create buffers and each buffer is a descendant of the schema that created it.
+//! NoProto schemas describe how the data in a buffer is stored and what types of data are stored.  Schemas are required to create buffers and each buffer is a descendant of the schema that created it.
 //! 
-//! Buffers are forever related to the schema that created them, buffers created from a given schema can only later be decoded, edited or compacted by that same schema.
+//! Schemas can be created with JSON, ES6 or Bytes.
 //! 
-//! Schemas are validated and sanity checked upon creation.  You cannot pass an invalid schema into a factory constructor and build/parse buffers with it.
+//! As a quick example, the schemas below are indentical in what they describe, only different in syntax.
+//! ```
+//! /* List Of Strings */
 //! 
-//! Properties that are not part of the schema are ignored.
+//! // JSON Schema
+//! {"type": "list", "of": {"type": "string"}}
 //! 
-//! If you're familiar with Typescript, schemas can be described by this recursive interface:
+//! // ES6 Schema
+//! list({of: string()})
+//! 
+//! // Byte schema (not human readable)
+//! [23, 2, 0, 0, 0, 0, 0]
+//! ```
+//! 
+//! NoProto provides full interop for all schema syntax variants.  You can create a NoProto factory using any schema syntax then export to any other syntax.
+//! 
+//! Buffers are forever related to the schema that created them, buffers created from a given schema can only later be decoded, edited or compacted by that same schema or a safe mutation of it.
+//! 
+//! Schemas are validated and sanity checked upon creation.  You cannot pass an invalid JSON or ES6 schema into a factory constructor and build/parse buffers with it.  
+//! 
+//! Schemas can be as simple as a single scalar type, for example a perfectly valid schema for a buffer that contains only a string:
+//! ```
+//! // JSON
+//! {
+//!     "type": "string"
+//! }
+//! // ES6
+//! string()
+//! ```
+//! 
+//! However, you will likely want to store more complicated objects, so that's easy to do as well.
+//! ```
+//! // JSON
+//! {
+//!     "type": "struct",
+//!     "fields": [
+//!         ["userID",   {"type": "string"}], // userID field contains a string
+//!         ["password", {"type": "string"}], // password field contains a string
+//!         ["email",    {"type": "string"}], // email field contains a string
+//!         ["age",      {"type": "u8"}]     // age field contains a Uint8 number (0 - 255)
+//!     ]
+//! }
+//! // ES6
+//! struct({
+//!     userID: string(),    // userID field contains a string
+//!     password: string(),  // password field contains a string
+//!     email: string(),     // email field contains a string
+//!     age: u8()            // age field contains a Uint8 number (0 - 255)
+//! })
+//! ```
+//! 
+//! There are multiple collection types, and they can be nested.
+//! 
+//! For example, this is a list of structs.  Every item in the list is a struct with two fields: id and title.  Both fields are a string type.
+//! ```
+//! // JSON
+//! {
+//!     "type": "list",
+//!     "of": {
+//!         "type": "struct",
+//!         "fields": [
+//!             ["id",    {"type": "string"}]
+//!             ["title", {"type": "string"}]
+//!         ]
+//!     }
+//! }
+//! 
+//! // ES6
+//! list({of: struct({
+//!     id: string(),
+//!     title: string()
+//! })})
+//! ```
+//! You can nest collections as much and however you'd like, up to 255 levels.
+//! 
+//! A list of strings is just as easy...
+//! 
+//! ```
+//! // JSON
+//! {
+//!     "type": "list",
+//!     "of": { type: "string" }
+//! }
+//! 
+//! // ES6
+//! list({of: string()})
+//! ```
+//! 
+//! **ES6 Schemas**<br/>
+//! NoProto's ES6/Javascript IDL schemas use a **very** strict subset of the ES6 syntax. Expressions like `2 + 3`, variables and most other javascripty things aren't supported.  The ES6 IDL is not intended to provide a JS runtime, only a familiar syntax.
+//! 
+//! The following ES6 syntax is supported:
+//! - Calling functions with or without arguments like `myFn()`, `myFn(1, 2)`, or `myFn("hello", [1, 2])`
+//! - Single line comments on their own line or at the end of a line using double slash `//`.
+//! - Arrays with any valid JS object.  Examples: `[]`, `[1, 2]`, `["hello", myFn()]`
+//! - Objects with string keys and any valid JS object for values.  **Keys cannot use quotes**.  Examples: `{}`, `{key: "value"}`, `{foo: "bar", baz: myFn()}`
+//! - Arrays and objects can be safely nested.  There is a nesting limit of 255 levels.
+//! - Numbers, Strings contained in double quotes '`"`', and Boolean values.
+//! - Strings can safely contain escaped double quotes `\"` inside them.
+//! - ES6 arrow methods that contain comments or statements seperated by semicolons. Example: `() => { string(); }`
+//! 
+//! If the syntax is not in the above list, it will not be parsed correctly by NoProto.
+//! 
+//! ES6 schemas are not as expensive to parse as JSON schemas, but nowhere near as fast to parse as byte schemas.
+//! 
+//! **JSON Schemas**
+//! 
+//! If you're familiar with Typescript, JSON schemas can be described by this recursive interface:
+//! 
 //! ```typescript
 //! interface NP_Schema {
 //!     // table, string, bytes, etc
@@ -49,55 +153,10 @@
 //! }
 //! ```
 //! 
-//! Schemas can be as simple as a single scalar type, for example a perfectly valid schema for a buffer that contains only a string:
-//! ```json
-//! {
-//!     "type": "string"
-//! }
-//! ```
-//! 
-//! However, you will likely want to store more complicated objects, so that's easy to do as well.
-//! ```json
-//! {
-//!     "type": "struct",
-//!     "fields": [
-//!         ["userID",   {"type": "string"}], // userID field contains a string
-//!         ["password", {"type": "string"}], // password field contains a string
-//!         ["email",    {"type": "string"}], // email field contains a string
-//!         ["age",      {"type": "u8"}]     // age field contains a Uint8 number (0 - 255)
-//!     ]
-//! }
-//! ```
-//! 
-//! There are multiple collection types, and they can be nested.
-//! 
-//! For example, this is a list of tables.  Every item in the list is a struct with two fields: id and title.  Both fields are a string type.
-//! ```json
-//! {
-//!     "type": "list",
-//!     "of": {
-//!         "type": "struct",
-//!         "fields": [
-//!             ["id",    {type: "string"}]
-//!             ["title", {type: "string"}]
-//!         ]
-//!     }
-//! }
-//! ```
-//! You can nest collections as much and however you'd like. Nesting is only limited by the address space of the buffer, so go crazy.
-//! 
-//! A list of strings is just as easy...
-//! 
-//! ```json
-//! {
-//!     "type": "list",
-//!     "of": { type: "string" }
-//! }
-//! ```
-//! 
+//! ## Schema Data Types
 //! Each type has trade offs associated with it.  The table and documentation below go into further detail.
 //! 
-//! ## Supported Data Types
+//! ### Supported Data Types
 //! 
 //! | Schema Type                            | Rust Type                                                                | Zero Copy Type   |Bytewise Sorting  | Bytes (Size)    | Limits / Notes                                                           |
 //! |----------------------------------------|--------------------------------------------------------------------------|------------------|------------------|-----------------|--------------------------------------------------------------------------|
@@ -118,7 +177,7 @@
 //! | [`uint64`](#uint8-uint16-uint32-uint64)| [`u64`](https://doc.rust-lang.org/std/primitive.u64.html)                | -                |✓                 | 8 bytes         | 0 - 18,446,744,073,709,551,616                                           |
 //! | [`float`](#float-double)               | [`f32`](https://doc.rust-lang.org/std/primitive.f32.html)                | -                |𐄂                 | 4 bytes         | -3.4e38 to 3.4e38                                                        |
 //! | [`double`](#float-double)              | [`f64`](https://doc.rust-lang.org/std/primitive.f64.html)                | -                |𐄂                 | 8 bytes         | -1.7e308 to 1.7e308                                                      |
-//! | [`option`](#option)                    | [`NP_Enum`](../pointer/option/struct.NP_Enum.html)                       | -                |✓                 | 1 byte          | Up to 255 string based options in schema.                                |
+//! | [`enum`](#enum)                        | [`NP_Enum`](../pointer/option/struct.NP_Enum.html)                       | -                |✓                 | 1 byte          | Up to 255 string based options in schema.                                |
 //! | [`bool`](#bool)                        | [`bool`](https://doc.rust-lang.org/std/primitive.bool.html)              | -                |✓                 | 1 byte          |                                                                          |
 //! | [`decimal`](#decimal)                  | [`NP_Dec`](../pointer/dec/struct.NP_Dec.html)                            | -                |✓                 | 8 bytes         | Fixed point decimal number based on i64.                                 |
 //! | [`geo4`](#geo4-geo8-geo16)             | [`NP_Geo`](../pointer/geo/struct.NP_Geo.html)                            | -                |✓                 | 4 bytes         | 1.1km resolution (city) geographic coordinate                            |
@@ -176,7 +235,8 @@
 //! 
 //! If you need flexible field names use a `map` type instead.
 //! 
-//! ```json
+//! ```
+//! // JSON
 //! {
 //!     "type": "struct",
 //!     "fields": [ // can have between 1 and 255 fields
@@ -186,12 +246,25 @@
 //!             "type": "string"
 //!         }}],
 //!         ["age",          {"type": "u8"}], // Uint8 number
-//!         ["meta",         {"type": "struct", fields: [ // nested table
+//!         ["meta",         {"type": "struct", "fields": [ // nested struct
 //!             ["favorite_color",  {"type": "string"}],
 //!             ["favorite_sport",  {"type": "string"}]
 //!         ]}]
 //!     ]
 //! }
+//! 
+//! // ES6
+//! struct({
+//!     // data_type() isn't a real data type...
+//!     field_name: data_type(),
+//!     name: string(),
+//!     tags: list({of: string()}),
+//!     age: u8(),
+//!     meta: struct({
+//!         favorite_color: string(),
+//!         favorite_sport: string()
+//!     })
+//! })
 //! ```
 //! 
 //! ## list
@@ -205,8 +278,9 @@
 //! 
 //! The more items you have in a list, the slower it will be to seek to values towards the end of the list or loop through the list.
 //! 
-//! ```json
+//! ```
 //! // a list of list of strings
+//! // JSON
 //! {
 //!     "type": "list",
 //!     "of": {
@@ -214,12 +288,18 @@
 //!         "of": {"type": "string"}
 //!     }
 //! }
+//! // ES6
+//! list({of: string()})
 //! 
 //! // list of numbers
+//! // JSON
 //! {
 //!     "type": "list",
-//!     "of": {"type": "int32"}
+//!     "of": {"type": "i32"}
 //! }
+//! 
+//! // ES6
+//! list({of: i32()})
 //! ```
 //! 
 //! 
@@ -236,14 +316,17 @@
 //! 
 //! The more items you have in a map, the slower it will be to seek to values or loop through the map.  Tables are far more performant for seeking to values.
 //! 
-//! ```json
+//! ```
 //! // a map where every value is a string
+//! // JSON
 //! {
 //!     "type": "map",
 //!     "value": {
 //!         "type": "string"
 //!     }
 //! }
+//! // ES6
+//! map({value: string()})
 //! ```
 //! 
 //! 
@@ -261,26 +344,37 @@
 //! 
 //! When `sorted` is true the order of values is gauranteed to be constant in every buffer and all buffers will be identical in size.
 //! 
-//! ```json
+//! ```
+//! // JSON
 //! {
 //!     "type": "tuple",
 //!     "values": [
 //!         {"type": "string"},
 //!         {"type": "list", "of": {"type": "strings"}},
-//!         {"type": "uint64"}
+//!         {"type": "u64"}
 //!     ]
 //! }
+//! // ES6
+//! tuple({values: [string(), list({of: string()}), u64()]})
 //! 
 //! // tuple for bytewise sorting
+//! // JSON
 //! {
 //!     "type": "tuple",
 //!     "sorted": true,
 //!     "values": [
 //!         {"type": "string", "size": 25},
-//!         {"type": "uint8"},
-//!         {"type": "int64"}
+//!         {"type": "u8"},
+//!         {"type": "i64"}
 //!     ]
 //! }
+//! 
+//! // ES6
+//! tuple({storted: true, values: [
+//!     string({size: 25}), 
+//!     u8(), 
+//!     i64()
+//! ]})
 //! ```
 //!
 //! 
@@ -294,20 +388,33 @@
 //! 
 //! The `size` property provides a way to have fixed size strings in your buffers.  If a provided string is larger than the `size` property it will be truncated.  Smaller strings will be padded with white space.
 //! 
-//! ```json
+//! ```
+//! // JSON
 //! {
 //!     "type": "string"
 //! }
+//! // ES6
+//! string()
+//! 
+//! 
 //! // fixed size
+//! // JSON
 //! {
 //!     "type": "string",
 //!     "size": 20
 //! }
+//! // ES6
+//! string({size: 20})
+//! 
 //! // with default value
+//! // JSON
 //! {
 //!     "type": "string",
 //!     "default": "Default string value"
 //! }
+//! 
+//! // ES6
+//! string({default: "Default string value"})
 //! ```
 //! 
 //! More Details:
@@ -322,20 +429,32 @@
 //! 
 //! The `size` property provides a way to have fixed size `&[u8]` in your buffers.  If a provided byte slice is larger than the `size` property it will be truncated.  Smaller byte slices will be padded with zeros.
 //! 
-//! ```json
+//! ```
+//! // JSON
 //! {
 //!     "type": "bytes"
 //! }
+//! // ES6
+//! bytes()
+//! 
 //! // fixed size
+//! // JSON
 //! {
 //!     "type": "bytes",
 //!     "size": 20
 //! }
+//! // ES6
+//! bytes({size: 20})
+//! 
 //! // with default value
+//! // JSON
 //! {
 //!     "type": "bytes",
 //!     "default": [1, 2, 3, 4]
 //! }
+//! 
+//! // ES6
+//! bytes({default: [1, 2, 3, 4]})
 //! ```
 //! 
 //! More Details:
@@ -344,15 +463,24 @@
 //! ## int8, int16, int32, int64
 //! Signed integers allow positive or negative whole numbers to be stored.  The bytes are stored in big endian format and converted to unsigned types to allow bytewise sorting.
 //! 
-//! ```json
+//! ```
+//! // JSON
 //! {
-//!     "type": "int8"
+//!     "type": "i8"
 //! }
+//! 
+//! // ES6
+//! i8()
+//! 
 //! // with default value
+//! // JSON
 //! {
-//!     "type": "int8",
+//!     "type": "i8",
 //!     "default": 20
 //! }
+//! 
+//! // ES6
+//! i8({default: 20})
 //! ```
 //! 
 //! - **Bytewise Sorting**: Supported
@@ -369,15 +497,24 @@
 //! - **Compaction**: Updates are done in place, never use additional space.
 //! - **Schema Mutations**: None
 //! 
-//! ```json
+//! ```
+//! // JSON
 //! {
-//!     "type": "uint8"
+//!     "type": "u8"
 //! }
+//! 
+//! // ES6
+//! u8()
+//! 
+//! 
 //! // with default value
+//! // JSON
 //! {
-//!     "type": "uint8",
+//!     "type": "u8",
 //!     "default": 20
 //! }
+//! // ES6
+//! u8({default: 20})
 //! ```
 //! 
 //! More Details:
@@ -390,21 +527,31 @@
 //! - **Compaction**: Updates are done in place, never use additional space.
 //! - **Schema Mutations**: None
 //! 
-//! ```json
+//! ```
+//! // JSON
 //! {
-//!     "type": "float"
+//!     "type": "f32"
 //! }
+//! 
+//! // ES6
+//! f32()
+//! 
 //! // with default value
+//! // JSON
 //! {
-//!     "type": "float",
+//!     "type": "f32",
 //!     "default": 20.283
 //! }
+//! 
+//! // ES6
+//! f32({default: 20.283})
+//! 
 //! ```
 //! 
 //! More Details:
 //! - [Using number data types](../pointer/numbers/index.html)
 //! 
-//! ## option
+//! ## enum
 //! Allows efficeint storage of a selection between a known collection of ordered strings.  The selection is stored as a single u8 byte, limiting the max number of choices to 255.  Also the choices themselves cannot be longer than 255 UTF8 bytes each.
 //! 
 //! - **Bytewise Sorting**: Supported
@@ -413,17 +560,25 @@
 //! 
 //! There is one required property of this schema called `choices`.  The property should contain an array of strings that represent all possible choices of the option.
 //! 
-//! ```json
+//! ```
+//! // JSON
 //! {
-//!     "type": "option",
+//!     "type": "enum",
 //!     "choices": ["choice 1", "choice 2", "etc"]
 //! }
+//! // ES6
+//! enum({choices: ["choice 1", "choice 2", "etc"]})
+//! 
 //! // with default value
+//! // JSON
 //! {
-//!     "type": "option",
+//!     "type": "enum",
 //!     "choices": ["choice 1", "choice 2", "etc"],
 //!     "default": "etc"
 //! }
+//! 
+//! // ES6
+//! enum({choices: ["choice 1", "choice 2", "etc"], default: "etc"})
 //! ```
 //! 
 //! More Details:
@@ -436,15 +591,22 @@
 //! - **Compaction**: Updates are done in place, never use additional space.
 //! - **Schema Mutations**: None
 //! 
-//! ```json
+//! ```
+//! // JSON
 //! {
 //!     "type": "bool"
 //! }
+//! // ES6
+//! bool()
+//! 
 //! // with default value
+//! // JSON
 //! {
 //!     "type": "bool",
 //!     "default": false
 //! }
+//! // ES6
+//! bool({default: false})
 //! ```
 //! 
 //! More Details:
@@ -458,17 +620,24 @@
 //! 
 //! There is a single required property called `exp` that represents the number of decimal points every value will have.
 //! 
-//! ```json
+//! ```
+//! // JSON
 //! {
 //!     "type": "decimal",
 //!     "exp": 3
 //! }
+//! // ES6
+//! decimal({exp: 3})
+//! 
 //! // with default value
+//! // JSON
 //! {
 //!     "type": "decimal",
 //!     "exp": 3,
 //!     "default": 20.293
 //! }
+//! // ES6
+//! decimal({exp: 3, default: 20.293})
 //! ```
 //! 
 //! More Details:
@@ -489,15 +658,21 @@
 //! | geo8  | 8     | 11mm resolution (marble)               | 7              |
 //! | geo16 | 16    | 110 microns resolution (grain of sand) | 9              |
 //! 
-//! ```json
+//! ```
+//! // JSON
 //! {
 //!     "type": "geo4"
 //! }
+//! // ES6
+//! geo4()
+//! 
 //! // with default
 //! {
 //!     "type": "geo4",
 //!     "default": {"lat": -20.283, "lng": 19.929}
 //! }
+//! // ES6
+//! geo4({default: {lat: -20.283, lng: 19.929}})
 //! ```
 //! 
 //! More Details:
@@ -510,10 +685,13 @@
 //! - **Compaction**: Updates are done in place, never use additional space.
 //! - **Schema Mutations**: None
 //! 
-//! ```json
+//! ```
+//! // JSON
 //! {
 //!     "type": "ulid"
 //! }
+//! // ES6
+//! ulid()
 //! // no default supported
 //! ```
 //! 
@@ -527,10 +705,13 @@
 //! - **Compaction**: Updates are done in place, never use additional space.
 //! - **Schema Mutations**: None
 //! 
-//! ```json
+//! ```
+//! // JSON
 //! {
 //!     "type": "uuid"
 //! }
+//! // ES6
+//! uuid()
 //! // no default supported
 //! ```
 //! 
@@ -544,15 +725,22 @@
 //! - **Compaction**: Updates are done in place, never use additional space.
 //! - **Schema Mutations**: None
 //! 
-//! ```json
+//! ```
+//! // JSON
 //! {
 //!     "type": "date"
 //! }
+//! // ES6
+//! date()
+//! 
 //! // with default value (default should be in ms)
+//! // JSON
 //! {
 //!     "type": "date",
 //!     "default": 1605909163951
 //! }
+//! // ES6
+//! date({default: 1605909163951})
 //! ```
 //! 
 //! More Details:
@@ -571,7 +759,8 @@
 //! - **Compaction**: Same behavior as type being teleported.
 //! - **Schema Mutations**: None
 //! 
-//! ```json
+//! ```
+//! // JSON
 //! {
 //!     "type": "struct",
 //!     "fields": [
@@ -579,13 +768,19 @@
 //!         ["next", {"type": "portal", "to": ""}]
 //!     ]
 //! }
+//! // ES6
+//! struct({
+//!     value: u8(),
+//!     next: portal({to: ""})
+//! })
 //! ```
 //! 
 //! With the above schema, values can be stored at `value`, `next.value`, `next.next.next.value`, etc.
 //! 
-//! Here is an example where `portal` is used to replicate a type.
+//! Here is an example where `portal` is used to duplicate a type.
 //! 
-//! ```json
+//! ```
+//! // JSON
 //! {
 //!     "type": "struct",
 //!     "fields": [
@@ -593,11 +788,16 @@
 //!         ["email", {"type": "portal", "to": "username"}]
 //!     ]
 //! }
+//! // ES6
+//! struct({
+//!     username: string(),
+//!     email: portal({to: "username"})
+//! })
 //! ```
 //! 
 //! In the schema above `username` and `email` are both resolved to the `string` type.
 //! 
-//! Even though tables are the only type used in the examples above, the `portal` type will work with any collection type.
+//! Even though structs are the only type used in the examples above, the `portal` type will work with any collection type.
 //! 
 //! 
 //! ## Next Step
@@ -607,6 +807,7 @@
 //! [Go to NP_Factory docs](../struct.NP_Factory.html)
 //! 
 
+use crate::idl::{JS_AST, JS_Schema};
 use crate::{np_path, pointer::{NP_Cursor, union::NP_Union}};
 use alloc::string::String;
 use core::{fmt::Debug};
@@ -953,6 +1154,51 @@ impl NP_Schema {
         Ok(completed)
     }
 
+    /// Generate a schema from a parsed IDL
+    pub fn from_idl(parsed: Vec<NP_Parsed_Schema>,idl: &JS_Schema, ast: &JS_AST) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {
+        
+        match ast {
+            JS_AST::method { name, args } => {
+                match idl.get_str(name).trim() {
+                    "any"      => {    NP_Any::from_idl_to_schema(parsed, idl, args) },
+                    "string"   => {    String::from_idl_to_schema(parsed, idl, args) },
+                    "bytes"    => {  NP_Bytes::from_idl_to_schema(parsed, idl, args) },
+                    "i8"       => {        i8::from_idl_to_schema(parsed, idl, args) },
+                    "i16"      => {       i16::from_idl_to_schema(parsed, idl, args) },
+                    "i32"      => {       i32::from_idl_to_schema(parsed, idl, args) },
+                    "i64"      => {       i64::from_idl_to_schema(parsed, idl, args) },
+                    "u8"       => {        u8::from_idl_to_schema(parsed, idl, args) },
+                    "u16"      => {       u16::from_idl_to_schema(parsed, idl, args) },
+                    "u32"      => {       u32::from_idl_to_schema(parsed, idl, args) },
+                    "u64"      => {       u64::from_idl_to_schema(parsed, idl, args) },
+                    "f32"      => {       f32::from_idl_to_schema(parsed, idl, args) },
+                    "f64"      => {       f64::from_idl_to_schema(parsed, idl, args) },
+                    "decimal"  => {    NP_Dec::from_idl_to_schema(parsed, idl, args) },
+                    "bool"     => {      bool::from_idl_to_schema(parsed, idl, args) },
+                    "geo4"     => {    NP_Geo::from_idl_to_schema(parsed, idl, args) },
+                    "geo8"     => {    NP_Geo::from_idl_to_schema(parsed, idl, args) },
+                    "geo16"    => {    NP_Geo::from_idl_to_schema(parsed, idl, args) },
+                    "uuid"     => {   NP_UUID::from_idl_to_schema(parsed, idl, args) },
+                    "ulid"     => {   NP_ULID::from_idl_to_schema(parsed, idl, args) },
+                    "date"     => {   NP_Date::from_idl_to_schema(parsed, idl, args) },
+                    "enum"     => {   NP_Enum::from_idl_to_schema(parsed, idl, args) },
+                    "struct"   => { NP_Struct::from_idl_to_schema(parsed, idl, args) },
+                    "list"     => {   NP_List::from_idl_to_schema(parsed, idl, args) },
+                    "map"      => {    NP_Map::from_idl_to_schema(parsed, idl, args) },
+                    "tuple"    => {  NP_Tuple::from_idl_to_schema(parsed, idl, args) },
+                    "portal"   => { NP_Portal::from_idl_to_schema(parsed, idl, args) },
+                    "union"    => {  NP_Union::from_idl_to_schema(parsed, idl, args) },
+                    _ => {
+                        let mut err_msg = String::from("Can't find a type that matches this schema! ");
+                        err_msg.push_str(idl.get_str(name));
+                        Err(NP_Error::new(err_msg.as_str()))
+                    }
+                }
+            },
+            _ => { Err(NP_Error::new("Error parsing IDL Schema!")) }
+        }
+    }
+
     /// Parse a schema out of schema bytes
     pub fn from_bytes(mut cache: Vec<NP_Parsed_Schema>, address: usize, bytes: &[u8]) -> (bool, Vec<NP_Parsed_Schema>) {
         let this_type = NP_TypeKeys::from(bytes[address]);
@@ -1056,395 +1302,4 @@ impl NP_Schema {
             }
         }
     }
-}
-
-/// Parsed AST String
-#[derive(PartialEq, Clone, Copy, Debug)]
-pub struct AST_STR { 
-    start: usize, 
-    end: usize 
-}
-
-/// AST object of es6 schema
-#[allow(missing_docs)]
-#[derive(Debug)]
-pub enum JS_AST {
-    method { name: AST_STR, args: Vec<JS_AST> },
-    object { properties: Vec<(AST_STR, JS_AST)> },
-    bool { state: bool },
-    string { addr: AST_STR },
-    array { values: Vec<JS_AST> },
-    number { addr: AST_STR },
-    closure { args: Vec<AST_STR>, statements: Vec<JS_AST> }
-}
-
-#[allow(missing_docs)]
-#[derive(Debug)]
-/// Schema using ES6 syntax
-pub struct JS_Schema {
-    value: String,
-    pub ast: JS_AST
-}
-
-#[derive(PartialEq)]
-enum js_control {
-    none,
-    paran,
-    curly,
-    square,
-    quote
-}
-
-impl JS_Schema {
-    /// Parse a JS style schema into AST
-    pub fn new(schema: String) -> Result<Self, NP_Error> {
-        let mut no_comments: String = String::with_capacity(schema.len());
-
-        schema.trim().split("\n").for_each(|f| {
-            let trimmed = f.trim();
-
-            if trimmed.len() > 0 {
-                let keep_line = if let Some(idx) = trimmed.find("//") {
-                    if idx == 0 { false } else { true }
-                } else {
-                    true
-                };
-                if keep_line {
-                    no_comments.push_str(f.trim());
-                }
-            }
-        });
-
-
-        Ok(Self {
-            ast: Self::parse(0, 0, no_comments.len(), &no_comments)?,
-            value: no_comments,
-        })
-    }
-
-    /// Get a str value from the schema
-    pub fn get_str(&self, addr: &AST_STR) -> &str {
-        &self.value[addr.start..addr.end]
-    }
-
-    fn parse(depth: usize, start: usize, end: usize, schema: &str) -> Result<JS_AST, NP_Error> {
-
-        if start == end {
-            return Err(NP_Error::new("empty request"));
-        }
-
-        if depth > 255 {
-            return Err(NP_Error::new("too much depth!"));
-        }
-
-
-        let mut control_char = js_control::none;
-
-        let mut index = start;
-        while control_char == js_control::none && index < end {
-            match &schema[index..(index + 1)] {
-                "[" => { control_char = js_control::square; },
-                "{" => { control_char = js_control::curly; },
-                "(" => { control_char = js_control::paran; },
-                "\"" => { control_char = js_control::quote; }
-                _ => { }
-            }
-
-            index += 1;
-        }
-
-        static NESTING_DEFAULT: i16 = 0;
-
-        let mut nesting = NESTING_DEFAULT;
-
-        let mut closed = false;
-        let mut moving_start = index;
-        let mut escaped = false;
-        let mut is_quoted = false;
-
-        match control_char {
-            js_control::none => { // number or bool
-                match schema[start..end].trim() {
-                    "true" => Ok(JS_AST::bool { state: true }),
-                    "false" => Ok(JS_AST::bool { state: false }),
-                    _ => Ok(JS_AST::number { addr: AST_STR { start, end }})
-                }
-            },
-            js_control::square => { // array
-                let mut arr: Vec<JS_AST> = Vec::new();
-
-                while closed == false && index < end && nesting > -256 && nesting < 256 {
-
-                    match &schema[index..(index + 1)] {
-                        "]" => {
-                            escaped = false;
-
-                            if nesting == NESTING_DEFAULT {
-                                if moving_start != index {
-                                    arr.push(Self::parse(depth + 1, moving_start, index, schema)?);
-                                }
-                                closed = true; 
-                            } else {
-                                nesting -= 1;
-                            }
-                        },
-                        "[" => { 
-                            escaped = false;
-                            nesting += 1;
-                        },
-                        "{" => {
-                            escaped = false;
-                            nesting += 1;
-                        }
-                        "}" => {
-                            escaped = false;
-                            nesting -= 1;
-                        },
-                        "\\" => {
-                            escaped = true;
-                        },
-                        "\"" => {
-                            if escaped == false {
-                                if is_quoted {
-                                    nesting -= 1;
-                                } else {
-                                    nesting += 1;
-                                }
-                                is_quoted = !is_quoted;
-                            }
-                        },
-                        "," => {
-                            if nesting == NESTING_DEFAULT {
-                                if moving_start != index {
-                                    arr.push(Self::parse(depth + 1, moving_start, index, schema)?);
-                                }
-                                moving_start = index + 1;
-                            }
-                        },
-                        _ => { 
-                            escaped = false;
-                        }
-                    }
-                    index += 1;
-                }
-
-                if closed == false {
-                    let mut message = String::from("Missing matching square bracket for array! -> ");
-                    message.push_str(&schema[start..usize::min(end, start + 20)]);
-                    return Err(NP_Error::new(message.as_str()))
-                }
-
-                Ok(JS_AST::array { values: arr })
-            },
-            js_control::paran => { // function or closure
-                if index == start || schema[start..index].trim().len() == 0 { // closure like (args) => { .. }
-
-                } else { // function like some_name(...args)
-                    let fn_name = AST_STR { start, end: index - 1 };
-
-                    let mut args: Vec<JS_AST> = Vec::new();
-
-                    while closed == false && index < end && nesting > -256 && nesting < 256 {
-                        match &schema[index..(index + 1)] {
-                            "]" => {
-                                escaped = false;
-                                nesting -= 1;
-                            },
-                            "[" => { 
-                                escaped = false;
-                                nesting += 1;
-                            },
-                            "(" => {
-                                escaped = false;
-                                nesting += 1;
-                            },
-                            ")" => {
-                                escaped = false;
-                                if nesting == NESTING_DEFAULT {
-                                    if moving_start != index {
-                                        args.push(Self::parse(depth + 1, moving_start, index, schema)?);
-                                    }
-                                    closed = true; 
-                                } else {
-                                    nesting -= 1;
-                                }
-                            },
-                            "{" => {
-                                escaped = false;
-                                nesting += 1;
-                            }
-                            "}" => {
-                                escaped = false;
-                                nesting -= 1;
-                            },
-                            "\\" => {
-                                escaped = true;
-                            },
-                            "\"" => {
-                                if escaped == false {
-                                    if is_quoted {
-                                        nesting -= 1;
-                                    } else {
-                                        nesting += 1;
-                                    }
-                                    is_quoted = !is_quoted;
-                                }
-                            },
-                            "," => {
-                                if nesting == NESTING_DEFAULT {
-                                    if moving_start != index {
-                                        args.push(Self::parse(depth + 1, moving_start, index, schema)?);
-                                    }
-                                    moving_start = index + 1;
-                                }
-                            },
-                            _ => { 
-                                escaped = false;
-                            }
-                        }
-                        index += 1;
-                    }
-
-                    if closed == false {
-                        let mut message = String::from("Missing matching paran for function!\n");
-                        message.push_str(&schema[start..usize::min(end, start + 10)]);
-                        message.push_str("\n");
-                        message.push_str("^------\n");
-                        return Err(NP_Error::new(message.as_str()))
-                    }
-
-                    return Ok(JS_AST::method { name: fn_name, args })
-                }
-
-                todo!()
-            },
-            js_control::curly => { // object
-                let mut obj: Vec<(AST_STR, JS_AST)> = Vec::new();
-
-                let mut key: Option<AST_STR> = None;
-
-                while closed == false && index < end && nesting > -256 && nesting < 256 {
-                    match &schema[index..(index + 1)] {
-                        ":" => {
-                            if nesting == NESTING_DEFAULT {
-                                if moving_start != index {
-                                    key = Some(AST_STR { start: moving_start, end: index});
-                                }
-                                moving_start = index + 1;
-                            }
-                        },
-                        "]" => {
-                            escaped = false;
-                            nesting -= 1;
-                        },
-                        "[" => { 
-                            escaped = false;
-                            nesting += 1;
-                        },
-                        "{" => {
-                            escaped = false;
-                            nesting += 1;
-                        }
-                        "}" => {
-                            escaped = false;
-                            if nesting == NESTING_DEFAULT {
-                                if let Some(ast_key) = &key {
-                                    if moving_start != index {
-                                        obj.push((ast_key.clone(), Self::parse(depth + 1, moving_start, index, schema)?));
-                                    }
-                                    moving_start = index + 1;
-                                    key = Option::None;
-                                } else {
-                                    let mut message = String::from("Missing property name in object! -> ");
-                                    message.push_str(&schema[moving_start..usize::min(end, moving_start + 10)]);
-                                    return Err(NP_Error::new(message.as_str()))
-                                }
-                                closed = true; 
-                            } else {
-                                nesting -= 1;
-                            }
-                        },
-                        "\\" => {
-                            escaped = true;
-                        },
-                        "\"" => {
-                            if escaped == false {
-                                if is_quoted {
-                                    nesting -= 1;
-                                } else {
-                                    nesting += 1;
-                                }
-                                is_quoted = !is_quoted;
-                            }
-                        },
-                        "," => {
-                            if nesting == NESTING_DEFAULT {
-                                if let Some(ast_key) = &key {
-                                    obj.push((ast_key.clone(), Self::parse(depth + 1, moving_start, index, schema)?));
-                                    moving_start = index + 1;
-                                    key = Option::None;
-                                } else {
-                                    let mut message = String::from("Missing property name in object! -> ");
-                                    message.push_str(&schema[moving_start..usize::min(end, moving_start + 10)]);
-                                    return Err(NP_Error::new(message.as_str()))
-                                }
-                            }
-                        },
-                        _ => { 
-                            escaped = false;
-                        }
-                    }
-                    index += 1;
-                }
-
-                if closed == false {
-                    let mut message = String::from("Missing matching curly bracket for object! -> ");
-                    message.push_str(&schema[start..usize::min(end, start + 20)]);
-                    return Err(NP_Error::new(message.as_str()))
-                }
-
-                Ok(JS_AST::object{ properties: obj })
-            },
-            js_control::quote => { // string
-                while closed == false && index < end {
-                    match &schema[index..(index + 1)] {
-                        "\\" => {
-                            escaped = true;
-                        },
-                        "\"" => {
-                            if escaped == false {
-                                closed = true;
-                            }
-                        },
-                        _ => { 
-                            escaped = false;
-                        }
-                    }
-                    index += 1;
-                }
-
-                if closed == false {
-                    let mut message = String::from("Missing matching qutoes for string! -> ");
-                    message.push_str(&schema[start..usize::min(end, start + 20)]);
-                    return Err(NP_Error::new(message.as_str()))
-                }
-
-                Ok(JS_AST::string{ addr: AST_STR { start: moving_start, end: index} })
-            }
-        }
-    }
-
-
-}
-
-#[test] 
-fn test() {
-
-    println!("{:?}", JS_Schema::new(String::from(r#"
-        struct({
-            name: string(),
-            age: u16({default: 0}),
-            tags: list({of: string()})
-        });
-    "#)));
 }

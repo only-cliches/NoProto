@@ -23,11 +23,11 @@ rpc_spec({
     author: "hello",
     version: "1.0.0",
     spec: (mod, self) => {
-        self.msg("send_name", struct());
-        self.rpc("your_face", fn(self.send_name), option(self.send_name));
-        self.rpc("your_face", fn(self.argument), result(self.send_name, self.error));
-        self.rpc("your_face", fn(self.argument), empty());
-        self.mod("mod_name", (self) => {
+        msg("send_name", struct());
+        rpc("your_face", fn(self.send_name), option(self.send_name));
+        rpc("your_face", fn(self.argument), result(self.send_name, self.error));
+        rpc("your_face", fn(self.argument), empty());
+        mod("mod_name", (self) => {
 
         });
     }

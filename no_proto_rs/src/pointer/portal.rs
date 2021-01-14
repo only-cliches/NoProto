@@ -151,7 +151,7 @@ impl<'value> NP_Value<'value> for NP_Portal {
 fn schema_parsing_works() -> Result<(), NP_Error> {
 
     let schema = "{\"type\":\"portal\",\"to\":\"\"}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
     let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
     assert_eq!(schema, factory2.schema.to_json()?.stringify());
@@ -170,7 +170,7 @@ fn infinite_recursion() -> Result<(), NP_Error> {
             ["nested", {"type": "portal", "to": "nested"}]
         ]
     }"#;
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     let mut buffer = factory.empty_buffer(None);
 
     match buffer.set(&["nested","nested", "nested"], "hello infinite") {
@@ -204,7 +204,7 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
             ["nested", {"type": "portal", "to": ""}]
         ]
     }"#;
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     let mut buffer = factory.empty_buffer(None);
 
     buffer.set(&["nested", "street"], "hello street")?;
@@ -237,7 +237,7 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
             ]}]
         ]
     }"#;
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     let mut buffer = factory.empty_buffer(None);
 
     buffer.set(&["address", "more", "more","more", "more","more", "more","more", "more", "street"], "hello")?;

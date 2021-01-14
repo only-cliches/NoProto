@@ -352,7 +352,7 @@ impl<'value> NP_Value<'value> for NP_Map<'value> {
 #[test]
 fn schema_parsing_works() -> Result<(), NP_Error> {
     let schema = r#"{"type":"map","value":{"type":"string"}}"#;
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
     let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
     assert_eq!(schema, factory2.schema.to_json()?.stringify());
@@ -362,7 +362,7 @@ fn schema_parsing_works() -> Result<(), NP_Error> {
 #[test]
 fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = r#"{"type":"map","value":{"type":"string"}}"#;
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
 
     // compaction works
     let mut buffer = factory.empty_buffer(None);

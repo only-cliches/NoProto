@@ -5,7 +5,7 @@
 //! use no_proto::NP_Factory;
 //! use no_proto::pointer::bytes::NP_Bytes;
 //! 
-//! let factory: NP_Factory = NP_Factory::new(r#"{
+//! let factory: NP_Factory = NP_Factory::new_json(r#"{
 //!    "type": "bytes"
 //! }"#)?;
 //!
@@ -555,19 +555,19 @@ impl<'value> NP_Value<'value> for NP_Borrow_Bytes<'value> {
 #[test]
 fn schema_parsing_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"bytes\",\"default\":[22,208,10,78,1,19,85]}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
     let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
     assert_eq!(schema, factory2.schema.to_json()?.stringify());
 
     let schema = "{\"type\":\"bytes\",\"size\":10}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
     let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
     assert_eq!(schema, factory2.schema.to_json()?.stringify());
 
     let schema = "{\"type\":\"bytes\"}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
     let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
     assert_eq!(schema, factory2.schema.to_json()?.stringify());
@@ -579,7 +579,7 @@ fn schema_parsing_works() -> Result<(), NP_Error> {
 #[test]
 fn default_value_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"bytes\",\"default\":[1,2,3,4]}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     let buffer = factory.empty_buffer(None);
     assert_eq!(buffer.get::<&[u8]>(&[])?.unwrap(), &[1,2,3,4]);
 
@@ -589,7 +589,7 @@ fn default_value_works() -> Result<(), NP_Error> {
 #[test]
 fn fixed_size_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"bytes\",\"size\": 20}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     let mut buffer = factory.empty_buffer(None);
     buffer.set(&[], &[1u8,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22] as &[u8])?;
     assert_eq!(buffer.get::<&[u8]>(&[])?.unwrap(), &[1u8,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20] as &[u8]);
@@ -600,7 +600,7 @@ fn fixed_size_works() -> Result<(), NP_Error> {
 #[test]
 fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"bytes\"}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     let mut buffer = factory.empty_buffer(None);
     buffer.set(&[], &[1u8,2,3,4,5,6,7,8,9,10,11,12,13] as &[u8])?;
     assert_eq!(buffer.get::<&[u8]>(&[])?.unwrap(), &[1u8,2,3,4,5,6,7,8,9,10,11,12,13] as &[u8]);

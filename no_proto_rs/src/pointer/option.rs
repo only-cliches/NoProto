@@ -5,7 +5,7 @@
 //! use no_proto::NP_Factory;
 //! use no_proto::pointer::option::NP_Enum;
 //! 
-//! let factory: NP_Factory = NP_Factory::new(r#"{
+//! let factory: NP_Factory = NP_Factory::new_json(r#"{
 //!    "type": "option",
 //!    "choices": ["red", "green", "blue"]
 //! }"#)?;
@@ -421,13 +421,13 @@ impl<'value> NP_Value<'value> for NP_Enum {
 #[test]
 fn schema_parsing_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"option\",\"default\":\"hello\",\"choices\":[\"hello\",\"world\"]}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
     let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
     assert_eq!(schema, factory2.schema.to_json()?.stringify());
 
     let schema = "{\"type\":\"option\",\"choices\":[\"hello\",\"world\"]}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
     let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
     assert_eq!(schema, factory2.schema.to_json()?.stringify());
@@ -439,7 +439,7 @@ fn schema_parsing_works() -> Result<(), NP_Error> {
 #[test]
 fn default_value_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"option\",\"default\":\"hello\",\"choices\":[\"hello\",\"world\"]}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     let buffer = factory.empty_buffer(None);
     assert_eq!(buffer.get::<NP_Enum>(&[])?.unwrap(), NP_Enum::new("hello"));
 
@@ -449,7 +449,7 @@ fn default_value_works() -> Result<(), NP_Error> {
 #[test]
 fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"option\",\"choices\":[\"hello\",\"world\"]}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     let mut buffer = factory.empty_buffer(None);
     buffer.set(&[], NP_Enum::new("hello"))?;
     assert_eq!(buffer.get::<NP_Enum>(&[])?, Some(NP_Enum::new("hello")));

@@ -28,7 +28,7 @@ pub mod union;
 use core::{fmt::{Debug}};
 
 use alloc::prelude::v1::Box;
-use crate::{pointer::dec::NP_Dec, schema::NP_Schema_Addr, utils::opt_err};
+use crate::{idl::{JS_AST, JS_Schema}, pointer::dec::NP_Dec, schema::NP_Schema_Addr, utils::opt_err};
 use crate::NP_Parsed_Schema;
 use crate::{json_flex::NP_JSON};
 use crate::memory::{NP_Memory};
@@ -716,6 +716,12 @@ pub trait NP_Value<'value> {
     /// Convert the schema byte array for this type into JSON
     /// 
     fn schema_to_json(schema: &Vec<NP_Parsed_Schema>, address: usize)-> Result<NP_JSON, NP_Error>;
+
+    /// Parse JSON schema into schema
+    ///
+    fn from_idl_to_schema(schema: Vec<NP_Parsed_Schema>, idl: &JS_Schema, args: &Vec<JS_AST>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {
+        panic!()
+    }
 
     /// Parse JSON schema into schema
     ///

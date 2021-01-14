@@ -78,7 +78,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// use no_proto::NP_Factory;
     /// use no_proto::NP_Size_Data;
     /// 
-    /// let factory: NP_Factory = NP_Factory::new(r#"{
+    /// let factory: NP_Factory = NP_Factory::new_json(r#"{
     ///    "type": "struct",
     ///    "fields": [
     ///         ["age", {"type": "uint8"}],
@@ -120,7 +120,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// use no_proto::NP_Factory;
     /// use no_proto::NP_Size_Data;
     /// 
-    /// let factory: NP_Factory = NP_Factory::new(r#"{
+    /// let factory: NP_Factory = NP_Factory::new_json(r#"{
     ///    "type": "string"
     /// }"#)?;
     /// 
@@ -151,7 +151,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// use no_proto::NP_Factory;
     /// use no_proto::NP_Size_Data;
     /// 
-    /// let factory: NP_Factory = NP_Factory::new(r#"{
+    /// let factory: NP_Factory = NP_Factory::new_json(r#"{
     ///    "type": "tuple",
     ///    "sorted": true,
     ///    "values": [
@@ -249,7 +249,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// use no_proto::error::NP_Error;
     /// use no_proto::NP_Factory;
     /// 
-    /// let factory: NP_Factory = NP_Factory::new(r#"{
+    /// let factory: NP_Factory = NP_Factory::new_json(r#"{
     ///    "type": "tuple",
     ///    "sorted": true,
     ///    "values": [
@@ -307,7 +307,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// use no_proto::error::NP_Error;
     /// use no_proto::NP_Factory;
     /// 
-    /// let factory: NP_Factory = NP_Factory::new(r#"{
+    /// let factory: NP_Factory = NP_Factory::new_json(r#"{
     ///    "type": "tuple",
     ///    "sorted": true,
     ///    "values": [
@@ -361,7 +361,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// use no_proto::NP_Size_Data;
     /// 
     /// // a list where each item is a map where each key has a value containing a list of strings
-    /// let factory: NP_Factory = NP_Factory::new(r#"{
+    /// let factory: NP_Factory = NP_Factory::new_json(r#"{
     ///    "type": "list",
     ///    "of": {"type": "map", "value": {
     ///         "type": "list", "of": {"type": "string"}
@@ -418,7 +418,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// use no_proto::NP_Factory;
     /// use no_proto::NP_Size_Data;
     /// 
-    /// let factory: NP_Factory = NP_Factory::new(r#"{
+    /// let factory: NP_Factory = NP_Factory::new_json(r#"{
     ///    "type": "list",
     ///     "of": {"type": "string"}
     /// }"#)?;
@@ -470,7 +470,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// use no_proto::NP_Factory;
     /// use no_proto::NP_Size_Data;
     /// 
-    /// let factory: NP_Factory = NP_Factory::new(r#"{
+    /// let factory: NP_Factory = NP_Factory::new_json(r#"{
     ///    "type": "list",
     ///     "of": {"type": "string"}
     /// }"#)?;
@@ -505,7 +505,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// use no_proto::NP_Factory;
     /// use no_proto::NP_Size_Data;
     /// 
-    /// let factory: NP_Factory = NP_Factory::new(r#"{
+    /// let factory: NP_Factory = NP_Factory::new_json(r#"{
     ///    "type": "struct",
     ///    "fields": [
     ///         ["age", {"type": "uint8"}],
@@ -550,7 +550,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// use no_proto::NP_Factory;
     /// use no_proto::NP_Size_Data;
     /// 
-    /// let factory: NP_Factory = NP_Factory::new(r#"{
+    /// let factory: NP_Factory = NP_Factory::new_json(r#"{
     ///    "type": "map",
     ///    "value": {"type": "string"}
     /// }"#)?;
@@ -580,7 +580,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// use no_proto::NP_Factory;
     /// use no_proto::NP_Size_Data;
     /// 
-    /// let factory: NP_Factory = NP_Factory::new(r#"{
+    /// let factory: NP_Factory = NP_Factory::new_json(r#"{
     ///    "type": "tuple",
     ///     "values": [
     ///         {"type": "string"},
@@ -638,7 +638,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// use no_proto::NP_Factory;
     /// use no_proto::NP_Size_Data;
     /// 
-    /// let factory: NP_Factory = NP_Factory::new(r#"{
+    /// let factory: NP_Factory = NP_Factory::new_json(r#"{
     ///    "type": "list",
     ///     "of": {"type": "string"}
     /// }"#)?;
@@ -728,7 +728,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// use no_proto::NP_Factory;
     /// use no_proto::NP_Size_Data;
     /// 
-    /// let factory: NP_Factory = NP_Factory::new(r#"{
+    /// let factory: NP_Factory = NP_Factory::new_json(r#"{
     ///    "type": "string"
     /// }"#)?;
     /// 
@@ -747,7 +747,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// use no_proto::NP_Factory;
     /// use no_proto::NP_Size_Data;
     /// 
-    /// let factory: NP_Factory = NP_Factory::new(r#"{
+    /// let factory: NP_Factory = NP_Factory::new_json(r#"{
     ///    "type": "list",
     ///     "of": {"type": "string"}
     /// }"#)?;
@@ -767,7 +767,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// use no_proto::NP_Factory;
     /// use no_proto::NP_Size_Data;
     /// 
-    /// let factory: NP_Factory = NP_Factory::new(r#"{
+    /// let factory: NP_Factory = NP_Factory::new_json(r#"{
     ///    "type": "struct",
     ///    "fields": [
     ///         ["age", {"type": "u8"}],
@@ -788,7 +788,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// use no_proto::NP_Factory;
     /// use no_proto::NP_Size_Data;
     /// 
-    /// let factory: NP_Factory = NP_Factory::new(r#"{
+    /// let factory: NP_Factory = NP_Factory::new_json(r#"{
     ///    "type": "map",
     ///    "value": {"type": "string"}
     /// }"#)?;
@@ -809,7 +809,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// use no_proto::NP_Factory;
     /// use no_proto::NP_Size_Data;
     /// 
-    /// let factory: NP_Factory = NP_Factory::new(r#"{
+    /// let factory: NP_Factory = NP_Factory::new_json(r#"{
     ///    "type": "tuple",
     ///    "values": [
     ///         {"type": "string"}, 
@@ -906,7 +906,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// use no_proto::NP_Factory;
     /// use no_proto::NP_Size_Data;
     /// 
-    /// let factory: NP_Factory = NP_Factory::new(r#"{
+    /// let factory: NP_Factory = NP_Factory::new_json(r#"{
     ///    "type": "list",
     ///     "of": {"type": "string"}
     /// }"#)?;
@@ -942,7 +942,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// use no_proto::NP_Factory;
     /// use no_proto::schema::NP_TypeKeys;
     /// 
-    /// let factory: NP_Factory = NP_Factory::new(r#"{
+    /// let factory: NP_Factory = NP_Factory::new_json(r#"{
     ///    "type": "tuple",
     ///    "values": [
     ///         {"type": "geo8"},
@@ -986,7 +986,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// use no_proto::pointer::geo::NP_Geo;
     /// 
     /// // a list where each item is a map where each key has a value containing a list of strings
-    /// let factory: NP_Factory = NP_Factory::new(r#"{
+    /// let factory: NP_Factory = NP_Factory::new_json(r#"{
     ///    "type": "tuple",
     ///    "values": [
     ///         {"type": "geo8"},
@@ -1039,7 +1039,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// use no_proto::NP_Size_Data;
     /// 
     /// // a list where each item is a map where each key has a value containing a list of strings
-    /// let factory: NP_Factory = NP_Factory::new(r#"{
+    /// let factory: NP_Factory = NP_Factory::new_json(r#"{
     ///    "type": "list",
     ///    "of": {"type": "map", "value": {
     ///         "type": "list", "of": {"type": "string"}
@@ -1108,7 +1108,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// use no_proto::NP_Factory;
     /// use no_proto::NP_Size_Data;
     /// 
-    /// let factory: NP_Factory = NP_Factory::new(r#"{
+    /// let factory: NP_Factory = NP_Factory::new_json(r#"{
     ///    "type": "string"
     /// }"#)?;
     /// 
@@ -1171,7 +1171,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// use no_proto::NP_Factory;
     /// use no_proto::NP_Size_Data;
     /// 
-    /// let factory: NP_Factory = NP_Factory::new(r#"{
+    /// let factory: NP_Factory = NP_Factory::new_json(r#"{
     ///    "type": "string"
     /// }"#)?;
     /// 
@@ -1233,7 +1233,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// use no_proto::NP_Factory;
     /// use no_proto::NP_Size_Data;
     /// 
-    /// let factory: NP_Factory = NP_Factory::new(r#"{
+    /// let factory: NP_Factory = NP_Factory::new_json(r#"{
     ///    "type": "string"
     /// }"#)?;
     /// 

@@ -482,13 +482,13 @@ impl<'value> NP_Value<'value> for NP_Tuple<'value> {
 #[test]
 fn schema_parsing_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"tuple\",\"values\":[{\"type\":\"string\"},{\"type\":\"uuid\"},{\"type\":\"uint8\"}]}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
     let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
     assert_eq!(schema, factory2.schema.to_json()?.stringify());
 
     let schema = "{\"type\":\"tuple\",\"values\":[{\"type\":\"string\",\"size\":10},{\"type\":\"uuid\"},{\"type\":\"uint8\"}],\"sorted\":true}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
     let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
     assert_eq!(schema, factory2.schema.to_json()?.stringify());
@@ -499,7 +499,7 @@ fn schema_parsing_works() -> Result<(), NP_Error> {
 #[test]
 fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = r#"{"type":"tuple","values":[{"type":"string"},{"type":"uuid"},{"type":"uint8"}]}"#;
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     let mut buffer = factory.empty_buffer(None);
     buffer.set(&["0"], "hello")?;
     assert_eq!(buffer.get::<&str>(&["0"])?, Some("hello"));
@@ -520,7 +520,7 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
 #[test]
 fn sorting_tuples_works() -> Result<(), NP_Error> {
     let schema = r#"{"type":"tuple","values":[{"type":"string","size":10},{"type":"uuid"},{"type":"uint8"}],"sorted":true}"#;
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     let mut buffer = factory.empty_buffer(None);
     assert_eq!(buffer.read_bytes(), &[0, 0, 0, 4, 0, 14, 0, 24, 0, 40, 0, 0, 0, 0, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
     buffer.set(&["0"], "hello")?;

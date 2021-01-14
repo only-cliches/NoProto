@@ -5,7 +5,7 @@
 //! use no_proto::NP_Factory;
 //! use no_proto::pointer::bytes::NP_Bytes;
 //! 
-//! let factory: NP_Factory = NP_Factory::new(r#"{
+//! let factory: NP_Factory = NP_Factory::new_json(r#"{
 //!    "type": "bool"
 //! }"#)?;
 //!
@@ -239,13 +239,13 @@ impl<'value> NP_Value<'value> for bool {
 #[test]
 fn schema_parsing_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"bool\",\"default\":false}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
     let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
     assert_eq!(schema, factory2.schema.to_json()?.stringify());
 
     let schema = "{\"type\":\"bool\"}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
     let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
     assert_eq!(schema, factory2.schema.to_json()?.stringify());
@@ -255,7 +255,7 @@ fn schema_parsing_works() -> Result<(), NP_Error> {
 #[test]
 fn default_value_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"bool\",\"default\":false}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     let buffer = factory.empty_buffer(None);
     assert_eq!(buffer.get::<bool>(&[])?.unwrap(), false);
 
@@ -266,7 +266,7 @@ fn default_value_works() -> Result<(), NP_Error> {
 #[test]
 fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"bool\"}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     let mut buffer = factory.empty_buffer(None);
     buffer.set(&[], false)?;
     assert_eq!(buffer.get::<bool>(&[])?.unwrap(), false);

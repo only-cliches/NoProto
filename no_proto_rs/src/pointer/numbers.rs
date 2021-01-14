@@ -16,7 +16,7 @@
 //! use no_proto::error::NP_Error;
 //! use no_proto::NP_Factory;
 //! 
-//! let factory: NP_Factory = NP_Factory::new(r#"{
+//! let factory: NP_Factory = NP_Factory::new_json(r#"{
 //!    "type": "u32"
 //! }"#)?;
 //!
@@ -390,13 +390,13 @@ impl NP_BigEndian for i8 {
 #[test]
 fn i8_schema_parsing_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"int8\",\"default\":20}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
     let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
     assert_eq!(schema, factory2.schema.to_json()?.stringify());
 
     let schema = "{\"type\":\"int8\"}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
     let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
     assert_eq!(schema, factory2.schema.to_json()?.stringify());
@@ -407,7 +407,7 @@ fn i8_schema_parsing_works() -> Result<(), NP_Error> {
 #[test]
 fn i8_default_value_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"int8\",\"default\":56}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     let buffer = factory.empty_buffer(None);
     assert_eq!(buffer.get::<i8>(&[])?.unwrap(), 56i8);
     let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
@@ -419,7 +419,7 @@ fn i8_default_value_works() -> Result<(), NP_Error> {
 #[test]
 fn i8_set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"i8\"}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     let mut buffer = factory.empty_buffer(None);
     buffer.set(&[], 56i8)?;
     assert_eq!(buffer.get::<i8>(&[])?.unwrap(), 56i8);
@@ -467,13 +467,13 @@ impl NP_BigEndian for i16 {
 #[test]
 fn i16_schema_parsing_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"int16\",\"default\":20}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
     let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
     assert_eq!(schema, factory2.schema.to_json()?.stringify());
 
     let schema = "{\"type\":\"int16\"}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
     let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
     assert_eq!(schema, factory2.schema.to_json()?.stringify());
@@ -485,7 +485,7 @@ fn i16_schema_parsing_works() -> Result<(), NP_Error> {
 #[test]
 fn i16_default_value_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"int16\",\"default\":293}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     let buffer = factory.empty_buffer(None);
     assert_eq!(buffer.get::<i16>(&[])?.unwrap(), 293i16);
     let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
@@ -497,7 +497,7 @@ fn i16_default_value_works() -> Result<(), NP_Error> {
 #[test]
 fn i16_set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"int16\"}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     let mut buffer = factory.empty_buffer(None);
     buffer.set(&[], 293i16)?;
     assert_eq!(buffer.get::<i16>(&[])?.unwrap(), 293i16);
@@ -546,13 +546,13 @@ impl NP_BigEndian for i32 {
 #[test]
 fn i32_schema_parsing_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"int32\",\"default\":20}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
     let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
     assert_eq!(schema, factory2.schema.to_json()?.stringify());
 
     let schema = "{\"type\":\"int32\"}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
     let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
     assert_eq!(schema, factory2.schema.to_json()?.stringify());
@@ -564,7 +564,7 @@ fn i32_schema_parsing_works() -> Result<(), NP_Error> {
 #[test]
 fn i32_default_value_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"i32\",\"default\":293}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     let buffer = factory.empty_buffer(None);
     assert_eq!(buffer.get::<i32>(&[])?.unwrap(), 293i32);
 
@@ -574,7 +574,7 @@ fn i32_default_value_works() -> Result<(), NP_Error> {
 #[test]
 fn i32_set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"i32\"}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     let mut buffer = factory.empty_buffer(None);
     buffer.set(&[], 293i32)?;
     assert_eq!(buffer.get::<i32>(&[])?.unwrap(), 293i32);
@@ -624,13 +624,13 @@ impl NP_BigEndian for i64 {
 #[test]
 fn i64_schema_parsing_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"int64\",\"default\":20}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
     let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
     assert_eq!(schema, factory2.schema.to_json()?.stringify());
 
     let schema = "{\"type\":\"int64\"}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
     let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
     assert_eq!(schema, factory2.schema.to_json()?.stringify());
@@ -642,7 +642,7 @@ fn i64_schema_parsing_works() -> Result<(), NP_Error> {
 #[test]
 fn i64_default_value_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"int64\",\"default\":293}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     let buffer = factory.empty_buffer(None);
     assert_eq!(buffer.get::<i64>(&[])?.unwrap(), 293i64);
     let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
@@ -654,7 +654,7 @@ fn i64_default_value_works() -> Result<(), NP_Error> {
 #[test]
 fn i64_set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"int64\"}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     let mut buffer = factory.empty_buffer(None);
     buffer.set(&[], 293i64)?;
     assert_eq!(buffer.get::<i64>(&[])?.unwrap(), 293i64);
@@ -705,13 +705,13 @@ impl NP_BigEndian for u8 {
 #[test]
 fn u8_schema_parsing_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"uint8\",\"default\":20}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
     let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
     assert_eq!(schema, factory2.schema.to_json()?.stringify());
 
     let schema = "{\"type\":\"uint8\"}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
     let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
     assert_eq!(schema, factory2.schema.to_json()?.stringify());
@@ -722,7 +722,7 @@ fn u8_schema_parsing_works() -> Result<(), NP_Error> {
 #[test]
 fn u8_default_value_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"uint8\",\"default\":198}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     let buffer = factory.empty_buffer(None);
     assert_eq!(buffer.get::<u8>(&[])?.unwrap(), 198u8);
 
@@ -732,7 +732,7 @@ fn u8_default_value_works() -> Result<(), NP_Error> {
 #[test]
 fn u8_set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"uint8\"}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     let mut buffer = factory.empty_buffer(None);
     buffer.set(&[], 198u8)?;
     assert_eq!(buffer.get::<u8>(&[])?.unwrap(), 198u8);
@@ -782,13 +782,13 @@ impl NP_BigEndian for u16 {
 #[test]
 fn u16_schema_parsing_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"uint16\",\"default\":20}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
     let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
     assert_eq!(schema, factory2.schema.to_json()?.stringify());
 
     let schema = "{\"type\":\"uint16\"}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
     let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
     assert_eq!(schema, factory2.schema.to_json()?.stringify());
@@ -800,7 +800,7 @@ fn u16_schema_parsing_works() -> Result<(), NP_Error> {
 #[test]
 fn u16_default_value_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"u16\",\"default\":293}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     let buffer = factory.empty_buffer(None);
     assert_eq!(buffer.get::<u16>(&[])?.unwrap(), 293u16);
 
@@ -810,7 +810,7 @@ fn u16_default_value_works() -> Result<(), NP_Error> {
 #[test]
 fn u16_set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"u16\"}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     let mut buffer = factory.empty_buffer(None);
     buffer.set(&[], 293u16)?;
     assert_eq!(buffer.get::<u16>(&[])?.unwrap(), 293u16);
@@ -860,13 +860,13 @@ impl NP_BigEndian for u32 {
 #[test]
 fn u32_schema_parsing_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"uint32\",\"default\":20}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
     let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
     assert_eq!(schema, factory2.schema.to_json()?.stringify());
 
     let schema = "{\"type\":\"uint32\"}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
     let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
     assert_eq!(schema, factory2.schema.to_json()?.stringify());
@@ -878,7 +878,7 @@ fn u32_schema_parsing_works() -> Result<(), NP_Error> {
 #[test]
 fn u32_default_value_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"u32\",\"default\":293}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     let buffer = factory.empty_buffer(None);
     assert_eq!(buffer.get::<u32>(&[])?.unwrap(), 293u32);
 
@@ -888,7 +888,7 @@ fn u32_default_value_works() -> Result<(), NP_Error> {
 #[test]
 fn u32_set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"u32\"}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     let mut buffer = factory.empty_buffer(None);
     buffer.set(&[], 293u32)?;
     assert_eq!(buffer.get::<u32>(&[])?.unwrap(), 293u32);
@@ -937,13 +937,13 @@ impl NP_BigEndian for u64 {
 #[test]
 fn u64_schema_parsing_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"uint64\",\"default\":20}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
     let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
     assert_eq!(schema, factory2.schema.to_json()?.stringify());
 
     let schema = "{\"type\":\"uint64\"}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
     let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
     assert_eq!(schema, factory2.schema.to_json()?.stringify());
@@ -954,7 +954,7 @@ fn u64_schema_parsing_works() -> Result<(), NP_Error> {
 #[test]
 fn u64_default_value_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"u64\",\"default\":293}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     let buffer = factory.empty_buffer(None);
     assert_eq!(buffer.get::<u64>(&[])?.unwrap(), 293u64);
 
@@ -964,7 +964,7 @@ fn u64_default_value_works() -> Result<(), NP_Error> {
 #[test]
 fn u64_set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"u64\"}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     let mut buffer = factory.empty_buffer(None);
     buffer.set(&[], 293u64)?;
     assert_eq!(buffer.get::<u64>(&[])?.unwrap(), 293u64);
@@ -1013,13 +1013,13 @@ impl NP_BigEndian for f32 {
 #[test]
 fn float_schema_parsing_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"float\",\"default\":20.183000564575195}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
     let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
     assert_eq!(schema, factory2.schema.to_json()?.stringify());
 
     let schema = "{\"type\":\"float\"}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
     let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
     assert_eq!(schema, factory2.schema.to_json()?.stringify());
@@ -1030,7 +1030,7 @@ fn float_schema_parsing_works() -> Result<(), NP_Error> {
 #[test]
 fn float_default_value_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"float\",\"default\":2983.2938}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     let buffer = factory.empty_buffer(None);
     assert_eq!(buffer.get::<f32>(&[])?.unwrap(), 2983.2938f32);
 
@@ -1040,7 +1040,7 @@ fn float_default_value_works() -> Result<(), NP_Error> {
 #[test]
 fn float_set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"float\"}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     let mut buffer = factory.empty_buffer(None);
     buffer.set(&[], 2983.2938f32)?;
     assert_eq!(buffer.get::<f32>(&[])?.unwrap(), 2983.2938f32);
@@ -1089,13 +1089,13 @@ impl NP_BigEndian for f64 {
 #[test]
 fn double_schema_parsing_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"double\",\"default\":20.183000564575195}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
     let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
     assert_eq!(schema, factory2.schema.to_json()?.stringify());
 
     let schema = "{\"type\":\"double\"}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
     let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
     assert_eq!(schema, factory2.schema.to_json()?.stringify());
@@ -1106,7 +1106,7 @@ fn double_schema_parsing_works() -> Result<(), NP_Error> {
 #[test]
 fn double_default_value_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"double\",\"default\":2983.2938}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     let buffer = factory.empty_buffer(None);
     assert_eq!(buffer.get::<f64>(&[])?.unwrap(), 2983.2938f64);
 
@@ -1116,7 +1116,7 @@ fn double_default_value_works() -> Result<(), NP_Error> {
 #[test]
 fn double_set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"double\"}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     let mut buffer = factory.empty_buffer(None);
     buffer.set(&[], 2983.2938f64)?;
     assert_eq!(buffer.get::<f64>(&[])?.unwrap(), 2983.2938f64);

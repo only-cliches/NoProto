@@ -4,7 +4,7 @@
 //! use no_proto::error::NP_Error;
 //! use no_proto::NP_Factory;
 //!
-//! let factory: NP_Factory = NP_Factory::new(r#"{
+//! let factory: NP_Factory = NP_Factory::new_json(r#"{
 //!    "type": "string"
 //! }"#)?;
 //!
@@ -562,31 +562,31 @@ impl<'value> NP_Value<'value> for NP_String<'value> {
 #[test]
 fn schema_parsing_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"string\",\"default\":\"hello\"}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
     let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
     assert_eq!(schema, factory2.schema.to_json()?.stringify());
 
     let schema = "{\"type\":\"string\",\"size\":10}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
     let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
     assert_eq!(schema, factory2.schema.to_json()?.stringify());
 
     let schema = "{\"type\":\"string\",\"lowercase\":true}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
     let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
     assert_eq!(schema, factory2.schema.to_json()?.stringify());
 
     let schema = "{\"type\":\"string\",\"uppercase\":true}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
     let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
     assert_eq!(schema, factory2.schema.to_json()?.stringify());
 
     let schema = "{\"type\":\"string\"}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
     let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
     assert_eq!(schema, factory2.schema.to_json()?.stringify());
@@ -597,7 +597,7 @@ fn schema_parsing_works() -> Result<(), NP_Error> {
 #[test]
 fn default_value_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"string\",\"default\":\"hello\"}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     let buffer = factory.empty_buffer(None);
     assert_eq!(buffer.get::<&str>(&[])?.unwrap(), "hello");
 
@@ -607,7 +607,7 @@ fn default_value_works() -> Result<(), NP_Error> {
 #[test]
 fn fixed_size_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"string\",\"size\": 20}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     let mut buffer = factory.empty_buffer(None);
     buffer.set(&[] as &[&str], "hello there this sentence is long")?;
     assert_eq!(buffer.get::<&str>(&[])?.unwrap(), "hello there this sen");
@@ -618,7 +618,7 @@ fn fixed_size_works() -> Result<(), NP_Error> {
 #[test]
 fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"string\"}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     let mut buffer = factory.empty_buffer(None);
     buffer.set(&[], "hello there this sentence is long")?;
     assert_eq!(
@@ -638,13 +638,13 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
 #[test]
 fn uppercase_lowercase_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"string\",\"lowercase\": true}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     let mut buffer = factory.empty_buffer(None);
     buffer.set(&[], "HELLO")?;
     assert_eq!(buffer.get::<&str>(&[])?.unwrap(),"hello");
 
     let schema = "{\"type\":\"string\",\"uppercase\": true}";
-    let factory = crate::NP_Factory::new(schema)?;
+    let factory = crate::NP_Factory::new_json(schema)?;
     let mut buffer = factory.empty_buffer(None);
     buffer.set(&[], "hello")?;
     assert_eq!(buffer.get::<&str>(&[])?.unwrap(),"HELLO");
