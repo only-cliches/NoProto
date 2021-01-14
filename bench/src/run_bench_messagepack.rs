@@ -1,5 +1,5 @@
 use crate::LOOPS;
-use messagepack_rs::{deserializable::Deserializable, serializable::Serializable, value::Value};
+
 use std::io::{BufReader, Cursor};
 use std::collections::BTreeMap;
 
@@ -9,6 +9,10 @@ use flate2::Compression;
 use flate2::write::ZlibEncoder;
 use std::time::{SystemTime};
 
+use std::collections::HashMap;
+use rmp::{encode, decode};
+use rmpv::{ValueRef::*, decode::read_value_ref};
+use rmpv::encode::write_value_ref;
 
 pub struct MessagePackBench();
 
@@ -26,12 +30,12 @@ impl MessagePackBench {
         return (encoded.len(), compressed.len())
     }
 
-    pub fn encode_bench(base: u128) -> String {
+    pub fn encode_bench(base: u128) -> std::string::String {
         let start = SystemTime::now();
 
         for _x in 0..LOOPS {
             let buffer = Self::encode_single();
-            assert_eq!(buffer.len(), 296);
+            assert_eq!(buffer.len(), 311);
         }
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
@@ -46,46 +50,54 @@ impl MessagePackBench {
 
         for x in 0..3 {
 
-            let mut bar = BTreeMap::new();
-            bar.insert(String::from("time"), Value::from(123456 + (x as i32)));
-            bar.insert(String::from("ratio"), Value::from(3.14159 + (x as f32)));
-            bar.insert(String::from("size"), Value::from(10000 + (x as u16)));
+            let bar = Map(vec![
+                (String("time".into()), Integer((123456 + (x as i32)).into())),
+                (String("ratio".into()), F32((3.14159 + (x as f32)).into())),
+                (String("size".into()), Integer((10000 + (x as u16)).into()))
+            ]);
 
-            let mut foobar = BTreeMap::new();
-            foobar.insert(String::from("name"), Value::from("Hello, World!"));
-            foobar.insert(String::from("sibling"), Value::from(bar));
-            foobar.insert(String::from("rating"), Value::from(3.1415432432445543543 + (x as f64)));
-            foobar.insert(String::from("postfix"), Value::from("!".as_bytes()[0]));
+            let foobar = Map(vec![
+                (String("name".into()), String("Hello, World!".into())),
+                (String("sibling".into()), bar),
+                (String("rating".into()), F64((3.1415432432445543543 + (x as f64)).into())),
+                (String("postfix".into()), String("!".into()))
+            ]);
 
-            vector.push(Value::from(foobar));
+            vector.push(foobar);
         }
 
-        let mut foobarcontainer = BTreeMap::new();
-        foobarcontainer.insert(String::from("fruit"), Value::from(2u8));
-        foobarcontainer.insert(String::from("initialized"), Value::from(true));
-        foobarcontainer.insert(String::from("location"), Value::from("http://arstechnica.com"));
-        foobarcontainer.insert(String::from("list"), Value::from(vector));
+        let value = Map(vec![
+            (String("fruit".into()), Integer(2u8.into())),
+            (String("initialized".into()), Boolean(true)),
+            (String("location".into()), String("http://arstechnica.com".into())),
+            (String("list".into()), Array(vector))
+        ]);
 
-        Value::from(foobarcontainer).serialize().unwrap()
+        let mut bytes: Vec<u8> = Vec::new();
+
+        write_value_ref(&mut bytes, &value).unwrap();
+
+        bytes
     }
 
 
 
-    pub fn update_bench(base: u128) -> String  {
+    pub fn update_bench(base: u128) -> std::string::String  {
         let buffer = Self::encode_single();
 
         let start = SystemTime::now();
 
         for _x in 0..LOOPS {
-            let mut container = Value::deserialize(&mut BufReader::new(Cursor::new(buffer.clone()))).unwrap();
+            let mut container = read_value_ref(&mut &buffer[..]).unwrap().to_owned();
 
             match &mut container {
-                Value::Map(foobarcontainer) => {
-                    if let Value::Array(list) = foobarcontainer.get_mut("list").unwrap() {
+                rmpv::Value::Map(foobarcontainer) => {
+                    if let rmpv::Value::Array(list) = Self::find_mut(foobarcontainer, "list") {
                         list.iter_mut().enumerate().for_each(|(x, value)| {
                             if x == 0 {
-                                if let Value::Map(foobar) = value {
-                                    foobar.insert(String::from("name"), Value::from("bob"));
+                                if let rmpv::Value::Map(foobar) = value {
+                                    let value = Self::find_mut(foobar, "name");
+                                    *value = rmpv::Value::String("bob".into());
                                    
                                 } else { panic!() }
                             }
@@ -95,29 +107,33 @@ impl MessagePackBench {
                 _ => panic!()
             }
 
-            assert_eq!(container.serialize().unwrap().len(), 286);
+            let mut bytes: Vec<u8> = Vec::new();
+
+            rmpv::encode::write_value(&mut bytes, &container).unwrap();
+
+            assert_eq!(bytes.len(), 301);
         }
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
         println!("MessagePack: {:>9.0} ops/ms {:.2}", LOOPS as f64 / time.as_millis() as f64, (base as f64 / time.as_micros() as f64));
         format!("{:>6.0}", LOOPS as f64 / time.as_millis() as f64)
-
     }
 
-    pub fn decode_one_bench(base: u128) -> String {
+    pub fn decode_one_bench(base: u128) -> std::string::String {
         let buffer = Self::encode_single();
 
         let start = SystemTime::now();
 
+        let location = String("location".into());
+        let url = String("http://arstechnica.com".into());
 
         for _x in 0..LOOPS {
-            let container = Value::deserialize(&mut BufReader::new(Cursor::new(buffer.clone()))).unwrap();
+            let container = read_value_ref(&mut &buffer[..]).unwrap();
 
             match &container {
-                Value::Map(foobarcontainer) => {
-                    if let Value::String(location) = foobarcontainer.get("location").unwrap() {
-                        assert_eq!(location, &String::from("http://arstechnica.com"));
-                    } else { panic!() }
+                Map(foobarcontainer) => {
+                    let location = foobarcontainer.iter().position(|(key, _value)| { key == &location }).unwrap();
+                    assert_eq!(&foobarcontainer[location].1, &url);
                 },
                 _ => panic!()
             }
@@ -128,58 +144,59 @@ impl MessagePackBench {
         format!("{:>6.0}", LOOPS as f64 / time.as_millis() as f64)
     }
 
-    pub fn decode_bench(base: u128) -> String  {
+    #[inline(always)]
+    pub fn find<'find>(container: &'find Vec<(rmpv::ValueRef, rmpv::ValueRef)>, key: &str) -> &'find rmpv::ValueRef<'find> {
+        let k = String(key.into());
+        let idx = container.iter().position(|(key, _value)| { key == &k }).unwrap();
+        &container[idx].1
+    }
+
+    #[inline(always)]
+    pub fn find_mut<'find>(container: &'find mut Vec<(rmpv::Value, rmpv::Value)>, key: &str) -> &'find mut rmpv::Value {
+        let k = rmpv::Value::String(key.into());
+        let idx = container.iter().position(|(key, _value)| { key == &k }).unwrap();
+        &mut container[idx].1
+    }
+
+    pub fn decode_bench(base: u128) -> std::string::String  {
         
         let buffer = Self::encode_single();
 
         let start = SystemTime::now();
 
-        let hello_world = String::from("Hello, World!");
-        let ars_technica = String::from("http://arstechnica.com");
+        let hello_world = String("Hello, World!".into());
+        let ars_technica = String("http://arstechnica.com".into());
 
 
         for _x in 0..LOOPS {
-            let container = Value::deserialize(&mut BufReader::new(Cursor::new(buffer.clone()))).unwrap();
+            let container = read_value_ref(&mut &buffer[..]).unwrap();
 
             match &container {
-                Value::Map(foobarcontainer) => {
-                    if let Value::String(location) = foobarcontainer.get("location").unwrap() {
-                        assert_eq!(location, &ars_technica);
-                    } else { panic!() }
-                    if let Value::UInt8(fruit) = foobarcontainer.get("fruit").unwrap() {
-                        assert_eq!(fruit, &2u8);
-                    } else { panic!() }
-                    if let Value::Bool(init) = foobarcontainer.get("initialized").unwrap() {
-                        assert_eq!(init, &true);
-                    } else { panic!() }
+                Map(foobarcontainer) => {
+                    assert_eq!(Self::find(foobarcontainer, "location"), &ars_technica);
+                    assert_eq!(Self::find(foobarcontainer, "fruit"), &Integer(2u8.into()));
+                    assert_eq!(Self::find(foobarcontainer, "initialized"), &Boolean(true));
+
                     let mut loops = 0;
-                    if let Value::Array(list) = foobarcontainer.get("list").unwrap() {
+                    if let Array(list) = Self::find(foobarcontainer, "list") {
                         list.iter().enumerate().for_each(|(x, value)| {
                             loops += 1;
-                            if let Value::Map(foobar) = value {
-                                if let Value::String(name) = foobar.get("name").unwrap() {
-                                    assert_eq!(name, &hello_world);
-                                } else { panic!() }
-                                if let Value::Float64(rating) = foobar.get("rating").unwrap() {
-                                    assert_eq!(rating, &(3.1415432432445543543 + (x as f64)));
-                                } else { panic!() }
-                                if let Value::UInt8(postfix) = foobar.get("postfix").unwrap() {
-                                    assert_eq!(postfix, &"!".as_bytes()[0]);
-                                } else { panic!() }
-                                if let Value::Map(bar) = foobar.get("sibling").unwrap() {
-                                    if let Value::UInt8(time) = bar.get("time").unwrap() {
-                                        assert_eq!(time, &(64 + x as u8));
-                                    } else { panic!(); }
-                                    if let Value::Float32(ratio) = bar.get("ratio").unwrap() {
-                                        assert_eq!(ratio, &(3.14159 + (x as f32)));
-                                    } else { panic!() }
-                                    if let Value::UInt16(size) = bar.get("size").unwrap() {
-                                        assert_eq!(size, &(10000 + (x as u16)));
-                                    } else { panic!() }
+ 
+                            if let Map(foobar) = value {
+                                assert_eq!(Self::find(foobar, "name"), &hello_world);
+                                assert_eq!(Self::find(foobar, "rating"), &F64((3.1415432432445543543 + (x as f64)).into()));
+                                assert_eq!(Self::find(foobar, "postfix"), &String("!".into()));
+
+                                if let Map(bar) = Self::find(foobar, "sibling") {
+                                    assert_eq!(Self::find(bar, "time"), &Integer((123456 + (x as i32)).into()));
+                                    assert_eq!(Self::find(bar, "ratio"), &F32((3.14159 + (x as f32)).into()));
+                                    assert_eq!(Self::find(bar, "size"), &Integer((10000 + (x as u16)).into()));
                                 } else { panic!() }
                             } else { panic!() }
                         });
-                    } else { panic!() }
+                    } else {
+                        panic!()
+                    }
                     assert!(loops == 3);
                 },
                 _ => panic!()

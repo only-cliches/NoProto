@@ -90,6 +90,8 @@ dependencies = [
  "rand 0.7.3",
  "rawbson",
  "rmp",
+ "rmp-serde",
+ "rmpv",
  "serde",
 ]
 
@@ -706,6 +708,27 @@ checksum = "0f10b46df14cf1ee1ac7baa4d2fbc2c52c0622a4b82fa8740e37bc452ac0184f"
 dependencies = [
  "byteorder",
  "num-traits",
+]
+
+[[package]]
+name = "rmp-serde"
+version = "0.15.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3f74489002493a9984ee753ebd049552a1c82f0740e347ee9fc57c907fb19f83"
+dependencies = [
+ "byteorder",
+ "rmp",
+ "serde",
+]
+
+[[package]]
+name = "rmpv"
+version = "0.4.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "601e306fb529fadf3faa482684fba756e1b93897864ef2ab2080b12775c04235"
+dependencies = [
+ "num-traits",
+ "rmp",
 ]
 
 [[package]]

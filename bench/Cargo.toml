@@ -24,6 +24,8 @@ protobuf = "2.18.1"
 rand = "0.7.3"
 rawbson = "0.1.0"
 rmp = "0.8.9"
+rmp-serde = "0.15.1"
+rmpv = "0.4.6"
 serde = "1.0.118"
 
 [target.x86_64-apple-darwin]

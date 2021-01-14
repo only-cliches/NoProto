@@ -134,7 +134,6 @@
 //! ```rust
 //! use no_proto::error::NP_Error;
 //! use no_proto::NP_Factory;
-//! use no_proto::collection::table::NP_Struct;
 //! 
 //! // JSON is used to describe schema for the factory
 //! // Each factory represents a single schema
@@ -154,15 +153,19 @@
 //! // create a new empty buffer
 //! let mut user_buffer = user_factory.empty_buffer(None); // optional capacity
 //! 
-//! // set an internal value of the buffer, set the  "name" field
+//! // set the "name" field
 //! user_buffer.set(&["name"], "Billy Joel")?;
 //! 
-//! // assign nested internal values, sets the first tag element
-//! user_buffer.set(&["tags", "0"], "first tag")?;
-//! 
-//! // get an internal value of the buffer from the "name" field
+//! // read the "name" field
 //! let name = user_buffer.get::<&str>(&["name"])?;
 //! assert_eq!(name, Some("Billy Joel"));
+//! 
+//! // set a nested value, the first tag in the tag list
+//! user_buffer.set(&["tags", "0"], "first tag")?;
+//! 
+//! // read the first tag from the tag list
+//! let tag = user_buffer.get::<&str>(&["tags", "0"])?;
+//! assert_eq!(tag, Some("first tag"));
 //! 
 //! // close buffer and get internal bytes
 //! let user_bytes: Vec<u8> = user_buffer.close();
@@ -170,11 +173,11 @@
 //! // open the buffer again
 //! let user_buffer = user_factory.open_buffer(user_bytes);
 //! 
-//! // get nested internal value, first tag from the tag list
-//! let tag = user_buffer.get::<&str>(&["tags", "0"])?;
-//! assert_eq!(tag, Some("first tag"));
+//! // read the "name" field again
+//! let name = user_buffer.get::<&str>(&["name"])?;
+//! assert_eq!(name, Some("Billy Joel"));
 //! 
-//! // get nested internal value, the age field
+//! // get the age field
 //! let age = user_buffer.get::<u16>(&["age"])?;
 //! // returns default value from schema
 //! assert_eq!(age, Some(0u16));
@@ -238,7 +241,7 @@
 //! The worse case failure mode for NoProto buffers is junk data.  While other formats can cause denial of service attacks or allow unsafe memory access, there is no such failure case with NoProto.  There is no way to construct a NoProto buffer that would cause any detrement in performance to the host application or lead to unsafe memory access.  Also, there is no panic causing code in the library, meaning it will never crash your application.
 //! 
 //! 3. Extremely Fast Updates<br/>
-//! If you have a workflow in your application that is read -> modify -> write with buffers, NoProto will usually outperform every other format, including Bincode and Flatbuffers. This is because NoProto never actually deserializes, it doesn't need to. This library was written with databases in mind, if you want to support client requests like "change username field to X", NoProto will do this faster than any other format, usually orders of magnitude faster. This includes complicated mutations like "push a value onto the end of this nested list".
+//! If you have a workflow in your application that is read -> modify -> write with buffers, NoProto will usually outperform every other format, including Bincode and Flatbuffers. This is because NoProto never actually deserializes, it doesn't need to.  This includes complicated mutations like pushing a value onto a list or adding a value into the middle of a list.
 //! 
 //! 4. Incremental Deserializing<br/>
 //! You only pay for the fields you read, no more. There is no deserializing step in NoProto, opening a buffer typically performs no operations (except for sorted buffers, which is opt in). Once you start asking for fields, the library will navigate the buffer using the format rules to get just what you asked for and nothing else. If you have a workflow in your application where you read a buffer and only grab a few fields inside it, NoProto will outperform most other libraries.

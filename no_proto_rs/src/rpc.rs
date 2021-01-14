@@ -1135,6 +1135,16 @@ pub struct NP_RPC_Request<'request> {
 
 impl<'request> NP_RPC_Request<'request> {
 
+    /// Get the API id of the RPC schema this came from.
+    pub fn api_id(&self) -> &str {
+        todo!()
+    }
+
+    /// Get the API version of the RPC schema this came from.
+    pub fn api_version(&self) -> &str {
+        todo!()
+    }
+
     /// Get the name of this RPC method
     pub fn rpc_name(&self) -> &str {
         self.spec.read_str(&self.rpc)
@@ -1207,6 +1217,17 @@ pub struct NP_RPC_Response<'response> {
 
 
 impl<'request> NP_RPC_Response<'request> {
+
+    
+    /// Get the API id of the RPC schema this came from.
+    pub fn api_id(&self) -> &str {
+        todo!()
+    }
+
+    /// Get the API version of the RPC schema this came from.
+    pub fn api_version(&self) -> &str {
+        todo!()
+    }
 
     /// Get the name of this RPC method
     pub fn rpc_name(&self) -> &str {
