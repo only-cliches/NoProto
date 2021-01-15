@@ -12,7 +12,7 @@ use crate::run_bench_prost::ProstBench;
 use crate::run_bench_flexbuffers::FlexBench;
 // use crate::run_bench_rawbson::RawBSONBench;
 use crate::run_bench_abomonation::AbomBench;
-pub const LOOPS: usize = 1_0_000;
+pub const LOOPS: usize = 1_000_000;
 
 mod bench_fb;
 mod bench_pb;
@@ -153,7 +153,7 @@ fn main() {
     println!("//! | Bincode            | {} |     {} |   {} |   {} |          {} |         {} |", bn_enc, bn_dec, bn_dec1, bn_up, bn_size.0, bn_size.1);
     println!("//! | Protobuf           | {} |     {} |   {} |   {} |          {} |         {} |", pb_enc, pb_dec, pb_dec1, pb_up, pb_size.0, pb_size.1);
     println!("//! | Prost              | {} |     {} |   {} |   {} |          {} |         {} |", pro_enc, pro_dec, pro_dec1, pro_up, pro_size.0, pro_size.1);
-    // println!("//! | Abomonation        | {} |     {} |   {} |   {} |          {} |         {} |", abo_enc, abo_dec, abo_dec1, abo_up, abo_size.0, abo_size.1);
+    println!("//! | Abomonation        | {} |     {} |   {} |   {} |          {} |         {} |", abo_enc, abo_dec, abo_dec1, abo_up, abo_size.0, abo_size.1);
     println!("//! | Rkyv               | {} |     {} |   {} |   {} |          {} |         {} |", rkyv_enc, rkyv_dec, rkyv_dec1, rkyv_up, rkyv_size.0, rkyv_size.1);
 }
 

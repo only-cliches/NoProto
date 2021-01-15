@@ -206,17 +206,18 @@ The format and data used in the benchmarks were taken from the `flatbuffers` ben
 | Library            | Encode | Decode All | Decode 1 | Update 1 | Size (bytes) | Size (Zlib) |
 |--------------------|--------|------------|----------|----------|--------------|-------------|
 | **Runtime Libs**   |        |            |          |          |              |             |
-| *NoProto*          |   1028 |       1548 |    45455 |    11494 |          209 |         167 |
-| Apache Avro        |    155 |         57 |       56 |       40 |          702 |         333 |
-| FlexBuffers        |    448 |        949 |    24390 |      296 |          490 |         309 |
-| JSON               |    614 |        498 |      602 |      447 |          439 |         184 |
-| BSON               |    129 |        115 |      123 |       90 |          414 |         216 |
-| MessagePack        |    687 |        597 |      813 |      205 |          311 |         193 |
+| *NoProto*          |   1006 |       1575 |    38462 |    11628 |          209 |         167 |
+| Apache Avro        |    156 |         57 |       57 |       41 |          702 |         338 |
+| FlexBuffers        |    449 |        954 |    24390 |      298 |          490 |         309 |
+| JSON               |    587 |        489 |      581 |      436 |          439 |         184 |
+| BSON               |    129 |        116 |      124 |       91 |          414 |         216 |
+| MessagePack        |    670 |        620 |      818 |      200 |          311 |         193 |
 | **Compiled Libs**  |        |            |          |          |              |             |
-| Flatbuffers        |   3257 |      16393 |   250000 |     2755 |          264 |         181 |
-| Bincode            |   6098 |       9434 |    10101 |     4425 |          163 |         129 |
-| Protobuf           |   1011 |       1242 |     1309 |      536 |          154 |         141 |
-| Prost              |   1504 |       2137 |     2165 |     1072 |          154 |         142 |
+| Flatbuffers        |   3279 |      16393 |   200000 |     2674 |          264 |         181 |
+| Bincode            |   5988 |       9901 |    10526 |     4651 |          163 |         129 |
+| Protobuf           |    991 |       1290 |     1307 |      530 |          154 |         141 |
+| Prost              |   1520 |       2114 |     2217 |     1091 |          154 |         142 |
+| Rkyv               |   2618 |      31250 |   200000 |        0 |          180 |         152 |
 
 - **Encode**: Transfer a collection of fields of test data into a serialized `Vec<u8>`.
 - **Decode All**: Deserialize the test object from the `Vec<u8>` into all fields.

@@ -156,7 +156,7 @@ impl RkyvBench {
 
             assert!(loops == 3);
 
-            assert_eq!(decoded.location, "http://arstechnica.com");
+            assert_eq!(decoded.location.as_str(), "http://arstechnica.com");
             assert_eq!(decoded.fruit, 2);
             assert_eq!(decoded.initialized, true);
         }
