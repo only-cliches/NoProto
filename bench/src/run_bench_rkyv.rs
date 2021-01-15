@@ -1,4 +1,4 @@
-use crate::LOOPS;
+use crate::{LOOPS};
 
 
 use std::io::{Write, prelude::*};
@@ -6,17 +6,17 @@ use flate2::Compression;
 use flate2::write::ZlibEncoder;
 use std::time::{SystemTime};
 
-use rkyv::{Aligned, Archive, ArchiveBuffer, Archived, archived_value, archived_value_mut, archived_ref, Write as RkWrite};
+use rkyv::{Aligned, Archive, ArchiveBuffer, ArchiveWriter, Archived, Unarchive, Write as RkWrite, archived_ref, archived_value, archived_value_mut};
 
 
-#[derive(Archive, PartialEq, Debug, Clone)]
+#[derive(Archive, PartialEq, Debug, Clone, Unarchive)]
 struct Bar {
   time: i32,
   ratio: f32,
   size: u16
 }
 
-#[derive(Archive, PartialEq, Debug, Clone)]
+#[derive(Archive, PartialEq, Debug, Clone, Unarchive)]
 struct FooBar {
   sibling: Bar,
   name: String,
@@ -24,7 +24,7 @@ struct FooBar {
   postfix: char
 }
 
-#[derive(Archive, PartialEq, Debug, Clone)]
+#[derive(Archive, PartialEq, Debug, Clone, Unarchive)]
 struct FooBarContainer {
   list: Vec<FooBar>,
   initialized: bool,
@@ -89,7 +89,7 @@ impl RkyvBench {
             list: vector
         };
 
-        let mut writer = ArchiveBuffer::new(vec![0u8; 180]);
+        let mut writer = ArchiveWriter::new(Vec::new());
         let pos = writer.archive(&foobar_c).expect("failed to archive test");
         (writer.into_inner(), pos)
     }
@@ -100,20 +100,19 @@ impl RkyvBench {
         let start = SystemTime::now();
 
         for _x in 0..LOOPS {
-            // let mut copy = buffer.clone();
-            // let decoded = unsafe { archived_value_mut::<FooBarContainer>(std::pin::Pin::new(&mut copy[..]), pos) };
+            let mut decoded: FooBarContainer = unsafe { archived_value::<FooBarContainer>(&buffer[..], pos) }.unarchive();
 
-            // decoded.list[0].name = rkyv::std_impl::ArchivedString:
+            decoded.list[0].name = String::from("bob");
 
-            // let encoded = bincode::serialize(&decoded).unwrap();
+            let mut writer = ArchiveWriter::new(Vec::new());
+            let pos = writer.archive(&decoded).expect("failed to archive test");
 
-            // assert_eq!(encoded.len(), 153);
+            assert_eq!(writer.into_inner().len(), 172);
         }
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
-        // println!("Rkyv:        {:>9.0} ops/ms {:.2}", LOOPS as f64 / time.as_millis() as f64, (base as f64 / time.as_micros() as f64));
-        println!("Rkyv:        {:>9.0} ops/ms {:.2}", 0, 0);
-        format!("{:>6.0}", 0)
+        println!("Rkyv:        {:>9.0} ops/ms {:.2}", LOOPS as f64 / time.as_millis() as f64, (base as f64 / time.as_micros() as f64));
+        format!("{:>6.0}", LOOPS as f64 / time.as_millis() as f64)
     }
 
     pub fn decode_one_bench(base: u128) -> String {
