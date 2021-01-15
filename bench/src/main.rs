@@ -12,7 +12,7 @@ use crate::run_bench_prost::ProstBench;
 use crate::run_bench_flexbuffers::FlexBench;
 // use crate::run_bench_rawbson::RawBSONBench;
 use crate::run_bench_abomonation::AbomBench;
-pub const LOOPS: usize = 1_000_000;
+pub const LOOPS: usize = 10_000_000;
 
 mod bench_fb;
 mod bench_pb;
