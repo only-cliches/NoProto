@@ -663,9 +663,9 @@ dependencies = [
 
 [[package]]
 name = "rawbson"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cc6432289a014978713cb802e4c651e9a99a422e7eac7e614fb8d7bdb232ae77"
+checksum = "ffb82470e3941b2d3b68c66c633eeebedaa3a289078eef151fb7b26f9e2b8c0e"
 dependencies = [
  "bson",
  "chrono",

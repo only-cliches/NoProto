@@ -22,7 +22,7 @@ no_proto = { path = "../no_proto_rs" }
 prost = "0.7.0"
 protobuf = "2.18.1"
 rand = "0.7.3"
-rawbson = "0.1.0"
+rawbson = "0.2.0"
 rkyv = "0.3.0"
 rmp = "0.8.9"
 rmp-serde = "0.15.1"
