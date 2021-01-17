@@ -5,8 +5,7 @@ use flate2::Compression;
 use flate2::write::ZlibEncoder;
 use std::time::{SystemTime};
 use rawbson::{
-    DocRef,
-    DocBuf,
+    Doc,
     elem,
 };
 use bson::*;
@@ -99,7 +98,7 @@ impl RawBSONBench {
         let start = SystemTime::now();
 
         for _x in 0..LOOPS {
-            let container = DocRef::new(&buffer[..]).unwrap();
+            let container = Doc::new(&buffer[..]).unwrap();
 
             assert_eq!(container.get_str("location").unwrap().unwrap(), "http://arstechnica.com");
         }
@@ -115,7 +114,7 @@ impl RawBSONBench {
         let start = SystemTime::now();
 
         for _x in 0..LOOPS {
-            let container = DocRef::new(&buffer[..]).unwrap();
+            let container = Doc::new(&buffer[..]).unwrap();
 
             assert_eq!(container.get_str("location").unwrap().unwrap(), "http://arstechnica.com");
             assert_eq!(container.get_i32("fruit").unwrap().unwrap(), 2i32);
@@ -134,14 +133,14 @@ impl RawBSONBench {
                 let sibling = foobar.get_document("sibling").unwrap().unwrap();
                 assert_eq!(sibling.get_i32("time").unwrap().unwrap(), 123456 + (x as i32));
                 assert_eq!(sibling.get_f64("ratio").unwrap().unwrap(), 3.14159f64);
-                assert_eq!(sibling.get_i32("size").unwrap().unwrap(), 10000 + (x as i32));               
+                assert_eq!(sibling.get_i32("size").unwrap().unwrap(), 10000 + (x as i32));
             }
 
             assert!(loops == 3);
         }
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
-        println!("Raw BSON:    {:>9.0} ops/ms {:.2}", LOOPS as f64 / time.as_millis() as f64, (base as f64 / time.as_micros() as f64));    
+        println!("Raw BSON:    {:>9.0} ops/ms {:.2}", LOOPS as f64 / time.as_millis() as f64, (base as f64 / time.as_micros() as f64));
         format!("{:>6.0}", LOOPS as f64 / time.as_millis() as f64)
     }
 }
