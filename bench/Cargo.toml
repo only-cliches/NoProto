@@ -28,6 +28,7 @@ rmp = "0.8.9"
 rmp-serde = "0.15.1"
 rmpv = "0.4.6"
 serde = "1.0.118"
+serde_json = "1.0.61"
 
 [target.x86_64-apple-darwin]
 rustflags = ["-Ctarget-cpu=native"]

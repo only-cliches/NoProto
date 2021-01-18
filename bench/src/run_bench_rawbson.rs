@@ -122,11 +122,9 @@ impl RawBSONBench {
 
             let mut loops = 0;
 
-            let list = container.get_array("list").unwrap().unwrap();
-
-            for x in 0..3 {
+            container.get_array("list").unwrap().unwrap().into_iter().enumerate().for_each(|(x, foobar)| {
                 loops += 1;
-                let foobar = list.get_document(x).unwrap().unwrap();
+                let foobar = foobar.unwrap().as_document().unwrap();
                 assert_eq!(foobar.get_str("name").unwrap().unwrap(), "Hello, World!");
                 assert_eq!(foobar.get_f64("rating").unwrap().unwrap(), 3.1415432432445543543 + (x as f64));
                 assert_eq!(foobar.get_str("postfix").unwrap().unwrap(), "!");
@@ -134,6 +132,10 @@ impl RawBSONBench {
                 assert_eq!(sibling.get_i32("time").unwrap().unwrap(), 123456 + (x as i32));
                 assert_eq!(sibling.get_f64("ratio").unwrap().unwrap(), 3.14159f64);
                 assert_eq!(sibling.get_i32("size").unwrap().unwrap(), 10000 + (x as i32));
+            });
+
+            for x in 0..3 {
+
             }
 
             assert!(loops == 3);

@@ -10,9 +10,9 @@ use flate2::write::ZlibEncoder;
 use std::time::{SystemTime};
 
 
-pub struct MessagePackBench();
+pub struct MessagePackRSBench();
 
-impl MessagePackBench {
+impl MessagePackRSBench {
 
     pub fn size_bench() -> (usize, usize) {
 
