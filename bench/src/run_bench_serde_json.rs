@@ -48,7 +48,7 @@ impl SerdeJSONBench {
         e.write(&encoded[..]).unwrap();
         let compressed = e.finish().unwrap();
 
-        println!("Serde JSON: size: {}b, zlib: {}b", encoded.len(), compressed.len());
+        println!("Serde JSON:  size: {}b, zlib: {}b", encoded.len(), compressed.len());
         return (encoded.len(), compressed.len())
     }
 
@@ -61,7 +61,7 @@ impl SerdeJSONBench {
         }
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
-        println!("Serde JSON: {:>9.0} ops/ms {:.2}", LOOPS as f64 / time.as_millis() as f64, (base as f64 / time.as_micros() as f64)); 
+        println!("Serde JSON:  {:>9.0} ops/ms {:.2}", LOOPS as f64 / time.as_millis() as f64, (base as f64 / time.as_micros() as f64)); 
         format!("{:>6.0}", LOOPS as f64 / time.as_millis() as f64) 
     }
 
@@ -112,7 +112,7 @@ impl SerdeJSONBench {
         }
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
-        println!("Serde JSON: {:>9.0} ops/ms {:.2}", LOOPS as f64 / time.as_millis() as f64, (base as f64 / time.as_micros() as f64));
+        println!("Serde JSON:  {:>9.0} ops/ms {:.2}", LOOPS as f64 / time.as_millis() as f64, (base as f64 / time.as_micros() as f64));
         format!("{:>6.0}", LOOPS as f64 / time.as_millis() as f64)
     }
 
@@ -127,7 +127,7 @@ impl SerdeJSONBench {
         }
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
-        println!("Serde JSON: {:>9.0} ops/ms {:.2}", LOOPS as f64 / time.as_millis() as f64, (base as f64 / time.as_micros() as f64));
+        println!("Serde JSON:  {:>9.0} ops/ms {:.2}", LOOPS as f64 / time.as_millis() as f64, (base as f64 / time.as_micros() as f64));
         format!("{:>6.0}", LOOPS as f64 / time.as_millis() as f64)
     }
 
@@ -162,7 +162,7 @@ impl SerdeJSONBench {
         }
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
-        println!("Serde JSON: {:>9.0} ops/ms {:.2}", LOOPS as f64 / time.as_millis() as f64, (base as f64 / time.as_micros() as f64));
+        println!("Serde JSON:  {:>9.0} ops/ms {:.2}", LOOPS as f64 / time.as_millis() as f64, (base as f64 / time.as_micros() as f64));
         format!("{:>6.0}", LOOPS as f64 / time.as_millis() as f64)
     }
 }

@@ -44,64 +44,79 @@ BSON:        size: 414b, zlib: 216b
 Prost:       size: 154b, zlib: 142b
 Avro:        size: 702b, zlib: 336b
 Flexbuffers: size: 490b, zlib: 309b
-Abomonation: size: 261b, zlib: 160b
+Abomonation: size: 261b, zlib: 159b
 Rkyv:        size: 180b, zlib: 151b
+Raw BSON:    size: 414b, zlib: 216b
+MessagePack: size: 296b, zlib: 187b
+Serde JSON: size: 446b, zlib: 198b
 
 ======== ENCODE BENCHMARK ========
-NoProto:          1019 ops/ms 1.00
-Flatbuffers:      3144 ops/ms 3.08
-Bincode:          6698 ops/ms 6.57
-Protobuf:          939 ops/ms 0.92
-MessagePack:       685 ops/ms 0.67
-JSON:              606 ops/ms 0.59
-BSON:              129 ops/ms 0.13
-Prost:            1520 ops/ms 1.49
-Avro:              155 ops/ms 0.15
-Flexbuffers:       443 ops/ms 0.43
-Abomonation:      2625 ops/ms 2.57
-Rkyv:             1674 ops/ms 1.64
+NoProto:           998 ops/ms 1.00
+Flatbuffers:      3205 ops/ms 3.21
+Bincode:          6135 ops/ms 6.15
+Protobuf:         1011 ops/ms 1.01
+MessagePack:       681 ops/ms 0.68
+JSON:              622 ops/ms 0.62
+BSON:              130 ops/ms 0.13
+Prost:            1548 ops/ms 1.55
+Avro:              158 ops/ms 0.16
+Flexbuffers:       447 ops/ms 0.45
+Abomonation:      2710 ops/ms 2.71
+Rkyv:             1658 ops/ms 1.66
+Raw BSON:          128 ops/ms 0.13
+MessagePack:       151 ops/ms 0.15
+Serde JSON:       948 ops/ms 0.95
 
 ======== DECODE BENCHMARK ========
-NoProto:          1560 ops/ms 1.00
-Flatbuffers:     16234 ops/ms 10.40
-Bincode:          9259 ops/ms 5.93
-Protobuf:         1249 ops/ms 0.80
-MessagePack:       616 ops/ms 0.39
-JSON:              491 ops/ms 0.31
+NoProto:          1645 ops/ms 1.00
+Flatbuffers:     16393 ops/ms 9.95
+Bincode:          9804 ops/ms 5.93
+Protobuf:         1294 ops/ms 0.79
+MessagePack:       627 ops/ms 0.38
+JSON:              491 ops/ms 0.30
 BSON:              115 ops/ms 0.07
-Prost:            2205 ops/ms 1.41
-Avro:               57 ops/ms 0.04
-Flexbuffers:       947 ops/ms 0.61
-Abomonation:    117647 ops/ms 75.22
-Rkyv:            36900 ops/ms 23.64
+Prost:            2075 ops/ms 1.26
+Avro:               57 ops/ms 0.03
+Flexbuffers:       950 ops/ms 0.58
+Abomonation:    125000 ops/ms 71.37
+Rkyv:            37037 ops/ms 22.23
+Raw BSON:         1130 ops/ms 0.69
+MessagePack:       246 ops/ms 0.15
+Serde JSON:       650 ops/ms 0.39
 
 ====== DECODE ONE BENCHMARK ======
-NoProto:         46729 ops/ms 1.00
-Flatbuffers:    222222 ops/ms 4.67
-Bincode:         10050 ops/ms 0.22
-Protobuf:         1294 ops/ms 0.03
-MessagePack:       825 ops/ms 0.02
-JSON:              604 ops/ms 0.01
+NoProto:         45455 ops/ms 1.00
+Flatbuffers:    200000 ops/ms 3.97
+Bincode:         10417 ops/ms 0.23
+Protobuf:         1266 ops/ms 0.03
+MessagePack:       833 ops/ms 0.02
+JSON:              606 ops/ms 0.01
 BSON:              122 ops/ms 0.00
-Prost:            2222 ops/ms 0.05
-Avro:               57 ops/ms 0.00
-Flexbuffers:     24213 ops/ms 0.52
-Abomonation:    416667 ops/ms 8.75
-Rkyv:           185185 ops/ms 3.94
+Prost:            2151 ops/ms 0.05
+Avro:               56 ops/ms 0.00
+Flexbuffers:     25000 ops/ms 0.54
+Abomonation:    500000 ops/ms 9.05
+Rkyv:           200000 ops/ms 4.06
+Raw BSON:        17544 ops/ms 0.39
+MessagePack:       263 ops/ms 0.01
+Serde JSON:       648 ops/ms 0.01
 
 ====== UPDATE ONE BENCHMARK ======
-NoProto:         11723 ops/ms 1.00
-Flatbuffers:      2486 ops/ms 0.21
-Bincode:          4417 ops/ms 0.38
-Protobuf:          517 ops/ms 0.04
-MessagePack:       206 ops/ms 0.02
-JSON:              439 ops/ms 0.04
-BSON:               89 ops/ms 0.01
-Prost:            1070 ops/ms 0.09
+NoProto:         11905 ops/ms 1.00
+Flatbuffers:      2500 ops/ms 0.21
+Bincode:          4329 ops/ms 0.36
+Protobuf:          539 ops/ms 0.05
+MessagePack:       209 ops/ms 0.02
+JSON:              441 ops/ms 0.04
+BSON:               90 ops/ms 0.01
+Prost:            1072 ops/ms 0.09
 Avro:               41 ops/ms 0.00
-Flexbuffers:       298 ops/ms 0.03
-Abomonation:      2178 ops/ms 0.19
-Rkyv:             1655 ops/ms 0.14
+Flexbuffers:       294 ops/ms 0.02
+Abomonation:      2288 ops/ms 0.19
+Rkyv:             1672 ops/ms 0.14
+Raw BSON:           90 ops/ms 0.01
+MessagePack:       130 ops/ms 0.01
+Serde JSON:       407 ops/ms 0.03
 ```
 
 
