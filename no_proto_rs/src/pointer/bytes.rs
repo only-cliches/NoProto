@@ -5,9 +5,7 @@
 //! use no_proto::NP_Factory;
 //! use no_proto::pointer::bytes::NP_Bytes;
 //! 
-//! let factory: NP_Factory = NP_Factory::new_json(r#"{
-//!    "type": "bytes"
-//! }"#)?;
+//! let factory: NP_Factory = NP_Factory::new("bytes()")?;
 //!
 //! let mut new_buffer = factory.empty_buffer(None);
 //! new_buffer.set(&[], &[0u8, 1, 2, 3, 4] as &[u8])?;
@@ -18,7 +16,8 @@
 //! ```
 //! 
 
-use crate::{json_flex::JSMAP, schema::{NP_Parsed_Schema}};
+use alloc::string::String;
+use crate::{idl::{JS_AST, JS_Schema}, json_flex::JSMAP, schema::{NP_Parsed_Schema}};
 use crate::error::NP_Error;
 use crate::{schema::{NP_TypeKeys}, pointer::NP_Value, json_flex::NP_JSON};
 
@@ -148,6 +147,125 @@ impl<'value> NP_Value<'value> for NP_Bytes {
  
     fn set_value<'set, M: NP_Memory>(cursor: NP_Cursor, memory: &'set M, value: Self) -> Result<NP_Cursor, NP_Error> where Self: 'set + Sized {
         NP_Borrow_Bytes::set_value(cursor, memory, &value)
+    }
+
+
+    fn schema_to_idl(schema: &Vec<NP_Parsed_Schema>, address: usize)-> Result<String, NP_Error> {
+        Ok(match &schema[address] {
+            NP_Parsed_Schema::Bytes { default, size, .. } => {
+                let mut properties: Vec<String> = Vec::new();
+
+                if let Some(x) = default {
+                    let mut def = String::from("default: ");
+                    def.push_str("[");
+                    def.push_str(x.iter().map(|b| b.to_string()).collect::<Vec<String>>().join(",").as_str());
+                    def.push_str("]");
+                    properties.push(def);
+                }
+
+                if *size > 0 {
+                    let mut def = String::from("size: ");
+                    def.push_str(size.to_string().as_str());
+                    properties.push(def);
+                }
+
+                if properties.len() == 0 {
+                    String::from("bytes()")
+                } else {
+                    let mut final_str = String::from("bytes({");
+                    final_str.push_str(properties.join(", ").as_str());
+                    final_str.push_str("})");
+                    final_str
+                }
+
+                
+            },
+            _ => { String::from("") }
+        })
+    }
+
+    fn from_idl_to_schema(mut schema: Vec<NP_Parsed_Schema>, _name: &str, idl: &JS_Schema, args: &Vec<JS_AST>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {
+        let mut schema_data: Vec<u8> = Vec::new();
+        schema_data.push(NP_TypeKeys::Bytes as u8);
+
+        let mut has_fixed_size = false;
+        let mut size = 0u16;
+
+        let mut default: Option<Vec<u8>> = Option::None;
+
+        if args.len() > 0 {
+            match &args[0] {
+                JS_AST::object { properties } => {
+                    for (key, value) in properties.iter() {
+                        match idl.get_str(key).trim() {
+                            "size" => {
+                                match value {
+                                    JS_AST::number { addr } => {
+                                        match idl.get_str(addr).trim().parse::<u16>() {
+                                            Ok(x) => {
+                                                size = x;
+                                                has_fixed_size = true;
+                                            },
+                                            Err(_e) => { return Err(NP_Error::new("size property must be an integer!")) }
+                                        }
+                                    },
+                                    _ => { }
+                                }
+                            },
+                            "default" => {
+                                match value {
+                                    JS_AST::array { values } => {
+                                        let mut default_vals: Vec<u8> = Vec::new();
+
+                                        for val in values {
+                                            match val {
+                                                JS_AST::number { addr } => {
+                                                    match idl.get_str(addr).parse::<u8>() {
+                                                        Ok(x) => {
+                                                            default_vals.push(x);
+                                                        },
+                                                        _ => {}
+                                                    }
+                                                },
+                                                _ => { }
+                                            }
+                                        }
+
+                                        default = Some(default_vals);
+                                    },
+                                    _ => { }
+                                }
+                            }
+                            _ => { }
+                        }
+                    }
+                }
+                _ => { }
+            }
+        };
+
+        if has_fixed_size {
+            schema_data.extend_from_slice(&size.to_be_bytes());
+        } else {
+            schema_data.extend_from_slice(&0u16.to_be_bytes());
+        }
+
+        if let Some(x) = &default {
+            schema_data.extend_from_slice(&((x.len() + 1) as u16).to_be_bytes());
+            schema_data.extend_from_slice(&x[..]);
+        } else {
+            schema_data.extend(0u16.to_be_bytes().to_vec());
+        }
+
+
+        schema.push(NP_Parsed_Schema::Bytes {
+            i: NP_TypeKeys::Bytes,
+            size: size,
+            default: default,
+            sortable: has_fixed_size,
+        });
+
+        return Ok((has_fixed_size, schema_data, schema));
     }
     
     fn set_from_json<'set, M: NP_Memory>(_depth: usize, _apply_null: bool, cursor: NP_Cursor, memory: &'set M, value: &Box<NP_JSON>) -> Result<(), NP_Error> where Self: 'set + Sized {
@@ -394,6 +512,16 @@ impl<'value> NP_Value<'value> for NP_Borrow_Bytes<'value> {
         }
     }
 
+    // This is never called
+    fn schema_to_idl(_schema: &Vec<NP_Parsed_Schema>, _address: usize)-> Result<String, NP_Error> {
+        Ok(String::from("bytes()"))
+    }
+
+    // This is never called
+    fn from_idl_to_schema(schema: Vec<NP_Parsed_Schema>, name: &str, _idl: &JS_Schema, _args: &Vec<JS_AST>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {
+        Self::from_json_to_schema(schema, &Box::new(NP_JSON::Null))
+    }
+
  
     fn set_value<'set, M: NP_Memory>(cursor: NP_Cursor, memory: &'set M, value: Self) -> Result<NP_Cursor, NP_Error> where Self: 'set + Sized {
 
@@ -551,6 +679,28 @@ impl<'value> NP_Value<'value> for NP_Borrow_Bytes<'value> {
     }
 }
 
+#[test]
+fn schema_parsing_works_idl() -> Result<(), NP_Error> {
+    let schema = "bytes({default: [22,208,10,78,1,19,85], size: 10})";
+    let factory = crate::NP_Factory::new(schema)?;
+    assert_eq!(schema, factory.schema.to_idl()?);
+    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    assert_eq!(schema, factory2.schema.to_idl()?);
+
+    let schema = "bytes({size: 10})";
+    let factory = crate::NP_Factory::new(schema)?;
+    assert_eq!(schema, factory.schema.to_idl()?);
+    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    assert_eq!(schema, factory2.schema.to_idl()?);
+
+    let schema = "bytes()";
+    let factory = crate::NP_Factory::new(schema)?;
+    assert_eq!(schema, factory.schema.to_idl()?);
+    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    assert_eq!(schema, factory2.schema.to_idl()?);
+    
+    Ok(())
+}
 
 #[test]
 fn schema_parsing_works() -> Result<(), NP_Error> {

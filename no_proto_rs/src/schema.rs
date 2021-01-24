@@ -5,7 +5,7 @@
 //! Schemas can be created with JSON, ES6 or Bytes.
 //! 
 //! As a quick example, the schemas below are indentical in what they describe, only different in syntax.
-//! ```
+//! ```text
 //! /* List Of Strings */
 //! 
 //! // JSON Schema
@@ -18,14 +18,14 @@
 //! [23, 2, 0, 0, 0, 0, 0]
 //! ```
 //! 
-//! NoProto provides full interop for all schema syntax variants.  You can create a NoProto factory using any schema syntax then export to any other syntax.
+//! NoProto provides complete import and export interop for all schema syntax variants.  You can create a NoProto factory using any schema syntax then export to any syntax.  This means you can compile your schema into bytes using the runtime, then later expand the bytes schema to JSON or IDL if you need to inspect it.
 //! 
 //! Buffers are forever related to the schema that created them, buffers created from a given schema can only later be decoded, edited or compacted by that same schema or a safe mutation of it.
 //! 
 //! Schemas are validated and sanity checked upon creation.  You cannot pass an invalid JSON or ES6 schema into a factory constructor and build/parse buffers with it.  
 //! 
 //! Schemas can be as simple as a single scalar type, for example a perfectly valid schema for a buffer that contains only a string:
-//! ```
+//! ```text
 //! // JSON
 //! {
 //!     "type": "string"
@@ -35,7 +35,7 @@
 //! ```
 //! 
 //! However, you will likely want to store more complicated objects, so that's easy to do as well.
-//! ```
+//! ```text
 //! // JSON
 //! {
 //!     "type": "struct",
@@ -47,18 +47,18 @@
 //!     ]
 //! }
 //! // ES6
-//! struct({
+//! struct({fields: {
 //!     userID: string(),    // userID field contains a string
 //!     password: string(),  // password field contains a string
 //!     email: string(),     // email field contains a string
 //!     age: u8()            // age field contains a Uint8 number (0 - 255)
-//! })
+//! }})
 //! ```
 //! 
 //! There are multiple collection types, and they can be nested.
 //! 
 //! For example, this is a list of structs.  Every item in the list is a struct with two fields: id and title.  Both fields are a string type.
-//! ```
+//! ```text
 //! // JSON
 //! {
 //!     "type": "list",
@@ -72,20 +72,20 @@
 //! }
 //! 
 //! // ES6
-//! list({of: struct({
+//! list({of: struct({fields: {
 //!     id: string(),
 //!     title: string()
-//! })})
+//! }})})
 //! ```
 //! You can nest collections as much and however you'd like, up to 255 levels.
 //! 
 //! A list of strings is just as easy...
 //! 
-//! ```
+//! ```text
 //! // JSON
 //! {
 //!     "type": "list",
-//!     "of": { type: "string" }
+//!     "of": { "type": "string" }
 //! }
 //! 
 //! // ES6
@@ -109,7 +109,7 @@
 //! 
 //! ES6 schemas are not as expensive to parse as JSON schemas, but nowhere near as fast to parse as byte schemas.
 //! 
-//! **JSON Schemas**
+//! **JSON Schemas**<br/>
 //! 
 //! If you're familiar with Typescript, JSON schemas can be described by this recursive interface:
 //! 
@@ -226,7 +226,7 @@
 //! Structs represnt a fixed number of named fields, with each field having it's own data type.
 //! 
 //! - **Bytewise Sorting**: Unsupported
-//! - **Compaction**: Fields without values will be removed from the buffer durring compaction.  If a field never had a value set it's using *zero* space in the buffer.
+//! - **Compaction**: Fields without values will be removed from the buffer durring compaction.
 //! - **Schema Mutations**: The ordering of items in the `fields` property must always remain the same.  It's safe to add new fields to the bottom of the field list or rename fields, but never to remove fields.  field types cannot be changed safely.  If you need to depreciate a field, set it's name to an empty string. 
 //! 
 //! Struct schemas have a single required property called `fields`.  The `fields` property is an array of arrays that represent all possible fields in the struct and their data types.  Any type can be used in fields, including other structs.  Structs cannot have more than 255 fields, and the field names cannot be longer than 255 UTF8 bytes.
@@ -235,7 +235,7 @@
 //! 
 //! If you need flexible field names use a `map` type instead.
 //! 
-//! ```
+//! ```text
 //! // JSON
 //! {
 //!     "type": "struct",
@@ -254,17 +254,17 @@
 //! }
 //! 
 //! // ES6
-//! struct({
+//! struct({fields: {
 //!     // data_type() isn't a real data type...
 //!     field_name: data_type(),
 //!     name: string(),
 //!     tags: list({of: string()}),
 //!     age: u8(),
-//!     meta: struct({
+//!     meta: struct({fields: {
 //!         favorite_color: string(),
 //!         favorite_sport: string()
-//!     })
-//! })
+//!     }})
+//! }})
 //! ```
 //! 
 //! ## list
@@ -278,7 +278,7 @@
 //! 
 //! The more items you have in a list, the slower it will be to seek to values towards the end of the list or loop through the list.
 //! 
-//! ```
+//! ```text
 //! // a list of list of strings
 //! // JSON
 //! {
@@ -289,7 +289,7 @@
 //!     }
 //! }
 //! // ES6
-//! list({of: string()})
+//! list({of: list({of: string()})})
 //! 
 //! // list of numbers
 //! // JSON
@@ -316,7 +316,7 @@
 //! 
 //! The more items you have in a map, the slower it will be to seek to values or loop through the map.  Tables are far more performant for seeking to values.
 //! 
-//! ```
+//! ```text
 //! // a map where every value is a string
 //! // JSON
 //! {
@@ -344,7 +344,7 @@
 //! 
 //! When `sorted` is true the order of values is gauranteed to be constant in every buffer and all buffers will be identical in size.
 //! 
-//! ```
+//! ```text
 //! // JSON
 //! {
 //!     "type": "tuple",
@@ -388,7 +388,7 @@
 //! 
 //! The `size` property provides a way to have fixed size strings in your buffers.  If a provided string is larger than the `size` property it will be truncated.  Smaller strings will be padded with white space.
 //! 
-//! ```
+//! ```text
 //! // JSON
 //! {
 //!     "type": "string"
@@ -429,7 +429,7 @@
 //! 
 //! The `size` property provides a way to have fixed size `&[u8]` in your buffers.  If a provided byte slice is larger than the `size` property it will be truncated.  Smaller byte slices will be padded with zeros.
 //! 
-//! ```
+//! ```text
 //! // JSON
 //! {
 //!     "type": "bytes"
@@ -463,7 +463,7 @@
 //! ## int8, int16, int32, int64
 //! Signed integers allow positive or negative whole numbers to be stored.  The bytes are stored in big endian format and converted to unsigned types to allow bytewise sorting.
 //! 
-//! ```
+//! ```text
 //! // JSON
 //! {
 //!     "type": "i8"
@@ -497,7 +497,7 @@
 //! - **Compaction**: Updates are done in place, never use additional space.
 //! - **Schema Mutations**: None
 //! 
-//! ```
+//! ```text
 //! // JSON
 //! {
 //!     "type": "u8"
@@ -527,7 +527,7 @@
 //! - **Compaction**: Updates are done in place, never use additional space.
 //! - **Schema Mutations**: None
 //! 
-//! ```
+//! ```text
 //! // JSON
 //! {
 //!     "type": "f32"
@@ -560,7 +560,7 @@
 //! 
 //! There is one required property of this schema called `choices`.  The property should contain an array of strings that represent all possible choices of the option.
 //! 
-//! ```
+//! ```text
 //! // JSON
 //! {
 //!     "type": "enum",
@@ -591,7 +591,7 @@
 //! - **Compaction**: Updates are done in place, never use additional space.
 //! - **Schema Mutations**: None
 //! 
-//! ```
+//! ```text
 //! // JSON
 //! {
 //!     "type": "bool"
@@ -620,7 +620,7 @@
 //! 
 //! There is a single required property called `exp` that represents the number of decimal points every value will have.
 //! 
-//! ```
+//! ```text
 //! // JSON
 //! {
 //!     "type": "decimal",
@@ -658,7 +658,7 @@
 //! | geo8  | 8     | 11mm resolution (marble)               | 7              |
 //! | geo16 | 16    | 110 microns resolution (grain of sand) | 9              |
 //! 
-//! ```
+//! ```text
 //! // JSON
 //! {
 //!     "type": "geo4"
@@ -685,7 +685,7 @@
 //! - **Compaction**: Updates are done in place, never use additional space.
 //! - **Schema Mutations**: None
 //! 
-//! ```
+//! ```text
 //! // JSON
 //! {
 //!     "type": "ulid"
@@ -705,7 +705,7 @@
 //! - **Compaction**: Updates are done in place, never use additional space.
 //! - **Schema Mutations**: None
 //! 
-//! ```
+//! ```text
 //! // JSON
 //! {
 //!     "type": "uuid"
@@ -725,7 +725,7 @@
 //! - **Compaction**: Updates are done in place, never use additional space.
 //! - **Schema Mutations**: None
 //! 
-//! ```
+//! ```text
 //! // JSON
 //! {
 //!     "type": "date"
@@ -759,7 +759,7 @@
 //! - **Compaction**: Same behavior as type being teleported.
 //! - **Schema Mutations**: None
 //! 
-//! ```
+//! ```text
 //! // JSON
 //! {
 //!     "type": "struct",
@@ -769,17 +769,17 @@
 //!     ]
 //! }
 //! // ES6
-//! struct({
+//! struct({fields: {
 //!     value: u8(),
 //!     next: portal({to: ""})
-//! })
+//! }})
 //! ```
 //! 
 //! With the above schema, values can be stored at `value`, `next.value`, `next.next.next.value`, etc.
 //! 
 //! Here is an example where `portal` is used to duplicate a type.
 //! 
-//! ```
+//! ```text
 //! // JSON
 //! {
 //!     "type": "struct",
@@ -789,10 +789,10 @@
 //!     ]
 //! }
 //! // ES6
-//! struct({
+//! struct({fields: {
 //!     username: string(),
 //!     email: portal({to: "username"})
-//! })
+//! }})
 //! ```
 //! 
 //! In the schema above `username` and `email` are both resolved to the `string` type.
@@ -890,7 +890,7 @@ impl NP_TypeKeys {
             NP_TypeKeys::Ulid       => {   NP_ULID::type_idx() }
             NP_TypeKeys::Date       => {   NP_Date::type_idx() }
             NP_TypeKeys::Enum       => {   NP_Enum::type_idx() }
-            NP_TypeKeys::Struct      => {  NP_Struct::type_idx() }
+            NP_TypeKeys::Struct     => { NP_Struct::type_idx() }
             NP_TypeKeys::Map        => {    NP_Map::type_idx() }
             NP_TypeKeys::List       => {   NP_List::type_idx() }
             NP_TypeKeys::Tuple      => {  NP_Tuple::type_idx() },
@@ -978,7 +978,7 @@ impl NP_Parsed_Schema {
             NP_Parsed_Schema::Ulid       { i, .. }     => { i }
             NP_Parsed_Schema::Date       { i, .. }     => { i }
             NP_Parsed_Schema::Enum       { i, .. }     => { i }
-            NP_Parsed_Schema::Struct      { i, .. }     => { i }
+            NP_Parsed_Schema::Struct     { i, .. }     => { i }
             NP_Parsed_Schema::Map        { i, .. }     => { i }
             NP_Parsed_Schema::List       { i, .. }     => { i }
             NP_Parsed_Schema::Tuple      { i, .. }     => { i }
@@ -1012,7 +1012,7 @@ impl NP_Parsed_Schema {
             NP_Parsed_Schema::Ulid       { i, .. }     => { i.into_type_idx() }
             NP_Parsed_Schema::Date       { i, .. }     => { i.into_type_idx() }
             NP_Parsed_Schema::Enum       { i, .. }     => { i.into_type_idx() }
-            NP_Parsed_Schema::Struct      { i, .. }     => { i.into_type_idx() }
+            NP_Parsed_Schema::Struct     { i, .. }     => { i.into_type_idx() }
             NP_Parsed_Schema::Map        { i, .. }     => { i.into_type_idx() }
             NP_Parsed_Schema::List       { i, .. }     => { i.into_type_idx() }
             NP_Parsed_Schema::Tuple      { i, .. }     => { i.into_type_idx() }
@@ -1044,7 +1044,7 @@ impl NP_Parsed_Schema {
             NP_Parsed_Schema::Ulid       { sortable, .. }     => { *sortable }
             NP_Parsed_Schema::Date       { sortable, .. }     => { *sortable }
             NP_Parsed_Schema::Enum       { sortable, .. }     => { *sortable }
-            NP_Parsed_Schema::Struct      { sortable, .. }     => { *sortable }
+            NP_Parsed_Schema::Struct     { sortable, .. }     => { *sortable }
             NP_Parsed_Schema::Map        { sortable, .. }     => { *sortable }
             NP_Parsed_Schema::List       { sortable, .. }     => { *sortable }
             NP_Parsed_Schema::Tuple      { sortable, .. }     => { *sortable }
@@ -1067,6 +1067,45 @@ pub struct NP_Schema {
 }
 
 impl NP_Schema {
+
+    /// Get a IDL represenatation of this schema
+    pub fn to_idl(&self) -> Result<String, NP_Error> {
+        NP_Schema::_type_to_idl(&self.parsed, 0)
+    }
+
+    /// Recursive function parse schema into IDL
+    #[doc(hidden)]
+    pub fn _type_to_idl(parsed_schema: &Vec<NP_Parsed_Schema>, address: usize) -> Result<String, NP_Error> {
+        match parsed_schema[address] {
+            NP_Parsed_Schema::Any        { .. }      => {    NP_Any::schema_to_idl(parsed_schema, address) }
+            NP_Parsed_Schema::UTF8String { .. }      => {    String::schema_to_idl(parsed_schema, address) }
+            NP_Parsed_Schema::Bytes      { .. }      => {  NP_Bytes::schema_to_idl(parsed_schema, address) }
+            NP_Parsed_Schema::Int8       { .. }      => {        i8::schema_to_idl(parsed_schema, address) }
+            NP_Parsed_Schema::Int16      { .. }      => {       i16::schema_to_idl(parsed_schema, address) }
+            NP_Parsed_Schema::Int32      { .. }      => {       i32::schema_to_idl(parsed_schema, address) }
+            NP_Parsed_Schema::Int64      { .. }      => {       i64::schema_to_idl(parsed_schema, address) }
+            NP_Parsed_Schema::Uint8      { .. }      => {        u8::schema_to_idl(parsed_schema, address) }
+            NP_Parsed_Schema::Uint16     { .. }      => {       u16::schema_to_idl(parsed_schema, address) }
+            NP_Parsed_Schema::Uint32     { .. }      => {       u32::schema_to_idl(parsed_schema, address) }
+            NP_Parsed_Schema::Uint64     { .. }      => {       u64::schema_to_idl(parsed_schema, address) }
+            NP_Parsed_Schema::Float      { .. }      => {       f32::schema_to_idl(parsed_schema, address) }
+            NP_Parsed_Schema::Double     { .. }      => {       f64::schema_to_idl(parsed_schema, address) }
+            NP_Parsed_Schema::Decimal    { .. }      => {    NP_Dec::schema_to_idl(parsed_schema, address) }
+            NP_Parsed_Schema::Boolean    { .. }      => {      bool::schema_to_idl(parsed_schema, address) } 
+            NP_Parsed_Schema::Geo        { .. }      => {    NP_Geo::schema_to_idl(parsed_schema, address) }
+            NP_Parsed_Schema::Uuid       { .. }      => {   NP_UUID::schema_to_idl(parsed_schema, address) }
+            NP_Parsed_Schema::Ulid       { .. }      => {   NP_ULID::schema_to_idl(parsed_schema, address) }
+            NP_Parsed_Schema::Date       { .. }      => {   NP_Date::schema_to_idl(parsed_schema, address) }
+            NP_Parsed_Schema::Enum       { .. }      => {   NP_Enum::schema_to_idl(parsed_schema, address) }
+            NP_Parsed_Schema::Struct     { .. }      => { NP_Struct::schema_to_idl(parsed_schema, address) }
+            NP_Parsed_Schema::Map        { .. }      => {    NP_Map::schema_to_idl(parsed_schema, address) }
+            NP_Parsed_Schema::List       { .. }      => {   NP_List::schema_to_idl(parsed_schema, address) }
+            NP_Parsed_Schema::Tuple      { .. }      => {  NP_Tuple::schema_to_idl(parsed_schema, address) }
+            NP_Parsed_Schema::Portal     { .. }      => { NP_Portal::schema_to_idl(parsed_schema, address) }
+            NP_Parsed_Schema::Union      { .. }      => {  NP_Union::schema_to_idl(parsed_schema, address) }
+            _ => { Ok(String::from("")) }
+        }
+    }
 
     /// Get a JSON represenatation of this schema
     pub fn to_json(&self) -> Result<NP_JSON, NP_Error> {
@@ -1097,7 +1136,7 @@ impl NP_Schema {
             NP_Parsed_Schema::Ulid       { .. }      => {   NP_ULID::schema_to_json(parsed_schema, address) }
             NP_Parsed_Schema::Date       { .. }      => {   NP_Date::schema_to_json(parsed_schema, address) }
             NP_Parsed_Schema::Enum       { .. }      => {   NP_Enum::schema_to_json(parsed_schema, address) }
-            NP_Parsed_Schema::Struct      { .. }      => {  NP_Struct::schema_to_json(parsed_schema, address) }
+            NP_Parsed_Schema::Struct     { .. }      => { NP_Struct::schema_to_json(parsed_schema, address) }
             NP_Parsed_Schema::Map        { .. }      => {    NP_Map::schema_to_json(parsed_schema, address) }
             NP_Parsed_Schema::List       { .. }      => {   NP_List::schema_to_json(parsed_schema, address) }
             NP_Parsed_Schema::Tuple      { .. }      => {  NP_Tuple::schema_to_json(parsed_schema, address) }
@@ -1155,39 +1194,57 @@ impl NP_Schema {
     }
 
     /// Generate a schema from a parsed IDL
-    pub fn from_idl(parsed: Vec<NP_Parsed_Schema>,idl: &JS_Schema, ast: &JS_AST) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {
+    pub fn from_idl(parsed: Vec<NP_Parsed_Schema>, idl: &JS_Schema, ast: &JS_AST) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {
         
         match ast {
             JS_AST::method { name, args } => {
-                match idl.get_str(name).trim() {
-                    "any"      => {    NP_Any::from_idl_to_schema(parsed, idl, args) },
-                    "string"   => {    String::from_idl_to_schema(parsed, idl, args) },
-                    "bytes"    => {  NP_Bytes::from_idl_to_schema(parsed, idl, args) },
-                    "i8"       => {        i8::from_idl_to_schema(parsed, idl, args) },
-                    "i16"      => {       i16::from_idl_to_schema(parsed, idl, args) },
-                    "i32"      => {       i32::from_idl_to_schema(parsed, idl, args) },
-                    "i64"      => {       i64::from_idl_to_schema(parsed, idl, args) },
-                    "u8"       => {        u8::from_idl_to_schema(parsed, idl, args) },
-                    "u16"      => {       u16::from_idl_to_schema(parsed, idl, args) },
-                    "u32"      => {       u32::from_idl_to_schema(parsed, idl, args) },
-                    "u64"      => {       u64::from_idl_to_schema(parsed, idl, args) },
-                    "f32"      => {       f32::from_idl_to_schema(parsed, idl, args) },
-                    "f64"      => {       f64::from_idl_to_schema(parsed, idl, args) },
-                    "decimal"  => {    NP_Dec::from_idl_to_schema(parsed, idl, args) },
-                    "bool"     => {      bool::from_idl_to_schema(parsed, idl, args) },
-                    "geo4"     => {    NP_Geo::from_idl_to_schema(parsed, idl, args) },
-                    "geo8"     => {    NP_Geo::from_idl_to_schema(parsed, idl, args) },
-                    "geo16"    => {    NP_Geo::from_idl_to_schema(parsed, idl, args) },
-                    "uuid"     => {   NP_UUID::from_idl_to_schema(parsed, idl, args) },
-                    "ulid"     => {   NP_ULID::from_idl_to_schema(parsed, idl, args) },
-                    "date"     => {   NP_Date::from_idl_to_schema(parsed, idl, args) },
-                    "enum"     => {   NP_Enum::from_idl_to_schema(parsed, idl, args) },
-                    "struct"   => { NP_Struct::from_idl_to_schema(parsed, idl, args) },
-                    "list"     => {   NP_List::from_idl_to_schema(parsed, idl, args) },
-                    "map"      => {    NP_Map::from_idl_to_schema(parsed, idl, args) },
-                    "tuple"    => {  NP_Tuple::from_idl_to_schema(parsed, idl, args) },
-                    "portal"   => { NP_Portal::from_idl_to_schema(parsed, idl, args) },
-                    "union"    => {  NP_Union::from_idl_to_schema(parsed, idl, args) },
+                let type_name = idl.get_str(name).trim();
+
+                match type_name {
+                    "any"      => {    NP_Any::from_idl_to_schema(parsed, type_name, idl, args) },
+                    "string"   => {    String::from_idl_to_schema(parsed, type_name, idl, args) },
+                    "utf8"     => {    String::from_idl_to_schema(parsed, type_name, idl, args) },
+                    "str"      => {    String::from_idl_to_schema(parsed, type_name, idl, args) },
+                    "bytes"    => {  NP_Bytes::from_idl_to_schema(parsed, type_name, idl, args) },
+                    "i8"       => {        i8::from_idl_to_schema(parsed, type_name, idl, args) },
+                    "int8"     => {        i8::from_idl_to_schema(parsed, type_name, idl, args) },
+                    "i16"      => {       i16::from_idl_to_schema(parsed, type_name, idl, args) },
+                    "int16"    => {       i16::from_idl_to_schema(parsed, type_name, idl, args) },
+                    "i32"      => {       i32::from_idl_to_schema(parsed, type_name, idl, args) },
+                    "int32"    => {       i32::from_idl_to_schema(parsed, type_name, idl, args) },
+                    "i64"      => {       i64::from_idl_to_schema(parsed, type_name, idl, args) },
+                    "int64"    => {       i64::from_idl_to_schema(parsed, type_name, idl, args) },
+                    "u8"       => {        u8::from_idl_to_schema(parsed, type_name, idl, args) },
+                    "uint8"    => {        u8::from_idl_to_schema(parsed, type_name, idl, args) },
+                    "u16"      => {       u16::from_idl_to_schema(parsed, type_name, idl, args) },
+                    "uint16"   => {       u16::from_idl_to_schema(parsed, type_name, idl, args) },
+                    "u32"      => {       u32::from_idl_to_schema(parsed, type_name, idl, args) },
+                    "uint32"   => {       u32::from_idl_to_schema(parsed, type_name, idl, args) },
+                    "u64"      => {       u64::from_idl_to_schema(parsed, type_name, idl, args) },
+                    "uint64"   => {       u64::from_idl_to_schema(parsed, type_name, idl, args) },
+                    "f32"      => {       f32::from_idl_to_schema(parsed, type_name, idl, args) },
+                    "float"    => {       f32::from_idl_to_schema(parsed, type_name, idl, args) },
+                    "f64"      => {       f64::from_idl_to_schema(parsed, type_name, idl, args) },
+                    "double"   => {       f64::from_idl_to_schema(parsed, type_name, idl, args) },
+                    "decimal"  => {    NP_Dec::from_idl_to_schema(parsed, type_name, idl, args) },
+                    "dec"      => {    NP_Dec::from_idl_to_schema(parsed, type_name, idl, args) },
+                    "bool"     => {      bool::from_idl_to_schema(parsed, type_name, idl, args) },
+                    "boolean"  => {      bool::from_idl_to_schema(parsed, type_name, idl, args) },
+                    "geo4"     => {    NP_Geo::from_idl_to_schema(parsed, type_name, idl, args) },
+                    "geo8"     => {    NP_Geo::from_idl_to_schema(parsed, type_name, idl, args) },
+                    "geo16"    => {    NP_Geo::from_idl_to_schema(parsed, type_name, idl, args) },
+                    "uuid"     => {   NP_UUID::from_idl_to_schema(parsed, type_name, idl, args) },
+                    "ulid"     => {   NP_ULID::from_idl_to_schema(parsed, type_name, idl, args) },
+                    "date"     => {   NP_Date::from_idl_to_schema(parsed, type_name, idl, args) },
+                    "enum"     => {   NP_Enum::from_idl_to_schema(parsed, type_name, idl, args) },
+                    "option"   => {   NP_Enum::from_idl_to_schema(parsed, type_name, idl, args) },
+                    "struct"   => { NP_Struct::from_idl_to_schema(parsed, type_name, idl, args) },
+                    "list"     => {   NP_List::from_idl_to_schema(parsed, type_name, idl, args) },
+                    "array"    => {   NP_List::from_idl_to_schema(parsed, type_name, idl, args) },
+                    "map"      => {    NP_Map::from_idl_to_schema(parsed, type_name, idl, args) },
+                    "tuple"    => {  NP_Tuple::from_idl_to_schema(parsed, type_name, idl, args) },
+                    "portal"   => { NP_Portal::from_idl_to_schema(parsed, type_name, idl, args) },
+                    "union"    => {  NP_Union::from_idl_to_schema(parsed, type_name, idl, args) },
                     _ => {
                         let mut err_msg = String::from("Can't find a type that matches this schema! ");
                         err_msg.push_str(idl.get_str(name));
@@ -1224,7 +1281,7 @@ impl NP_Schema {
             NP_TypeKeys::Ulid       => {      NP_ULID::from_bytes_to_schema(cache, address, bytes) }
             NP_TypeKeys::Date       => {      NP_Date::from_bytes_to_schema(cache, address, bytes) }
             NP_TypeKeys::Enum       => {      NP_Enum::from_bytes_to_schema(cache, address, bytes) }
-            NP_TypeKeys::Struct      => {     NP_Struct::from_bytes_to_schema(cache, address, bytes) }
+            NP_TypeKeys::Struct     => {    NP_Struct::from_bytes_to_schema(cache, address, bytes) }
             NP_TypeKeys::Map        => {       NP_Map::from_bytes_to_schema(cache, address, bytes) }
             NP_TypeKeys::List       => {      NP_List::from_bytes_to_schema(cache, address, bytes) }
             NP_TypeKeys::Tuple      => {     NP_Tuple::from_bytes_to_schema(cache, address, bytes) }
@@ -1286,6 +1343,7 @@ impl NP_Schema {
                     "struct"   => { NP_Struct::from_json_to_schema(schema, &json_schema) },
                     "table"    => { NP_Struct::from_json_to_schema(schema, &json_schema) },
                     "list"     => {   NP_List::from_json_to_schema(schema, &json_schema) },
+                    "array"    => {   NP_List::from_json_to_schema(schema, &json_schema) },
                     "map"      => {    NP_Map::from_json_to_schema(schema, &json_schema) },
                     "tuple"    => {  NP_Tuple::from_json_to_schema(schema, &json_schema) },
                     "portal"   => { NP_Portal::from_json_to_schema(schema, &json_schema) },

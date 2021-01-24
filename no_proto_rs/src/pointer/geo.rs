@@ -20,7 +20,8 @@
 //! ```
 //! 
 
-use crate::schema::{NP_Parsed_Schema};
+use alloc::string::String;
+use crate::{idl::{JS_AST, JS_Schema}, schema::{NP_Parsed_Schema}};
 use alloc::vec::Vec;
 use crate::utils::to_signed;
 use crate::utils::to_unsigned;
@@ -157,6 +158,14 @@ impl<'value> NP_Value<'value> for NP_Geo_Bytes {
     }
     fn type_idx() -> (&'value str, NP_TypeKeys) { NP_Geo::type_idx() }
     fn self_type_idx(&self) -> (&'value str, NP_TypeKeys) { NP_Geo::type_idx() }
+
+    fn schema_to_idl(schema: &Vec<NP_Parsed_Schema>, address: usize)-> Result<String, NP_Error> {
+        NP_Geo::schema_to_idl(schema, address)
+    }
+
+    fn from_idl_to_schema(schema: Vec<NP_Parsed_Schema>, name: &str, idl: &JS_Schema, args: &Vec<JS_AST>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {
+        NP_Geo::from_idl_to_schema(schema, name, idl, args)
+    }
 
     fn schema_to_json(schema: &Vec<NP_Parsed_Schema>, address: usize)-> Result<NP_JSON, NP_Error> { NP_Geo::schema_to_json(schema, address)}
 
@@ -727,6 +736,126 @@ impl<'value> NP_Value<'value> for NP_Geo {
         }
     }
 
+    fn schema_to_idl(schema: &Vec<NP_Parsed_Schema>, address: usize)-> Result<String, NP_Error> {
+        
+
+        match &schema[address] {
+            NP_Parsed_Schema::Geo { default, size, .. } => {
+                let mut schema_idl = match *size {
+                    16 => { String::from("geo16(") }
+                    8  => { String::from("geo8(")  },
+                    4  => { String::from("geo4(")  },
+                    _  => { String::from("geo4(")  }
+                };
+            
+                if let Some(d) = default {
+                    schema_idl.push_str("{default: {");
+                    schema_idl.push_str("lat: ");
+                    schema_idl.push_str(d.lat.to_string().as_str());
+                    schema_idl.push_str(", ");
+                    schema_idl.push_str("lng: ");
+                    schema_idl.push_str(d.lng.to_string().as_str());
+                    schema_idl.push_str("}}");
+                }
+
+                schema_idl.push_str(")");
+        
+                Ok(schema_idl)
+            },
+            _ => Err(NP_Error::new("unreachable"))
+        }
+    }
+
+    fn from_idl_to_schema(mut schema: Vec<NP_Parsed_Schema>, name: &str, idl: &JS_Schema, args: &Vec<JS_AST>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {
+
+        let mut default: (bool, f64, f64) = (false, 0.0, 0.0);
+
+        if args.len() > 0 {
+            match &args[0] {
+                JS_AST::object { properties } => {
+                    for (key, value) in properties {
+                        if idl.get_str(key).trim() == "default" {
+                            match value {
+                                JS_AST::object { properties: default_props } => {
+                                    for (dkey, dvalue) in default_props {
+                                        match idl.get_str(dkey).trim() {
+                                            "lat" => {
+                                                default.0 = true;
+                                                default.1 = match dvalue {
+                                                    JS_AST::number {addr } => {
+                                                        match idl.get_str(addr).trim().parse::<f64>() {
+                                                            Ok(x) => x,
+                                                            Err(_e) => return Err(NP_Error::new("Error parsing default geo value!"))
+                                                        }
+                                                    },
+                                                    _ => 0.0
+                                                }
+                                            },
+                                            "lng" => {
+                                                default.0 = true;
+                                                default.2 = match dvalue {
+                                                    JS_AST::number {addr } => {
+                                                        match idl.get_str(addr).trim().parse::<f64>() {
+                                                            Ok(x) => x,
+                                                            Err(_e) => return Err(NP_Error::new("Error parsing default geo value!"))
+                                                        }
+                                                    },
+                                                    _ => 0.0
+                                                }
+                                            },
+                                            _ => { }
+                                        }
+                                    }
+                                },
+                                _ => { }
+                            }
+                        }
+                    }
+                }
+                _ => { }
+            }
+        }
+
+        let size = match name {
+            "geo4" => 4,
+            "geo8" => 8,
+            "geo16" => 16,
+            _ => 4
+        };
+
+        let default = {
+            if default.0 == false {
+                None
+            } else {
+                NP_Geo::new(size, default.1, default.2).get_bytes()
+            }
+        };
+
+        let mut schema_data: Vec<u8> = Vec::new();
+        schema_data.push(NP_TypeKeys::Geo as u8);
+        schema_data.push(size);
+        let default = match default {
+            Some(x) => {
+                schema_data.push(1);
+                schema_data.extend(x.lat.clone());
+                schema_data.extend(x.lng.clone());
+                let g = x.into_geo();
+                Some(NP_Geo::new(size, g.lat, g.lng))
+            },
+            None => {
+                schema_data.push(0);
+                None
+            }
+        };
+        schema.push(NP_Parsed_Schema::Geo {
+            i: NP_TypeKeys::Geo,
+            size: size,
+            default: default,
+            sortable: false
+        });
+        Ok((false, schema_data, schema))
+    }
+
     fn get_size<M: NP_Memory>(_depth:usize, cursor: &NP_Cursor, memory: &M) -> Result<usize, NP_Error> {
 
         let c_value = || { cursor.get_value(memory) };
@@ -889,6 +1018,48 @@ impl<'value> NP_Value<'value> for NP_Geo {
             }
         }
     }
+}
+
+
+#[test]
+fn schema_parsing_works_idl() -> Result<(), NP_Error> {
+    let schema = "geo4({default: {lat: 20.23, lng: -12.21}})";
+    let factory = crate::NP_Factory::new(schema)?;
+    assert_eq!(schema, factory.schema.to_idl()?);
+    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    assert_eq!(schema, factory2.schema.to_idl()?);
+
+    let schema = "geo4()";
+    let factory = crate::NP_Factory::new(schema)?;
+    assert_eq!(schema, factory.schema.to_idl()?);
+    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    assert_eq!(schema, factory2.schema.to_idl()?);
+
+    let schema = "geo8({default: {lat: 20.2334234, lng: -12.2146363}})";
+    let factory = crate::NP_Factory::new(schema)?;
+    assert_eq!(schema, factory.schema.to_idl()?);
+    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    assert_eq!(schema, factory2.schema.to_idl()?);
+
+    let schema = "geo8()";
+    let factory = crate::NP_Factory::new(schema)?;
+    assert_eq!(schema, factory.schema.to_idl()?);
+    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    assert_eq!(schema, factory2.schema.to_idl()?);
+
+    let schema = "geo16({default: {lat: 20.233423434, lng: -12.214636323}})";
+    let factory = crate::NP_Factory::new(schema)?;
+    assert_eq!(schema, factory.schema.to_idl()?);
+    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    assert_eq!(schema, factory2.schema.to_idl()?);
+
+    let schema = "geo16()";
+    let factory = crate::NP_Factory::new(schema)?;
+    assert_eq!(schema, factory.schema.to_idl()?);
+    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    assert_eq!(schema, factory2.schema.to_idl()?);
+    
+    Ok(())
 }
 
 #[test]

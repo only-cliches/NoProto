@@ -19,6 +19,7 @@
 //! ```
 //! 
 
+use crate::{JS_Schema, idl::JS_AST};
 use crate::{memory::NP_Memory, schema::{NP_Parsed_Schema}};
 use alloc::vec::Vec;
 use crate::json_flex::{JSMAP, NP_JSON};
@@ -94,6 +95,14 @@ impl NP_Enum {
     }
 
     /// get string of value
+    pub fn to_str(&self) -> &str {
+        match self {
+            NP_Enum::None => "",
+            NP_Enum::Some(x) => x
+        }
+    }
+
+    /// get string of value
     pub fn to_string(&self) -> String {
         match self {
             NP_Enum::None => String::from(""),
@@ -109,8 +118,6 @@ impl Default for NP_Enum {
 }
 
 impl<'value> NP_Value<'value> for NP_Enum {
-
-
 
     fn type_idx() -> (&'value str, NP_TypeKeys) { ("option", NP_TypeKeys::Enum) }
     fn self_type_idx(&self) -> (&'value str, NP_TypeKeys) { ("option", NP_TypeKeys::Enum) }
@@ -196,6 +203,102 @@ impl<'value> NP_Value<'value> for NP_Enum {
             },
             _ => Err(NP_Error::new("unreachable"))
         }               
+    }
+
+    fn schema_to_idl(schema: &Vec<NP_Parsed_Schema>, address: usize)-> Result<String, NP_Error> {
+        let mut result = String::from("enum(");
+
+
+        Ok(result)
+    }
+
+    fn from_idl_to_schema(mut schema: Vec<NP_Parsed_Schema>, name: &str, idl: &JS_Schema, args: &Vec<JS_AST>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {
+        let mut schema_data: Vec<u8> = Vec::new();
+        schema_data.push(NP_TypeKeys::Enum as u8);
+
+        let mut choices: Vec<NP_Enum> = Vec::new();
+
+        let mut default_stir: Option<String> = None;
+
+        let mut default_value: Option<NP_Enum> = None;
+        let mut default_index: Option<u8> = None;
+
+        if args.len() > 0 {
+            match &args[0] {
+                JS_AST::object { properties } => {
+                    for (key, value) in properties {
+                        match idl.get_str(key).trim() {
+                            "default" => {
+                                match value {
+                                    JS_AST::string { addr } => {
+                                        default_stir = Some(String::from(idl.get_str(addr)));
+                                    },
+                                    _ => { }
+                                }
+                            },
+                            "choices" => {
+                                match value {
+                                    JS_AST::array { values } => {
+                                        for choice in values {
+                                            match choice {
+                                                JS_AST::string { addr } => {
+                                                    let stir = idl.get_str(addr);
+                                                    if stir.len() > 255 {
+                                                        return Err(NP_Error::new("'enum' choices cannot be longer than 255 characters each!"))
+                                                    }
+                                                    choices.push(NP_Enum::new(String::from(stir)));
+                                                },
+                                                _ => { }
+                                            }
+                                        }
+                                    },
+                                    _ => { }
+                                }
+                            },
+                            _ => { }
+                        }
+                    }
+                },
+                _ => { }
+            }
+        }
+
+        if choices.len() > 254 {
+            return Err(NP_Error::new("Enum types cannot have more than 254 choices!"))
+        } else if choices.len() == 0 {
+            return Err(NP_Error::new("Enum types must have at least one choice!"))
+        }
+
+        if let Some(x) = &default_stir {
+            for (idx, choice) in choices.iter().enumerate() {
+                if x == choice.to_str() {
+                    default_value = Some(choice.clone());
+                    default_index = Some(idx as u8);
+                }
+            }
+        }
+
+        // default value
+        match &default_index {
+            Some(x) => schema_data.push(*x + 1),
+            None => schema_data.push(0)
+        }
+
+        // choices
+        schema_data.push(choices.len() as u8);
+        for choice in &choices {
+            schema_data.push(choice.len() as u8);
+            schema_data.extend(choice.as_bytes().to_vec())
+        }
+
+        schema.push(NP_Parsed_Schema::Enum { 
+            i: NP_TypeKeys::Enum,
+            default: default_value,
+            choices: choices,
+            sortable: true
+        });
+
+        return Ok((true, schema_data, schema));
     }
 
     fn into_value<M: NP_Memory>(cursor: &NP_Cursor, memory: &'value M) -> Result<Option<Self>, NP_Error> where Self: Sized {

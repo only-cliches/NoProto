@@ -507,7 +507,7 @@ impl JS_Schema {
                     return Err(NP_Error::new(message.as_str()))
                 }
 
-                Ok(JS_AST::string{ addr: AST_STR { start: moving_start, end: index} })
+                Ok(JS_AST::string{ addr: AST_STR { start: moving_start, end: index - 1} })
             }
         }
     }
@@ -515,5 +515,5 @@ impl JS_Schema {
 
 #[test]
 fn test() {
-    println!("{:?}", JS_Schema::new(String::from("struct({key: string()})")));
+    println!("{:?}", JS_Schema::new(String::from("struct({fields:{key: string()}})")));
 }

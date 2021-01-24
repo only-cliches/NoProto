@@ -63,8 +63,9 @@
 //! ```
 //!
 
+use alloc::string::String;
 use alloc::prelude::v1::Box;
-use crate::utils::to_signed;
+use crate::{idl::{JS_AST, JS_Schema}, utils::to_signed};
 use crate::schema::{NP_Parsed_Schema};
 use alloc::vec::Vec;
 use crate::utils::to_unsigned;
@@ -896,6 +897,104 @@ impl<'value> NP_Value<'value> for NP_Dec {
         }
     }
 
+
+    fn schema_to_idl(schema: &Vec<NP_Parsed_Schema>, address: usize)-> Result<String, NP_Error> {
+        match &schema[address] {
+            NP_Parsed_Schema::Decimal { exp, default , .. } => {
+                let mut result = String::from("dec({exp: ");
+                result.push_str(exp.to_string().as_str());
+                if let Some(x) = default {
+                    result.push_str(", default: ");
+                    result.push_str(x.to_float().to_string().as_str());
+                }
+                result.push_str("})");
+                Ok(result)
+            },
+            _ => { Err(NP_Error::new("unreachable")) }
+        }
+    }
+
+    fn from_idl_to_schema(mut schema: Vec<NP_Parsed_Schema>, _name: &str, idl: &JS_Schema, args: &Vec<JS_AST>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {
+
+        let mut exp: Option<u8> = None;
+        let mut default: Option<f64> = None;
+        if args.len() > 0 {
+            match &args[0] {
+                JS_AST::object { properties } => {
+                    for (key, value) in properties {
+                        match idl.get_str(key).trim() {
+                            "exp" => {
+                                match value {
+                                    JS_AST::number { addr } => {
+                                        match idl.get_str(addr).trim().parse::<u8>() {
+                                            Ok(x) => {
+                                                exp = Some(x);
+                                            },
+                                            Err(_e) => return Err(NP_Error::new("Error parsing exponent of decimal value!"))
+                                        }
+                                    },
+                                    _ => { }
+                                }
+                            },
+                            "default" => {
+                                match value {
+                                    JS_AST::number { addr } => {
+                                        match idl.get_str(addr).trim().parse::<f64>() {
+                                            Ok(x) => {
+                                                default = Some(x);
+                                            },
+                                            Err(_e) => return Err(NP_Error::new("Error parsing exponent of decimal default!"))
+                                        }
+                                    },
+                                    _ => { }
+                                }
+                            },
+                            _ => { }
+                        }
+                    }
+                },
+                _ => { }
+            }
+        }
+
+        let mut schema_data: Vec<u8> = Vec::new();
+        schema_data.push(NP_TypeKeys::Decimal as u8);
+
+        
+
+        let exp = if let Some(x) = exp {
+            schema_data.push(x as u8);
+            x
+        } else {
+            return Err(NP_Error::new("Decimal type requires 'exp' property!"))
+        };
+
+        let mult = 10i64.pow(exp as u32);
+
+        let default = match default {
+            Some(x) => {
+                schema_data.push(1);
+                let value = x * (mult as f64);
+                schema_data.extend((value as i64).to_be_bytes().to_vec());
+                Some(NP_Dec::new(value as i64, exp))
+            },
+            _ => {
+                schema_data.push(0);
+                None
+            }
+        };
+
+        schema.push(NP_Parsed_Schema::Decimal {
+            i: NP_TypeKeys::Decimal,
+            default,
+            sortable: true,
+            exp: exp
+        });
+
+        return Ok((true, schema_data, schema))
+
+    }
+
     fn from_json_to_schema(mut schema: Vec<NP_Parsed_Schema>, json_schema: &Box<NP_JSON>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {
 
         let mut schema_data: Vec<u8> = Vec::new();
@@ -970,6 +1069,23 @@ impl<'value> NP_Value<'value> for NP_Dec {
 
         (true, schema)
     }
+}
+
+#[test]
+fn schema_parsing_works_idl() -> Result<(), NP_Error> {
+    let schema = "dec({exp: 3, default: 203.293})";
+    let factory = crate::NP_Factory::new(schema)?;
+    assert_eq!(schema, factory.schema.to_idl()?);
+    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    assert_eq!(schema, factory2.schema.to_idl()?);
+
+    let schema = "dec({exp: 3})";
+    let factory = crate::NP_Factory::new(schema)?;
+    assert_eq!(schema, factory.schema.to_idl()?);
+    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    assert_eq!(schema, factory2.schema.to_idl()?);
+    
+    Ok(())
 }
 
 #[test]

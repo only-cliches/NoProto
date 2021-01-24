@@ -1,5 +1,7 @@
+use crate::{idl::AST_STR, schema::NP_Schema_Addr};
+use crate::idl::JS_AST;
 use alloc::string::String;
-use crate::{buffer::{VTABLE_BYTES, VTABLE_SIZE}, utils::opt_err};
+use crate::{buffer::{VTABLE_BYTES, VTABLE_SIZE}, idl::JS_Schema, utils::opt_err};
 use crate::{ pointer::NP_Vtable};
 
 use crate::{json_flex::JSMAP, pointer::{NP_Cursor}};
@@ -354,6 +356,120 @@ impl<'value> NP_Value<'value> for NP_Tuple<'value> {
         Ok(to_cursor)
     }
 
+    fn schema_to_idl(schema: &Vec<NP_Parsed_Schema>, address: usize)-> Result<String, NP_Error> {
+        match &schema[address] {
+            NP_Parsed_Schema::Tuple { values, sortable, .. } => {
+                let mut result = String::from("tuple({values: [");
+
+                let last_index = values.len() - 1;
+                for (idx, field) in values.iter().enumerate() {
+                    result.push_str(NP_Schema::_type_to_idl(schema, *field)?.as_str());
+                    if idx < last_index {
+                        result.push_str(", ");
+                    }
+                }
+
+                result.push_str("]");
+                if *sortable == true {
+                    result.push_str(", sorted: true");
+                }
+                result.push_str("})");
+                Ok(result)
+            },  
+            _ => { Err(NP_Error::new("unreachable")) }
+        }
+    }
+
+    fn from_idl_to_schema(mut schema: Vec<NP_Parsed_Schema>, _name: &str, idl: &JS_Schema, args: &Vec<JS_AST>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {
+        let mut schema_data: Vec<u8> = Vec::new();
+        schema_data.push(NP_TypeKeys::Tuple as u8);
+
+        let mut sorted = false;
+        let mut tuple_values: Option<&Vec<JS_AST>> = None;
+
+        if args.len() > 0 {
+            match &args[0] {
+                JS_AST::object { properties } => {
+                    for (key, value) in properties {
+                        match idl.get_str(key).trim() {
+                            "sorted" => {
+                                sorted = true;
+                            },
+                            "values" => {
+                                match value {
+                                    JS_AST::array { values } => {
+                                        tuple_values = Some(values);
+                                    },
+                                    _ => { }
+                                }
+                            },
+                            _ => { }
+                        }
+                    }
+                },
+                _ => { }
+            }
+        }
+
+        if sorted {
+            schema_data.push(1);
+        } else {
+            schema_data.push(0);
+        }
+
+        if let Some(tuple_vals) = tuple_values {
+
+            let mut column_schemas: Vec<Vec<u8>> = Vec::new();
+            let tuple_addr = schema.len();
+            schema.push(NP_Parsed_Schema::Tuple {
+                i: NP_TypeKeys::Tuple,
+                sortable: sorted,
+                values: Vec::new()
+            });
+    
+            let mut tuple_values = Vec::new();
+    
+            let mut working_schema = schema;
+    
+            for col in tuple_vals {
+                tuple_values.push(working_schema.len());
+                let (is_sortable, schema_bytes, _schema ) = NP_Schema::from_idl(working_schema, idl, &col)?;
+                working_schema = _schema;
+                if sorted && is_sortable == false {
+                    return Err(NP_Error::new("All children of a sorted tuple must be sortable items!"))
+                }
+                column_schemas.push(schema_bytes);
+            }
+            
+            working_schema[tuple_addr] = NP_Parsed_Schema::Tuple {
+                i: NP_TypeKeys::Tuple,
+                sortable: sorted,
+                values: tuple_values
+            };
+    
+            if column_schemas.len() > 255 {
+                return Err(NP_Error::new("Tuples cannot have more than 255 values!"))
+            }
+    
+            // number of schema values
+            schema_data.push(column_schemas.len() as u8);
+    
+            for col in column_schemas {
+    
+                if col.len() > u16::MAX as usize {
+                    return Err(NP_Error::new("Schema overflow error!"))
+                }
+                
+                // column type
+                schema_data.extend((col.len() as u16).to_be_bytes().to_vec());
+                schema_data.extend(col);
+            }
+    
+            Ok((sorted, schema_data, working_schema))
+        } else {
+            Err(NP_Error::new("Tuples require a 'values' property that is an array of schemas!"))
+        }
+    }
 
     fn from_json_to_schema(mut schema: Vec<NP_Parsed_Schema>, json_schema: &Box<NP_JSON>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {
 
@@ -478,6 +594,21 @@ impl<'value> NP_Value<'value> for NP_Tuple<'value> {
 
 
 
+#[test]
+fn schema_parsing_works_idl() -> Result<(), NP_Error> {
+    let schema = "tuple({values: [string(), uuid(), u8()]})";
+    let factory = crate::NP_Factory::new(schema)?;
+    assert_eq!(schema, factory.schema.to_idl()?);
+    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    assert_eq!(schema, factory2.schema.to_idl()?);
+
+    let schema = "tuple({values: [string({size: 10}), uuid(), u8()], sorted: true})";
+    let factory = crate::NP_Factory::new(schema)?;
+    assert_eq!(schema, factory.schema.to_idl()?);
+    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    assert_eq!(schema, factory2.schema.to_idl()?);
+    Ok(())
+}
 
 #[test]
 fn schema_parsing_works() -> Result<(), NP_Error> {

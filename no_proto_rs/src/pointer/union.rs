@@ -1,7 +1,7 @@
 //! Clone type for recursive or duplicating data types.
 //! 
 
-use crate::schema::NP_Schema_Addr;
+use crate::{idl::{JS_AST, JS_Schema}, schema::NP_Schema_Addr};
 use crate::NP_Schema;
 use crate::{memory::NP_Memory, schema::{NP_Parsed_Schema}};
 use alloc::vec::Vec;
@@ -99,6 +99,14 @@ impl<'value> NP_Value<'value> for NP_Union {
         schema_json.insert("types".to_owned(), NP_JSON::Array(types));
 
         Ok(NP_JSON::Dictionary(schema_json))
+    }
+
+    fn schema_to_idl(schema: &Vec<NP_Parsed_Schema>, address: usize)-> Result<String, NP_Error> {
+        todo!()
+    }
+
+    fn from_idl_to_schema(schema: Vec<NP_Parsed_Schema>, name: &str, idl: &JS_Schema, args: &Vec<JS_AST>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {
+        todo!()
     }
 
     fn from_json_to_schema(mut schema: Vec<NP_Parsed_Schema>, json_schema: &Box<NP_JSON>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {

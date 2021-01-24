@@ -7,9 +7,7 @@
 //! use no_proto::NP_Factory;
 //! use no_proto::pointer::date::NP_Date;
 //! 
-//! let factory: NP_Factory = NP_Factory::new_json(r#"{
-//!    "type": "date"
-//! }"#)?;
+//! let factory: NP_Factory = NP_Factory::new("date()")?;
 //!
 //! let mut new_buffer = factory.empty_buffer(None);
 //! new_buffer.set(&[], NP_Date::new(1604965249484))?;
@@ -20,7 +18,8 @@
 //! ```
 //! 
 
-use crate::schema::{NP_Parsed_Schema};
+use alloc::string::String;
+use crate::{idl::{JS_AST, JS_Schema}, schema::{NP_Parsed_Schema}};
 use alloc::vec::Vec;
 use crate::json_flex::{JSMAP, NP_JSON};
 use crate::schema::{NP_TypeKeys};
@@ -209,6 +208,77 @@ impl<'value> NP_Value<'value> for NP_Date {
         } else {
             Ok(core::mem::size_of::<u64>())
         }
+    }
+
+
+    fn schema_to_idl(schema: &Vec<NP_Parsed_Schema>, address: usize)-> Result<String, NP_Error> {
+        match &schema[address] {
+            NP_Parsed_Schema::Date { default , .. } => {
+                let mut result = String::from("date(");
+                if let Some(x) = default {
+                    result.push_str("{default: ");
+                    result.push_str(x.value.to_string().as_str());
+                    result.push_str("}");
+                }
+                result.push_str(")");
+                Ok(result)
+            },
+            _ => { Err(NP_Error::new("unreachable")) }
+        }
+    }
+
+    fn from_idl_to_schema(mut schema: Vec<NP_Parsed_Schema>, _name: &str, idl: &JS_Schema, args: &Vec<JS_AST>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {
+
+        let mut default: Option<u64> = None;
+        if args.len() > 0 {
+            match &args[0] {
+                JS_AST::object { properties } => {
+                    for (key, value) in properties {
+                        match idl.get_str(key).trim() {
+                            "default" => {
+                                match value {
+                                    JS_AST::number { addr } => {
+                                        match idl.get_str(addr).trim().parse::<u64>() {
+                                            Ok(x) => {
+                                                default = Some(x);
+                                            },
+                                            Err(_e) => return Err(NP_Error::new("Error parsing default of date!"))
+                                        }
+                                    },
+                                    _ => { }
+                                }
+                            },
+                            _ => { }
+                        }
+                    }
+                },
+                _ => { }
+            }
+        }
+
+        let mut schema_data: Vec<u8> = Vec::new();
+        schema_data.push(NP_TypeKeys::Date as u8);
+
+        let default = match default {
+            Some(x) => {
+                schema_data.push(1);
+                schema_data.extend_from_slice(&(x as u64).to_be_bytes());
+                Some(NP_Date { value: x as u64})
+            },
+            _ => {
+                schema_data.push(0);
+                None
+            }
+        };
+        
+        schema.push(NP_Parsed_Schema::Date {
+            i: NP_TypeKeys::Date,
+            default: default,
+            sortable: true
+        });
+
+        return Ok((true, schema_data, schema));
+
     }
 
     fn from_json_to_schema(mut schema: Vec<NP_Parsed_Schema>, json_schema: &Box<NP_JSON>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {

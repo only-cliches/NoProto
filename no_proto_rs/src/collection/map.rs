@@ -1,5 +1,5 @@
 use alloc::string::String;
-use crate::pointer::NP_Cursor;
+use crate::{idl::{JS_AST, JS_Schema}, pointer::NP_Cursor};
 use crate::{json_flex::JSMAP};
 use crate::pointer::{NP_Value};
 use crate::{memory::{NP_Memory}, schema::{NP_Schema, NP_TypeKeys, NP_Parsed_Schema}, error::NP_Error, json_flex::NP_JSON};
@@ -304,6 +304,56 @@ impl<'value> NP_Value<'value> for NP_Map<'value> {
         Ok(to_cursor)
     }
 
+    fn schema_to_idl(schema: &Vec<NP_Parsed_Schema>, address: usize)-> Result<String, NP_Error> {
+        match &schema[address] {
+            NP_Parsed_Schema::Map { value, .. } => {
+                let mut result = String::from("map({value: ");
+                result.push_str(NP_Schema::_type_to_idl(&schema, *value)?.as_str());
+                result.push_str("})");
+                Ok(result)
+            },
+            _ => { Err(NP_Error::new("unreachable")) }
+        }
+    }
+
+    fn from_idl_to_schema(mut schema: Vec<NP_Parsed_Schema>, _name: &str, idl: &JS_Schema, args: &Vec<JS_AST>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {
+        let mut schema_data: Vec<u8> = Vec::new();
+        schema_data.push(NP_TypeKeys::Map as u8);
+
+        let value_addr = schema.len();
+        schema.push(NP_Parsed_Schema::Map {
+            i: NP_TypeKeys::Map,
+            value: value_addr + 1,
+            sortable: false
+        });
+
+        let mut value_jst: Option<&JS_AST> = None;
+
+        if args.len() > 0 {
+            match &args[0] {
+                JS_AST::object { properties } => {
+                    for (key, value) in properties {
+                        if idl.get_str(key).trim() == "value" {
+                            value_jst = Some(value);
+                        }
+                    }
+                },
+                _ => { }
+            }
+        };
+
+        if let Some(x) = value_jst {
+            // let of_addr = schema.len();
+            let (_sortable, child_bytes, schema) = NP_Schema::from_idl(schema, idl, x)?;
+            
+            schema_data.extend(child_bytes);
+
+            Ok((false, schema_data, schema))
+        } else {
+            Err(NP_Error::new("lists require an 'of' property!"))
+        }
+    }
+
     fn from_json_to_schema(mut schema: Vec<NP_Parsed_Schema>, json_schema: &Box<NP_JSON>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {
       
         let mut schema_data: Vec<u8> = Vec::new();
@@ -348,6 +398,16 @@ impl<'value> NP_Value<'value> for NP_Map<'value> {
     }
 }
 
+
+#[test]
+fn schema_parsing_works_idl() -> Result<(), NP_Error> {
+    let schema = r#"map({value: string()})"#;
+    let factory = crate::NP_Factory::new(schema)?;
+    assert_eq!(schema, factory.schema.to_idl()?);
+    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    assert_eq!(schema, factory2.schema.to_idl()?);
+    Ok(())
+}
 
 #[test]
 fn schema_parsing_works() -> Result<(), NP_Error> {

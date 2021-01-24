@@ -1,4 +1,5 @@
-use crate::{buffer::{VTABLE_BYTES, VTABLE_SIZE}};
+use crate::idl::AST_STR;
+use crate::{buffer::{VTABLE_BYTES, VTABLE_SIZE}, idl::{JS_AST, JS_Schema}};
 use alloc::string::String;
 use crate::pointer::{NP_Vtable};
 use crate::{pointer::{NP_Cursor}, schema::{NP_Parsed_Schema, NP_Schema_Addr}};
@@ -388,6 +389,131 @@ impl<'value> NP_Value<'value> for NP_Struct<'value> {
         Ok(to_cursor)
     }
 
+    fn schema_to_idl(schema: &Vec<NP_Parsed_Schema>, address: usize)-> Result<String, NP_Error> {
+        match &schema[address] {
+            NP_Parsed_Schema::Struct { fields, .. } => {
+                let mut result = String::from("struct({fields: {");
+
+                let last_index = fields.len() - 1;
+                for (idx, field) in fields.iter().enumerate() {
+                    result.push_str(field.1.as_str());
+                    result.push_str(": ");
+                    result.push_str(NP_Schema::_type_to_idl(schema, field.2)?.as_str());
+                    if idx < last_index {
+                        result.push_str(", ");
+                    }
+                }
+
+                result.push_str("}})");
+                Ok(result)
+            },  
+            _ => { Err(NP_Error::new("unreachable")) }
+        }
+    }
+
+    fn from_idl_to_schema(mut schema: Vec<NP_Parsed_Schema>, name: &str, idl: &JS_Schema, args: &Vec<JS_AST>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {
+        let mut schema_bytes: Vec<u8> = Vec::new();
+        schema_bytes.push(NP_TypeKeys::Struct as u8);
+
+        let schema_table_addr = schema.len();
+        schema.push(NP_Parsed_Schema::Struct {
+            i: NP_TypeKeys::Struct,
+            sortable: false,
+            fields: Vec::new()
+        });
+
+        let mut fields: Vec<(u8, String, NP_Schema_Addr)> = Vec::new();
+
+        let mut field_data: Vec<(String, Vec<u8>)> = Vec::new();
+
+        let mut schema_parsed: Vec<NP_Parsed_Schema> = schema;
+
+        let mut idl_fields: Option<&Vec<(AST_STR, JS_AST)>> = None;
+
+        if args.len() > 0 {
+            match &args[0] {
+                JS_AST::object { properties } => {
+                    for (key, value) in properties {
+                        match idl.get_str(key).trim() {
+                            "fields" => {
+                                match value {
+                                    JS_AST::object { properties } => {
+                                        idl_fields = Some(properties);
+                                    },
+                                    _ => { }
+                                }
+                            },
+                            "columns" => {
+                                match value {
+                                    JS_AST::object { properties } => {
+                                        idl_fields = Some(properties);
+                                    },
+                                    _ => { }
+                                }
+                            },
+                            _ => { }
+                        }
+                    }
+                },
+                _ => { }
+            }
+        }
+
+        if let Some(ast_fields) = idl_fields {
+
+            let mut x: u8 = 0;
+            for col in ast_fields {
+                let field_name = idl.get_str(&col.0).trim();
+                if field_name.len() > 255 {
+                    return Err(NP_Error::new("Struct field names cannot be longer than 255 characters!"))
+                }
+    
+                let field_schema_addr = schema_parsed.len();
+                fields.push((x, String::from(field_name), field_schema_addr));
+                let (_is_sortable, field_type, schema_p) = NP_Schema::from_idl(schema_parsed, idl, &col.1)?;
+                schema_parsed = schema_p;
+                field_data.push((String::from(field_name), field_type));
+                x += 1;
+            }
+    
+            schema_parsed[schema_table_addr] = NP_Parsed_Schema::Struct {
+                i: NP_TypeKeys::Struct,
+                sortable: false,
+                fields: fields,
+            };
+    
+            if field_data.len() > 255 {
+                return Err(NP_Error::new("Structs cannot have more than 255 fields!"))
+            }
+    
+            if field_data.len() == 0 {
+                return Err(NP_Error::new("Structs must have at least one field!"))
+            }
+    
+            // number of fields
+            schema_bytes.push(field_data.len() as u8);
+    
+            for col in field_data {
+                // colum name
+                let bytes = col.0.as_bytes().to_vec();
+                schema_bytes.push(bytes.len() as u8);
+                schema_bytes.extend(bytes);
+    
+                if col.1.len() > u16::MAX as usize {
+                    return Err(NP_Error::new("Schema overflow error!"))
+                }
+                
+                // field type
+                schema_bytes.extend((col.1.len() as u16).to_be_bytes().to_vec());
+                schema_bytes.extend(col.1);
+            }
+    
+            Ok((false, schema_bytes, schema_parsed))
+        } else {
+            Err(NP_Error::new("Structs require a 'fields' property that is an array of schemas!"))
+        }
+    }
+
     fn from_json_to_schema(mut schema: Vec<NP_Parsed_Schema>, json_schema: &Box<NP_JSON>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {
 
         let mut schema_bytes: Vec<u8> = Vec::new();
@@ -397,11 +523,8 @@ impl<'value> NP_Value<'value> for NP_Struct<'value> {
         schema.push(NP_Parsed_Schema::Struct {
             i: NP_TypeKeys::Struct,
             sortable: false,
-            fields: Vec::new(),
-           //  fields_mapped: Vec::new()
+            fields: Vec::new()
         });
-
-        // let mut fields_mapped = Vec::new();
 
         let mut fields: Vec<(u8, String, NP_Schema_Addr)> = Vec::new();
 
@@ -432,20 +555,14 @@ impl<'value> NP_Value<'value> for NP_Struct<'value> {
             fields.push((x, field_name.clone(), field_schema_addr));
             let (_is_sortable, field_type, schema_p) = NP_Schema::from_json(schema_parsed, &Box::new(col[1].clone()))?;
             schema_parsed = schema_p;
-            // fields_mapped.insert(field_name.as_str(), x as usize)?;
-            // fields_mapped.push(field_name.to_string());
             field_data.push((field_name, field_type));
             x += 1;
         }
-
-
-        // fields_mapped.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
 
         schema_parsed[schema_table_addr] = NP_Parsed_Schema::Struct {
             i: NP_TypeKeys::Struct,
             sortable: false,
             fields: fields,
-            // fields_mapped
         };
 
         if field_data.len() > 255 {
@@ -483,6 +600,16 @@ impl<'value> NP_Value<'value> for NP_Struct<'value> {
     }
 }
 
+
+#[test]
+fn schema_parsing_works_idl() -> Result<(), NP_Error> {
+    let schema = r#"struct({fields: {age: u8(), tags: list({of: string()}), name: string({size: 10})}})"#;
+    let factory = crate::NP_Factory::new(schema)?;
+    assert_eq!(schema, factory.schema.to_idl()?);
+    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    assert_eq!(schema, factory2.schema.to_idl()?);
+    Ok(())
+}
 
 
 #[test]

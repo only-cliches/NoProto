@@ -75,13 +75,12 @@ impl<'buffer> NP_Buffer_RO<'buffer> {
     /// use no_proto::NP_Factory;
     /// use no_proto::NP_Size_Data;
     /// 
-    /// let factory: NP_Factory = NP_Factory::new_json(r#"{
-    ///    "type": "struct",
-    ///    "fields": [
-    ///         ["age", {"type": "uint8"}],
-    ///         ["name", {"type": "string"}]
-    ///     ]
-    /// }"#)?;
+    /// let factory: NP_Factory = NP_Factory::new(r#"
+    /// struct({fields: {
+    ///     age: u8(),
+    ///     name: string()
+    /// }})
+    /// "#)?;
     /// 
     /// let mut new_buffer = factory.empty_buffer(None);
     /// new_buffer.set(&["name"], "Jeb Kermin");
@@ -119,9 +118,7 @@ impl<'buffer> NP_Buffer_RO<'buffer> {
     /// use no_proto::NP_Factory;
     /// use no_proto::NP_Size_Data;
     /// 
-    /// let factory: NP_Factory = NP_Factory::new_json(r#"{
-    ///    "type": "string"
-    /// }"#)?;
+    /// let factory: NP_Factory = NP_Factory::new("string()")?;
     /// 
     /// let mut new_buffer = factory.empty_buffer(None);
     /// // set initial value
@@ -150,14 +147,12 @@ impl<'buffer> NP_Buffer_RO<'buffer> {
     /// use no_proto::NP_Factory;
     /// use no_proto::NP_Size_Data;
     /// 
-    /// let factory: NP_Factory = NP_Factory::new_json(r#"{
-    ///    "type": "tuple",
-    ///    "sorted": true,
-    ///    "values": [
-    ///         {"type": "u8"},
-    ///         {"type": "string", "size": 6}
-    ///     ]
-    /// }"#)?;
+    /// let factory: NP_Factory = NP_Factory::new(r#"
+    ///     tuple({
+    ///         sorted: true,
+    ///         values: [u8(), string({size: 6})]
+    ///     })
+    /// "#)?;
     /// 
     /// let mut new_buffer = factory.empty_buffer(None);
     /// // set initial value
@@ -243,10 +238,7 @@ impl<'buffer> NP_Buffer_RO<'buffer> {
     /// use no_proto::NP_Factory;
     /// use no_proto::NP_Size_Data;
     /// 
-    /// let factory: NP_Factory = NP_Factory::new_json(r#"{
-    ///    "type": "list",
-    ///     "of": {"type": "string"}
-    /// }"#)?;
+    /// let factory: NP_Factory = NP_Factory::new("list({of: string()})")?;
     /// 
     /// let mut new_buffer = factory.empty_buffer(None);
     /// // set value at 1 index
@@ -278,15 +270,14 @@ impl<'buffer> NP_Buffer_RO<'buffer> {
     /// use no_proto::NP_Factory;
     /// use no_proto::NP_Size_Data;
     /// 
-    /// let factory: NP_Factory = NP_Factory::new_json(r#"{
-    ///    "type": "struct",
-    ///    "fields": [
-    ///         ["age", {"type": "uint8"}],
-    ///         ["name", {"type": "string"}],
-    ///         ["job", {"type": "string"}],
-    ///         ["tags", {"type": "list", "of": {"type": "string"}}]
-    ///     ]
-    /// }"#)?;
+    /// let factory: NP_Factory = NP_Factory::new(r#"
+    ///     struct({fields: {
+    ///         age: u8(),
+    ///         name: string(),
+    ///         job: string(),
+    ///         tags: list({of: string()})
+    ///     }})
+    /// "#)?;
     /// 
     /// let mut new_buffer = factory.empty_buffer(None);
     /// // set value of age
@@ -323,10 +314,7 @@ impl<'buffer> NP_Buffer_RO<'buffer> {
     /// use no_proto::NP_Factory;
     /// use no_proto::NP_Size_Data;
     /// 
-    /// let factory: NP_Factory = NP_Factory::new_json(r#"{
-    ///    "type": "map",
-    ///    "value": {"type": "string"}
-    /// }"#)?;
+    /// let factory: NP_Factory = NP_Factory::new("map({value: string()})")?;
     /// 
     /// let mut new_buffer = factory.empty_buffer(None);
     /// // set value of color key
@@ -353,14 +341,7 @@ impl<'buffer> NP_Buffer_RO<'buffer> {
     /// use no_proto::NP_Factory;
     /// use no_proto::NP_Size_Data;
     /// 
-    /// let factory: NP_Factory = NP_Factory::new_json(r#"{
-    ///    "type": "tuple",
-    ///     "values": [
-    ///         {"type": "string"},
-    ///         {"type": "u8"},
-    ///         {"type": "bool"}
-    ///     ]
-    /// }"#)?;
+    /// let factory: NP_Factory = NP_Factory::new("tuple({values: [string(), u8(), bool()]})")?;
     /// 
     /// let mut new_buffer = factory.empty_buffer(None);
     /// // set value at 0 index
@@ -416,9 +397,7 @@ impl<'buffer> NP_Buffer_RO<'buffer> {
     /// use no_proto::NP_Factory;
     /// use no_proto::NP_Size_Data;
     /// 
-    /// let factory: NP_Factory = NP_Factory::new_json(r#"{
-    ///    "type": "string"
-    /// }"#)?;
+    /// let factory: NP_Factory = NP_Factory::new("string()")?;
     /// 
     /// let mut new_buffer = factory.empty_buffer(None);
     /// // set initial value
@@ -435,10 +414,7 @@ impl<'buffer> NP_Buffer_RO<'buffer> {
     /// use no_proto::NP_Factory;
     /// use no_proto::NP_Size_Data;
     /// 
-    /// let factory: NP_Factory = NP_Factory::new_json(r#"{
-    ///    "type": "list",
-    ///     "of": {"type": "string"}
-    /// }"#)?;
+    /// let factory: NP_Factory = NP_Factory::new("list({of: string()})")?;
     /// 
     /// let mut new_buffer = factory.empty_buffer(None);
     /// // set value at 9th index
@@ -455,13 +431,12 @@ impl<'buffer> NP_Buffer_RO<'buffer> {
     /// use no_proto::NP_Factory;
     /// use no_proto::NP_Size_Data;
     /// 
-    /// let factory: NP_Factory = NP_Factory::new_json(r#"{
-    ///    "type": "struct",
-    ///    "fields": [
-    ///         ["age", {"type": "u8"}],
-    ///         ["name", {"type": "string"}]
-    ///     ]
-    /// }"#)?;
+    /// let factory: NP_Factory = NP_Factory::new(r#"
+    ///     struct({fields: {
+    ///         age: u8(),
+    ///         name: string()
+    ///     }})
+    /// "#)?;
     /// 
     /// let mut new_buffer = factory.empty_buffer(None);
     /// // get length of value at root (Table)
@@ -476,10 +451,7 @@ impl<'buffer> NP_Buffer_RO<'buffer> {
     /// use no_proto::NP_Factory;
     /// use no_proto::NP_Size_Data;
     /// 
-    /// let factory: NP_Factory = NP_Factory::new_json(r#"{
-    ///    "type": "map",
-    ///    "value": {"type": "string"}
-    /// }"#)?;
+    /// let factory: NP_Factory = NP_Factory::new("map({value: string()})")?;
     /// 
     /// let mut new_buffer = factory.empty_buffer(None);
     /// // set values
@@ -497,13 +469,7 @@ impl<'buffer> NP_Buffer_RO<'buffer> {
     /// use no_proto::NP_Factory;
     /// use no_proto::NP_Size_Data;
     /// 
-    /// let factory: NP_Factory = NP_Factory::new_json(r#"{
-    ///    "type": "tuple",
-    ///    "values": [
-    ///         {"type": "string"}, 
-    ///         {"type": "string"}
-    ///     ]
-    /// }"#)?;
+    /// let factory: NP_Factory = NP_Factory::new("tuple({values: [string(), string()]})")?;
     /// 
     /// let mut new_buffer = factory.empty_buffer(None);
     /// // get length of value at root (Tuple)
@@ -594,14 +560,11 @@ impl<'buffer> NP_Buffer_RO<'buffer> {
     /// use no_proto::schema::NP_TypeKeys;
     /// 
     /// // a list where each item is a map where each key has a value containing a list of strings
-    /// let factory: NP_Factory = NP_Factory::new_json(r#"{
-    ///    "type": "tuple",
-    ///    "values": [
-    ///         {"type": "geo8"},
-    ///         {"type": "dec", "exp": 2},
-    ///         {"type": "string"}
-    ///     ]
-    /// }"#)?;
+    /// let factory: NP_Factory = NP_Factory::new(r#"
+    ///     tuple({
+    ///         values: [geo8(), dec({exp: 2}), string()]
+    ///     })
+    /// "#)?;
     /// 
     /// let mut new_buffer = factory.empty_buffer(None);
     /// let new_buffer = factory.open_buffer_ro(new_buffer.read_bytes());
@@ -638,14 +601,8 @@ impl<'buffer> NP_Buffer_RO<'buffer> {
     /// use no_proto::pointer::dec::NP_Dec;
     /// use no_proto::pointer::geo::NP_Geo;
     /// 
-    /// // a list where each item is a map where each key has a value containing a list of strings
-    /// let factory: NP_Factory = NP_Factory::new_json(r#"{
-    ///    "type": "tuple",
-    ///    "values": [
-    ///         {"type": "geo8"},
-    ///         {"type": "dec", "exp": 2}
-    ///     ]
-    /// }"#)?;
+    /// // a tuple with geo and decimal values
+    /// let factory: NP_Factory = NP_Factory::new("tuple({values: [geo8(), dec({exp: 2})]})")?;
     /// 
     /// let mut new_buffer = factory.empty_buffer(None);
     /// let new_buffer = factory.open_buffer_ro(new_buffer.read_bytes());
@@ -694,12 +651,7 @@ impl<'buffer> NP_Buffer_RO<'buffer> {
     /// use no_proto::NP_Size_Data;
     /// 
     /// // a list where each item is a map where each key has a value containing a list of strings
-    /// let factory: NP_Factory = NP_Factory::new_json(r#"{
-    ///    "type": "list",
-    ///    "of": {"type": "map", "value": {
-    ///         "type": "list", "of": {"type": "string"}
-    ///     }}
-    /// }"#)?;
+    /// let factory: NP_Factory = NP_Factory::new("list({of: map({value: list({of: string()})})})")?;
     /// 
     /// let mut new_buffer = factory.empty_buffer(None);
     /// // third item in the top level list -> key "alpha" of map at 3rd element -> 9th element of list at "alpha" key
@@ -813,9 +765,7 @@ impl<'buffer> NP_Buffer_RO<'buffer> {
     /// use no_proto::NP_Factory;
     /// use no_proto::NP_Size_Data;
     /// 
-    /// let factory: NP_Factory = NP_Factory::new_json(r#"{
-    ///    "type": "string"
-    /// }"#)?;
+    /// let factory: NP_Factory = NP_Factory::new("string()")?;
     /// 
     /// let mut new_buffer = factory.empty_buffer(None);
     /// new_buffer.set(&[], "hello")?;

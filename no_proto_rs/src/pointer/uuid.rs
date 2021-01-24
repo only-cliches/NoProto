@@ -7,9 +7,7 @@
 //! use no_proto::NP_Factory;
 //! use no_proto::pointer::uuid::NP_UUID;
 //! 
-//! let factory: NP_Factory = NP_Factory::new_json(r#"{
-//!    "type": "uuid"
-//! }"#)?;
+//! let factory: NP_Factory = NP_Factory::new("uuid()")?;
 //!
 //! let mut new_buffer = factory.empty_buffer(None);
 //! let uuid = NP_UUID::generate(50);
@@ -24,6 +22,7 @@
 //! ```
 //! 
 
+use crate::{JS_Schema, idl::JS_AST};
 use alloc::prelude::v1::Box;
 use crate::pointer::NP_Scalar;
 use crate::{memory::NP_Memory, schema::{NP_Parsed_Schema}};
@@ -189,6 +188,15 @@ impl<'value> NP_Value<'value> for NP_UUID {
         Ok(())
     }
 
+
+    fn schema_to_idl(schema: &Vec<NP_Parsed_Schema>, address: usize)-> Result<String, NP_Error> {
+        Ok(String::from("uuid()"))
+    }
+
+    fn from_idl_to_schema(schema: Vec<NP_Parsed_Schema>, name: &str, idl: &JS_Schema, args: &Vec<JS_AST>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {
+        Self::from_json_to_schema(schema, &Box::new(NP_JSON::Null))
+    }
+
     fn default_value(_depth: usize, _scham_addr: usize,_schema: &Vec<NP_Parsed_Schema>) -> Option<Self> {
         None
     }
@@ -300,12 +308,19 @@ impl<'value> NP_Value<'value> for &NP_UUID {
         Ok(cursor)
     }
 
+    fn schema_to_idl(schema: &Vec<NP_Parsed_Schema>, address: usize)-> Result<String, NP_Error> {
+        Ok(String::from("uuid()"))
+    }
+
+    fn from_idl_to_schema(schema: Vec<NP_Parsed_Schema>, name: &str, idl: &JS_Schema, args: &Vec<JS_AST>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {
+        Self::from_json_to_schema(schema, &Box::new(NP_JSON::Null))
+    }
+
     fn default_value(_depth: usize, _scham_addr: usize,_schema: &Vec<NP_Parsed_Schema>) -> Option<Self> {
         None
     }
 
     fn set_from_json<'set, M: NP_Memory>(_depth: usize, _apply_null: bool, _cursor: NP_Cursor, _memory: &'set M, _value: &Box<NP_JSON>) -> Result<(), NP_Error> where Self: 'set + Sized {
-
         Ok(())
     }
 
@@ -343,6 +358,17 @@ impl<'value> NP_Value<'value> for &NP_UUID {
     fn from_bytes_to_schema(schema: Vec<NP_Parsed_Schema>, _address: usize, _bytes: &[u8]) -> (bool, Vec<NP_Parsed_Schema>) {
         NP_UUID::from_bytes_to_schema(schema, _address, _bytes)
     }
+}
+
+#[test]
+fn schema_parsing_works_idl() -> Result<(), NP_Error> {
+    let schema = "uuid()";
+    let factory = crate::NP_Factory::new(schema)?;
+    assert_eq!(schema, factory.schema.to_idl()?);
+    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    assert_eq!(schema, factory2.schema.to_idl()?);
+
+    Ok(())
 }
 
 #[test]

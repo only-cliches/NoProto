@@ -717,11 +717,13 @@ pub trait NP_Value<'value> {
     /// 
     fn schema_to_json(schema: &Vec<NP_Parsed_Schema>, address: usize)-> Result<NP_JSON, NP_Error>;
 
+    /// Export schema to IDL
+    /// 
+    fn schema_to_idl(schema: &Vec<NP_Parsed_Schema>, address: usize)-> Result<String, NP_Error>;
+
     /// Parse JSON schema into schema
     ///
-    fn from_idl_to_schema(schema: Vec<NP_Parsed_Schema>, idl: &JS_Schema, args: &Vec<JS_AST>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {
-        panic!()
-    }
+    fn from_idl_to_schema(schema: Vec<NP_Parsed_Schema>, name: &str, idl: &JS_Schema, args: &Vec<JS_AST>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error>;
 
     /// Parse JSON schema into schema
     ///

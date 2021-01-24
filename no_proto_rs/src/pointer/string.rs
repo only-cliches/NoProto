@@ -4,9 +4,7 @@
 //! use no_proto::error::NP_Error;
 //! use no_proto::NP_Factory;
 //!
-//! let factory: NP_Factory = NP_Factory::new_json(r#"{
-//!    "type": "string"
-//! }"#)?;
+//! let factory: NP_Factory = NP_Factory::new("string()")?;
 //!
 //! let mut new_buffer = factory.empty_buffer(None);
 //! new_buffer.set(&[], "I want to play a game")?;
@@ -18,7 +16,7 @@
 
 use alloc::string::String;
 use alloc::prelude::v1::Box;
-use crate::{error::NP_Error, schema::String_Case};
+use crate::{error::NP_Error, idl::{JS_AST, JS_Schema}, schema::String_Case};
 use crate::{
     json_flex::JSMAP,
     memory::NP_Memory,
@@ -148,6 +146,139 @@ impl<'value> NP_Value<'value> for String {
             },
             _ => Ok(NP_JSON::Null)
         }
+    }
+
+    fn schema_to_idl(schema: &Vec<NP_Parsed_Schema>, address: usize)-> Result<String, NP_Error> {
+        Ok(match &schema[address] {
+            NP_Parsed_Schema::UTF8String { default, size, case, .. } => {
+                let mut properties: Vec<String> = Vec::new();
+
+                if let Some(x) = default {
+                    let mut def = String::from("default: ");
+                    def.push_str("\"");
+                    def.push_str(x.as_str());
+                    def.push_str("\"");
+                    properties.push(def);
+                }
+
+                if *size > 0 {
+                    let mut def = String::from("size: ");
+                    def.push_str(size.to_string().as_str());
+                    properties.push(def);
+                }
+
+                match case {
+                    String_Case::Uppercase => {
+                        properties.push(String::from("uppercase: true"));
+                    },
+                    String_Case::Lowercase => {
+                        properties.push(String::from("lowercase: true"));
+                    },
+                    _ => {}
+                }
+
+                if properties.len() == 0 {
+                    String::from("string()")
+                } else {
+                    let mut final_str = String::from("string({");
+                    final_str.push_str(properties.join(", ").as_str());
+                    final_str.push_str("})");
+                    final_str
+                }
+
+                
+            },
+            _ => { String::from("") }
+        })
+    }
+
+    fn from_idl_to_schema(mut schema: Vec<NP_Parsed_Schema>, name: &str, idl: &JS_Schema, args: &Vec<JS_AST>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {
+        let mut schema_data: Vec<u8> = Vec::new();
+        schema_data.push(NP_TypeKeys::UTF8String as u8);
+
+        let mut case_byte = String_Case::None;
+        let mut set = 0;
+
+        let mut has_fixed_size = false;
+        let mut size = 0u16;
+
+        let mut default: Option<String> = Option::None;
+
+        if args.len() > 0 {
+
+            match &args[0] {
+                JS_AST::object { properties } => {
+                    for (key, value) in properties.iter() {
+                        match idl.get_str(key).trim() {
+                            "lowercase" => {
+                                case_byte = String_Case::Lowercase; 
+                                set += 1;
+                            },
+                            "uppercase" => {
+                                case_byte = String_Case::Uppercase; 
+                                set += 1;
+                            },
+                            "size" => {
+                                match value {
+                                    JS_AST::number { addr } => {
+                                        match idl.get_str(addr).trim().parse::<u16>() {
+                                            Ok(x) => {
+                                                size = x;
+                                                has_fixed_size = true;
+                                            },
+                                            Err(_e) => { return Err(NP_Error::new("size property must be an integer!")) }
+                                        }
+                                    },
+                                    _ => { }
+                                }
+                            },
+                            "default" => {
+                                match value {
+                                    JS_AST::string { addr } => {
+                                        default = Some(String::from(idl.get_str(addr)))
+                                    },
+                                    _ => { }
+                                }
+                            }
+                            _ => { }
+                        }
+                    }
+                }
+                _ => { }
+            }
+        }
+        
+
+        if set == 2 {
+            return Err(NP_Error::new("Only one of uppercase or lowercase can be set!"));
+        }
+
+        schema_data.push(case_byte as u8);
+
+        if has_fixed_size {
+            schema_data.extend_from_slice(&size.to_be_bytes());
+        } else {
+            schema_data.extend_from_slice(&0u16.to_be_bytes());
+        }
+
+        if let Some(x) = &default {
+            let str_bytes = x.as_bytes();
+            schema_data.extend_from_slice(&((str_bytes.len() + 1) as u16).to_be_bytes());
+            schema_data.extend_from_slice(str_bytes);
+        } else {
+            schema_data.extend_from_slice(&0u16.to_be_bytes());
+        }
+
+
+        schema.push(NP_Parsed_Schema::UTF8String {
+            i: NP_TypeKeys::UTF8String,
+            size: size,
+            default: default,
+            case: case_byte,
+            sortable: has_fixed_size,
+        });
+
+        return Ok((has_fixed_size, schema_data, schema));
     }
 
     fn set_from_json<'set, M: NP_Memory>(_depth: usize, _apply_null: bool, cursor: NP_Cursor, memory: &'set M, value: &Box<NP_JSON>) -> Result<(), NP_Error> where Self: 'set + Sized {
@@ -505,6 +636,16 @@ impl<'value> NP_Value<'value> for NP_String<'value> {
         }
     }
 
+    /// This is never called
+    fn schema_to_idl(_schema: &Vec<NP_Parsed_Schema>, _address: usize)-> Result<String, NP_Error> {
+        Ok(String::from("string()"))
+    }
+
+    /// This is never called
+    fn from_idl_to_schema(schema: Vec<NP_Parsed_Schema>, name: &str, _idl: &JS_Schema, _args: &Vec<JS_AST>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {
+        Self::from_json_to_schema(schema, &Box::new(NP_JSON::Null))
+    }
+
     fn into_value<M: NP_Memory>(cursor: &NP_Cursor, memory: &'value M) -> Result<Option<Self>, NP_Error> where Self: Sized {
 
         let c_value = || { cursor.get_value(memory) };
@@ -558,6 +699,41 @@ impl<'value> NP_Value<'value> for NP_String<'value> {
     }
 }
 
+
+#[test]
+fn schema_parsing_works_idl() -> Result<(), NP_Error> {
+    let schema = r#"string({default: "hello"})"#;
+    let factory = crate::NP_Factory::new(schema)?;
+    assert_eq!(schema, factory.schema.to_idl().unwrap());
+    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    assert_eq!(schema, factory2.schema.to_idl().unwrap());
+
+    let schema = r#"string({size: 10})"#;
+    let factory = crate::NP_Factory::new(schema)?;
+    assert_eq!(schema, factory.schema.to_idl().unwrap());
+    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    assert_eq!(schema, factory2.schema.to_idl().unwrap());
+
+    let schema = r#"string({lowercase: true})"#;
+    let factory = crate::NP_Factory::new(schema)?;
+    assert_eq!(schema, factory.schema.to_idl().unwrap());
+    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    assert_eq!(schema, factory2.schema.to_idl().unwrap());
+
+    let schema = r#"string({uppercase: true})"#;
+    let factory = crate::NP_Factory::new(schema)?;
+    assert_eq!(schema, factory.schema.to_idl().unwrap());
+    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    assert_eq!(schema, factory2.schema.to_idl().unwrap());
+
+    let schema = r#"string()"#;
+    let factory = crate::NP_Factory::new(schema)?;
+    assert_eq!(schema, factory.schema.to_idl().unwrap());
+    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    assert_eq!(schema, factory2.schema.to_idl().unwrap());
+
+    Ok(())
+}
 
 #[test]
 fn schema_parsing_works() -> Result<(), NP_Error> {

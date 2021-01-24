@@ -78,7 +78,24 @@ impl NoProtoBench {
     fn get_factory<'get>() -> Result<NP_Factory<'get>, NP_Error> {
         
         NP_Factory::new_compiled(&SCHEMA)
-        // NP_Factory::new(r#"{
+        // NP_Factory::new(r#"
+        //     struct({fields: {
+        //         list: list({of: struct({fields: {
+        //             name: string(),
+        //             rating: float(),
+        //             postfix: string({size: 1}),
+        //             sibling: struct({fields: {
+        //                 time: u32(),
+        //                 ratio: float(),
+        //                 size: u16()
+        //             }})
+        //         }})}),
+        //         initialized: bool(),
+        //         location: string(),
+        //         fruit: u8()
+        //     }})
+        // "#)
+        // NP_Factory::new_json(r#"{
         //     "type": "table",
         //     "columns": [
         //         ["list",   {"type": "list", "of": {

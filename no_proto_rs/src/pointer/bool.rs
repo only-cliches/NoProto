@@ -5,9 +5,7 @@
 //! use no_proto::NP_Factory;
 //! use no_proto::pointer::bytes::NP_Bytes;
 //! 
-//! let factory: NP_Factory = NP_Factory::new_json(r#"{
-//!    "type": "bool"
-//! }"#)?;
+//! let factory: NP_Factory = NP_Factory::new("bool()")?;
 //!
 //! let mut new_buffer = factory.empty_buffer(None);
 //! new_buffer.set(&[], true)?;
@@ -17,7 +15,8 @@
 //! # Ok::<(), NP_Error>(()) 
 //! ```
 
-use crate::{json_flex::JSMAP, schema::{NP_Parsed_Schema}};
+use alloc::string::String;
+use crate::{idl::{JS_AST, JS_Schema}, json_flex::JSMAP, schema::{NP_Parsed_Schema}};
 use crate::error::NP_Error;
 use crate::{schema::{NP_TypeKeys}, pointer::NP_Value, json_flex::NP_JSON};
 
@@ -147,8 +146,6 @@ impl<'value> NP_Value<'value> for bool {
 
     fn to_json<M: NP_Memory>(_depth:usize, cursor: &NP_Cursor, memory: &'value M) -> NP_JSON {
 
-        
-
         match Self::into_value(cursor, memory) {
             Ok(x) => {
                 match x {
@@ -190,6 +187,78 @@ impl<'value> NP_Value<'value> for bool {
         } else {
             Ok(core::mem::size_of::<u8>())
         }
+    }
+
+    fn schema_to_idl(schema: &Vec<NP_Parsed_Schema>, address: usize)-> Result<String, NP_Error> {
+        match &schema[address] {
+            NP_Parsed_Schema::Boolean { default , .. } => {
+                let mut result = String::from("bool(");
+                if let Some(x) = default {
+                    result.push_str("{default: ");
+                    if *x == true {
+                        result.push_str("true");
+                    } else {
+                        result.push_str("false");
+                    }
+                    result.push_str("}");
+                }
+                result.push_str(")");
+                Ok(result)
+            },
+            _ => { Err(NP_Error::new("unreachable")) }
+        }
+    }
+
+    fn from_idl_to_schema(mut schema: Vec<NP_Parsed_Schema>, _name: &str, idl: &JS_Schema, args: &Vec<JS_AST>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {
+
+        let mut default: Option<bool> = None;
+        if args.len() > 0 {
+            match &args[0] {
+                JS_AST::object { properties } => {
+                    for (key, value) in properties {
+                        match idl.get_str(key).trim() {
+                            "default" => {
+                                match value {
+                                    JS_AST::bool { state } => {
+                                        default = Some(*state);
+                                    },
+                                    _ => { }
+                                }
+                            },
+                            _ => { }
+                        }
+                    }
+                },
+                _ => { }
+            }
+        }
+
+        let mut schema_data: Vec<u8> = Vec::new();
+        schema_data.push(NP_TypeKeys::Boolean as u8);
+
+        let default = match default {
+            Some(x) => {
+                if x == false {
+                    schema_data.push(2);
+                } else {
+                    schema_data.push(1);
+                }
+                Some(x)  
+            },
+            _ => {
+                schema_data.push(0);
+                None
+            }
+        };
+
+        schema.push(NP_Parsed_Schema::Boolean {
+            i: NP_TypeKeys::Boolean,
+            default: default,
+            sortable: true
+        });
+
+        return Ok((true, schema_data, schema));
+
     }
 
     fn from_json_to_schema(mut schema: Vec<NP_Parsed_Schema>, json_schema: &Box<NP_JSON>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {
@@ -234,6 +303,23 @@ impl<'value> NP_Value<'value> for bool {
         });
         (true, schema)
      }
+}
+
+
+#[test]
+fn schema_parsing_works_idl() -> Result<(), NP_Error> {
+    let schema = "bool({default: false})";
+    let factory = crate::NP_Factory::new(schema)?;
+    assert_eq!(schema, factory.schema.to_idl()?);
+    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    assert_eq!(schema, factory2.schema.to_idl()?);
+
+    let schema = "bool()";
+    let factory = crate::NP_Factory::new(schema)?;
+    assert_eq!(schema, factory.schema.to_idl()?);
+    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    assert_eq!(schema, factory2.schema.to_idl()?);
+    Ok(())
 }
 
 #[test]

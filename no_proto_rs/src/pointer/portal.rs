@@ -1,7 +1,7 @@
 //! Clone type for recursive or duplicating data types.
 //! 
 
-use crate::{memory::NP_Memory, schema::{NP_Parsed_Schema}};
+use crate::{idl::{JS_AST, JS_Schema}, memory::NP_Memory, schema::{NP_Parsed_Schema}};
 use alloc::vec::Vec;
 
 use crate::json_flex::{JSMAP, NP_JSON};
@@ -46,6 +46,62 @@ impl<'value> NP_Value<'value> for NP_Portal {
                 Ok(NP_JSON::Dictionary(schema_json))
             },
             _ => Ok(NP_JSON::Null)
+        }
+    }
+
+    fn schema_to_idl(schema: &Vec<NP_Parsed_Schema>, address: usize)-> Result<String, NP_Error> {
+        match &schema[address] {
+            NP_Parsed_Schema::Portal { path, .. } => {
+                let mut result = String::from("portal({to: \"");
+                result.push_str(path.as_str());
+                result.push_str("\"});");
+                Ok(result)
+            },
+            _ => { Err(NP_Error::new("unreachable")) }
+        }
+    }
+
+    fn from_idl_to_schema(mut schema: Vec<NP_Parsed_Schema>, name: &str, idl: &JS_Schema, args: &Vec<JS_AST>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {
+
+        let mut to: Option<String> = None;
+        if args.len() > 0 {
+            match &args[0] {
+                JS_AST::object { properties } => {
+                    for (key, value) in properties {
+                        match idl.get_str(key).trim() {
+                            "to" => {
+                                match value {
+                                    JS_AST::string { addr } => {
+                                        to = Some(String::from(idl.get_str(addr).trim()));
+                                    },
+                                    _ => { }
+                                }
+                            },
+                            _ => { }
+                        }
+                    }
+                },
+                _ => { }
+            }
+        }
+
+        if let Some(path) = to {
+            let mut schema_vec: Vec<u8> = Vec::new();
+            schema_vec.push(NP_TypeKeys::Portal as u8);
+            schema.push(NP_Parsed_Schema::Portal {
+                i: NP_TypeKeys::Portal,
+                sortable: false,
+                path: path.clone(),
+                schema: 0,
+                parent_schema: 0
+            });
+            let path_bytes = path.as_bytes();
+            schema_vec.extend(&(path_bytes.len() as u16).to_be_bytes()[..]);
+            schema_vec.extend(path_bytes);
+
+            Ok((false, schema_vec, schema))             
+        } else {
+            Err(NP_Error::new("Portal types require a 'to' parameter!"))
         }
     }
 

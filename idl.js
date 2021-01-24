@@ -1,7 +1,7 @@
 // WIP IDL ideas...
 
 // this is a comment
-struct({
+struct({fiels: {
     name: string({default: "default value here", size: 20}),
     tags: list({of: string()}),
     tuple: tuple({sorted: true, values: [string(), string(), string()]}),
@@ -9,12 +9,12 @@ struct({
     // another comment
     enum: option({default: "red", choices: ["red", "blue", "orange"]}),
     p: portal({to: "map"}),
-    nested: struct({
+    nested: struct({fiels: {
         name: string(),
         value: u32({default: 20}),
         geo: geo({size: 4, default: {lat: 20, lng: 20.28}}),
-    })
-});
+    }})
+}});
 
 
 
@@ -22,7 +22,7 @@ rpc_spec({
     name: "Test API",
     author: "hello",
     version: "1.0.0",
-    spec: (mod, self) => {
+    spec: (self, mod) => {
         msg("send_name", struct());
         rpc("your_face", fn(self.send_name), option(self.send_name));
         rpc("your_face", fn(self.argument), result(self.send_name, self.error));

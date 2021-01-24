@@ -7,9 +7,7 @@
 //! use no_proto::NP_Factory;
 //! use no_proto::pointer::ulid::NP_ULID;
 //! 
-//! let factory: NP_Factory = NP_Factory::new_json(r#"{
-//!    "type": "ulid"
-//! }"#)?;
+//! let factory: NP_Factory = NP_Factory::new("ulid()")?;
 //!
 //! let mut new_buffer = factory.empty_buffer(None);
 //! let ulid = NP_ULID::generate(1604965249484, 50);
@@ -21,7 +19,7 @@
 //! ```
 //! 
 
-use crate::{memory::NP_Memory, schema::{NP_Parsed_Schema}, utils::from_base32};
+use crate::{idl::{JS_AST, JS_Schema}, memory::NP_Memory, schema::{NP_Parsed_Schema}, utils::from_base32};
 use alloc::vec::Vec;
 use crate::utils::to_base32;
 use crate::json_flex::{JSMAP, NP_JSON};
@@ -209,6 +207,14 @@ impl<'value> NP_Value<'value> for NP_ULID {
 
         Ok(())
     }
+
+    fn schema_to_idl(schema: &Vec<NP_Parsed_Schema>, address: usize)-> Result<String, NP_Error> {
+        Ok(String::from("ulid()"))
+    }
+
+    fn from_idl_to_schema(schema: Vec<NP_Parsed_Schema>, name: &str, idl: &JS_Schema, args: &Vec<JS_AST>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {
+        Self::from_json_to_schema(schema, &Box::new(NP_JSON::Null))
+    }
  
     fn set_value<'set, M: NP_Memory>(cursor: NP_Cursor, memory: &'set M, value: Self) -> Result<NP_Cursor, NP_Error> where Self: 'set + Sized {
         _NP_ULID::set_value(cursor, memory, &value)
@@ -308,6 +314,14 @@ impl<'value> NP_Value<'value> for &NP_ULID {
         Ok(())
     }
 
+    fn schema_to_idl(schema: &Vec<NP_Parsed_Schema>, address: usize)-> Result<String, NP_Error> {
+        Ok(String::from("ulid()"))
+    }
+
+    fn from_idl_to_schema(schema: Vec<NP_Parsed_Schema>, name: &str, idl: &JS_Schema, args: &Vec<JS_AST>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {
+        Self::from_json_to_schema(schema, &Box::new(NP_JSON::Null))
+    }
+
     fn set_value<'set, M: NP_Memory>(cursor: NP_Cursor, memory: &'set M, value: Self) -> Result<NP_Cursor, NP_Error> where Self: 'set + Sized {
         let c_value = || { cursor.get_value(memory) };
 
@@ -370,6 +384,18 @@ impl<'value> NP_Value<'value> for &NP_ULID {
     fn from_bytes_to_schema(schema: Vec<NP_Parsed_Schema>, _address: usize, _bytes: &[u8]) -> (bool, Vec<NP_Parsed_Schema>) {
         NP_ULID::from_bytes_to_schema(schema, _address, _bytes)
     }
+}
+
+
+#[test]
+fn schema_parsing_works_idl() -> Result<(), NP_Error> {
+    let schema = "ulid()";
+    let factory = crate::NP_Factory::new(schema)?;
+    assert_eq!(schema, factory.schema.to_idl()?);
+    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    assert_eq!(schema, factory2.schema.to_idl()?);
+
+    Ok(())
 }
 
 #[test]

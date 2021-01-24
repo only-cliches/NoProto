@@ -31,6 +31,11 @@
 //! 
 
 
+use core::{str::FromStr};
+
+use crate::pointer::JS_AST;
+use crate::JS_Schema;
+use alloc::string::String;
 use alloc::prelude::v1::Box;
 use crate::schema::NP_Parsed_Schema;
 use alloc::vec::Vec;
@@ -116,6 +121,102 @@ macro_rules! noproto_number {
                 }
         
                 Ok(NP_JSON::Dictionary(schema_json))
+            }
+
+            fn schema_to_idl(schema: &Vec<NP_Parsed_Schema>, address: usize)-> Result<String, NP_Error> {
+                let mut result = String::from($str2);
+
+                if let Some(default) = <$t>::np_get_default(address, &schema) {
+                    result.push_str("({default: ");
+                    result.push_str(default.to_string().as_str());
+                    result.push_str("})");
+                } else {
+                    result.push_str("()");
+                }
+
+                Ok(result)
+            }
+        
+            fn from_idl_to_schema(mut schema: Vec<NP_Parsed_Schema>, name: &str, idl: &JS_Schema, args: &Vec<JS_AST>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {
+                
+                let mut default: Option<$t> = None;
+                let mut default_str: Option<String> = None;
+
+                if args.len() > 0 {
+                    match &args[0] {
+                        JS_AST::object { properties } => {
+                            for (key, value) in properties.iter() {
+                                match idl.get_str(key).trim() {
+                                    "default" => {
+                                        match value {
+                                            JS_AST::number { addr } => {
+                                                let trimmed = idl.get_str(addr).trim();
+                                                match trimmed.parse::<$t>() {
+                                                    Ok(x) => {
+                                                        default_str = Some(String::from(trimmed));
+                                                        default = Some(x);
+                                                    },
+                                                    Err(_e) => {  }
+                                                }
+                                            },
+                                            _ => { }
+                                        }
+                                    },
+                                    _ => { }
+                                }
+                            }
+                        },
+                        _ => { }
+                    }
+                }
+
+                let mut schema_data: Vec<u8> = Vec::new();
+                schema_data.push($tkey as u8);
+
+                if let Some(x) = default {
+                    schema_data.push(1);
+                    schema_data.extend_from_slice(&(x as $t).to_be_bytes());
+                } else {
+                    schema_data.push(0);
+                }
+
+                let use_schema = match $tkey {
+                    NP_TypeKeys::Int8 => {
+                        NP_Parsed_Schema::Int8 { sortable: true, i: $tkey, default: i8::np_unwrap_default(default_str)}
+                    },
+                    NP_TypeKeys::Int16 => {
+                        NP_Parsed_Schema::Int16 { sortable: true, i: $tkey, default: i16::np_unwrap_default(default_str)}
+                    },
+                    NP_TypeKeys::Int32 => {
+                        NP_Parsed_Schema::Int32 { sortable: true, i: $tkey, default: i32::np_unwrap_default(default_str)}
+                    },
+                    NP_TypeKeys::Int64 => {
+                        NP_Parsed_Schema::Int64 { sortable: true, i: $tkey, default: i64::np_unwrap_default(default_str)}
+                    },
+                    NP_TypeKeys::Uint8 => {
+                        NP_Parsed_Schema::Uint8 { sortable: true, i: $tkey, default: u8::np_unwrap_default(default_str)}
+                    },
+                    NP_TypeKeys::Uint16 => {
+                        NP_Parsed_Schema::Uint16 { sortable: true, i: $tkey, default: u16::np_unwrap_default(default_str)}
+                    },
+                    NP_TypeKeys::Uint32 => {
+                        NP_Parsed_Schema::Uint32 { sortable: true, i: $tkey, default: u32::np_unwrap_default(default_str)}
+                    },
+                    NP_TypeKeys::Uint64 => {
+                        NP_Parsed_Schema::Uint64 { sortable: true, i: $tkey, default: u64::np_unwrap_default(default_str)}
+                    },
+                    NP_TypeKeys::Float => {
+                        NP_Parsed_Schema::Float { sortable: false, i: $tkey, default: f32::np_unwrap_default(default_str)}
+                    },
+                    NP_TypeKeys::Double => {
+                        NP_Parsed_Schema::Double { sortable: false, i: $tkey, default: f64::np_unwrap_default(default_str)}
+                    },
+                    _ => { unreachable!() }
+                };
+
+                schema.push(use_schema);
+
+                return Ok((true, schema_data, schema));
             }
 
             fn default_value<'default>(_depth: usize, addr: usize, schema: &'default Vec<NP_Parsed_Schema>) -> Option<Self> {
@@ -352,6 +453,17 @@ trait NP_BigEndian {
     fn np_get_default_from_json(json: &NP_JSON) -> Option<Self> where Self: Sized;
     fn np_get_default<'default>(schema_addr: usize, ptr: &'default Vec<NP_Parsed_Schema>) -> Option<Self> where Self: Sized;
     fn np_get_default_from_bytes<'default>(address: usize, bytes: &'default [u8]) -> Option<Self> where Self: Sized;
+    fn np_unwrap_default(value: Option<String>) -> Option<Self> where Self: Sized + FromStr {
+        if let Some(x) = value {
+            if let Ok(y) = x.parse::<Self>() {
+                Some(y)
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
 }
 
 
@@ -400,6 +512,23 @@ fn i8_schema_parsing_works() -> Result<(), NP_Error> {
     assert_eq!(schema, factory.schema.to_json()?.stringify());
     let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
     assert_eq!(schema, factory2.schema.to_json()?.stringify());
+    
+    Ok(())
+}
+
+#[test]
+fn i8_schema_parsing_works_idl() -> Result<(), NP_Error> {
+    let schema = "i8({default: -98})";
+    let factory = crate::NP_Factory::new(schema)?;
+    assert_eq!(schema, factory.schema.to_idl()?);
+    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    assert_eq!(schema, factory2.schema.to_idl()?);
+
+    let schema = "i8()";
+    let factory = crate::NP_Factory::new(schema)?;
+    assert_eq!(schema, factory.schema.to_idl()?);
+    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    assert_eq!(schema, factory2.schema.to_idl()?);
     
     Ok(())
 }

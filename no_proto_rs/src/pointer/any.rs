@@ -1,4 +1,5 @@
-use crate::{json_flex::{JSMAP}, schema::{NP_Parsed_Schema}};
+use alloc::string::String;
+use crate::{idl::{JS_AST, JS_Schema}, json_flex::{JSMAP}, schema::{NP_Parsed_Schema}};
 use alloc::vec::Vec;
 use crate::error::NP_Error;
 use crate::{schema::{NP_TypeKeys}, pointer::NP_Value, json_flex::NP_JSON};
@@ -24,6 +25,14 @@ impl<'value> NP_Value<'value> for NP_Any {
         schema_json.insert("type".to_owned(), NP_JSON::String("any".to_owned()));
 
         Ok(NP_JSON::Dictionary(schema_json))
+    }
+
+    fn schema_to_idl(_schema: &Vec<NP_Parsed_Schema>, _address: usize)-> Result<String, NP_Error> {
+        Ok(String::from("any()"))
+    }
+
+    fn from_idl_to_schema(schema: Vec<NP_Parsed_Schema>, _name: &str, _idl: &JS_Schema, _args: &Vec<JS_AST>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {
+        Self::from_json_to_schema(schema, &Box::new(NP_JSON::Null))
     }
 
     fn set_from_json<'set, M: NP_Memory>(depth: usize, apply_null: bool, cursor: NP_Cursor, memory: &'set M, value: &Box<NP_JSON>) -> Result<(), NP_Error> where Self: 'set + Sized {

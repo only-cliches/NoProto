@@ -389,15 +389,15 @@ macro_rules! np_path {
 /// use no_proto::error::NP_Error;
 /// use no_proto::NP_Factory;
 /// 
-/// let user_factory = NP_Factory::new_json(r#"{
-///     "type": "struct",
-///     "fields": [
-///         ["name",   {"type": "string"}],
-///         ["pass",   {"type": "string"}],
-///         ["age",    {"type": "uint16"}],
-///         ["todos",  {"type": "list", "of": {"type": "string"}}]
-///     ]
-/// }"#)?;
+/// let user_factory = NP_Factory::new(r#"
+///     struct({fields: {
+///         name:  string(),
+///         pass:  string(),
+///         age:   u16(),
+///         todos: list({of: string()})
+///     }})
+/// "#)?;
+/// 
 /// 
 /// // user_factory can now be used to make or open buffers that contain the data in the schema.
 /// 
@@ -416,7 +416,7 @@ macro_rules! np_path {
 /// // open existing buffer for reading
 /// let user_buffer_2 = user_factory.open_buffer(user_vec);
 /// 
-/// // read field value
+/// // read field name
 /// let name_field = user_buffer_2.get::<&str>(&["name"])?;
 /// assert_eq!(name_field, Some("Billy Joel"));
 /// 
@@ -432,7 +432,7 @@ macro_rules! np_path {
 /// 
 /// // close buffer again
 /// let user_vec: Vec<u8> = user_buffer_2.close();
-/// // user_vec is a Vec<u8> with our data
+/// // user_vec is a serialized Vec<u8> with our data
 /// 
 /// # Ok::<(), NP_Error>(()) 
 /// ```
@@ -558,6 +558,11 @@ impl<'fact> NP_Factory<'fact> {
         }
     }
 
+    /// Exports this factorie's schema to ES6 IDL.  This works regardless of wether the factory was created with `NP_Factory::new` or `NP_Factory::new_compiled`.
+    /// 
+    pub fn export_schema_idl(&self) -> Result<String, NP_Error> {
+        self.schema.to_idl()
+    }
 
     /// Exports this factorie's schema to JSON.  This works regardless of wether the factory was created with `NP_Factory::new` or `NP_Factory::new_compiled`.
     /// 
