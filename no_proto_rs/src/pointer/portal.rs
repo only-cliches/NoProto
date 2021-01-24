@@ -61,7 +61,7 @@ impl<'value> NP_Value<'value> for NP_Portal {
         }
     }
 
-    fn from_idl_to_schema(mut schema: Vec<NP_Parsed_Schema>, name: &str, idl: &JS_Schema, args: &Vec<JS_AST>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {
+    fn from_idl_to_schema(mut schema: Vec<NP_Parsed_Schema>, _name: &str, idl: &JS_Schema, args: &Vec<JS_AST>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {
 
         let mut to: Option<String> = None;
         if args.len() > 0 {

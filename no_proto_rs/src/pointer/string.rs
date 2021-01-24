@@ -192,7 +192,7 @@ impl<'value> NP_Value<'value> for String {
         })
     }
 
-    fn from_idl_to_schema(mut schema: Vec<NP_Parsed_Schema>, name: &str, idl: &JS_Schema, args: &Vec<JS_AST>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {
+    fn from_idl_to_schema(mut schema: Vec<NP_Parsed_Schema>, _name: &str, idl: &JS_Schema, args: &Vec<JS_AST>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {
         let mut schema_data: Vec<u8> = Vec::new();
         schema_data.push(NP_TypeKeys::UTF8String as u8);
 
@@ -642,7 +642,7 @@ impl<'value> NP_Value<'value> for NP_String<'value> {
     }
 
     /// This is never called
-    fn from_idl_to_schema(schema: Vec<NP_Parsed_Schema>, name: &str, _idl: &JS_Schema, _args: &Vec<JS_AST>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {
+    fn from_idl_to_schema(schema: Vec<NP_Parsed_Schema>, _name: &str, _idl: &JS_Schema, _args: &Vec<JS_AST>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {
         Self::from_json_to_schema(schema, &Box::new(NP_JSON::Null))
     }
 

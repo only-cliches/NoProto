@@ -206,13 +206,42 @@ impl<'value> NP_Value<'value> for NP_Enum {
     }
 
     fn schema_to_idl(schema: &Vec<NP_Parsed_Schema>, address: usize)-> Result<String, NP_Error> {
-        let mut result = String::from("enum(");
+        let mut result = String::from("enum({");
 
+        match &schema[address] {
+            NP_Parsed_Schema::Enum { choices, default, .. } => {
+                if let Some(x) = default {
+                    if let NP_Enum::Some(stri) = x {
+                        result.push_str("default: \"");
+                        result.push_str(stri);
+                        result.push_str("\", ");
+                    }
+                }
+
+                result.push_str("choices: [");
+
+                let last_choice = choices.len() - 1;
+                for (idx, choice) in choices.iter().enumerate() {
+                    result.push_str("\"");
+                    if let NP_Enum::Some(stri) = choice {
+                        result.push_str(stri);
+                    }
+                    result.push_str("\"");
+                    if idx < last_choice {
+                        result.push_str(", ");
+                    }
+                }
+                result.push_str("]");
+            },
+            _ => return Err(NP_Error::new("unreachable"))
+        }
+
+        result.push_str("})");
 
         Ok(result)
     }
 
-    fn from_idl_to_schema(mut schema: Vec<NP_Parsed_Schema>, name: &str, idl: &JS_Schema, args: &Vec<JS_AST>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {
+    fn from_idl_to_schema(mut schema: Vec<NP_Parsed_Schema>, _name: &str, idl: &JS_Schema, args: &Vec<JS_AST>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {
         let mut schema_data: Vec<u8> = Vec::new();
         schema_data.push(NP_TypeKeys::Enum as u8);
 
@@ -519,6 +548,23 @@ impl<'value> NP_Value<'value> for NP_Enum {
 
         (true, schema)
     }
+}
+
+#[test]
+fn schema_parsing_works_idl() -> Result<(), NP_Error> {
+    let schema = r#"enum({default: "hello", choices: ["hello", "world"]})"#;
+    let factory = crate::NP_Factory::new(schema)?;
+    assert_eq!(schema, factory.schema.to_idl()?);
+    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    assert_eq!(schema, factory2.schema.to_idl()?);
+
+    let schema = r#"enum({choices: ["hello", "world"]})"#;
+    let factory = crate::NP_Factory::new(schema)?;
+    assert_eq!(schema, factory.schema.to_idl()?);
+    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    assert_eq!(schema, factory2.schema.to_idl()?);
+    
+    Ok(())
 }
 
 #[test]

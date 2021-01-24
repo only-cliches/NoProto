@@ -49,7 +49,7 @@ impl NP_Union {
                     return Ok(Some(cursor))
                 }
 
-                let mut union_value = cursor.get_value(memory);
+                let union_value = cursor.get_value(memory);
 
                 let addr_value = union_value.get_addr_value();
 
@@ -101,11 +101,11 @@ impl<'value> NP_Value<'value> for NP_Union {
         Ok(NP_JSON::Dictionary(schema_json))
     }
 
-    fn schema_to_idl(schema: &Vec<NP_Parsed_Schema>, address: usize)-> Result<String, NP_Error> {
+    fn schema_to_idl(_schema: &Vec<NP_Parsed_Schema>, _address: usize)-> Result<String, NP_Error> {
         todo!()
     }
 
-    fn from_idl_to_schema(schema: Vec<NP_Parsed_Schema>, name: &str, idl: &JS_Schema, args: &Vec<JS_AST>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {
+    fn from_idl_to_schema(_schema: Vec<NP_Parsed_Schema>, _name: &str, _idl: &JS_Schema, _args: &Vec<JS_AST>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {
         todo!()
     }
 
@@ -244,7 +244,7 @@ impl<'value> NP_Value<'value> for NP_Union {
         (false, schema_parsed)
     }
 
-    fn set_from_json<'set, M: NP_Memory>(depth: usize, apply_null: bool, cursor: NP_Cursor, memory: &'set M, value: &Box<NP_JSON>) -> Result<(), NP_Error> where Self: 'set + Sized {
+    fn set_from_json<'set, M: NP_Memory>(_depth: usize, _apply_null: bool, _cursor: NP_Cursor, _memory: &'set M, _value: &Box<NP_JSON>) -> Result<(), NP_Error> where Self: 'set + Sized {
         todo!()
     }
 
@@ -260,7 +260,7 @@ impl<'value> NP_Value<'value> for NP_Union {
         todo!()
     }
 
-    fn to_json<M: NP_Memory>(depth:usize, cursor: &NP_Cursor, memory: &'value M) -> NP_JSON {
+    fn to_json<M: NP_Memory>(_depth:usize, _cursor: &NP_Cursor, _memory: &'value M) -> NP_JSON {
         // match memory.get_schema(cursor.schema_addr) {
         //     NP_Parsed_Schema::Portal { schema, parent_schema, .. } => {
         //         let mut next = cursor.clone();
@@ -273,7 +273,7 @@ impl<'value> NP_Value<'value> for NP_Union {
         todo!()
     }
 
-    fn get_size<M: NP_Memory>(depth:usize, cursor: &'value NP_Cursor, memory: &'value M) -> Result<usize, NP_Error> {
+    fn get_size<M: NP_Memory>(_depth:usize, _cursor: &'value NP_Cursor, _memory: &'value M) -> Result<usize, NP_Error> {
         // match memory.get_schema(cursor.schema_addr) {
         //     NP_Parsed_Schema::Portal { schema, parent_schema, .. } => {
         //         let mut next = cursor.clone();
@@ -286,7 +286,7 @@ impl<'value> NP_Value<'value> for NP_Union {
         todo!()
     }
 
-    fn do_compact<M: NP_Memory, M2: NP_Memory>(depth:usize, mut from_cursor: NP_Cursor, from_memory: &'value M, mut to_cursor: NP_Cursor, to_memory: &'value M2) -> Result<NP_Cursor, NP_Error> where Self: 'value + Sized {
+    fn do_compact<M: NP_Memory, M2: NP_Memory>(_depth:usize, mut _from_cursor: NP_Cursor, _from_memory: &'value M, mut _to_cursor: NP_Cursor, _to_memory: &'value M2) -> Result<NP_Cursor, NP_Error> where Self: 'value + Sized {
         // match from_memory.get_schema(from_cursor.schema_addr) {
         //     NP_Parsed_Schema::Portal { schema, parent_schema, .. } => {
         //         from_cursor.schema_addr = *schema;

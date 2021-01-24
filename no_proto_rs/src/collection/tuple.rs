@@ -1,4 +1,3 @@
-use crate::{idl::AST_STR, schema::NP_Schema_Addr};
 use crate::idl::JS_AST;
 use alloc::string::String;
 use crate::{buffer::{VTABLE_BYTES, VTABLE_SIZE}, idl::JS_Schema, utils::opt_err};

@@ -1,5 +1,5 @@
 # 0.9.1
-- Changed "struct" type "struct" type.  Old code should still work with "struct".
+- Changed "table" type "struct" type.  Old code should still work with "table".
 - `NP_Factory::new` is now `NP_Factory::new_json`.
 - Added new IDL that is similar to ES6 for schemas (way shorter than JSON).  JSON is still supported, though.
 

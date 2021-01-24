@@ -137,7 +137,7 @@ macro_rules! noproto_number {
                 Ok(result)
             }
         
-            fn from_idl_to_schema(mut schema: Vec<NP_Parsed_Schema>, name: &str, idl: &JS_Schema, args: &Vec<JS_AST>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {
+            fn from_idl_to_schema(mut schema: Vec<NP_Parsed_Schema>, _name: &str, idl: &JS_Schema, args: &Vec<JS_AST>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {
                 
                 let mut default: Option<$t> = None;
                 let mut default_str: Option<String> = None;
