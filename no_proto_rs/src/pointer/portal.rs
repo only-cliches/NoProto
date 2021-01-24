@@ -1,7 +1,7 @@
 //! Clone type for recursive or duplicating data types.
 //! 
 
-use crate::{idl::{JS_AST, JS_Schema}, memory::NP_Memory, schema::{NP_Parsed_Schema}};
+use crate::{idl::{JS_AST, JS_Schema}, memory::NP_Memory, schema::{NP_Parsed_Schema, NP_Value_Kind}};
 use alloc::vec::Vec;
 
 use crate::json_flex::{JSMAP, NP_JSON};
@@ -89,6 +89,7 @@ impl<'value> NP_Value<'value> for NP_Portal {
             let mut schema_vec: Vec<u8> = Vec::new();
             schema_vec.push(NP_TypeKeys::Portal as u8);
             schema.push(NP_Parsed_Schema::Portal {
+                val: NP_Value_Kind::Pointer,
                 i: NP_TypeKeys::Portal,
                 sortable: false,
                 path: path.clone(),
@@ -111,6 +112,7 @@ impl<'value> NP_Value<'value> for NP_Portal {
         match &json_schema["to"] {
             NP_JSON::String(path) => {
                 schema.push(NP_Parsed_Schema::Portal {
+                    val: NP_Value_Kind::Pointer,
                     i: NP_TypeKeys::Portal,
                     sortable: false,
                     path: path.clone(),
@@ -137,6 +139,7 @@ impl<'value> NP_Value<'value> for NP_Portal {
         let path_str = unsafe { core::str::from_utf8_unchecked(path) };
 
         schema.push(NP_Parsed_Schema::Portal {
+            val: NP_Value_Kind::Pointer,
             i: NP_TypeKeys::Portal,
             sortable: false,
             path: String::from(path_str),

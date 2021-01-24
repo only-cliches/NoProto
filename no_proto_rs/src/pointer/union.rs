@@ -1,7 +1,7 @@
 //! Clone type for recursive or duplicating data types.
 //! 
 
-use crate::{idl::{JS_AST, JS_Schema}, schema::NP_Schema_Addr};
+use crate::{idl::{JS_AST, JS_Schema}, schema::{NP_Schema_Addr, NP_Value_Kind}};
 use crate::NP_Schema;
 use crate::{memory::NP_Memory, schema::{NP_Parsed_Schema}};
 use alloc::vec::Vec;
@@ -116,6 +116,7 @@ impl<'value> NP_Value<'value> for NP_Union {
 
         let schema_table_addr = schema.len();
         schema.push(NP_Parsed_Schema::Union {
+            val: NP_Value_Kind::Pointer,
             i: NP_TypeKeys::Union,
             sortable: false,
             types: Vec::new(),
@@ -158,6 +159,7 @@ impl<'value> NP_Value<'value> for NP_Union {
 
 
         schema_parsed[schema_table_addr] = NP_Parsed_Schema::Union {
+            val: NP_Value_Kind::Pointer,
             i: NP_TypeKeys::Union,
             sortable: false,
             types: types,
@@ -202,6 +204,7 @@ impl<'value> NP_Value<'value> for NP_Union {
         let table_schema_addr = schema.len();
 
         schema.push(NP_Parsed_Schema::Union {
+            val: NP_Value_Kind::Pointer,
             i: NP_TypeKeys::Union,
             sortable: false,
             default: 0,
@@ -235,6 +238,7 @@ impl<'value> NP_Value<'value> for NP_Union {
         }
 
         schema_parsed[table_schema_addr] = NP_Parsed_Schema::Union {
+            val: NP_Value_Kind::Pointer,
             i: NP_TypeKeys::Union,
             sortable: false,
             types: parsed_types,

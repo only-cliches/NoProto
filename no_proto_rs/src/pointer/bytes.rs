@@ -17,7 +17,7 @@
 //! 
 
 use alloc::string::String;
-use crate::{idl::{JS_AST, JS_Schema}, json_flex::JSMAP, schema::{NP_Parsed_Schema}};
+use crate::{idl::{JS_AST, JS_Schema}, json_flex::JSMAP, schema::{NP_Parsed_Schema, NP_Value_Kind}};
 use crate::error::NP_Error;
 use crate::{schema::{NP_TypeKeys}, pointer::NP_Value, json_flex::NP_JSON};
 
@@ -111,7 +111,7 @@ impl<'value> NP_Value<'value> for NP_Bytes {
         schema_json.insert("type".to_owned(), NP_JSON::String(Self::type_idx().0.to_string()));
 
         match &schema[address] {
-            NP_Parsed_Schema::Bytes { i: _, sortable: _, default, size} => {
+            NP_Parsed_Schema::Bytes { default, size, ..} => {
                 if *size > 0 {
                     schema_json.insert("size".to_owned(), NP_JSON::Integer(*size as i64));
                 }
@@ -259,6 +259,11 @@ impl<'value> NP_Value<'value> for NP_Bytes {
 
 
         schema.push(NP_Parsed_Schema::Bytes {
+            val: if size > 0 {
+                NP_Value_Kind::Fixed(size as u32)
+            } else {
+                NP_Value_Kind::Pointer
+            },
             i: NP_TypeKeys::Bytes,
             size: size,
             default: default,
@@ -425,6 +430,11 @@ impl<'value> NP_Value<'value> for NP_Bytes {
         
 
         schema.push(NP_Parsed_Schema::Bytes {
+            val: if size > 0 {
+                NP_Value_Kind::Fixed(size as u32)
+            } else {
+                NP_Value_Kind::Pointer
+            },
             i: NP_TypeKeys::Bytes,
             size: size,
             default: default,
@@ -449,6 +459,11 @@ impl<'value> NP_Value<'value> for NP_Bytes {
 
         if default_size == 0 {
             schema.push(NP_Parsed_Schema::Bytes {
+                val: if fixed_size > 0 {
+                    NP_Value_Kind::Fixed(fixed_size as u32)
+                } else {
+                    NP_Value_Kind::Pointer
+                },
                 i: NP_TypeKeys::Bytes,
                 default: None,
                 sortable: fixed_size > 0,
@@ -458,6 +473,11 @@ impl<'value> NP_Value<'value> for NP_Bytes {
             let default_bytes = &bytes[(address + 5)..(address + 5 + (default_size - 1))];
 
             schema.push(NP_Parsed_Schema::Bytes {
+                val: if fixed_size > 0 {
+                    NP_Value_Kind::Fixed(fixed_size as u32)
+                } else {
+                    NP_Value_Kind::Pointer
+                },
                 i: NP_TypeKeys::Bytes,
                 default: Some(default_bytes.to_vec()),
                 size: fixed_size,
@@ -633,12 +653,7 @@ impl<'value> NP_Value<'value> for NP_Borrow_Bytes<'value> {
         }
 
         match memory.get_schema(cursor.schema_addr) {
-            NP_Parsed_Schema::Bytes {
-                i: _,
-                sortable: _,
-                default: _,
-                size,
-            } => {
+            NP_Parsed_Schema::Bytes { size , .. } => {
                 if *size > 0 {
                     // fixed size
 

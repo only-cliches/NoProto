@@ -1,5 +1,5 @@
 use alloc::string::String;
-use crate::{idl::{JS_AST, JS_Schema}, pointer::NP_Cursor};
+use crate::{idl::{JS_AST, JS_Schema}, pointer::NP_Cursor, schema::NP_Value_Kind};
 use crate::{json_flex::JSMAP};
 use crate::pointer::{NP_Value};
 use crate::{memory::{NP_Memory}, schema::{NP_Schema, NP_TypeKeys, NP_Parsed_Schema}, error::NP_Error, json_flex::NP_JSON};
@@ -322,6 +322,7 @@ impl<'value> NP_Value<'value> for NP_Map<'value> {
 
         let value_addr = schema.len();
         schema.push(NP_Parsed_Schema::Map {
+            val: NP_Value_Kind::Pointer,
             i: NP_TypeKeys::Map,
             value: value_addr + 1,
             sortable: false
@@ -361,6 +362,7 @@ impl<'value> NP_Value<'value> for NP_Map<'value> {
 
         let value_addr = schema.len();
         schema.push(NP_Parsed_Schema::Map {
+            val: NP_Value_Kind::Pointer,
             i: NP_TypeKeys::Map,
             value: value_addr + 1,
             sortable: false
@@ -389,6 +391,7 @@ impl<'value> NP_Value<'value> for NP_Map<'value> {
     fn from_bytes_to_schema(mut schema: Vec<NP_Parsed_Schema>, address: usize, bytes: &[u8]) -> (bool, Vec<NP_Parsed_Schema>) {
         let of_addr = schema.len();
         schema.push(NP_Parsed_Schema::Map {
+            val: NP_Value_Kind::Pointer,
             i: NP_TypeKeys::Map,
             sortable: false,
             value: of_addr + 1

@@ -31,6 +31,7 @@
 //! 
 
 
+use crate::schema::NP_Value_Kind;
 use core::{str::FromStr};
 
 use crate::pointer::JS_AST;
@@ -182,34 +183,34 @@ macro_rules! noproto_number {
 
                 let use_schema = match $tkey {
                     NP_TypeKeys::Int8 => {
-                        NP_Parsed_Schema::Int8 { sortable: true, i: $tkey, default: i8::np_unwrap_default(default_str)}
+                        NP_Parsed_Schema::Int8 { val: NP_Value_Kind::Fixed(core::mem::size_of::<Self>() as u32), sortable: true, i: $tkey, default: i8::np_unwrap_default(default_str)}
                     },
                     NP_TypeKeys::Int16 => {
-                        NP_Parsed_Schema::Int16 { sortable: true, i: $tkey, default: i16::np_unwrap_default(default_str)}
+                        NP_Parsed_Schema::Int16 { val: NP_Value_Kind::Fixed(core::mem::size_of::<Self>() as u32), sortable: true, i: $tkey, default: i16::np_unwrap_default(default_str)}
                     },
                     NP_TypeKeys::Int32 => {
-                        NP_Parsed_Schema::Int32 { sortable: true, i: $tkey, default: i32::np_unwrap_default(default_str)}
+                        NP_Parsed_Schema::Int32 { val: NP_Value_Kind::Fixed(core::mem::size_of::<Self>() as u32), sortable: true, i: $tkey, default: i32::np_unwrap_default(default_str)}
                     },
                     NP_TypeKeys::Int64 => {
-                        NP_Parsed_Schema::Int64 { sortable: true, i: $tkey, default: i64::np_unwrap_default(default_str)}
+                        NP_Parsed_Schema::Int64 { val: NP_Value_Kind::Fixed(core::mem::size_of::<Self>() as u32), sortable: true, i: $tkey, default: i64::np_unwrap_default(default_str)}
                     },
                     NP_TypeKeys::Uint8 => {
-                        NP_Parsed_Schema::Uint8 { sortable: true, i: $tkey, default: u8::np_unwrap_default(default_str)}
+                        NP_Parsed_Schema::Uint8 { val: NP_Value_Kind::Fixed(core::mem::size_of::<Self>() as u32), sortable: true, i: $tkey, default: u8::np_unwrap_default(default_str)}
                     },
                     NP_TypeKeys::Uint16 => {
-                        NP_Parsed_Schema::Uint16 { sortable: true, i: $tkey, default: u16::np_unwrap_default(default_str)}
+                        NP_Parsed_Schema::Uint16 { val: NP_Value_Kind::Fixed(core::mem::size_of::<Self>() as u32), sortable: true, i: $tkey, default: u16::np_unwrap_default(default_str)}
                     },
                     NP_TypeKeys::Uint32 => {
-                        NP_Parsed_Schema::Uint32 { sortable: true, i: $tkey, default: u32::np_unwrap_default(default_str)}
+                        NP_Parsed_Schema::Uint32 { val: NP_Value_Kind::Fixed(core::mem::size_of::<Self>() as u32), sortable: true, i: $tkey, default: u32::np_unwrap_default(default_str)}
                     },
                     NP_TypeKeys::Uint64 => {
-                        NP_Parsed_Schema::Uint64 { sortable: true, i: $tkey, default: u64::np_unwrap_default(default_str)}
+                        NP_Parsed_Schema::Uint64 { val: NP_Value_Kind::Fixed(core::mem::size_of::<Self>() as u32), sortable: true, i: $tkey, default: u64::np_unwrap_default(default_str)}
                     },
                     NP_TypeKeys::Float => {
-                        NP_Parsed_Schema::Float { sortable: false, i: $tkey, default: f32::np_unwrap_default(default_str)}
+                        NP_Parsed_Schema::Float { val: NP_Value_Kind::Fixed(core::mem::size_of::<Self>() as u32), sortable: false, i: $tkey, default: f32::np_unwrap_default(default_str)}
                     },
                     NP_TypeKeys::Double => {
-                        NP_Parsed_Schema::Double { sortable: false, i: $tkey, default: f64::np_unwrap_default(default_str)}
+                        NP_Parsed_Schema::Double { val: NP_Value_Kind::Fixed(core::mem::size_of::<Self>() as u32), sortable: false, i: $tkey, default: f64::np_unwrap_default(default_str)}
                     },
                     _ => { unreachable!() }
                 };
@@ -354,34 +355,34 @@ macro_rules! noproto_number {
 
                 let use_schema = match $tkey {
                     NP_TypeKeys::Int8 => {
-                        NP_Parsed_Schema::Int8 { sortable: true, i: $tkey, default: i8::np_get_default_from_json(&json_schema["default"])}
+                        NP_Parsed_Schema::Int8 { val: NP_Value_Kind::Fixed(core::mem::size_of::<Self>() as u32), sortable: true, i: $tkey, default: i8::np_get_default_from_json(&json_schema["default"])}
                     },
                     NP_TypeKeys::Int16 => {
-                        NP_Parsed_Schema::Int16 { sortable: true, i: $tkey, default: i16::np_get_default_from_json(&json_schema["default"])}
+                        NP_Parsed_Schema::Int16 { val: NP_Value_Kind::Fixed(core::mem::size_of::<Self>() as u32), sortable: true, i: $tkey, default: i16::np_get_default_from_json(&json_schema["default"])}
                     },
                     NP_TypeKeys::Int32 => {
-                        NP_Parsed_Schema::Int32 { sortable: true, i: $tkey, default: i32::np_get_default_from_json(&json_schema["default"])}
+                        NP_Parsed_Schema::Int32 { val: NP_Value_Kind::Fixed(core::mem::size_of::<Self>() as u32), sortable: true, i: $tkey, default: i32::np_get_default_from_json(&json_schema["default"])}
                     },
                     NP_TypeKeys::Int64 => {
-                        NP_Parsed_Schema::Int64 { sortable: true, i: $tkey, default: i64::np_get_default_from_json(&json_schema["default"])}
+                        NP_Parsed_Schema::Int64 { val: NP_Value_Kind::Fixed(core::mem::size_of::<Self>() as u32), sortable: true, i: $tkey, default: i64::np_get_default_from_json(&json_schema["default"])}
                     },
                     NP_TypeKeys::Uint8 => {
-                        NP_Parsed_Schema::Uint8 { sortable: true, i: $tkey, default: u8::np_get_default_from_json(&json_schema["default"])}
+                        NP_Parsed_Schema::Uint8 { val: NP_Value_Kind::Fixed(core::mem::size_of::<Self>() as u32), sortable: true, i: $tkey, default: u8::np_get_default_from_json(&json_schema["default"])}
                     },
                     NP_TypeKeys::Uint16 => {
-                        NP_Parsed_Schema::Uint16 { sortable: true, i: $tkey, default: u16::np_get_default_from_json(&json_schema["default"])}
+                        NP_Parsed_Schema::Uint16 { val: NP_Value_Kind::Fixed(core::mem::size_of::<Self>() as u32), sortable: true, i: $tkey, default: u16::np_get_default_from_json(&json_schema["default"])}
                     },
                     NP_TypeKeys::Uint32 => {
-                        NP_Parsed_Schema::Uint32 { sortable: true, i: $tkey, default: u32::np_get_default_from_json(&json_schema["default"])}
+                        NP_Parsed_Schema::Uint32 { val: NP_Value_Kind::Fixed(core::mem::size_of::<Self>() as u32), sortable: true, i: $tkey, default: u32::np_get_default_from_json(&json_schema["default"])}
                     },
                     NP_TypeKeys::Uint64 => {
-                        NP_Parsed_Schema::Uint64 { sortable: true, i: $tkey, default: u64::np_get_default_from_json(&json_schema["default"])}
+                        NP_Parsed_Schema::Uint64 { val: NP_Value_Kind::Fixed(core::mem::size_of::<Self>() as u32), sortable: true, i: $tkey, default: u64::np_get_default_from_json(&json_schema["default"])}
                     },
                     NP_TypeKeys::Float => {
-                        NP_Parsed_Schema::Float { sortable: false, i: $tkey, default: f32::np_get_default_from_json(&json_schema["default"])}
+                        NP_Parsed_Schema::Float { val: NP_Value_Kind::Fixed(core::mem::size_of::<Self>() as u32), sortable: false, i: $tkey, default: f32::np_get_default_from_json(&json_schema["default"])}
                     },
                     NP_TypeKeys::Double => {
-                        NP_Parsed_Schema::Double { sortable: false, i: $tkey, default: f64::np_get_default_from_json(&json_schema["default"])}
+                        NP_Parsed_Schema::Double { val: NP_Value_Kind::Fixed(core::mem::size_of::<Self>() as u32), sortable: false, i: $tkey, default: f64::np_get_default_from_json(&json_schema["default"])}
                     },
                     _ => { unreachable!() }
                 };
@@ -395,34 +396,34 @@ macro_rules! noproto_number {
             fn from_bytes_to_schema(mut schema: Vec<NP_Parsed_Schema>, address: usize, bytes: &[u8]) -> (bool, Vec<NP_Parsed_Schema>) {
                 schema.push(match $tkey {
                     NP_TypeKeys::Int8 => {
-                        NP_Parsed_Schema::Int8 { sortable: true, i: $tkey, default: i8::np_get_default_from_bytes(address, bytes)}
+                        NP_Parsed_Schema::Int8 { val: NP_Value_Kind::Fixed(core::mem::size_of::<Self>() as u32), sortable: true, i: $tkey, default: i8::np_get_default_from_bytes(address, bytes)}
                     },
                     NP_TypeKeys::Int16 => {
-                        NP_Parsed_Schema::Int16 { sortable: true, i: $tkey, default: i16::np_get_default_from_bytes(address, bytes)}
+                        NP_Parsed_Schema::Int16 { val: NP_Value_Kind::Fixed(core::mem::size_of::<Self>() as u32), sortable: true, i: $tkey, default: i16::np_get_default_from_bytes(address, bytes)}
                     },
                     NP_TypeKeys::Int32 => {
-                        NP_Parsed_Schema::Int32 { sortable: true, i: $tkey, default: i32::np_get_default_from_bytes(address, bytes)}
+                        NP_Parsed_Schema::Int32 { val: NP_Value_Kind::Fixed(core::mem::size_of::<Self>() as u32), sortable: true, i: $tkey, default: i32::np_get_default_from_bytes(address, bytes)}
                     },
                     NP_TypeKeys::Int64 => {
-                        NP_Parsed_Schema::Int64 { sortable: true, i: $tkey, default: i64::np_get_default_from_bytes(address, bytes)}
+                        NP_Parsed_Schema::Int64 { val: NP_Value_Kind::Fixed(core::mem::size_of::<Self>() as u32), sortable: true, i: $tkey, default: i64::np_get_default_from_bytes(address, bytes)}
                     },
                     NP_TypeKeys::Uint8 => {
-                        NP_Parsed_Schema::Uint8 { sortable: true, i: $tkey, default: u8::np_get_default_from_bytes(address, bytes)}
+                        NP_Parsed_Schema::Uint8 { val: NP_Value_Kind::Fixed(core::mem::size_of::<Self>() as u32), sortable: true, i: $tkey, default: u8::np_get_default_from_bytes(address, bytes)}
                     },
                     NP_TypeKeys::Uint16 => {
-                        NP_Parsed_Schema::Uint16 { sortable: true, i: $tkey, default: u16::np_get_default_from_bytes(address, bytes)}
+                        NP_Parsed_Schema::Uint16 { val: NP_Value_Kind::Fixed(core::mem::size_of::<Self>() as u32), sortable: true, i: $tkey, default: u16::np_get_default_from_bytes(address, bytes)}
                     },
                     NP_TypeKeys::Uint32 => {
-                        NP_Parsed_Schema::Uint32 { sortable: true, i: $tkey, default: u32::np_get_default_from_bytes(address, bytes)}
+                        NP_Parsed_Schema::Uint32 { val: NP_Value_Kind::Fixed(core::mem::size_of::<Self>() as u32), sortable: true, i: $tkey, default: u32::np_get_default_from_bytes(address, bytes)}
                     },
                     NP_TypeKeys::Uint64 => {
-                        NP_Parsed_Schema::Uint64 { sortable: true, i: $tkey, default: u64::np_get_default_from_bytes(address, bytes)}
+                        NP_Parsed_Schema::Uint64 { val: NP_Value_Kind::Fixed(core::mem::size_of::<Self>() as u32), sortable: true, i: $tkey, default: u64::np_get_default_from_bytes(address, bytes)}
                     },
                     NP_TypeKeys::Float => {
-                        NP_Parsed_Schema::Float { sortable: false, i: $tkey, default: f32::np_get_default_from_bytes(address, bytes)}
+                        NP_Parsed_Schema::Float { val: NP_Value_Kind::Fixed(core::mem::size_of::<Self>() as u32),sortable: false, i: $tkey, default: f32::np_get_default_from_bytes(address, bytes)}
                     },
                     NP_TypeKeys::Double => {
-                        NP_Parsed_Schema::Double { sortable: false, i: $tkey, default: f64::np_get_default_from_bytes(address, bytes)}
+                        NP_Parsed_Schema::Double { val: NP_Value_Kind::Fixed(core::mem::size_of::<Self>() as u32), sortable: false, i: $tkey, default: f64::np_get_default_from_bytes(address, bytes)}
                     },
                     _ => { unreachable!() }
                 });
@@ -471,7 +472,7 @@ impl NP_BigEndian for i8 {
 
     fn np_get_default<'default>(schema: usize, ptr: &'default Vec<NP_Parsed_Schema>) -> Option<Self> {
         match &ptr[schema] {
-            NP_Parsed_Schema::Int8 { sortable: _, i: _, default } => { *default },
+            NP_Parsed_Schema::Int8 { default, .. } => { *default },
             _ => None
         }
     }
@@ -565,7 +566,7 @@ impl NP_BigEndian for i16 {
 
     fn np_get_default<'default>(schema: usize, ptr: &'default Vec<NP_Parsed_Schema>) -> Option<Self> {
         match &ptr[schema] {
-            NP_Parsed_Schema::Int16 { sortable: _, i: _, default } => { *default },
+            NP_Parsed_Schema::Int16 { default, .. } => { *default },
             _ => None
         }
     }
@@ -644,7 +645,7 @@ impl NP_BigEndian for i32 {
 
     fn np_get_default<'default>(schema: usize, ptr: &'default Vec<NP_Parsed_Schema>) -> Option<Self> {
         match &ptr[schema] {
-            NP_Parsed_Schema::Int32 { sortable: _, i: _, default } => { *default },
+            NP_Parsed_Schema::Int32 { default, .. } => { *default },
             _ => None
         }
     }
@@ -722,7 +723,7 @@ impl NP_BigEndian for i64 {
 
     fn np_get_default<'default>(schema: usize, ptr: &'default Vec<NP_Parsed_Schema>) -> Option<Self> {
         match &ptr[schema] {
-            NP_Parsed_Schema::Int64 { sortable: _, i: _, default } => { *default },
+            NP_Parsed_Schema::Int64 { default, .. } => { *default },
             _ => None
         }
     }
@@ -802,7 +803,7 @@ impl NP_BigEndian for u8 {
 
     fn np_get_default<'default>(schema: usize, ptr: &'default Vec<NP_Parsed_Schema>) -> Option<Self> {
         match &ptr[schema] {
-            NP_Parsed_Schema::Uint8 { sortable: _, i: _, default } => { *default },
+            NP_Parsed_Schema::Uint8 { default, .. } => { *default },
             _ => None
         }
     }
@@ -880,7 +881,7 @@ impl NP_BigEndian for u16 {
 
     fn np_get_default<'default>(schema: usize, ptr: &'default Vec<NP_Parsed_Schema>) -> Option<Self> {
         match &ptr[schema] {
-            NP_Parsed_Schema::Uint16 { sortable: _, i: _, default } => { *default },
+            NP_Parsed_Schema::Uint16 { default, .. } => { *default },
             _ => None
         }
     }
@@ -958,7 +959,7 @@ impl NP_BigEndian for u32 {
 
     fn np_get_default<'default>(schema: usize, ptr: &'default Vec<NP_Parsed_Schema>) -> Option<Self> {
         match &ptr[schema] {
-            NP_Parsed_Schema::Uint32 { sortable: _, i: _, default } => { *default },
+            NP_Parsed_Schema::Uint32 { default, .. } => { *default },
             _ => None
         }
     }
@@ -1035,7 +1036,7 @@ impl NP_BigEndian for u64 {
            
     fn np_get_default<'default>(schema: usize, ptr: &'default Vec<NP_Parsed_Schema>) -> Option<Self> {
         match &ptr[schema] {
-            NP_Parsed_Schema::Uint64 { sortable: _, i: _, default } => { *default },
+            NP_Parsed_Schema::Uint64 { default, .. } => { *default },
             _ => None
         }
     }
@@ -1111,7 +1112,7 @@ impl NP_BigEndian for f32 {
 
     fn np_get_default<'default>(schema: usize, ptr: &'default Vec<NP_Parsed_Schema>) -> Option<Self> {
         match &ptr[schema] {
-            NP_Parsed_Schema::Float { sortable: _, i: _, default } => { *default },
+            NP_Parsed_Schema::Float { default, .. } => { *default },
             _ => None
         }
     }
@@ -1187,7 +1188,7 @@ impl NP_BigEndian for f64 {
 
     fn np_get_default<'default>(schema: usize, ptr: &'default Vec<NP_Parsed_Schema>) -> Option<Self> {
         match &ptr[schema] {
-            NP_Parsed_Schema::Double { sortable: _, i: _, default } => { *default },
+            NP_Parsed_Schema::Double { default, .. } => { *default },
             _ => None
         }
     }

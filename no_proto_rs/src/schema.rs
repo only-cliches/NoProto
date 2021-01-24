@@ -918,41 +918,90 @@ impl From<u8> for String_Case {
     }
 }
 
+#[derive(Debug, Clone, Eq, PartialEq, Copy)]
+#[allow(missing_docs)]
+pub enum NP_Value_Kind {
+    Pointer,
+    Fixed(u32)
+}
+
+#[allow(missing_docs)]
+#[derive(Debug, Clone)]
+pub struct NP_Struct_Field {
+    pub idx: u8,
+    pub col: String,
+    pub schema: usize,
+    pub offset: usize
+}
+
 /// When a schema is parsed from JSON or Bytes, it is stored in this recursive type
 /// 
 #[allow(missing_docs)]
 #[derive(Debug, Clone)]
 pub enum NP_Parsed_Schema {
     None,
-    Any        { sortable: bool, i:NP_TypeKeys },
-    UTF8String { sortable: bool, i:NP_TypeKeys, default: Option<String>, size: u16, case: String_Case },
-    Bytes      { sortable: bool, i:NP_TypeKeys, default: Option<Vec<u8>>, size: u16 },
-    Int8       { sortable: bool, i:NP_TypeKeys, default: Option<i8> },
-    Int16      { sortable: bool, i:NP_TypeKeys, default: Option<i16> },
-    Int32      { sortable: bool, i:NP_TypeKeys, default: Option<i32> },
-    Int64      { sortable: bool, i:NP_TypeKeys, default: Option<i64> },
-    Uint8      { sortable: bool, i:NP_TypeKeys, default: Option<u8> },
-    Uint16     { sortable: bool, i:NP_TypeKeys, default: Option<u16> },
-    Uint32     { sortable: bool, i:NP_TypeKeys, default: Option<u32> },
-    Uint64     { sortable: bool, i:NP_TypeKeys, default: Option<u64> },
-    Float      { sortable: bool, i:NP_TypeKeys, default: Option<f32> },
-    Double     { sortable: bool, i:NP_TypeKeys, default: Option<f64> },
-    Decimal    { sortable: bool, i:NP_TypeKeys, default: Option<NP_Dec>, exp: u8 },
-    Boolean    { sortable: bool, i:NP_TypeKeys, default: Option<bool> },
-    Geo        { sortable: bool, i:NP_TypeKeys, default: Option<NP_Geo>, size: u8 },
-    Date       { sortable: bool, i:NP_TypeKeys, default: Option<NP_Date> },
-    Enum       { sortable: bool, i:NP_TypeKeys, default: Option<NP_Enum>, choices: Vec<NP_Enum> },
-    Uuid       { sortable: bool, i:NP_TypeKeys },
-    Ulid       { sortable: bool, i:NP_TypeKeys },
-    Struct     { sortable: bool, i:NP_TypeKeys, fields: Vec<(u8, String, NP_Schema_Addr)> },
-    Map        { sortable: bool, i:NP_TypeKeys, value: NP_Schema_Addr}, 
-    List       { sortable: bool, i:NP_TypeKeys, of: NP_Schema_Addr },
-    Tuple      { sortable: bool, i:NP_TypeKeys, values: Vec<NP_Schema_Addr>},
-    Portal     { sortable: bool, i:NP_TypeKeys, path: String, schema: usize, parent_schema: usize },
-    Union      { sortable: bool, i:NP_TypeKeys, types: Vec<(u8, String, NP_Schema_Addr)>, default: usize },
+    Any        { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys },
+    UTF8String { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<String>, size: u16, case: String_Case },
+    Bytes      { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<Vec<u8>>, size: u16 },
+    Int8       { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<i8> },
+    Int16      { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<i16> },
+    Int32      { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<i32> },
+    Int64      { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<i64> },
+    Uint8      { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<u8> },
+    Uint16     { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<u16> },
+    Uint32     { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<u32> },
+    Uint64     { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<u64> },
+    Float      { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<f32> },
+    Double     { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<f64> },
+    Decimal    { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<NP_Dec>, exp: u8 },
+    Boolean    { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<bool> },
+    Geo        { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<NP_Geo>, size: u8 },
+    Date       { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<NP_Date> },
+    Enum       { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<NP_Enum>, choices: Vec<NP_Enum> },
+    Uuid       { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys },
+    Ulid       { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys },
+    Struct     { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, fields: Vec<NP_Struct_Field>, empty: Vec<u8> },
+    Map        { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, value: NP_Schema_Addr}, 
+    List       { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, of: NP_Schema_Addr },
+    Tuple      { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, values: Vec<NP_Schema_Addr>},
+    Portal     { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, path: String, schema: usize, parent_schema: usize },
+    Union      { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, types: Vec<(u8, String, NP_Schema_Addr)>, default: usize },
 }
 
 impl NP_Parsed_Schema {
+
+        /// Get the type key for this schema
+        pub fn get_offset(&self) -> &NP_Value_Kind {
+            match self {
+                NP_Parsed_Schema::None                                 => { &NP_Value_Kind::Pointer }
+                NP_Parsed_Schema::Any        { val, .. }     => { val }
+                NP_Parsed_Schema::UTF8String { val, .. }     => { val }
+                NP_Parsed_Schema::Bytes      { val, .. }     => { val }
+                NP_Parsed_Schema::Int8       { val, .. }     => { val }
+                NP_Parsed_Schema::Int16      { val, .. }     => { val }
+                NP_Parsed_Schema::Int32      { val, .. }     => { val }
+                NP_Parsed_Schema::Int64      { val, .. }     => { val }
+                NP_Parsed_Schema::Uint8      { val, .. }     => { val }
+                NP_Parsed_Schema::Uint16     { val, .. }     => { val }
+                NP_Parsed_Schema::Uint32     { val, .. }     => { val }
+                NP_Parsed_Schema::Uint64     { val, .. }     => { val }
+                NP_Parsed_Schema::Float      { val, .. }     => { val }
+                NP_Parsed_Schema::Double     { val, .. }     => { val }
+                NP_Parsed_Schema::Decimal    { val, .. }     => { val }
+                NP_Parsed_Schema::Boolean    { val, .. }     => { val }
+                NP_Parsed_Schema::Geo        { val, .. }     => { val }
+                NP_Parsed_Schema::Uuid       { val, .. }     => { val }
+                NP_Parsed_Schema::Ulid       { val, .. }     => { val }
+                NP_Parsed_Schema::Date       { val, .. }     => { val }
+                NP_Parsed_Schema::Enum       { val, .. }     => { val }
+                NP_Parsed_Schema::Struct     { val, .. }     => { val }
+                NP_Parsed_Schema::Map        { val, .. }     => { val }
+                NP_Parsed_Schema::List       { val, .. }     => { val }
+                NP_Parsed_Schema::Tuple      { val, .. }     => { val }
+                NP_Parsed_Schema::Portal     { val, .. }     => { val }
+                NP_Parsed_Schema::Union      { val, .. }     => { val }
+            }
+        }
 
     /// Get the type key for this schema
     pub fn get_type_key(&self) -> &NP_TypeKeys {
@@ -1174,6 +1223,7 @@ impl NP_Schema {
                     match NP_Cursor::select(&temp_memory, root_cursor, false, true, &str_path)? {
                         Some(next) => {
                             completed.push(NP_Parsed_Schema::Portal {
+                                val: NP_Value_Kind::Pointer,
                                 path: path.clone(),
                                 schema: next.schema_addr,
                                 parent_schema: next.parent_schema_addr,

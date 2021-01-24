@@ -19,7 +19,7 @@
 //! ```
 //! 
 
-use crate::{idl::{JS_AST, JS_Schema}, memory::NP_Memory, schema::{NP_Parsed_Schema}, utils::from_base32};
+use crate::{idl::{JS_AST, JS_Schema}, memory::NP_Memory, schema::{NP_Parsed_Schema, NP_Value_Kind}, utils::from_base32};
 use alloc::vec::Vec;
 use crate::utils::to_base32;
 use crate::json_flex::{JSMAP, NP_JSON};
@@ -266,6 +266,7 @@ impl<'value> NP_Value<'value> for NP_ULID {
         let mut schema_bytes: Vec<u8> = Vec::new();
         schema_bytes.push(NP_TypeKeys::Ulid as u8);
         schema.push(NP_Parsed_Schema::Ulid { 
+            val: NP_Value_Kind::Fixed(16),
             i: NP_TypeKeys::Ulid,
             sortable: true
         });
@@ -277,6 +278,7 @@ impl<'value> NP_Value<'value> for NP_ULID {
 
     fn from_bytes_to_schema(mut schema: Vec<NP_Parsed_Schema>, _address: usize, _bytes: &[u8]) -> (bool, Vec<NP_Parsed_Schema>) {
         schema.push(NP_Parsed_Schema::Ulid {
+            val: NP_Value_Kind::Fixed(16),
             i: NP_TypeKeys::Ulid,
             sortable: true
         });

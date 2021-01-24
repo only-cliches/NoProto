@@ -259,8 +259,8 @@ impl<'cursor> NP_Cursor {
     
             // now select into collections
             match memory.get_schema(loop_cursor.schema_addr) {
-                NP_Parsed_Schema::Struct { fields, .. } => {
-                    if let Some(next) = NP_Struct::select(loop_cursor, fields, path[path_index], make_path, schema_query, memory)? {
+                NP_Parsed_Schema::Struct { fields, empty, .. } => {
+                    if let Some(next) = NP_Struct::select(loop_cursor, empty, fields, path[path_index], make_path, schema_query, memory)? {
                         loop_cursor = next;
                         path_index += 1;
                     } else {

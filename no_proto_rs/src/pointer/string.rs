@@ -16,7 +16,7 @@
 
 use alloc::string::String;
 use alloc::prelude::v1::Box;
-use crate::{error::NP_Error, idl::{JS_AST, JS_Schema}, schema::String_Case};
+use crate::{error::NP_Error, idl::{JS_AST, JS_Schema}, schema::{NP_Value_Kind, String_Case}};
 use crate::{
     json_flex::JSMAP,
     memory::NP_Memory,
@@ -271,6 +271,11 @@ impl<'value> NP_Value<'value> for String {
 
 
         schema.push(NP_Parsed_Schema::UTF8String {
+            val: if size > 0 {
+                NP_Value_Kind::Fixed(size as u32)
+            } else {
+                NP_Value_Kind::Pointer
+            },
             i: NP_TypeKeys::UTF8String,
             size: size,
             default: default,
@@ -305,6 +310,11 @@ impl<'value> NP_Value<'value> for String {
 
         if default_size == 0 {
             schema.push(NP_Parsed_Schema::UTF8String {
+                val: if fixed_size > 0 {
+                    NP_Value_Kind::Fixed(fixed_size as u32)
+                } else {
+                    NP_Value_Kind::Pointer
+                },
                 i: NP_TypeKeys::UTF8String,
                 default: None,
                 case: case_byte,
@@ -315,6 +325,11 @@ impl<'value> NP_Value<'value> for String {
             let default_bytes = str::from_utf8(&bytes[(address + 6)..(address + 6 + (default_size - 1))]).unwrap_or_default();
 
             schema.push(NP_Parsed_Schema::UTF8String {
+                val: if fixed_size > 0 {
+                    NP_Value_Kind::Fixed(fixed_size as u32)
+                } else {
+                    NP_Value_Kind::Pointer
+                },
                 i: NP_TypeKeys::UTF8String,
                 default: Some(default_bytes.to_string()),
                 size: fixed_size,
@@ -448,6 +463,11 @@ impl<'value> NP_Value<'value> for String {
         };
 
         schema.push(NP_Parsed_Schema::UTF8String {
+            val: if size > 0 {
+                NP_Value_Kind::Fixed(size as u32)
+            } else {
+                NP_Value_Kind::Pointer
+            },
             i: NP_TypeKeys::UTF8String,
             size: size,
             default: default,

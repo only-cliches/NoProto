@@ -19,7 +19,7 @@
 //! 
 
 use alloc::string::String;
-use crate::{idl::{JS_AST, JS_Schema}, schema::{NP_Parsed_Schema}};
+use crate::{idl::{JS_AST, JS_Schema}, schema::{NP_Parsed_Schema, NP_Value_Kind}};
 use alloc::vec::Vec;
 use crate::json_flex::{JSMAP, NP_JSON};
 use crate::schema::{NP_TypeKeys};
@@ -90,7 +90,7 @@ impl<'value> NP_Value<'value> for NP_Date {
         schema_json.insert("type".to_owned(), NP_JSON::String(Self::type_idx().0.to_string()));
 
         match &schema[address] {
-            NP_Parsed_Schema::Date { i: _, default, sortable: _} => {
+            NP_Parsed_Schema::Date { default, .. } => {
                 if let Some(d) = default {
                     schema_json.insert("default".to_owned(), NP_JSON::Integer(d.value as i64));
                 }
@@ -181,7 +181,7 @@ impl<'value> NP_Value<'value> for NP_Date {
                     },
                     None => {
                         match memory.get_schema(cursor.schema_addr) {
-                            NP_Parsed_Schema::Date { i: _, default, sortable: _} => {
+                            NP_Parsed_Schema::Date { default, .. } => {
                                 if let Some(d) = default {
                                     NP_JSON::Integer(d.value.clone() as i64)
                                 } else {
@@ -272,6 +272,7 @@ impl<'value> NP_Value<'value> for NP_Date {
         };
         
         schema.push(NP_Parsed_Schema::Date {
+            val: NP_Value_Kind::Fixed(8),
             i: NP_TypeKeys::Date,
             default: default,
             sortable: true
@@ -299,6 +300,7 @@ impl<'value> NP_Value<'value> for NP_Date {
         };
         
         schema.push(NP_Parsed_Schema::Date {
+            val: NP_Value_Kind::Fixed(8),
             i: NP_TypeKeys::Date,
             default: default,
             sortable: true
@@ -322,6 +324,7 @@ impl<'value> NP_Value<'value> for NP_Date {
         };
 
         schema.push(NP_Parsed_Schema::Date {
+            val: NP_Value_Kind::Fixed(8),
             i: NP_TypeKeys::Date,
             sortable: true,
             default: default

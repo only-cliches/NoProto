@@ -1,5 +1,5 @@
 use alloc::string::String;
-use crate::{idl::{JS_AST, JS_Schema}, utils::opt_err};
+use crate::{idl::{JS_AST, JS_Schema}, schema::NP_Value_Kind, utils::opt_err};
 use crate::{error::NP_Error, json_flex::{JSMAP, NP_JSON}, memory::{NP_Memory}, pointer::{NP_Value}, pointer::{NP_Cursor}, schema::NP_Parsed_Schema, schema::{NP_Schema, NP_TypeKeys}};
 
 use alloc::borrow::ToOwned;
@@ -400,7 +400,7 @@ impl<'value> NP_Value<'value> for NP_List {
 
 
         let list_of = match &schema[address] {
-            NP_Parsed_Schema::List { i: _, sortable: _, of} => { *of },
+            NP_Parsed_Schema::List { of, .. } => { *of },
             _ => 0
         };
 
@@ -502,6 +502,7 @@ impl<'value> NP_Value<'value> for NP_List {
 
         let list_schema_addr = schema.len();
         schema.push(NP_Parsed_Schema::List {
+            val: NP_Value_Kind::Pointer,
             i: NP_TypeKeys::List,
             of: list_schema_addr + 1,
             sortable: false
@@ -541,6 +542,7 @@ impl<'value> NP_Value<'value> for NP_List {
 
         let list_schema_addr = schema.len();
         schema.push(NP_Parsed_Schema::List {
+            val: NP_Value_Kind::Pointer,
             i: NP_TypeKeys::List,
             of: list_schema_addr + 1,
             sortable: false
@@ -569,6 +571,7 @@ impl<'value> NP_Value<'value> for NP_List {
 
         let list_schema_addr = schema.len();
         schema.push(NP_Parsed_Schema::List {
+            val: NP_Value_Kind::Pointer,
             i: NP_TypeKeys::List,
             sortable: false,
             of: list_schema_addr + 1

@@ -1305,8 +1305,8 @@ impl<'item> NP_Item<'item> {
                     let item = opt_err(opt_err(NP_List::select(self.parent.clone(), self.index, true, false, self.memory)?)?.1)?;
                     X::set_value(item, self.memory, value)?;
                 }
-                NP_Parsed_Schema::Struct { fields, .. } => {
-                    let item = opt_err(NP_Struct::select(self.parent.clone(), fields, &self.key, true, false, self.memory)?)?;
+                NP_Parsed_Schema::Struct { fields, empty, .. } => {
+                    let item = opt_err(NP_Struct::select(self.parent.clone(), empty, fields, &self.key, true, false, self.memory)?)?;
                     X::set_value(item, self.memory, value)?;
                 },
                 NP_Parsed_Schema::Tuple { values, .. } => {

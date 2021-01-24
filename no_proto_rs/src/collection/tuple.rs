@@ -1,4 +1,4 @@
-use crate::idl::JS_AST;
+use crate::{idl::JS_AST, schema::NP_Value_Kind};
 use alloc::string::String;
 use crate::{buffer::{VTABLE_BYTES, VTABLE_SIZE}, idl::JS_Schema, utils::opt_err};
 use crate::{ pointer::NP_Vtable};
@@ -232,7 +232,7 @@ impl<'value> NP_Value<'value> for NP_Tuple<'value> {
         schema_json.insert("type".to_owned(), NP_JSON::String(Self::type_idx().0.to_string()));
 
         let schema_state: (bool, Vec<NP_JSON>) = match &schema[address] {
-            NP_Parsed_Schema::Tuple { i: _, sortable, values } => {
+            NP_Parsed_Schema::Tuple { sortable, values, .. } => {
                 (*sortable, values.into_iter().map(|column| {
                     NP_Schema::_type_to_json(schema, *column).unwrap_or(NP_JSON::Null)
                 }).collect())
@@ -421,6 +421,7 @@ impl<'value> NP_Value<'value> for NP_Tuple<'value> {
             let mut column_schemas: Vec<Vec<u8>> = Vec::new();
             let tuple_addr = schema.len();
             schema.push(NP_Parsed_Schema::Tuple {
+                val: NP_Value_Kind::Pointer,
                 i: NP_TypeKeys::Tuple,
                 sortable: sorted,
                 values: Vec::new()
@@ -441,6 +442,7 @@ impl<'value> NP_Value<'value> for NP_Tuple<'value> {
             }
             
             working_schema[tuple_addr] = NP_Parsed_Schema::Tuple {
+                val: NP_Value_Kind::Pointer,
                 i: NP_TypeKeys::Tuple,
                 sortable: sorted,
                 values: tuple_values
@@ -491,6 +493,7 @@ impl<'value> NP_Value<'value> for NP_Tuple<'value> {
         let mut column_schemas: Vec<Vec<u8>> = Vec::new();
         let tuple_addr = schema.len();
         schema.push(NP_Parsed_Schema::Tuple {
+            val: NP_Value_Kind::Pointer,
             i: NP_TypeKeys::Tuple,
             sortable: sorted,
             values: Vec::new()
@@ -518,6 +521,7 @@ impl<'value> NP_Value<'value> for NP_Tuple<'value> {
         }
         
         working_schema[tuple_addr] = NP_Parsed_Schema::Tuple {
+            val: NP_Value_Kind::Pointer,
             i: NP_TypeKeys::Tuple,
             sortable: sorted,
             values: tuple_values
@@ -558,6 +562,7 @@ impl<'value> NP_Value<'value> for NP_Tuple<'value> {
 
         let tuple_schema_addr = working_schema.len();
         working_schema.push(NP_Parsed_Schema::Tuple {
+            val: NP_Value_Kind::Pointer,
             i: NP_TypeKeys::Tuple,
             values: Vec::new(), 
             sortable: is_sorted != 0 
@@ -582,6 +587,7 @@ impl<'value> NP_Value<'value> for NP_Tuple<'value> {
         }
 
         working_schema[tuple_schema_addr] = NP_Parsed_Schema::Tuple {
+            val: NP_Value_Kind::Pointer,
             i: NP_TypeKeys::Tuple,
             values: tuple_values, 
             sortable: is_sorted != 0 

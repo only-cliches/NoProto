@@ -168,24 +168,35 @@ fn main() {
     println!("\n\n");
 
 
-    println!("//! | Format             | Library                                                    | Encode  | Decode All | Decode 1 | Update 1 | Size (bytes) | Size (Zlib) |");
-    println!("//! |--------------------|------------------------------------------------------------|---------|------------|----------|----------|--------------|-------------|");
-    println!("//! | **Runtime Libs**   |                                                            |         |            |          |          |              |             |");
-    println!("//! | *NoProto*          | {} |  {} |     {} |   {} |   {} |          {} |         {} |", np_lib, np_enc, np_dec, np_dec1, np_up, np_size.0, np_size.1);
-    println!("//! | Apache Avro        | {} |  {} |     {} |   {} |   {} |          {} |         {} |", avro_lib, avro_enc, avro_dec, avro_dec1, avro_up, avro_size.0, avro_size.1);
-    println!("//! | FlexBuffers        | {} |  {} |     {} |   {} |   {} |          {} |         {} |", flx_lib, flx_enc, flx_dec, flx_dec1, flx_up, flx_size.0, flx_size.1);
-    println!("//! | JSON               | {} |  {} |     {} |   {} |   {} |          {} |         {} |", json_lib, json_enc, json_dec, json_dec1, json_up, json_size.0, json_size.1);
-    println!("//! | BSON               | {} |  {} |     {} |   {} |   {} |          {} |         {} |", bson_lib, bson_enc, bson_dec, bson_dec1, bson_up, bson_size.0, bson_size.1);
-    println!("//! | BSON               | {} |  {} |     {} |   {} |   {} |          {} |         {} |", rbso_lib, rbso_enc, rbso_dec, rbso_dec1, rbso_up, rbso_size.0, rbso_size.1);
-    println!("//! | MessagePack        | {} |  {} |     {} |   {} |   {} |          {} |         {} |", msg_lib, msg_enc, msg_dec, msg_dec1, msg_up, msg_size.0, msg_size.1);
-    println!("//! | MessagePack        | {} |  {} |     {} |   {} |   {} |          {} |         {} |", msg2_lib, msg2_enc, msg2_dec, msg2_dec1, msg2_up, msg2_size.0, msg2_size.1);
-    println!("//! | **Compiled Libs**  |                                                            |         |            |          |          |              |             |");
-    println!("//! | Flatbuffers        | {} |  {} |     {} |   {} |   {} |          {} |         {} |", fb_lib, fb_enc, fb_dec, fb_dec1, fb_up, fb_size.0, fb_size.1);
-    println!("//! | Bincode            | {} |  {} |     {} |   {} |   {} |          {} |         {} |", bn_lib, bn_enc, bn_dec, bn_dec1, bn_up, bn_size.0, bn_size.1);
-    println!("//! | Protocol Buffers   | {} |  {} |     {} |   {} |   {} |          {} |         {} |", pb_lib, pb_enc, pb_dec, pb_dec1, pb_up, pb_size.0, pb_size.1);
-    println!("//! | Protocol Buffers   | {} |  {} |     {} |   {} |   {} |          {} |         {} |", pro_lib, pro_enc, pro_dec, pro_dec1, pro_up, pro_size.0, pro_size.1);
-    println!("//! | Abomonation        | {} |  {} |     {} |   {} |   {} |          {} |         {} |", abo_lib, abo_enc, abo_dec, abo_dec1, abo_up, abo_size.0, abo_size.1);
-    println!("//! | Rkyv               | {} |  {} |     {} |   {} |   {} |          {} |         {} |", rkyv_lib, rkyv_enc, rkyv_dec, rkyv_dec1, rkyv_up, rkyv_size.0, rkyv_size.1);
-    println!("//! | JSON               | {} |  {} |     {} |   {} |   {} |          {} |         {} |", json2_lib, json2_enc, json2_dec, json2_dec1, json2_up, json2_size.0, json2_size.1);
+    println!("//! | Format / Lib                                               | Encode  | Decode All | Decode 1 | Update 1 | Size (bytes) | Size (Zlib) |");
+    println!("//! |------------------------------------------------------------|---------|------------|----------|----------|--------------|-------------|");
+    println!("//! | **Runtime Libs**                                           |         |            |          |          |              |             |");
+    println!("//! | *NoProto*                                                  |         |            |          |          |              |             |");
+    println!("//! | {} |  {} |     {} |   {} |   {} |          {} |         {} |", np_lib, np_enc, np_dec, np_dec1, np_up, np_size.0, np_size.1);
+    println!("//! | Apache Avro                                                |         |            |          |          |              |             |");
+    println!("//! | {} |  {} |     {} |   {} |   {} |          {} |         {} |", avro_lib, avro_enc, avro_dec, avro_dec1, avro_up, avro_size.0, avro_size.1);
+    println!("//! | FlexBuffers                                                |         |            |          |          |              |             |");
+    println!("//! | {} |  {} |     {} |   {} |   {} |          {} |         {} |", flx_lib, flx_enc, flx_dec, flx_dec1, flx_up, flx_size.0, flx_size.1);
+    println!("//! | JSON                                                       |         |            |          |          |              |             |");
+    println!("//! | {} |  {} |     {} |   {} |   {} |          {} |         {} |", json_lib, json_enc, json_dec, json_dec1, json_up, json_size.0, json_size.1);
+    println!("//! | {} |  {} |     {} |   {} |   {} |          {} |         {} |", json2_lib, json2_enc, json2_dec, json2_dec1, json2_up, json2_size.0, json2_size.1);
+    println!("//! | BSON                                                       |         |            |          |          |              |             |");
+    println!("//! | {} |  {} |     {} |   {} |   {} |          {} |         {} |", bson_lib, bson_enc, bson_dec, bson_dec1, bson_up, bson_size.0, bson_size.1);
+    println!("//! | {} |  {} |     {} |   {} |   {} |          {} |         {} |", rbso_lib, rbso_enc, rbso_dec, rbso_dec1, rbso_up, rbso_size.0, rbso_size.1);
+    println!("//! | MessagePack                                                |         |            |          |          |              |             |");
+    println!("//! | {} |  {} |     {} |   {} |   {} |          {} |         {} |", msg_lib, msg_enc, msg_dec, msg_dec1, msg_up, msg_size.0, msg_size.1);
+    println!("//! | {} |  {} |     {} |   {} |   {} |          {} |         {} |", msg2_lib, msg2_enc, msg2_dec, msg2_dec1, msg2_up, msg2_size.0, msg2_size.1);
+    println!("//! | **Compiled Libs**                                          |         |            |          |          |              |             |");
+    println!("//! | Flatbuffers                                                |         |            |          |          |              |             |");
+    println!("//! | {} |  {} |     {} |   {} |   {} |          {} |         {} |", fb_lib, fb_enc, fb_dec, fb_dec1, fb_up, fb_size.0, fb_size.1);
+    println!("//! | Bincode                                                    |         |            |          |          |              |             |");
+    println!("//! | {} |  {} |     {} |   {} |   {} |          {} |         {} |", bn_lib, bn_enc, bn_dec, bn_dec1, bn_up, bn_size.0, bn_size.1);
+    println!("//! | Protocol Buffers                                           |         |            |          |          |              |             |");
+    println!("//! | {} |  {} |     {} |   {} |   {} |          {} |         {} |", pb_lib, pb_enc, pb_dec, pb_dec1, pb_up, pb_size.0, pb_size.1);
+    println!("//! | {} |  {} |     {} |   {} |   {} |          {} |         {} |", pro_lib, pro_enc, pro_dec, pro_dec1, pro_up, pro_size.0, pro_size.1);
+    println!("//! | Abomonation                                                |         |            |          |          |              |             |");
+    println!("//! | {} |  {} |     {} |   {} |   {} |          {} |         {} |", abo_lib, abo_enc, abo_dec, abo_dec1, abo_up, abo_size.0, abo_size.1);
+    println!("//! | Rkyv                                                       |         |            |          |          |              |             |");
+    println!("//! | {} |  {} |     {} |   {} |   {} |          {} |         {} |", rkyv_lib, rkyv_enc, rkyv_dec, rkyv_dec1, rkyv_up, rkyv_size.0, rkyv_size.1);
 }
 

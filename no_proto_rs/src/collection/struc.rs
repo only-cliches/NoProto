@@ -1,8 +1,8 @@
-use crate::idl::AST_STR;
+use crate::{idl::AST_STR, schema::{NP_Struct_Field, NP_Value_Kind}};
 use crate::{buffer::{VTABLE_BYTES, VTABLE_SIZE}, idl::{JS_AST, JS_Schema}};
 use alloc::string::String;
 use crate::pointer::{NP_Vtable};
-use crate::{pointer::{NP_Cursor}, schema::{NP_Parsed_Schema, NP_Schema_Addr}};
+use crate::{pointer::{NP_Cursor}, schema::{NP_Parsed_Schema}};
 use crate::{memory::{NP_Memory}, pointer::{NP_Value}, error::NP_Error, schema::{NP_Schema, NP_TypeKeys}, json_flex::{JSMAP, NP_JSON}};
 
 use alloc::string::ToString;
@@ -27,13 +27,13 @@ pub struct NP_Struct<'table> {
 impl<'table> NP_Struct<'table> {
 
     #[inline(always)]
-    pub fn select<M: NP_Memory>(mut table_cursor: NP_Cursor, fields: &Vec<(u8, String, usize)>,  key: &str, make_path: bool, schema_query: bool, memory: &M) -> Result<Option<NP_Cursor>, NP_Error> {
+    pub fn select<M: NP_Memory>(mut table_cursor: NP_Cursor, _empty: &Vec<u8>, fields: &Vec<NP_Struct_Field>,  key: &str, make_path: bool, schema_query: bool, memory: &M) -> Result<Option<NP_Cursor>, NP_Error> {
        
-        match fields.iter().position(|val| { val.1 == key }) {
+        match fields.iter().position(|val| { val.col == key }) {
             Some(x) => {
 
                 if schema_query {
-                    return Ok(Some(NP_Cursor::new(0, fields[x].2, table_cursor.schema_addr)));
+                    return Ok(Some(NP_Cursor::new(0, fields[x].schema, table_cursor.schema_addr)));
                 }
 
                 let v_table =  x / VTABLE_SIZE; // which vtable
@@ -73,7 +73,7 @@ impl<'table> NP_Struct<'table> {
 
                 let item_address = vtable_address + (v_table_idx * 2);
 
-                Ok(Some(NP_Cursor::new(item_address, fields[x].2, table_cursor.schema_addr)))
+                Ok(Some(NP_Cursor::new(item_address, fields[x].schema, table_cursor.schema_addr)))
             },
             None => Ok(None)
         }
@@ -164,9 +164,9 @@ impl<'table> NP_Struct<'table> {
 
                 if self.v_table_addr != 0 {
                     let item_address = self.v_table_addr + (v_table_idx * 2);
-                    Some((this_index, fields[this_index].1.as_str(), Some(NP_Cursor::new(item_address, fields[this_index].2, self.table.schema_addr))))
+                    Some((this_index, fields[this_index].col.as_str(), Some(NP_Cursor::new(item_address, fields[this_index].schema, self.table.schema_addr))))
                 } else {
-                    Some((this_index, fields[this_index].1.as_str(), None))
+                    Some((this_index, fields[this_index].col.as_str(), None))
                 }
             },
             _ => None
@@ -202,13 +202,13 @@ impl<'value> NP_Value<'value> for NP_Struct<'value> {
     fn set_from_json<'set, M: NP_Memory>(depth: usize, apply_null: bool, cursor: NP_Cursor, memory: &'set M, value: &Box<NP_JSON>) -> Result<(), NP_Error> where Self: 'set + Sized {
         
         match memory.get_schema(cursor.schema_addr) {
-            NP_Parsed_Schema::Struct { fields, .. } => {
+            NP_Parsed_Schema::Struct { fields, empty, .. } => {
                 for col in fields.iter() {
-                    let json_col = &value[col.1.clone()];
+                    let json_col = &value[col.col.as_str()];
                     match json_col {
                         NP_JSON::Null => {
                             if apply_null {
-                                match NP_Struct::select(cursor, fields, &col.1, false, false, memory)? {
+                                match NP_Struct::select(cursor, empty, fields, &col.col, false, false, memory)? {
                                     Some(x) => {
                                         NP_Cursor::delete(x, memory)?;
                                     },
@@ -217,7 +217,7 @@ impl<'value> NP_Value<'value> for NP_Struct<'value> {
                             }
                         },
                         _ => {
-                            match NP_Struct::select(cursor, fields, &col.1, true, false, memory)? {
+                            match NP_Struct::select(cursor, empty, fields, &col.col, true, false, memory)? {
                                 Some(x) => {
                                     NP_Cursor::set_from_json(depth + 1, apply_null, x, memory, &Box::new(json_col.clone()))?;
                                 },
@@ -239,11 +239,13 @@ impl<'value> NP_Value<'value> for NP_Struct<'value> {
     fn from_bytes_to_schema(mut schema: Vec<NP_Parsed_Schema>, address: usize, bytes: &[u8]) -> (bool, Vec<NP_Parsed_Schema>) {
         let fields_count = bytes[address + 1];
 
-        let mut parsed_fields: Vec<(u8, String,  NP_Schema_Addr)> = Vec::new();
+        let mut parsed_fields: Vec<NP_Struct_Field> = Vec::new();
 
         let table_schema_addr = schema.len();
 
         schema.push(NP_Parsed_Schema::Struct {
+            val: NP_Value_Kind::Pointer,
+            empty: Vec::new(),
             i: NP_TypeKeys::Struct,
             sortable: false,
             // fields_mapped: Vec::new(),
@@ -271,7 +273,8 @@ impl<'value> NP_Value<'value> for NP_Struct<'value> {
             let field_addr = schema_parsed.len();
             let (_, schema) = NP_Schema::from_bytes(schema_parsed, offset + 2, bytes);
             schema_parsed = schema;
-            parsed_fields.push((x as u8, col_name.to_string(), field_addr));
+            // parsed_fields.push((x as u8, col_name.to_string(), field_addr));
+            parsed_fields.push(NP_Struct_Field { idx: x as u8, col: col_name.to_string(), schema: field_addr, offset: 0});
             // hash_map.insert(col_name, x).unwrap_or_default();
             hash_map.push(col_name.to_string());
             offset += schema_size + 2;
@@ -280,6 +283,8 @@ impl<'value> NP_Value<'value> for NP_Struct<'value> {
         // hash_map.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
 
         schema_parsed[table_schema_addr] = NP_Parsed_Schema::Struct {
+            empty: Vec::new(),
+            val: NP_Value_Kind::Pointer,
             i: NP_TypeKeys::Struct,
             // fields_mapped: hash_map,
             sortable: false,
@@ -297,8 +302,8 @@ impl<'value> NP_Value<'value> for NP_Struct<'value> {
             NP_Parsed_Schema::Struct { fields, .. } => {
                 fields.into_iter().map(|field| {
                     let mut cols: Vec<NP_JSON> = Vec::new();
-                    cols.push(NP_JSON::String(field.1.to_string()));
-                    cols.push(NP_Schema::_type_to_json(&schema, field.2).unwrap_or(NP_JSON::Null));
+                    cols.push(NP_JSON::String(field.col.to_string()));
+                    cols.push(NP_Schema::_type_to_json(&schema, field.schema).unwrap_or(NP_JSON::Null));
                     NP_JSON::Array(cols)
                 }).collect()
             },
@@ -359,7 +364,7 @@ impl<'value> NP_Value<'value> for NP_Struct<'value> {
         let mut last_real_vtable = to_cursor_value.get_addr_value() as usize;
         let mut last_vtable_idx = 0usize;
 
-        let c: Vec<(u8, String, usize)>;
+        let c: Vec<NP_Struct_Field>;
         let col_schemas = match &from_memory.get_schema(from_cursor.schema_addr) {
             NP_Parsed_Schema::Struct { fields, .. } => {
                 fields
@@ -382,7 +387,7 @@ impl<'value> NP_Value<'value> for NP_Struct<'value> {
                 }
 
                 let item_addr = last_real_vtable + (v_table_idx * 2);
-                NP_Cursor::compact(depth + 1, real.clone(), from_memory, NP_Cursor::new(item_addr, col_schemas[idx].2, to_cursor.schema_addr), to_memory)?;
+                NP_Cursor::compact(depth + 1, real.clone(), from_memory, NP_Cursor::new(item_addr, col_schemas[idx].schema, to_cursor.schema_addr), to_memory)?;
             }         
         }
 
@@ -396,9 +401,9 @@ impl<'value> NP_Value<'value> for NP_Struct<'value> {
 
                 let last_index = fields.len() - 1;
                 for (idx, field) in fields.iter().enumerate() {
-                    result.push_str(field.1.as_str());
+                    result.push_str(field.col.as_str());
                     result.push_str(": ");
-                    result.push_str(NP_Schema::_type_to_idl(schema, field.2)?.as_str());
+                    result.push_str(NP_Schema::_type_to_idl(schema, field.schema)?.as_str());
                     if idx < last_index {
                         result.push_str(", ");
                     }
@@ -417,12 +422,14 @@ impl<'value> NP_Value<'value> for NP_Struct<'value> {
 
         let schema_table_addr = schema.len();
         schema.push(NP_Parsed_Schema::Struct {
+            val: NP_Value_Kind::Pointer,
+            empty: Vec::new(),
             i: NP_TypeKeys::Struct,
             sortable: false,
             fields: Vec::new()
         });
 
-        let mut fields: Vec<(u8, String, NP_Schema_Addr)> = Vec::new();
+        let mut fields: Vec<NP_Struct_Field> = Vec::new();
 
         let mut field_data: Vec<(String, Vec<u8>)> = Vec::new();
 
@@ -469,7 +476,8 @@ impl<'value> NP_Value<'value> for NP_Struct<'value> {
                 }
     
                 let field_schema_addr = schema_parsed.len();
-                fields.push((x, String::from(field_name), field_schema_addr));
+                // fields.push((x, String::from(field_name), field_schema_addr));
+                fields.push(NP_Struct_Field { idx: x as u8, col: String::from(field_name), schema: field_schema_addr, offset: 0});
                 let (_is_sortable, field_type, schema_p) = NP_Schema::from_idl(schema_parsed, idl, &col.1)?;
                 schema_parsed = schema_p;
                 field_data.push((String::from(field_name), field_type));
@@ -477,6 +485,8 @@ impl<'value> NP_Value<'value> for NP_Struct<'value> {
             }
     
             schema_parsed[schema_table_addr] = NP_Parsed_Schema::Struct {
+                val: NP_Value_Kind::Pointer,
+                empty: Vec::new(),
                 i: NP_TypeKeys::Struct,
                 sortable: false,
                 fields: fields,
@@ -521,12 +531,14 @@ impl<'value> NP_Value<'value> for NP_Struct<'value> {
 
         let schema_table_addr = schema.len();
         schema.push(NP_Parsed_Schema::Struct {
+            val: NP_Value_Kind::Pointer,
+            empty: Vec::new(),
             i: NP_TypeKeys::Struct,
             sortable: false,
             fields: Vec::new()
         });
 
-        let mut fields: Vec<(u8, String, NP_Schema_Addr)> = Vec::new();
+        let mut fields: Vec<NP_Struct_Field> = Vec::new();
 
         let mut field_data: Vec<(String, Vec<u8>)> = Vec::new();
 
@@ -552,7 +564,8 @@ impl<'value> NP_Value<'value> for NP_Struct<'value> {
             }
 
             let field_schema_addr = schema_parsed.len();
-            fields.push((x, field_name.clone(), field_schema_addr));
+            // fields.push((x, field_name.clone(), field_schema_addr));
+            fields.push(NP_Struct_Field { idx: x as u8, col: field_name.clone(), schema: field_schema_addr, offset: 0});
             let (_is_sortable, field_type, schema_p) = NP_Schema::from_json(schema_parsed, &Box::new(col[1].clone()))?;
             schema_parsed = schema_p;
             field_data.push((field_name, field_type));
@@ -560,6 +573,8 @@ impl<'value> NP_Value<'value> for NP_Struct<'value> {
         }
 
         schema_parsed[schema_table_addr] = NP_Parsed_Schema::Struct {
+            val: NP_Value_Kind::Pointer,
+            empty: Vec::new(),
             i: NP_TypeKeys::Struct,
             sortable: false,
             fields: fields,

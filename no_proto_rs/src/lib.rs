@@ -1,6 +1,6 @@
 #![warn(missing_docs)]
 #![allow(non_camel_case_types)]
-#![no_std]
+// #![no_std]
 
 //! ## NoProto: Flexible, Fast & Compact Serialization with RPC
 //! 
