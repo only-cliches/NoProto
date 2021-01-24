@@ -1,7 +1,8 @@
-# 0.9.1
+# 0.9.1 January 24, 2021
 - Changed "table" type "struct" type.  Old code should still work with "table".
 - `NP_Factory::new` is now `NP_Factory::new_json`.
 - Added new IDL that is similar to ES6 for schemas (way shorter than JSON).  JSON is still supported, though.
+- Working to stabilize the format and API for 1.0 release.
 
 # 0.9.0 January 10, 2021
 - Started adding `union` type, isn't fully implmented yet.
