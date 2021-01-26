@@ -114,16 +114,16 @@ NoProto takes the performance advantages of compiled formats and implements them
 |------------------|-----------|------------|---------|----------|-------------------|
 | **Runtime Libs** |           |            |         |          |                   | 
 | *NoProto*        | ✓         | ~64KB      | ✓       | ✓        | ✓                 |
-| Apache Avro      | 𐄂         | 2^63 Bytes | 𐄂       | ✓        | ✓                 |
-| JSON             | 𐄂         | Unlimited  | ✓       | 𐄂        | 𐄂                 |
-| BSON             | 𐄂         | ~16MB      | ✓       | 𐄂        | 𐄂                 |
-| MessagePack      | 𐄂         | Unlimited  | ✓       | 𐄂        | 𐄂                 |
+| Apache Avro      | ✗         | 2^63 Bytes | ✗       | ✓        | ✓                 |
+| JSON             | ✗         | Unlimited  | ✓       | ✗        | ✗                 |
+| BSON             | ✗         | ~16MB      | ✓       | ✗        | ✗                 |
+| MessagePack      | ✗         | Unlimited  | ✓       | ✗        | ✗                 |
 | **Compiled Libs**|           |            |         |          |                   | 
-| FlatBuffers      | ✓         | ~2GB       | 𐄂       | ✓        | 𐄂                 |
-| Bincode          | ✓         | ?          | ✓       | ✓        | 𐄂                 |
-| Protocol Buffers | 𐄂         | ~2GB       | 𐄂       | ✓        | 𐄂                 |
-| Cap'N Proto      | ✓         | 2^64 Bytes | 𐄂       | ✓        | 𐄂                 |
-| Veriform         | 𐄂         | ?          | 𐄂       | 𐄂        | 𐄂                 |
+| FlatBuffers      | ✓         | ~2GB       | ✗       | ✓        | ✗                 |
+| Bincode          | ✓         | ?          | ✓       | ✓        | ✗                 |
+| Protocol Buffers | ✗         | ~2GB       | ✗       | ✓        | ✗                 |
+| Cap'N Proto      | ✓         | 2^64 Bytes | ✗       | ✓        | ✗                 |
+| Veriform         | ✗         | ?          | ✗       | ✗        | ✗                 |
 
 
 # Quick Example
@@ -131,19 +131,16 @@ NoProto takes the performance advantages of compiled formats and implements them
 use no_proto::error::NP_Error;
 use no_proto::NP_Factory;
 
-// JSON is used to describe schema for the factory
+// An ES6 like IDL is used to describe schema for the factory
 // Each factory represents a single schema
 // One factory can be used to serialize/deserialize any number of buffers
-let user_factory = NP_Factory::new(r#"{
-    "type": "struct",
-    "fields": [
-        ["name",   {"type": "string"}],
-        ["age",    {"type": "u16", "default": 0}],
-        ["tags",   {"type": "list", "of": {
-            "type": "string"
-        }}]
-    ]
-}"#)?;
+let user_factory = NP_Factory::new(r#"
+    struct({ fields: {
+        name: string(),
+        age: u16({ default: 0 }),
+        tags: list({ of: string() })
+    }})
+"#)?;
 
 
 // create a new empty buffer
@@ -241,7 +238,7 @@ The format and data used in the benchmarks were taken from the `flatbuffers` ben
 
 **Runtime VS Compiled Libs**: Some formats require data types to be compiled into the application, which increases performance but means data types *cannot change at runtime*.  If data types need to mutate during runtime or can't be known before the application is compiled (like with databases), you must use a format that doesn't compile data types into the application, like JSON or NoProto.
 
-Complete benchmark source code is available [here](https://github.com/only-cliches/NoProto/tree/master/bench).
+Complete benchmark source code is available [here](https://github.com/only-cliches/NoProto/tree/master/bench).  Suggestions for improving the quality of these benchmarks is appreciated.
 
 ## NoProto Strengths
 If your use case fits any of the points below, NoProto is a good choice for your application.  You should always benchmark to verify.
@@ -278,6 +275,9 @@ If your data changes so often that schemas don't really make sense or the format
 - Enum/Option types are limited to 255 options and each option cannot be more than 255 UTF8 Bytes.
 - Map keys cannot be larger than 255 UTF8 bytes.
 - Buffers cannot be larger than 2^16 bytes or ~64KB.
+
+## Unsafe
+This library makes use of `unsafe` to get better performance.  Generally speaking, it's not possible to have a high performance serialization library without `unsafe`.  It is only used where absolutely necessary and additional checks are performed so that the worst case for any `unsafe` block is it leads to junk data in a buffer.
 
 ----------------------
 

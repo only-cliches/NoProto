@@ -1,3 +1,7 @@
+# 0.9.2 January 25, 2021
+- Restored `no_std`.  
+- Minor documentation updates.
+
 # 0.9.1 January 24, 2021
 - Changed "table" type "struct" type.  Old code should still work with "table".
 - `NP_Factory::new` is now `NP_Factory::new_json`.
