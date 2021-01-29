@@ -75,7 +75,7 @@ impl NP_Tuple {
         Ok(tuple_cursor)
     }
 
-    pub fn new_iter<M: NP_Memory>(cursor: &NP_Cursor, memory: &M) -> Self {
+    pub fn new_iter<M: NP_Memory>(cursor: &NP_Cursor, _memory: &M) -> Self {
 
         Self {
             table: cursor.clone(),

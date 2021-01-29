@@ -273,7 +273,7 @@ impl<'cursor> NP_Cursor {
             }
     
             if loop_count > 256 {
-                return Err(NP_Error::new("Select overflow"))
+                return Err(NP_Error::RecursionLimit)
             }
     
             // now select into collections
