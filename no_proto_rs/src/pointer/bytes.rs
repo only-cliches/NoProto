@@ -367,7 +367,7 @@ impl<'value> NP_Value<'value> for NP_Bytes {
                 // return total size of this string plus length
                 return Ok(bytes_size + 2);
             }
-            _ => Err(NP_Error::new("unreachable")),
+            _ => Err(NP_Error::Unreachable),
         }
     }
 
@@ -673,7 +673,7 @@ impl<'value> NP_Value<'value> for NP_Borrow_Bytes<'value> {
                     return Ok(Some(bytes));
                 }
             }
-            _ => Err(NP_Error::new("unreachable")),
+            _ => Err(NP_Error::Unreachable),
         }
     }
 
@@ -699,19 +699,19 @@ fn schema_parsing_works_idl() -> Result<(), NP_Error> {
     let schema = "bytes({default: [22,208,10,78,1,19,85], size: 10})";
     let factory = crate::NP_Factory::new(schema)?;
     assert_eq!(schema, factory.schema.to_idl()?);
-    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    let factory2 = crate::NP_Factory::new_bytes(factory.export_schema_bytes())?;
     assert_eq!(schema, factory2.schema.to_idl()?);
 
     let schema = "bytes({size: 10})";
     let factory = crate::NP_Factory::new(schema)?;
     assert_eq!(schema, factory.schema.to_idl()?);
-    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    let factory2 = crate::NP_Factory::new_bytes(factory.export_schema_bytes())?;
     assert_eq!(schema, factory2.schema.to_idl()?);
 
     let schema = "bytes()";
     let factory = crate::NP_Factory::new(schema)?;
     assert_eq!(schema, factory.schema.to_idl()?);
-    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    let factory2 = crate::NP_Factory::new_bytes(factory.export_schema_bytes())?;
     assert_eq!(schema, factory2.schema.to_idl()?);
     
     Ok(())
@@ -722,19 +722,19 @@ fn schema_parsing_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"bytes\",\"default\":[22,208,10,78,1,19,85]}";
     let factory = crate::NP_Factory::new_json(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
-    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    let factory2 = crate::NP_Factory::new_bytes(factory.export_schema_bytes())?;
     assert_eq!(schema, factory2.schema.to_json()?.stringify());
 
     let schema = "{\"type\":\"bytes\",\"size\":10}";
     let factory = crate::NP_Factory::new_json(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
-    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    let factory2 = crate::NP_Factory::new_bytes(factory.export_schema_bytes())?;
     assert_eq!(schema, factory2.schema.to_json()?.stringify());
 
     let schema = "{\"type\":\"bytes\"}";
     let factory = crate::NP_Factory::new_json(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
-    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    let factory2 = crate::NP_Factory::new_bytes(factory.export_schema_bytes())?;
     assert_eq!(schema, factory2.schema.to_json()?.stringify());
     
     Ok(())

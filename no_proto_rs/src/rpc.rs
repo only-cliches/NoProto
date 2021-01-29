@@ -384,7 +384,7 @@ impl<'spec> NP_RCP_Spec<'spec> {
     pub fn write(&mut self) -> Result<&mut Vec<u8>, NP_Error> {
         match self {
             NP_RCP_Spec::Owned(vec) => Ok(vec),
-            _ => Err(NP_Error::new("unreachable"))
+            _ => Err(NP_Error::Unreachable)
         }
     }
     #[inline(always)]
@@ -534,7 +534,7 @@ impl<'fact> NP_RPC_Factory<'fact> {
             author: author_addr,
             method_hash,
             spec: spec,
-            empty: NP_Factory::new_compiled(&[0u8])?
+            empty: NP_Factory::new_bytes(&[0u8])?
         })
     }
 
@@ -591,7 +591,7 @@ impl<'fact> NP_RPC_Factory<'fact> {
 
                             let bytes_w = spec.bytes.write()?;
 
-                            let schema = factory.compile_schema();
+                            let schema = factory.export_schema_bytes();
                             bytes_w.extend_from_slice(&(schema.len() as u16).to_be_bytes());
                             bytes_w.extend(schema);
 
@@ -791,7 +791,7 @@ impl<'fact> NP_RPC_Factory<'fact> {
     /// 
     /// This method is orders of magnitude faster than the `new` method since there's no JSON to parse and only a few memory allocations.
     /// 
-    pub fn new_compiled(bytes_rpc_spec: &'fact [u8]) -> Result<Self, NP_Error>  {
+    pub fn new_bytes(bytes_rpc_spec: &'fact [u8]) -> Result<Self, NP_Error>  {
 
         let mut id_hash = [0u8; 4];
         for (x, b) in murmurhash3_x86_32(&bytes_rpc_spec[2..21], SEED).to_be_bytes().iter().enumerate() {
@@ -822,7 +822,7 @@ impl<'fact> NP_RPC_Factory<'fact> {
             // we're bypassing rust's lifetime system here and creating a self referential struct
             // it's safe because everything is immutable plus spec.specs and spec.bytes have the same lifetime
             spec.specs.push(NP_RPC_Spec::MSG { 
-                factory: unsafe { NP_Factory::new_compiled_ptr(&spec.bytes.read()[offset..(offset + schema_len)] as *const [u8])? }
+                factory: unsafe { NP_Factory::new_bytes_ptr(&spec.bytes.read()[offset..(offset + schema_len)] as *const [u8])? }
             });
             offset += schema_len;
         }
@@ -871,7 +871,7 @@ impl<'fact> NP_RPC_Factory<'fact> {
             author: author_addr,
             method_hash,
             spec: spec,
-            empty: NP_Factory::new_compiled(&[0u8])?
+            empty: NP_Factory::new_bytes(&[0u8])?
         })
     }
 
@@ -902,7 +902,7 @@ impl<'fact> NP_RPC_Factory<'fact> {
                                 Some(arg) => {
                                     match &self.spec.specs[arg] {
                                         NP_RPC_Spec::MSG { factory, .. } => factory.empty_buffer(None),
-                                        _ => return Err(NP_Error::new("unreachable"))
+                                        _ => return Err(NP_Error::Unreachable)
                                     }
                                 },
                                 None => self.empty.empty_buffer(None)
@@ -945,7 +945,7 @@ impl<'fact> NP_RPC_Factory<'fact> {
                         Some(arg) => {
                             match &self.spec.specs[arg] {
                                 NP_RPC_Spec::MSG { factory, .. } => factory.open_buffer(bytes[7..].to_vec()),
-                                _ => return Err(NP_Error::new("unreachable"))
+                                _ => return Err(NP_Error::Unreachable)
                             }
                         },
                         None => self.empty.empty_buffer(None)
@@ -973,7 +973,7 @@ impl<'fact> NP_RPC_Factory<'fact> {
                                 Some(result) => {
                                     match &self.spec.specs[result] {
                                         NP_RPC_Spec::MSG { factory, .. } => factory.empty_buffer(None),
-                                        _ => return Err(NP_Error::new("unreachable"))
+                                        _ => return Err(NP_Error::Unreachable)
                                     }
                                 },
                                 None => self.empty.empty_buffer(None)
@@ -982,7 +982,7 @@ impl<'fact> NP_RPC_Factory<'fact> {
                                 Some(err) => {
                                     match &self.spec.specs[err] {
                                         NP_RPC_Spec::MSG { factory, .. } => factory.empty_buffer(None),
-                                        _ => return Err(NP_Error::new("unreachable"))
+                                        _ => return Err(NP_Error::Unreachable)
                                     }
                                 },
                                 None => self.empty.empty_buffer(None)
@@ -1045,7 +1045,7 @@ impl<'fact> NP_RPC_Factory<'fact> {
                                 Some(result) => {
                                     match &self.spec.specs[result] {
                                         NP_RPC_Spec::MSG { factory, .. } => factory.open_buffer(bytes[8..].to_vec()),
-                                        _ => return Err(NP_Error::new("unreachable"))
+                                        _ => return Err(NP_Error::Unreachable)
                                     }
                                 },
                                 None => self.empty.empty_buffer(None)
@@ -1070,7 +1070,7 @@ impl<'fact> NP_RPC_Factory<'fact> {
                                 Some(err) => {
                                     match &self.spec.specs[err] {
                                         NP_RPC_Spec::MSG { factory, .. } => factory.open_buffer(bytes[8..].to_vec()),
-                                        _ => return Err(NP_Error::new("unreachable"))
+                                        _ => return Err(NP_Error::Unreachable)
                                     }
                                 },
                                 None => return Err(NP_Error::new("Got error result on RPC method with no error type."))
@@ -1164,7 +1164,7 @@ impl<'request> NP_RPC_Request<'request> {
                         Some(result) => {
                             match &self.spec.specs[result] {
                                 NP_RPC_Spec::MSG { factory, .. } => factory.empty_buffer(None),
-                                _ => return Err(NP_Error::new("unreachable"))
+                                _ => return Err(NP_Error::Unreachable)
                             }
                         },
                         None => self.empty.clone()
@@ -1173,7 +1173,7 @@ impl<'request> NP_RPC_Request<'request> {
                         Some(err) => {
                             match &self.spec.specs[err] {
                                 NP_RPC_Spec::MSG { factory, .. } => factory.empty_buffer(None),
-                                _ => return Err(NP_Error::new("unreachable"))
+                                _ => return Err(NP_Error::Unreachable)
                             }
                         },
                         None => self.empty.clone()
@@ -1287,7 +1287,7 @@ fn rpc_test() -> Result<(), NP_Error> {
 
     // checks that compiled byte specs work
     assert_eq!(rpc_factory.compile_spec().len(), 128); // JSON schema above is 467 bytes without whitespace
-    let rpc_factory = NP_RPC_Factory::new_compiled(&rpc_factory.compile_spec())?;
+    let rpc_factory = NP_RPC_Factory::new_bytes(&rpc_factory.compile_spec())?;
 
     assert_eq!(rpc_factory.get_name(), "test api");
     assert_eq!(rpc_factory.get_author(), "Jeb Kermin");

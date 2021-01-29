@@ -28,7 +28,7 @@ pub mod union;
 use core::{fmt::{Debug}};
 
 use alloc::prelude::v1::Box;
-use crate::{idl::{JS_AST, JS_Schema}, pointer::dec::NP_Dec, schema::NP_Schema_Addr, utils::opt_err};
+use crate::{idl::{JS_AST, JS_Schema}, pointer::dec::NP_Dec, schema::{NP_Schema_Addr}, utils::opt_err};
 use crate::NP_Parsed_Schema;
 use crate::{json_flex::NP_JSON};
 use crate::memory::{NP_Memory};
@@ -189,6 +189,13 @@ impl NP_Vtable {
     }
 }
 
+#[doc(hidden)]
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum NP_Cursor_Parent {
+    None,
+    Tuple
+}
+
 /// Cursor for pointer value in buffer
 /// 
 #[doc(hidden)]
@@ -199,7 +206,11 @@ pub struct NP_Cursor {
     /// The address of the schema for this cursor
     pub schema_addr: NP_Schema_Addr,
     /// the parent schema address (so we know if we're in a collection type)
-    pub parent_schema_addr: NP_Schema_Addr
+    pub parent_schema_addr: NP_Schema_Addr,
+    /// used by tuple type to store scalar pointer bytes
+    pub value_bytes: Option<[u8; 2]>,
+    /// if parent is tuple
+    pub parent_type: NP_Cursor_Parent
 }
 
 impl<'cursor> NP_Cursor {
@@ -209,7 +220,9 @@ impl<'cursor> NP_Cursor {
         Self {
             buff_addr,
             schema_addr,
-            parent_schema_addr
+            parent_schema_addr,
+            value_bytes: None,
+            parent_type: NP_Cursor_Parent::None
         }
     }
     
@@ -228,7 +241,13 @@ impl<'cursor> NP_Cursor {
                 NP_Parsed_Schema::Map { .. } => {
                     unsafe { &mut *(ptr.add(self.buff_addr) as *mut NP_Pointer_Map_Item) }
                 },
-                _ => { // parent is scalar, struct or tuple
+                NP_Parsed_Schema::Tuple { .. } => {
+                    match &self.value_bytes {
+                        Some(x) => unsafe { &mut *(x as *const u8 as *mut NP_Pointer_Scalar) },
+                        None => unsafe { &mut *(ptr.add(self.buff_addr) as *mut NP_Pointer_Scalar) }
+                    }
+                },
+                _ => { // parent is scalar or struct
                     unsafe { &mut *(ptr.add(self.buff_addr) as *mut NP_Pointer_Scalar) }
                 }
             }                   
@@ -267,10 +286,10 @@ impl<'cursor> NP_Cursor {
                         return Ok(None);
                     }
                 },
-                NP_Parsed_Schema::Tuple { values, .. } => {
+                NP_Parsed_Schema::Tuple { values, empty, .. } => {
                     match path[path_index].parse::<usize>() {
                         Ok(x) => {
-                            if let Some(next) = NP_Tuple::select(loop_cursor, values, x, make_path, schema_query, memory)? {
+                            if let Some(next) = NP_Tuple::select(loop_cursor, empty, values, x, make_path, schema_query, memory)? {
                                 loop_cursor = next;
                                 path_index += 1;
                             } else {
@@ -328,6 +347,10 @@ impl<'cursor> NP_Cursor {
     /// Set the max value at this cursor
     pub fn set_max<M: NP_Memory>(cursor: NP_Cursor, memory: &M) -> Result<bool, NP_Error> {
 
+        if cursor.parent_type == NP_Cursor_Parent::Tuple {
+            memory.write_bytes()[cursor.buff_addr - 1] = 1;
+        }
+
         match memory.get_schema(cursor.schema_addr) {
             NP_Parsed_Schema::Boolean    { .. } => {       bool::set_value(cursor, memory, opt_err(    bool::np_max_value(&cursor, memory))?)?; } ,
             NP_Parsed_Schema::UTF8String { .. } => {     String::set_value(cursor, memory, opt_err(   String::np_max_value(&cursor, memory))?)?; } ,
@@ -358,7 +381,7 @@ impl<'cursor> NP_Cursor {
             },
             NP_Parsed_Schema::Tuple      { .. } => {
                 let mut tuple = NP_Tuple::new_iter(&cursor, memory);
-                while let Some((_index, item)) = tuple.step_iter(memory) {
+                while let Some((_index, item)) = tuple.step_iter(memory, false) {
                     if let Some(item_cursor) = item {
                         NP_Cursor::set_max(item_cursor.clone(), memory)?;
                     }
@@ -386,6 +409,10 @@ impl<'cursor> NP_Cursor {
 
     /// Set the min value at this cursor
     pub fn set_min<M: NP_Memory>(cursor: NP_Cursor, memory: &M) -> Result<bool, NP_Error> {
+
+        if cursor.parent_type == NP_Cursor_Parent::Tuple {
+            memory.write_bytes()[cursor.buff_addr - 1] = 1;
+        }
 
         match memory.get_schema(cursor.schema_addr) {
             NP_Parsed_Schema::Boolean    { .. } => {       bool::set_value(cursor, memory, opt_err(    bool::np_min_value(&cursor, memory))?)?; } ,
@@ -417,7 +444,7 @@ impl<'cursor> NP_Cursor {
             },
             NP_Parsed_Schema::Tuple      { .. } => {
                 let mut tuple = NP_Tuple::new_iter(&cursor, memory);
-                while let Some((_index, item)) = tuple.step_iter(memory) {
+                while let Some((_index, item)) = tuple.step_iter(memory, false) {
                     if let Some(item_cursor) = item {
                         NP_Cursor::set_min(item_cursor.clone(), memory)?;
                     }
@@ -486,7 +513,7 @@ impl<'cursor> NP_Cursor {
     /// 
     pub fn compact<M: NP_Memory, M2: NP_Memory>(depth: usize, from_cursor: NP_Cursor, from_memory: &M, to_cursor: NP_Cursor, to_memory: &M2) -> Result<NP_Cursor, NP_Error> {
 
-        if depth > 255 { return Err(NP_Error::new("Too much depth!"))}
+        if depth > 255 { return Err(NP_Error::RecursionLimit)}
 
         match from_memory.get_schema(from_cursor.schema_addr).get_type_key() {
             NP_TypeKeys::Any           => { Ok(to_cursor) }
@@ -515,7 +542,7 @@ impl<'cursor> NP_Cursor {
             NP_TypeKeys::Tuple         => {  NP_Tuple::do_compact(depth, from_cursor, from_memory, to_cursor, to_memory) }
             NP_TypeKeys::Portal        => { NP_Portal::do_compact(depth, from_cursor, from_memory, to_cursor, to_memory) }
             NP_TypeKeys::Union         => {  NP_Union::do_compact(depth, from_cursor, from_memory, to_cursor, to_memory) }
-            _ => { Err(NP_Error::new("unreachable")) }
+            _ => { Err(NP_Error::Unreachable) }
         }
     }
 
@@ -527,12 +554,12 @@ impl<'cursor> NP_Cursor {
         let schema = memory.get_schema(cursor.schema_addr);
 
         match schema.get_type_key() {
-            NP_TypeKeys::None        => { return Err(NP_Error::new("unreachable")); },
-            NP_TypeKeys::Any         => { return Err(NP_Error::new("unreachable")); },
-            NP_TypeKeys::Struct       => { return Err(NP_Error::new("unreachable")); },
-            NP_TypeKeys::Map         => { return Err(NP_Error::new("unreachable")); },
-            NP_TypeKeys::List        => { return Err(NP_Error::new("unreachable")); },
-            NP_TypeKeys::Tuple       => { return Err(NP_Error::new("unreachable")); },
+            NP_TypeKeys::None        => { return Err(NP_Error::Unreachable); },
+            NP_TypeKeys::Any         => { return Err(NP_Error::Unreachable); },
+            NP_TypeKeys::Struct       => { return Err(NP_Error::Unreachable); },
+            NP_TypeKeys::Map         => { return Err(NP_Error::Unreachable); },
+            NP_TypeKeys::List        => { return Err(NP_Error::Unreachable); },
+            NP_TypeKeys::Tuple       => { return Err(NP_Error::Unreachable); },
             NP_TypeKeys::Portal      => { return Err(NP_Error::new("Portal type does not have a default type")); },
             NP_TypeKeys::Union       => { return Err(NP_Error::new("Union type does not have a default type")); },
             NP_TypeKeys::UTF8String  => {     String::set_value(cursor, memory, opt_err(String::schema_default(schema))?)?; },
@@ -562,13 +589,17 @@ impl<'cursor> NP_Cursor {
     /// Set a JSON value into the buffer
     pub fn set_from_json<M: NP_Memory>(depth: usize, apply_null: bool, cursor: NP_Cursor, memory: &M, json: &Box<NP_JSON>) -> Result<(), NP_Error> {
 
-        if depth > 255 { return Err(NP_Error::new("Too much depth!")) }
+        if depth > 255 { return Err(NP_Error::RecursionLimit) }
 
         // if apply_null is true, we should delete values where we find "null" or "undefined"
         // if apply_null && **json == NP_JSON::Null {
         //     NP_Cursor::delete(cursor, memory)?;
         //     return Ok(())
         // }
+
+        if cursor.parent_type == NP_Cursor_Parent::Tuple {
+            memory.write_bytes()[cursor.buff_addr - 1] = 1;
+        }
 
         match memory.get_schema(cursor.schema_addr).get_type_key() {
             NP_TypeKeys::None           => { Ok(()) },
@@ -609,6 +640,10 @@ impl<'cursor> NP_Cursor {
 
         if cursor.buff_addr == 0 {
             return Ok(false)
+        }
+
+        if cursor.parent_type == NP_Cursor_Parent::Tuple {
+            memory.write_bytes()[cursor.buff_addr - 1] = 0;
         }
 
         let is_sortable = match memory.get_schema(0) {

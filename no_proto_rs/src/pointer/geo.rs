@@ -492,7 +492,7 @@ impl<'value> NP_Value<'value> for NP_Geo {
         
                 Ok(NP_JSON::Dictionary(schema_json))
             },
-            _ => Err(NP_Error::new("unreachable"))
+            _ => Err(NP_Error::Unreachable)
         }
     }
 
@@ -762,7 +762,7 @@ impl<'value> NP_Value<'value> for NP_Geo {
         
                 Ok(schema_idl)
             },
-            _ => Err(NP_Error::new("unreachable"))
+            _ => Err(NP_Error::Unreachable)
         }
     }
 
@@ -1034,37 +1034,37 @@ fn schema_parsing_works_idl() -> Result<(), NP_Error> {
     let schema = "geo4({default: {lat: 20.23, lng: -12.21}})";
     let factory = crate::NP_Factory::new(schema)?;
     assert_eq!(schema, factory.schema.to_idl()?);
-    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    let factory2 = crate::NP_Factory::new_bytes(factory.export_schema_bytes())?;
     assert_eq!(schema, factory2.schema.to_idl()?);
 
     let schema = "geo4()";
     let factory = crate::NP_Factory::new(schema)?;
     assert_eq!(schema, factory.schema.to_idl()?);
-    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    let factory2 = crate::NP_Factory::new_bytes(factory.export_schema_bytes())?;
     assert_eq!(schema, factory2.schema.to_idl()?);
 
     let schema = "geo8({default: {lat: 20.2334234, lng: -12.2146363}})";
     let factory = crate::NP_Factory::new(schema)?;
     assert_eq!(schema, factory.schema.to_idl()?);
-    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    let factory2 = crate::NP_Factory::new_bytes(factory.export_schema_bytes())?;
     assert_eq!(schema, factory2.schema.to_idl()?);
 
     let schema = "geo8()";
     let factory = crate::NP_Factory::new(schema)?;
     assert_eq!(schema, factory.schema.to_idl()?);
-    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    let factory2 = crate::NP_Factory::new_bytes(factory.export_schema_bytes())?;
     assert_eq!(schema, factory2.schema.to_idl()?);
 
     let schema = "geo16({default: {lat: 20.233423434, lng: -12.214636323}})";
     let factory = crate::NP_Factory::new(schema)?;
     assert_eq!(schema, factory.schema.to_idl()?);
-    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    let factory2 = crate::NP_Factory::new_bytes(factory.export_schema_bytes())?;
     assert_eq!(schema, factory2.schema.to_idl()?);
 
     let schema = "geo16()";
     let factory = crate::NP_Factory::new(schema)?;
     assert_eq!(schema, factory.schema.to_idl()?);
-    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    let factory2 = crate::NP_Factory::new_bytes(factory.export_schema_bytes())?;
     assert_eq!(schema, factory2.schema.to_idl()?);
     
     Ok(())
@@ -1072,40 +1072,40 @@ fn schema_parsing_works_idl() -> Result<(), NP_Error> {
 
 #[test]
 fn schema_parsing_works() -> Result<(), NP_Error> {
-    let schema = "{\"type\":\"geo4\",\"default\":{\"lat\":20.23,\"lng\":-12.21}}";
+    let schema = r#"{"type":"geo4","default":{"lat":20.23,"lng":-12.21}}"#;
     let factory = crate::NP_Factory::new_json(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
-    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    let factory2 = crate::NP_Factory::new_bytes(factory.export_schema_bytes())?;
     assert_eq!(schema, factory2.schema.to_json()?.stringify());
 
-    let schema = "{\"type\":\"geo4\"}";
+    let schema = r#"{"type":"geo4"}"#;
     let factory = crate::NP_Factory::new_json(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
-    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    let factory2 = crate::NP_Factory::new_bytes(factory.export_schema_bytes())?;
     assert_eq!(schema, factory2.schema.to_json()?.stringify());
 
-    let schema = "{\"type\":\"geo8\",\"default\":{\"lat\":20.2334234,\"lng\":-12.2146363}}";
+    let schema = r#"{"type":"geo8","default":{"lat":20.2334234,"lng":-12.2146363}}"#;
     let factory = crate::NP_Factory::new_json(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
-    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    let factory2 = crate::NP_Factory::new_bytes(factory.export_schema_bytes())?;
     assert_eq!(schema, factory2.schema.to_json()?.stringify());
 
-    let schema = "{\"type\":\"geo8\"}";
+    let schema = r#"{"type":"geo8"}"#;
     let factory = crate::NP_Factory::new_json(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
-    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    let factory2 = crate::NP_Factory::new_bytes(factory.export_schema_bytes())?;
     assert_eq!(schema, factory2.schema.to_json()?.stringify());
 
-    let schema = "{\"type\":\"geo16\",\"default\":{\"lat\":20.233423434,\"lng\":-12.214636323}}";
+    let schema = r#"{"type":"geo16","default":{"lat":20.233423434,"lng":-12.214636323}}"#;
     let factory = crate::NP_Factory::new_json(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
-    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    let factory2 = crate::NP_Factory::new_bytes(factory.export_schema_bytes())?;
     assert_eq!(schema, factory2.schema.to_json()?.stringify());
 
-    let schema = "{\"type\":\"geo16\"}";
+    let schema = r#"{"type":"geo16"}"#;
     let factory = crate::NP_Factory::new_json(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
-    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    let factory2 = crate::NP_Factory::new_bytes(factory.export_schema_bytes())?;
     assert_eq!(schema, factory2.schema.to_json()?.stringify());
     
     Ok(())
@@ -1114,17 +1114,17 @@ fn schema_parsing_works() -> Result<(), NP_Error> {
 
 #[test]
 fn default_value_works() -> Result<(), NP_Error> {
-    let schema = "{\"type\":\"geo4\",\"default\":{\"lat\":20.23,\"lng\":-12.21}}";
+    let schema = r#"{"type":"geo4","default":{"lat":20.23,"lng":-12.21}}"#;
     let factory = crate::NP_Factory::new_json(schema)?;
     let buffer = factory.empty_buffer(None);
     assert_eq!((buffer.get::<NP_Geo>(&[])?.unwrap()), NP_Geo::new(4, 20.23, -12.21));
 
-    let schema = "{\"type\":\"geo8\",\"default\":{\"lat\":20.2334234,\"lng\":-12.2146363}}";
+    let schema = r#"{"type":"geo8","default":{"lat":20.2334234,"lng":-12.2146363}}"#;
     let factory = crate::NP_Factory::new_json(schema)?;
     let buffer = factory.empty_buffer(None);
     assert_eq!((buffer.get::<NP_Geo>(&[])?.unwrap()), NP_Geo::new(8, 20.2334234, -12.2146363));
 
-    let schema = "{\"type\":\"geo16\",\"default\":{\"lat\":20.233423434,\"lng\":-12.214636323}}";
+    let schema = r#"{"type":"geo16","default":{"lat":20.233423434,"lng":-12.214636323}}"#;
     let factory = crate::NP_Factory::new_json(schema)?;
     let buffer = factory.empty_buffer(None);
     assert_eq!((buffer.get::<NP_Geo>(&[])?.unwrap()), NP_Geo::new(16, 20.233423434, -12.214636323));
@@ -1134,7 +1134,7 @@ fn default_value_works() -> Result<(), NP_Error> {
 
 #[test]
 fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
-    let schema = "{\"type\":\"geo4\"}";
+    let schema = r#"{"type":"geo4"}"#;
     let factory = crate::NP_Factory::new_json(schema)?;
     let mut buffer = factory.empty_buffer(None);
     buffer.set(&[], NP_Geo::new(4, 20.23, -12.21))?;

@@ -92,7 +92,7 @@ impl<'value> NP_Scalar<'value> for String {
             let mut value: String = String::with_capacity(size as usize);
 
             for _x in 0..size {
-                value.push_str(unsafe { str::from_utf8_unchecked(&[0])});
+                value.push_str(unsafe { str::from_utf8_unchecked(&[32])});
             }
 
             Some(value)
@@ -376,7 +376,7 @@ impl<'value> NP_Value<'value> for String {
                 // return total size of this string plus length bytes
                 return Ok(bytes_size + 2);
             }
-            _ => Err(NP_Error::new("unreachable")),
+            _ => Err(NP_Error::Unreachable),
         }
     }
 
@@ -697,7 +697,7 @@ impl<'value> NP_Value<'value> for NP_String<'value> {
                     return Ok(Some(unsafe { str::from_utf8_unchecked(bytes) }));
                 }
             }
-            _ => Err(NP_Error::new("unreachable")),
+            _ => Err(NP_Error::Unreachable),
         }
     }
 
@@ -725,31 +725,31 @@ fn schema_parsing_works_idl() -> Result<(), NP_Error> {
     let schema = r#"string({default: "hello"})"#;
     let factory = crate::NP_Factory::new(schema)?;
     assert_eq!(schema, factory.schema.to_idl().unwrap());
-    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    let factory2 = crate::NP_Factory::new_bytes(factory.export_schema_bytes())?;
     assert_eq!(schema, factory2.schema.to_idl().unwrap());
 
     let schema = r#"string({size: 10})"#;
     let factory = crate::NP_Factory::new(schema)?;
     assert_eq!(schema, factory.schema.to_idl().unwrap());
-    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    let factory2 = crate::NP_Factory::new_bytes(factory.export_schema_bytes())?;
     assert_eq!(schema, factory2.schema.to_idl().unwrap());
 
     let schema = r#"string({lowercase: true})"#;
     let factory = crate::NP_Factory::new(schema)?;
     assert_eq!(schema, factory.schema.to_idl().unwrap());
-    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    let factory2 = crate::NP_Factory::new_bytes(factory.export_schema_bytes())?;
     assert_eq!(schema, factory2.schema.to_idl().unwrap());
 
     let schema = r#"string({uppercase: true})"#;
     let factory = crate::NP_Factory::new(schema)?;
     assert_eq!(schema, factory.schema.to_idl().unwrap());
-    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    let factory2 = crate::NP_Factory::new_bytes(factory.export_schema_bytes())?;
     assert_eq!(schema, factory2.schema.to_idl().unwrap());
 
     let schema = r#"string()"#;
     let factory = crate::NP_Factory::new(schema)?;
     assert_eq!(schema, factory.schema.to_idl().unwrap());
-    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    let factory2 = crate::NP_Factory::new_bytes(factory.export_schema_bytes())?;
     assert_eq!(schema, factory2.schema.to_idl().unwrap());
 
     Ok(())
@@ -760,31 +760,31 @@ fn schema_parsing_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"string\",\"default\":\"hello\"}";
     let factory = crate::NP_Factory::new_json(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
-    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    let factory2 = crate::NP_Factory::new_bytes(factory.export_schema_bytes())?;
     assert_eq!(schema, factory2.schema.to_json()?.stringify());
 
     let schema = "{\"type\":\"string\",\"size\":10}";
     let factory = crate::NP_Factory::new_json(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
-    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    let factory2 = crate::NP_Factory::new_bytes(factory.export_schema_bytes())?;
     assert_eq!(schema, factory2.schema.to_json()?.stringify());
 
     let schema = "{\"type\":\"string\",\"lowercase\":true}";
     let factory = crate::NP_Factory::new_json(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
-    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    let factory2 = crate::NP_Factory::new_bytes(factory.export_schema_bytes())?;
     assert_eq!(schema, factory2.schema.to_json()?.stringify());
 
     let schema = "{\"type\":\"string\",\"uppercase\":true}";
     let factory = crate::NP_Factory::new_json(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
-    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    let factory2 = crate::NP_Factory::new_bytes(factory.export_schema_bytes())?;
     assert_eq!(schema, factory2.schema.to_json()?.stringify());
 
     let schema = "{\"type\":\"string\"}";
     let factory = crate::NP_Factory::new_json(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
-    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    let factory2 = crate::NP_Factory::new_bytes(factory.export_schema_bytes())?;
     assert_eq!(schema, factory2.schema.to_json()?.stringify());
 
     Ok(())

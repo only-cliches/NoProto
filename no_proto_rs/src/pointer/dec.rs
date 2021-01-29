@@ -717,7 +717,7 @@ impl<'value> NP_Value<'value> for NP_Dec {
         
                 Ok(NP_JSON::Dictionary(schema_json))
             },
-            _ => Err(NP_Error::new("unreachable"))
+            _ => Err(NP_Error::Unreachable)
         }
     }
 
@@ -910,7 +910,7 @@ impl<'value> NP_Value<'value> for NP_Dec {
                 result.push_str("})");
                 Ok(result)
             },
-            _ => { Err(NP_Error::new("unreachable")) }
+            _ => { Err(NP_Error::Unreachable) }
         }
     }
 
@@ -1079,13 +1079,13 @@ fn schema_parsing_works_idl() -> Result<(), NP_Error> {
     let schema = "dec({exp: 3, default: 203.293})";
     let factory = crate::NP_Factory::new(schema)?;
     assert_eq!(schema, factory.schema.to_idl()?);
-    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    let factory2 = crate::NP_Factory::new_bytes(factory.export_schema_bytes())?;
     assert_eq!(schema, factory2.schema.to_idl()?);
 
     let schema = "dec({exp: 3})";
     let factory = crate::NP_Factory::new(schema)?;
     assert_eq!(schema, factory.schema.to_idl()?);
-    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    let factory2 = crate::NP_Factory::new_bytes(factory.export_schema_bytes())?;
     assert_eq!(schema, factory2.schema.to_idl()?);
     
     Ok(())
@@ -1096,13 +1096,13 @@ fn schema_parsing_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"decimal\",\"exp\":3,\"default\":203.293}";
     let factory = crate::NP_Factory::new_json(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
-    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    let factory2 = crate::NP_Factory::new_bytes(factory.export_schema_bytes())?;
     assert_eq!(schema, factory2.schema.to_json()?.stringify());
 
     let schema = "{\"type\":\"decimal\",\"exp\":3}";
     let factory = crate::NP_Factory::new_json(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
-    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    let factory2 = crate::NP_Factory::new_bytes(factory.export_schema_bytes())?;
     assert_eq!(schema, factory2.schema.to_json()?.stringify());
     
     Ok(())
@@ -1114,7 +1114,7 @@ fn default_value_works() -> Result<(), NP_Error> {
     let factory = crate::NP_Factory::new_json(schema)?;
     let buffer = factory.empty_buffer(None);
     assert_eq!(buffer.get::<NP_Dec>(&[])?.unwrap(), NP_Dec::new(203293, 3));
-    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    let factory2 = crate::NP_Factory::new_bytes(factory.export_schema_bytes())?;
     assert_eq!(schema, factory2.schema.to_json()?.stringify());
 
     Ok(())

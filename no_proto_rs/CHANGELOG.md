@@ -1,3 +1,8 @@
+# 0.9.3
+- Tuple types are now packed much tighter but cannot be mutated in schema.  But no longer need `close_sortable` and `open_sortable` methods.
+- Updated open buffer methods and export schema methods to be consistent.
+- 
+
 # 0.9.2 January 25, 2021
 - Restored `no_std`.  
 - Minor documentation updates.

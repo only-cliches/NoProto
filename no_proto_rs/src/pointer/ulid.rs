@@ -185,8 +185,6 @@ impl<'value> NP_Scalar<'value> for NP_ULID {
 impl<'value> NP_Value<'value> for NP_ULID {
 
 
-
-
     fn type_idx() -> (&'value str, NP_TypeKeys) { ("ulid", NP_TypeKeys::Ulid) }
     fn self_type_idx(&self) -> (&'value str, NP_TypeKeys) { ("ulid", NP_TypeKeys::Ulid) }
 
@@ -394,7 +392,7 @@ fn schema_parsing_works_idl() -> Result<(), NP_Error> {
     let schema = "ulid()";
     let factory = crate::NP_Factory::new(schema)?;
     assert_eq!(schema, factory.schema.to_idl()?);
-    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    let factory2 = crate::NP_Factory::new_bytes(factory.export_schema_bytes())?;
     assert_eq!(schema, factory2.schema.to_idl()?);
 
     Ok(())
@@ -405,7 +403,7 @@ fn schema_parsing_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"ulid\"}";
     let factory = crate::NP_Factory::new_json(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
-    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    let factory2 = crate::NP_Factory::new_bytes(factory.export_schema_bytes())?;
     assert_eq!(schema, factory2.schema.to_json()?.stringify());
     
     Ok(())

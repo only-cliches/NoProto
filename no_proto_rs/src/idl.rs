@@ -82,7 +82,7 @@ impl JS_Schema {
         }
 
         if depth > 255 {
-            return Err(NP_Error::new("too much depth!"));
+            return Err(NP_Error::RecursionLimit);
         }
 
 

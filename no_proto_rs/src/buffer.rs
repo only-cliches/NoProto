@@ -1,7 +1,7 @@
 //! Top level abstraction for buffer objects
 
 use alloc::prelude::v1::Box;
-use crate::{json_decode, json_flex::JSMAP};
+use crate::{json_decode, json_flex::JSMAP, pointer::NP_Cursor_Parent};
 use alloc::string::String;
 use crate::{NP_Size_Data, schema::NP_TypeKeys};
 use crate::{memory::NP_Memory_Writable, utils::opt_err};
@@ -54,16 +54,6 @@ impl<'buffer> NP_Buffer<'buffer> {
 
     #[doc(hidden)]
     pub fn _new(memory: NP_Memory_Writable<'buffer>) -> Self { // make new buffer
-
-        // is the root a sortable tuple?  if so, create its children and vtables
-        match memory.get_schema(0) {
-            NP_Parsed_Schema::Tuple { sortable, values, .. } => {
-                if *sortable {
-                    NP_Tuple::select(NP_Cursor::new(memory.root, 0, 0), values,  0, true, false, &memory).unwrap_or(None);
-                }
-            },
-            _ => {}
-        };
 
         NP_Buffer {
             cursor: NP_Cursor::new(memory.root, 0, 0),
@@ -133,70 +123,6 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// 
     pub fn close(self) -> Vec<u8> {
         self.memory.dump()
-    }
-
-    /// If the buffer is sortable, this provides only the sortable bytes of the buffer.<br/>
-    /// 
-    /// There is typically 10 or more bytes in the beginning of the buffer that are identical between all the sortable buffers for a given schema.  These bytes are typically needed for NoProto to access the data.  Since the leading bytes are identical between all sortable buffers of the same schema, they can be generated as needed.
-    /// 
-    /// This calculates how many leading identical bytes there are and returns only the bytes following them.  This allows your sortable buffers to be only as large as they need to be.
-    /// 
-    /// This operation fails if the buffer is not sortable.
-    /// 
-    /// ```
-    /// use no_proto::error::NP_Error;
-    /// use no_proto::NP_Factory;
-    /// use no_proto::NP_Size_Data;
-    /// 
-    /// let factory: NP_Factory = NP_Factory::new(r#"
-    ///     tuple({
-    ///         sorted: true,
-    ///         values: [u8(), string({size: 6})]
-    ///     })
-    /// "#)?;
-    /// 
-    /// let mut new_buffer = factory.empty_buffer(None);
-    /// // set initial value
-    /// new_buffer.set(&["0"], 55u8)?;
-    /// new_buffer.set(&["1"], "hello")?;
-    /// 
-    /// // the buffer takes up 21 bytes!
-    /// assert_eq!(new_buffer.read_bytes().len(), 21usize);
-    /// 
-    /// // close buffer and get sortable bytes
-    /// let bytes: Vec<u8> = new_buffer.close_sortable()?;
-    /// // with close_sortable() we only get the 8 sortable bytes we care about!
-    /// assert_eq!([55, 104, 101, 108, 108, 111, 32].to_vec(), bytes);
-    /// 
-    /// // you can always re open the sortable buffers with this call
-    /// let new_buffer = factory.open_sortable_buffer(bytes)?;
-    /// assert_eq!(new_buffer.get(&["0"])?, Some(55u8));
-    /// assert_eq!(new_buffer.get(&["1"])?, Some("hello "));
-    /// 
-    /// # Ok::<(), NP_Error>(()) 
-    /// ```
-    /// 
-    pub fn close_sortable(self) -> Result<Vec<u8>, NP_Error> {
-        match &self.memory.get_schema(0) {
-            NP_Parsed_Schema::Tuple { values, sortable, .. } => {
-                if *sortable == false {
-                    Err(NP_Error::new("Attempted to close_sortable() on buffer that isn't sortable!"))
-                } else {
-                    let mut vtables = 1usize;
-                    let mut length = values.len();
-                    while length > 4 {
-                        vtables +=1;
-                        length -= 4;
-                    }
-                    let root_offset =  self.memory.root + 2 + (vtables * 10);
-
-                    let closed_vec = self.memory.dump();
-                    
-                    Ok(closed_vec[root_offset..].to_vec())
-                }
-            },
-            _ => Err(NP_Error::new("Attempted to close_sortable() on buffer that isn't sortable!"))
-        }
     }
 
     /// Read the bytes of the buffer immutably.  No touching!
@@ -380,6 +306,10 @@ impl<'buffer> NP_Buffer<'buffer> {
                     err.push_str(self.memory.get_schema(x.schema_addr).get_type_data().0);
                     err.push_str(")\n");
                     return Err(NP_Error::new(err));
+                }
+
+                if x.parent_type == NP_Cursor_Parent::Tuple {
+                    self.memory.write_bytes()[x.buff_addr - 1] = 1;
                 }
 
                 X::set_value(x, &self.memory, value)?;
@@ -1309,8 +1239,8 @@ impl<'item> NP_Item<'item> {
                     let item = opt_err(NP_Struct::select(self.parent.clone(), empty, fields, &self.key, true, false, self.memory)?)?;
                     X::set_value(item, self.memory, value)?;
                 },
-                NP_Parsed_Schema::Tuple { values, .. } => {
-                    let item = opt_err(NP_Tuple::select(self.parent.clone(), values, self.index, true, false, self.memory)?)?;
+                NP_Parsed_Schema::Tuple { values, empty,  .. } => {
+                    let item = opt_err(NP_Tuple::select(self.parent.clone(), empty, values, self.index, true, false, self.memory)?)?;
                     X::set_value(item, self.memory, value)?;
                 }
                 _ => { }
@@ -1347,7 +1277,7 @@ pub enum NP_Iterator_Collection<'col> {
     /// Struct
     Struct(NP_Struct<'col>),
     /// Tuple
-    Tuple(NP_Tuple<'col>)
+    Tuple(NP_Tuple)
 }
 
 #[allow(missing_docs)]
@@ -1424,7 +1354,7 @@ impl<'it> Iterator for NP_Generic_Iterator<'it> {
                 }
             },
             NP_Iterator_Collection::Tuple(x) => {
-                if let Some(next_item) = x.step_iter(self.memory) {
+                if let Some(next_item) = x.step_iter(self.memory, true) {
                     Some(NP_Item { memory: self.memory, key: "", field: "", index: next_item.0, cursor: next_item.1, parent: self.root.clone() })
                 } else {
                     None

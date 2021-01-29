@@ -335,7 +335,7 @@
 //! 
 //! - **Bytewise Sorting**: Supported if all children are scalars that support bytewise sorting and schema `sorted` is set to `true`.
 //! - **Compaction**: If `sorted` is true, compaction will not save space.  Otherwise, tuples only reduce in size if children are deleted or children with a dyanmic size are updated.
-//! - **Schema Mutations**: If `sorted` is true, none.  Otherwise adding new values to the end of the `values` schema property is safe.
+//! - **Schema Mutations**: No mutations are safe
 //! 
 //! Tuples have a single required property in the schema called `values`.  It's an array of schemas that represnt the tuple values.  Any schema is allowed, including other Tuples.
 //! 
@@ -934,6 +934,15 @@ pub struct NP_Struct_Field {
     pub offset: usize
 }
 
+#[allow(missing_docs)]
+#[derive(Debug, Clone)]
+pub struct NP_Tuple_Field {
+    pub schema: usize,
+    pub fixed: bool,
+    pub size: usize,
+    pub offset: usize
+}
+
 /// When a schema is parsed from JSON or Bytes, it is stored in this recursive type
 /// 
 #[allow(missing_docs)]
@@ -963,7 +972,7 @@ pub enum NP_Parsed_Schema {
     Struct     { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, fields: Vec<NP_Struct_Field>, empty: Vec<u8> },
     Map        { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, value: NP_Schema_Addr}, 
     List       { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, of: NP_Schema_Addr },
-    Tuple      { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, values: Vec<NP_Schema_Addr>},
+    Tuple      { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, values: Vec<NP_Tuple_Field>, empty: Vec<u8>},
     Portal     { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, path: String, schema: usize, parent_schema: usize },
     Union      { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, types: Vec<(u8, String, NP_Schema_Addr)>, default: usize },
 }

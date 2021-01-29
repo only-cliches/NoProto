@@ -412,7 +412,7 @@ impl<'value> NP_Value<'value> for NP_Struct<'value> {
                 result.push_str("}})");
                 Ok(result)
             },  
-            _ => { Err(NP_Error::new("unreachable")) }
+            _ => { Err(NP_Error::Unreachable) }
         }
     }
 
@@ -621,7 +621,7 @@ fn schema_parsing_works_idl() -> Result<(), NP_Error> {
     let schema = r#"struct({fields: {age: u8(), tags: list({of: string()}), name: string({size: 10})}})"#;
     let factory = crate::NP_Factory::new(schema)?;
     assert_eq!(schema, factory.schema.to_idl()?);
-    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    let factory2 = crate::NP_Factory::new_bytes(factory.export_schema_bytes())?;
     assert_eq!(schema, factory2.schema.to_idl()?);
     Ok(())
 }
@@ -632,7 +632,7 @@ fn schema_parsing_works() -> Result<(), NP_Error> {
     let schema = r#"{"type":"struct","fields":[["age",{"type":"uint8"}],["tags",{"type":"list","of":{"type":"string"}}],["name",{"type":"string","size":10}]]}"#;
     let factory = crate::NP_Factory::new_json(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
-    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    let factory2 = crate::NP_Factory::new_bytes(factory.export_schema_bytes())?;
     assert_eq!(schema, factory2.schema.to_json()?.stringify());
     Ok(())
 }
@@ -664,7 +664,7 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     // println!("{:?}", buffer.read_bytes());
     // let packed = factory.pack_buffer(buffer);
     // println!("{:?}", packed.schema.to_json()?.stringify().len());
-    // println!("{:?}", packed.compile_schema().len());
+    // println!("{:?}", packed.export_schema_bytes().len());
     // let closed = packed.close_packed();
 
     // let opened = NP_Packed_Buffer::open(closed)?;

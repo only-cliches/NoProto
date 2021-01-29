@@ -77,7 +77,7 @@ impl NoProtoBench {
     #[inline(always)]
     fn get_factory<'get>() -> Result<NP_Factory<'get>, NP_Error> {
         
-        NP_Factory::new_compiled(&SCHEMA)
+        NP_Factory::new_bytes(&SCHEMA)
         // NP_Factory::new(r#"
         //     struct({fields: {
         //         list: list({of: struct({fields: {

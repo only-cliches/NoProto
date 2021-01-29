@@ -162,15 +162,12 @@
 //! 
 //! ### Tuple (Collection)
 //! 
-//! The tuple data type stores one or more vtables for the values.  Each vtable is 10 bytes and contains:
-//! - 4 address (u16) pointers for the tuple values
-//! - a trailing address(u16) of the next vtable (should be zero if no more vtables)
+//! Tuples are stored by packing the types next to eachother.
 //! 
-//! Each vtable can address up to 4 values, so if there are 30 values in a schema there may be as many as 8 vtables in the buffer: `30 / 4 = 7.5`
+//! Before each type is a byte that is either 1 or 0.  It should be zero if the value has not been set, otherwise it should be one.
 //! 
-//! Vtables are normally created as needed,  For example if there are 100 values in the schema but the client only ever sets the first 4 values there will only ever be 1 vtable in the buffer.
-//! 
-//! If the tuple is set to be sorted, all vtables needed by the schema are created at once in a continuous chain.  Following the continuos chain of vtables, default zero bytes are set for all children of the tuple.  This gaurantees all sorted tuples of the same schema have identical leading bytes followed by sortable bytes determined by the value of the data.
+//! If a child type is flexible in size, a pointer address is put in the tuple.
+//! If a child type is fixed in size, it is placed inline in the tuple.
 //! 
 //! ```
 //! use no_proto::error::NP_Error;
@@ -188,10 +185,10 @@
 //! let mut new_buffer = factory.empty_buffer(None);
 //! new_buffer.set(&["0"], 20u8)?;
 //! new_buffer.set(&["1"], "hello")?;
-//! assert_eq!(vec![0, 0, 0, 4, 0, 14, 0, 15, 0, 0, 0, 0, 0, 0, 20, 0, 5, 104, 101, 108, 108, 111], new_buffer.close());
+//! assert_eq!(vec![0, 0, 0, 4, 1, 20, 1, 0, 9, 0, 5, 104, 101, 108, 108, 111], new_buffer.close());
 //! 
-//! // [0,0,   0, 4, 0, 14, 0, 15, 0, 0, 0, 0, 0, 0,  20, 0, 5, 104, 101, 108, 108, 111]
-//! // [   root ptr,                         vtable,  u8,         h,   e,   l,   l,   o]
+//! // [0, 0, 0, 4, 1, 20, 1,    0, 9, 0, 5, 104, 101, 108, 108, 111]
+//! // [   root ptr,    u8,   str ptr,         h,   e,   l,   l,   o]
 //!
 //! # Ok::<(), NP_Error>(()) 
 //! ```
@@ -508,7 +505,7 @@
 //!    "default": 56
 //! }"#)?;
 //!
-//! assert_eq!(&[6, 1, 0, 0, 0, 56], factory.compile_schema());
+//! assert_eq!(&[6, 1, 0, 0, 0, 56], factory.export_schema_bytes());
 //! 
 //! // [       6,           1,      0, 0, 0, 56]
 //! // [i32 type, has default,    default value]
@@ -517,7 +514,7 @@
 //!    "type": "i32"
 //! }"#)?;
 //!
-//! assert_eq!(&[6, 0], factory.compile_schema());
+//! assert_eq!(&[6, 0], factory.export_schema_bytes());
 //! 
 //! // [       6,           0]
 //! // [i32 type,  no default]
@@ -546,7 +543,7 @@
 //!    "default": "red"
 //! }"#)?;
 //!
-//! assert_eq!(&[20, 3, 3, 4, 98, 108, 117, 101, 6, 111, 114, 97, 110, 103, 101, 3, 114, 101, 100], factory.compile_schema());
+//! assert_eq!(&[20, 3, 3, 4, 98, 108, 117, 101, 6, 111, 114, 97, 110, 103, 101, 3, 114, 101, 100], factory.export_schema_bytes());
 //! 
 //! // [       20,                        3,            3, 4, 98, 108, 117, 101, 6, 111, 114, 97, 110, 103, 101, 3, 114, 101, 100]
 //! // [data type, 1 based index of default, # of options,     b,   l,   u,   e,      o,   r,  a,   n,   g,   e,      r,   e,   d]  
@@ -556,7 +553,7 @@
 //!    "choices": ["blue", "orange", "red"]
 //! }"#)?;
 //!
-//! assert_eq!(&[20, 0, 3, 4, 98, 108, 117, 101, 6, 111, 114, 97, 110, 103, 101, 3, 114, 101, 100], factory.compile_schema());
+//! assert_eq!(&[20, 0, 3, 4, 98, 108, 117, 101, 6, 111, 114, 97, 110, 103, 101, 3, 114, 101, 100], factory.export_schema_bytes());
 //! 
 //! // [       20,          0,             3, 4, 98, 108, 117, 101, 6, 111, 114, 97, 110, 103, 101, 3, 114, 101, 100]
 //! // [data type, no default,  # of options,     b,   l,   u,   e,      o,   r,  a,   n,   g,   e,      r,   e,   d]  
@@ -583,7 +580,7 @@
 //!    "default": true
 //! }"#)?;
 //!
-//! assert_eq!(&[15, 1], factory.compile_schema());
+//! assert_eq!(&[15, 1], factory.export_schema_bytes());
 //! 
 //! // [       15,               1]
 //! // [data type, default is true]  
@@ -593,7 +590,7 @@
 //!    "default": false
 //! }"#)?;
 //!
-//! assert_eq!(&[15, 2], factory.compile_schema());
+//! assert_eq!(&[15, 2], factory.export_schema_bytes());
 //! 
 //! // [       15,                2]
 //! // [data type, default is false]  
@@ -603,7 +600,7 @@
 //!    "type": "bool"
 //! }"#)?;
 //!
-//! assert_eq!(&[15, 0], factory.compile_schema());
+//! assert_eq!(&[15, 0], factory.export_schema_bytes());
 //! 
 //! // [       15,          0]
 //! // [data type, no default]  
@@ -629,7 +626,7 @@
 //!    "exp": 2
 //! }"#)?;
 //!
-//! assert_eq!(&[14, 2, 0], factory.compile_schema());
+//! assert_eq!(&[14, 2, 0], factory.export_schema_bytes());
 //! 
 //! // [       14,         2,                0]
 //! // [data type, expontent, no default value]
@@ -640,7 +637,7 @@
 //!    "default": 521.32
 //! }"#)?;
 //!
-//! assert_eq!(&[14, 2, 1, 0, 0, 0, 0, 0, 0, 203, 164], factory.compile_schema());
+//! assert_eq!(&[14, 2, 1, 0, 0, 0, 0, 0, 0, 203, 164], factory.export_schema_bytes());
 //! 
 //! // [       14,         2,                 1, 0, 0, 0, 0, 0, 0, 203, 164]
 //! // [data type, expontent, has default value,              default value]
@@ -663,7 +660,7 @@
 //!    "type": "geo8"
 //! }"#)?;
 //!
-//! assert_eq!(&[16, 8, 0], factory.compile_schema());
+//! assert_eq!(&[16, 8, 0], factory.export_schema_bytes());
 //! 
 //! // [       16,                 8,                0]
 //! // [data type, geo size (4/8/16), no default value]
@@ -674,7 +671,7 @@
 //!    "default": {"lat": 29.2, "lng": -19.2}
 //! }"#)?;
 //!
-//! assert_eq!(&[16, 8, 1, 145, 103, 145, 0, 116, 142, 80, 0], factory.compile_schema());
+//! assert_eq!(&[16, 8, 1, 145, 103, 145, 0, 116, 142, 80, 0], factory.export_schema_bytes());
 //! 
 //! // [       16,                 8,                 1, 145, 103, 145, 0, 116, 142, 80, 0]
 //! // [data type, geo size (4/8/16), has default value,             geo8 value (lat/lng) ]
@@ -696,7 +693,7 @@
 //!    "type": "uuid"
 //! }"#)?;
 //!
-//! assert_eq!(&[17], factory.compile_schema());
+//! assert_eq!(&[17], factory.export_schema_bytes());
 //! 
 //! // [       17]
 //! // [data type]
@@ -718,7 +715,7 @@
 //!    "type": "string"
 //! }"#)?;
 //!
-//! assert_eq!(&[2, 0, 0, 0, 0, 0], factory.compile_schema());
+//! assert_eq!(&[2, 0, 0, 0, 0, 0], factory.export_schema_bytes());
 //! 
 //! // [        2,                   0,             0, 0,                 0, 0]
 //! // [data type, uppercase/lowercase, fixed size (u16),  default size (u16) ]
@@ -728,7 +725,7 @@
 //!    "size": 20
 //! }"#)?;
 //!
-//! assert_eq!(&[2, 0, 0, 20, 0, 0], factory.compile_schema());
+//! assert_eq!(&[2, 0, 0, 20, 0, 0], factory.export_schema_bytes());
 //! 
 //! // [        2,                   0,            0, 20,                 0, 0]
 //! // [data type, uppercase/lowercase, fixed size (u16),  default size (u16) ]
@@ -739,7 +736,7 @@
 //!    "default": "hello"
 //! }"#)?;
 //!
-//! assert_eq!(&[2, 0, 0, 20, 0, 6, 104, 101, 108, 108, 111], factory.compile_schema());
+//! assert_eq!(&[2, 0, 0, 20, 0, 6, 104, 101, 108, 108, 111], factory.export_schema_bytes());
 //! 
 //! // [        2,                   0,             0, 20,                0, 6, 104, 101, 108, 108, 111]
 //! // [data type, uppercase/lowercase,  fixed size (u16),  default size (u16),   h,   e,   l,   l,   o]
@@ -762,7 +759,7 @@
 //!    "type": "date"
 //! }"#)?;
 //!
-//! assert_eq!(&[19, 0], factory.compile_schema());
+//! assert_eq!(&[19, 0], factory.export_schema_bytes());
 //! 
 //! // [       19,             0]
 //! // [data type, default flag ]
@@ -772,7 +769,7 @@
 //!    "default": 1604862252
 //! }"#)?;
 //!
-//! assert_eq!(&[19, 1, 0, 0, 0, 0, 95, 168, 65, 44], factory.compile_schema());
+//! assert_eq!(&[19, 1, 0, 0, 0, 0, 95, 168, 65, 44], factory.export_schema_bytes());
 //! 
 //! // [       19,            1, 0, 0, 0, 0, 95, 168, 65, 44]
 //! // [data type, default flag,        default value       ]
@@ -799,7 +796,7 @@
 //! }"#)?;
 //!
 //!
-//! assert_eq!(&[21, 2, 3, 97, 103, 101, 0, 2, 8, 0, 4, 110, 97, 109, 101, 0, 6, 2, 0, 0, 0, 0, 0], factory.compile_schema());
+//! assert_eq!(&[21, 2, 3, 97, 103, 101, 0, 2, 8, 0, 4, 110, 97, 109, 101, 0, 6, 2, 0, 0, 0, 0, 0], factory.export_schema_bytes());
 //! 
 //! // [       21,            2, 3, 97, 103, 101,                     0, 2,           8, 0, 4, 110, 97, 109, 101,                      0, 6,   2, 0, 0, 0, 0, 0]
 //! // [data type,  # of fields,     a,   g,   e,  field schema size (u16),   field schema,      n,  a,   m,   e,   field schema size (u16),     field schema  ]
@@ -818,7 +815,7 @@
 //!     "of": {"type": "u8"}
 //! }"#)?;
 //!
-//! assert_eq!(&[23, 8, 0], factory.compile_schema());
+//! assert_eq!(&[23, 8, 0], factory.export_schema_bytes());
 //! 
 //! // [       23,        8, 0]
 //! // [data type, "of" schema]
@@ -837,7 +834,7 @@
 //!     "value": {"type": "u8"}
 //! }"#)?;
 //! 
-//! assert_eq!(&[22, 8, 0], factory.compile_schema());
+//! assert_eq!(&[22, 8, 0], factory.export_schema_bytes());
 //! 
 //! // [       22,         8, 0]
 //! // [data type, value schema]
@@ -859,7 +856,7 @@
 //!    ]
 //! }"#)?;
 //!
-//! assert_eq!(&[24, 0, 2, 0, 2, 8, 0, 0, 6, 2, 0, 0, 0, 0, 0], factory.compile_schema());
+//! assert_eq!(&[24, 0, 2, 0, 2, 8, 0, 0, 6, 2, 0, 0, 0, 0, 0], factory.export_schema_bytes());
 //! 
 //! // [       24,      0,           2,               0, 2,   8, 0,              0, 6,  2, 0, 0, 0, 0, 0]
 //! // [data type, sorted, length (u8),  schema size (u16), schema, schema size (u16),      schema      ]

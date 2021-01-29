@@ -57,7 +57,7 @@ impl<'value> NP_Value<'value> for NP_Portal {
                 result.push_str("\"});");
                 Ok(result)
             },
-            _ => { Err(NP_Error::new("unreachable")) }
+            _ => { Err(NP_Error::Unreachable) }
         }
     }
 
@@ -186,7 +186,7 @@ impl<'value> NP_Value<'value> for NP_Portal {
                 next.parent_schema_addr = *parent_schema;
                 NP_Cursor::calc_size(depth + 1, &next, memory)
             },
-            _ => Err(NP_Error::new("unreachable"))
+            _ => Err(NP_Error::Unreachable)
         }
     }
 
@@ -199,7 +199,7 @@ impl<'value> NP_Value<'value> for NP_Portal {
                 to_cursor.parent_schema_addr = *parent_schema;
                 NP_Cursor::compact(depth + 1, from_cursor, from_memory, to_cursor, to_memory)
             },
-            _ => Err(NP_Error::new("unreachable"))
+            _ => Err(NP_Error::Unreachable)
         }
     }
 }
@@ -212,7 +212,7 @@ fn schema_parsing_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"portal\",\"to\":\"\"}";
     let factory = crate::NP_Factory::new_json(schema)?;
     assert_eq!(schema, factory.schema.to_json()?.stringify());
-    let factory2 = crate::NP_Factory::new_compiled(factory.compile_schema())?;
+    let factory2 = crate::NP_Factory::new_bytes(factory.export_schema_bytes())?;
     assert_eq!(schema, factory2.schema.to_json()?.stringify());
 
     Ok(())

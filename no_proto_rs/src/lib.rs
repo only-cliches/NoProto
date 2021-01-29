@@ -392,7 +392,7 @@ macro_rules! np_path {
 /// 
 /// The easiest way to create a factory is to pass a JSON string schema into the static `new` method.  [Learn about schemas here.](./schema/index.html)
 /// 
-/// You can also create a factory with a compiled byte schema using the static `new_compiled` method.
+/// You can also create a factory with a compiled byte schema using the static `new_bytes` method.
 /// 
 /// # Example
 /// ```
@@ -527,7 +527,7 @@ impl<'fact> NP_Factory<'fact> {
     /// Create a new factory from a compiled schema byte array.
     /// The byte schemas are at least an order of magnitude faster to parse than JSON schemas.
     /// 
-    pub fn new_compiled(schema_bytes: &'fact [u8]) -> Result<Self, NP_Error> {
+    pub fn new_bytes(schema_bytes: &'fact [u8]) -> Result<Self, NP_Error> {
         
         let (is_sortable, mut schema) = NP_Schema::from_bytes(Vec::new(), 0, schema_bytes);
 
@@ -544,7 +544,7 @@ impl<'fact> NP_Factory<'fact> {
 
     /// Generate factory from *const [u8], probably not safe to use generally speaking
     #[doc(hidden)]
-    pub unsafe fn new_compiled_ptr(schema_bytes: *const [u8]) -> Result<Self, NP_Error> {
+    pub unsafe fn new_bytes_ptr(schema_bytes: *const [u8]) -> Result<Self, NP_Error> {
         
         let (is_sortable, mut schema) = NP_Schema::from_bytes(Vec::new(), 0, &*schema_bytes );
 
@@ -561,94 +561,24 @@ impl<'fact> NP_Factory<'fact> {
 
     /// Get a copy of the compiled schema byte array
     /// 
-    pub fn compile_schema(&self) -> &[u8] {
+    pub fn export_schema_bytes(&self) -> &[u8] {
         match &self.schema_bytes {
             NP_Schema_Bytes::Owned(x) => x,
             NP_Schema_Bytes::Borrwed(x) => *x
         }
     }
 
-    /// Exports this factorie's schema to ES6 IDL.  This works regardless of wether the factory was created with `NP_Factory::new` or `NP_Factory::new_compiled`.
+    /// Exports this factorie's schema to ES6 IDL.  This works regardless of wether the factory was created with `NP_Factory::new` or `NP_Factory::new_bytes`.
     /// 
     pub fn export_schema_idl(&self) -> Result<String, NP_Error> {
         self.schema.to_idl()
     }
 
-    /// Exports this factorie's schema to JSON.  This works regardless of wether the factory was created with `NP_Factory::new` or `NP_Factory::new_compiled`.
+    /// Exports this factorie's schema to JSON.  This works regardless of wether the factory was created with `NP_Factory::new` or `NP_Factory::new_bytes`.
     /// 
-    pub fn export_schema(&self) -> Result<NP_JSON, NP_Error> {
+    pub fn export_schema_json(&self) -> Result<NP_JSON, NP_Error> {
         self.schema.to_json()
     }
-
-    /// Open existing Vec<u8> sortable buffer that was closed with `.close_sortable()` 
-    /// 
-    /// There is typically 10 bytes or more in front of every sortable buffer that is identical between all sortable buffers for a given schema.
-    /// 
-    /// This method is used to open buffers that have had the leading identical bytes trimmed from them using `.close_sortale()`.
-    /// 
-    /// This operation fails if the buffer is not sortable.
-    /// 
-    /// ```
-    /// use no_proto::error::NP_Error;
-    /// use no_proto::NP_Factory;
-    /// use no_proto::NP_Size_Data;
-    /// 
-    /// let factory: NP_Factory = NP_Factory::new_json(r#"
-    ///     tuple({
-    ///         sorted: true,
-    ///         values: [ u8(), string({size: 6}) ]
-    ///     })
-    /// "#)?;
-    /// 
-    /// let mut new_buffer = factory.empty_buffer(None);
-    /// // set initial value
-    /// new_buffer.set(&["0"], 55u8)?;
-    /// new_buffer.set(&["1"], "hello")?; 
-    /// 
-    /// // the buffer with it's vtables take up 21 bytes!
-    /// assert_eq!(new_buffer.read_bytes().len(), 21usize);
-    /// 
-    /// // close buffer and get sortable bytes
-    /// let bytes: Vec<u8> = new_buffer.close_sortable()?;
-    /// // with close_sortable() we only get the bytes we care about!
-    /// assert_eq!([55, 104, 101, 108, 108, 111, 32].to_vec(), bytes);
-    /// 
-    /// // you can always re open the sortable buffers with this call
-    /// let new_buffer = factory.open_sortable_buffer(bytes)?;
-    /// assert_eq!(new_buffer.get(&["0"])?, Some(55u8));
-    /// assert_eq!(new_buffer.get(&["1"])?, Some("hello "));
-    /// 
-    /// # Ok::<(), NP_Error>(()) 
-    /// ```
-    /// 
-    /// 
-    pub fn open_sortable_buffer<'buffer>(&'buffer self, bytes: Vec<u8>) -> Result<NP_Buffer<'buffer>, NP_Error> {
-        
-        match &self.schema.parsed[0] {
-            NP_Parsed_Schema::Tuple { values, sortable,  ..} => {
-                if *sortable == false {
-                    Err(NP_Error::new("Attempted to open sorted buffer when root wasn't sortable!"))
-                } else {
-                    let mut vtables = 1usize;
-                    let mut length = values.len();
-                    while length > 4 {
-                        vtables +=1;
-                        length -= 4;
-                    }
-                    // how many leading bytes are identical across all buffers with this schema
-                    let root_offset = DEFAULT_ROOT_PTR_ADDR + 2 + (vtables * 10);
-
-                    let default_buffer = NP_Buffer::_new(NP_Memory_Writable::new(Some(root_offset + bytes.len()), &self.schema.parsed, DEFAULT_ROOT_PTR_ADDR));
-                    let mut use_bytes = default_buffer.close()[0..root_offset].to_vec();
-                    use_bytes.extend_from_slice(&bytes[..]);
-
-                    Ok(NP_Buffer::_new(NP_Memory_Writable::existing(use_bytes, &self.schema.parsed, DEFAULT_ROOT_PTR_ADDR)))
-                }
-            },
-            _ => return Err(NP_Error::new("Attempted to open sorted buffer when root wasn't tuple!"))
-        }
-    }
-
 
     /// Open existing Vec<u8> as buffer for this factory.  
     /// 
@@ -684,7 +614,7 @@ impl<'fact> NP_Factory<'fact> {
     pub fn pack_buffer<'open>(&self, buffer: NP_Buffer) -> NP_Packed_Buffer<'open> {
         NP_Packed_Buffer {
             buffer: NP_Buffer::_new(NP_Memory_Writable::existing_owned(buffer.close(), self.schema.parsed.clone(), DEFAULT_ROOT_PTR_ADDR)),
-            schema_bytes: self.compile_schema().to_vec(),
+            schema_bytes: self.export_schema_bytes().to_vec(),
             schema: self.schema.clone()
         }
     }
@@ -730,11 +660,11 @@ impl<'packed> NP_Packed_Buffer<'packed> {
     pub fn close_packed(self) -> Vec<u8> {
         let mut new_buffer: Vec<u8> = Vec::new();
         new_buffer.push(1); // indicate this is a packed buffer
-        let schema = self.compile_schema();
+        let schema = self.export_schema_bytes();
         // schema size
         new_buffer.extend_from_slice(&(schema.len() as u16).to_be_bytes());
         // schema data
-        new_buffer.extend_from_slice(self.compile_schema());
+        new_buffer.extend_from_slice(self.export_schema_bytes());
         // buffer data
         new_buffer.extend(self.buffer.close());
         new_buffer
@@ -746,7 +676,7 @@ impl<'packed> NP_Packed_Buffer<'packed> {
     }
 
     /// Get the schema bytes for this packed buffer
-    pub fn compile_schema(&self) -> &[u8] {
+    pub fn export_schema_bytes(&self) -> &[u8] {
         &self.schema_bytes[..]
     }
 }

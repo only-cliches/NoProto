@@ -7,15 +7,22 @@ use alloc::string::ToString;
 
 /// The error type used for errors in this library
 #[derive(Debug)]
-pub struct NP_Error {
-    /// The message of this error
-    pub message: String
+pub enum NP_Error {
+    /// Use this instead of unreachable! which causes panic
+    Unreachable,
+    /// Too many recursive calls
+    RecursionLimit,
+    /// Custom error message
+    Custom { 
+        /// Error message
+        message: String 
+    }
 }
 
 impl NP_Error {
     /// Generate a new error with a specific message
     pub fn new<S: AsRef<str>>(message: S) -> Self {
-        NP_Error { message: message.as_ref().to_owned() }
+        NP_Error::Custom { message: message.as_ref().to_owned() }
     }
     /// Convert an option to an error type
     pub fn unwrap<T>(value: Option<T>) -> Result<T, NP_Error> {
