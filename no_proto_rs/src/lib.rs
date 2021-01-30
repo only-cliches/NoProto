@@ -47,9 +47,9 @@
 //! ### Why ANOTHER Serialization Format?
 //! 1. NoProto combines the **performance** of compiled formats with the **flexibilty** of dynamic formats:
 //! 
-//! **Compiled** formats like Flatbuffers, CapN Proto and bincode have amazing performance and extremely compact storage buffers, but you MUST compile the data types into your application.  This means if the schema of the data changes the application must be recompiled to accomodate the new schema.
+//! **Compiled** formats like Flatbuffers, CapN Proto and bincode have amazing performance and extremely compact buffers, but you MUST compile the data types into your application.  This means if the schema of the data changes the application must be recompiled to accomodate the new schema.
 //! 
-//! **Dynamic** formats like JSON, MessagePack and BSON give flexibilty to store any data with any schema at runtime but the storage buffers are fat and performance is somewhere between horrible and hopefully acceptable.
+//! **Dynamic** formats like JSON, MessagePack and BSON give flexibilty to store any data with any schema at runtime but the buffers are fat and performance is somewhere between horrible and hopefully acceptable.
 //! 
 //! NoProto takes the performance advantages of compiled formats and implements them in a flexible format.
 //! 
@@ -88,6 +88,7 @@
 //! - Byte-wise sorting is first class operation<br/>
 //! - Updates without deserializng/serializing<br/>
 //! - Safely handle untrusted data.<br/>
+//! - All values are optional and can be inserted in any order.<br/>
 //! </details>
 //! <br/>
 //! <details>
@@ -111,6 +112,7 @@
 //! - Updates without deserializng/serializing<br/>
 //! - Works with `no_std`.<br/>
 //! - Safely handle untrusted data.<br/>
+//! - All values are optional and can be inserted in any order.<br/>
 //! </details>
 //! <br/><br/>
 //! 
@@ -245,24 +247,27 @@
 //! Complete benchmark source code is available [here](https://github.com/only-cliches/NoProto/tree/master/bench).  Suggestions for improving the quality of these benchmarks is appreciated.
 //! 
 //! ## NoProto Strengths
-//! If your use case fits any of the points below, NoProto is a good choice for your application.  You should always benchmark to verify.
+//! If your use case fits any of the points below, NoProto might be a good choice for your application.
 //! 
 //! 1. Flexible At Runtime<br/>
-//! If you need to work with data types that will change or be created at runtime, you normally have to pick something like JSON since highly optimized formats like Flatbuffers and Bincode depend on compiling the data types into your application (making everything fixed at runtime). When it comes to formats that can change/implement data types at runtime, NoProto is fastest format I've been able to find (if you know if one that might be faster, let me know!).
+//! If you need to work with data types that will change or be created at runtime, you normally have to pick something like JSON since highly optimized formats like Flatbuffers and Bincode depend on compiling the data types into your application (making everything fixed at runtime). When it comes to formats that can change/implement data types at runtime, NoProto is fastest format we're aware of (if you know if one that might be faster, let us know!).
 //! 
 //! 2. Safely Accept Untrusted Data</br>
 //! The worse case failure mode for NoProto buffers is junk data.  While other formats can cause denial of service attacks or allow unsafe memory access, there is no such failure case with NoProto.  There is no way to construct a NoProto buffer that would cause any detrement in performance to the host application or lead to unsafe memory access.  Also, there is no panic causing code in the library, meaning it will never crash your application.
 //! 
 //! 3. Extremely Fast Updates<br/>
-//! If you have a workflow in your application that is read -> modify -> write with buffers, NoProto will usually outperform every other format, including Bincode and Flatbuffers. This is because NoProto never actually deserializes, it doesn't need to.  This includes complicated mutations like pushing a value onto a list or adding a value into the middle of a list.
+//! If you have a workflow in your application that is read -> modify -> write with buffers, NoProto will usually outperform every other format, including Bincode and Flatbuffers. This is because NoProto never actually deserializes, it doesn't need to.  This includes complicated mutations like pushing a value onto a nested list or replacing entire structs.
 //! 
-//! 4. Incremental Deserializing<br/>
-//! You only pay for the fields you read, no more. There is no deserializing step in NoProto, opening a buffer typically performs no operations (except for sorted buffers, which is opt in). Once you start asking for fields, the library will navigate the buffer using the format rules to get just what you asked for and nothing else. If you have a workflow in your application where you read a buffer and only grab a few fields inside it, NoProto will outperform most other libraries.
+//! 4. All Fields Optional, Insert/Update In Any Order<br/>
+//! Many formats require that all values be present to close the buffer, further they may require data to be inserted in a specific order to accomodate the encoding/decoding scheme.  With NoProto, all fields are optional and any update/insert can happen in any order.  
 //! 
-//! 5. Bytewise Sorting<br/>
+//! 5. Incremental Deserializing<br/>
+//! You only pay for the fields you read, no more. There is no deserializing step in NoProto, opening a buffer performs no operations. Once you start asking for fields, the library will navigate the buffer using the format rules to get just what you asked for and nothing else. If you have a workflow in your application where you read a buffer and only grab a few fields inside it, NoProto will outperform most other libraries.
+//! 
+//! 6. Bytewise Sorting<br/>
 //! Almost all of NoProto's data types are designed to serialize into bytewise sortable values, *including signed integers*.  When used with Tuples, making database keys with compound sorting is extremly easy.  When you combine that with first class support for `UUID`s and `ULID`s NoProto makes an excellent tool for parsing and creating primary keys for databases like RocksDB, LevelDB and TiKV. 
 //! 
-//! 6. `no_std` Support<br/>
+//! 7. `no_std` Support<br/>
 //! If you need a serialization format with low memory usage that works in `no_std` environments, NoProto is one of the few good choices.
 //! 
 //! 

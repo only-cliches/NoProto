@@ -46,6 +46,13 @@ impl<'vec> SchemaVec<'vec> {
 
 #[doc(hidden)]
 #[derive(Debug)]
+pub enum WritableBytes<'writable> {
+    owned { bytes: Vec<u8>},
+    borrowed { bytes: &'writable mut [u8], len: u32 }
+}
+
+#[doc(hidden)]
+#[derive(Debug)]
 pub struct NP_Memory_Writable<'memory> {
     bytes: UnsafeCell<Vec<u8>>,
     pub root: usize,
@@ -61,6 +68,10 @@ impl<'memory> NP_Memory_Writable<'memory> {
             bytes: UnsafeCell::new(self.read_bytes().to_vec()),
             schema: self.schema.clone()
         }
+    }
+
+    pub fn length(&self) -> usize {
+        unsafe { &*self.bytes.get() }.len()
     }
 
     #[inline(always)]

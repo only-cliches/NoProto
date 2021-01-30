@@ -8,6 +8,8 @@ use alloc::string::ToString;
 /// The error type used for errors in this library
 #[derive(Debug)]
 pub enum NP_Error {
+    /// Read only error
+    MemoryReadOnly,
     /// Use this instead of unreachable! which causes panic
     Unreachable,
     /// Too many recursive calls

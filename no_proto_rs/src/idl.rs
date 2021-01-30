@@ -162,11 +162,11 @@ impl JS_Schema {
                         },
                         "\"" => {
                             if escaped == false {
-                                if is_quoted {
-                                    nesting -= 1;
-                                } else {
-                                    nesting += 1;
-                                }
+                                // if is_quoted {
+                                //     nesting -= 1;
+                                // } else {
+                                //     nesting += 1;
+                                // }
                                 is_quoted = !is_quoted;
                             }
                         },
@@ -266,11 +266,11 @@ impl JS_Schema {
                             },
                             "\"" => {
                                 if escaped == false {
-                                    if is_quoted {
-                                        nesting -= 1;
-                                    } else {
-                                        nesting += 1;
-                                    }
+                                    // if is_quoted {
+                                    //     nesting -= 1;
+                                    // } else {
+                                    //     nesting += 1;
+                                    // }
                                     is_quoted = !is_quoted;
                                 }
                             },
@@ -351,11 +351,11 @@ impl JS_Schema {
                             },
                             "\"" => {
                                 if escaped == false {
-                                    if is_quoted {
-                                        nesting -= 1;
-                                    } else {
-                                        nesting += 1;
-                                    }
+                                    // if is_quoted {
+                                    //     nesting -= 1;
+                                    // } else {
+                                    //     nesting += 1;
+                                    // }
                                     is_quoted = !is_quoted;
                                 }
                             },
@@ -447,11 +447,11 @@ impl JS_Schema {
                         },
                         "\"" => {
                             if escaped == false {
-                                if is_quoted {
-                                    nesting -= 1;
-                                } else {
-                                    nesting += 1;
-                                }
+                                // if is_quoted {
+                                //     nesting -= 1;
+                                // } else {
+                                //     nesting += 1;
+                                // }
                                 is_quoted = !is_quoted;
                             }
                         },

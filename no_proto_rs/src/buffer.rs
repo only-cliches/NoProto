@@ -1162,7 +1162,7 @@ impl<'buffer> NP_Buffer<'buffer> {
 
         let root = NP_Cursor::new(self.memory.root, 0, 0);
         let real_bytes = NP_Cursor::calc_size(0, &root, &self.memory)? + self.memory.root;
-        let total_size = self.memory.read_bytes().len();
+        let total_size = self.memory.length();
 
         if total_size >= real_bytes {
             return Ok(NP_Size_Data {
@@ -1173,6 +1173,12 @@ impl<'buffer> NP_Buffer<'buffer> {
         } else {
             return Err(NP_Error::new("Error calculating bytes!"));
         }
+    }
+
+    /// Get the number of bytes used by the buffer
+    /// 
+    pub fn buffer_length(&self) -> usize {
+        self.memory.length()
     }
 }
 

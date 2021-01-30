@@ -263,6 +263,10 @@ impl<'cursor> NP_Cursor {
         let mut path_index = 0usize;
         
         let mut loop_count = 0u16;
+
+        if memory.is_mutable() == false && make_path == true {
+            return Err(NP_Error::MemoryReadOnly)
+        }
     
         loop {
     
@@ -347,6 +351,10 @@ impl<'cursor> NP_Cursor {
     /// Set the max value at this cursor
     pub fn set_max<M: NP_Memory>(cursor: NP_Cursor, memory: &M) -> Result<bool, NP_Error> {
 
+        if memory.is_mutable() == false {
+            return Err(NP_Error::MemoryReadOnly)
+        }
+
         if cursor.parent_type == NP_Cursor_Parent::Tuple {
             memory.write_bytes()[cursor.buff_addr - 1] = 1;
         }
@@ -409,6 +417,10 @@ impl<'cursor> NP_Cursor {
 
     /// Set the min value at this cursor
     pub fn set_min<M: NP_Memory>(cursor: NP_Cursor, memory: &M) -> Result<bool, NP_Error> {
+
+        if memory.is_mutable() == false {
+            return Err(NP_Error::MemoryReadOnly)
+        }
 
         if cursor.parent_type == NP_Cursor_Parent::Tuple {
             memory.write_bytes()[cursor.buff_addr - 1] = 1;
@@ -513,6 +525,10 @@ impl<'cursor> NP_Cursor {
     /// 
     pub fn compact<M: NP_Memory, M2: NP_Memory>(depth: usize, from_cursor: NP_Cursor, from_memory: &M, to_cursor: NP_Cursor, to_memory: &M2) -> Result<NP_Cursor, NP_Error> {
 
+        if to_memory.is_mutable() == false {
+            return Err(NP_Error::MemoryReadOnly)
+        }
+
         if depth > 255 { return Err(NP_Error::RecursionLimit)}
 
         match from_memory.get_schema(from_cursor.schema_addr).get_type_key() {
@@ -589,6 +605,10 @@ impl<'cursor> NP_Cursor {
     /// Set a JSON value into the buffer
     pub fn set_from_json<M: NP_Memory>(depth: usize, apply_null: bool, cursor: NP_Cursor, memory: &M, json: &Box<NP_JSON>) -> Result<(), NP_Error> {
 
+        if memory.is_mutable() == false {
+            return Err(NP_Error::MemoryReadOnly)
+        }
+
         if depth > 255 { return Err(NP_Error::RecursionLimit) }
 
         // if apply_null is true, we should delete values where we find "null" or "undefined"
@@ -638,6 +658,10 @@ impl<'cursor> NP_Cursor {
     /// 
     pub fn delete<M: NP_Memory>(cursor: NP_Cursor, memory: &M) -> Result<bool, NP_Error> {
 
+        if memory.is_mutable() == false {
+            return Err(NP_Error::MemoryReadOnly)
+        }
+        
         if cursor.buff_addr == 0 {
             return Ok(false)
         }

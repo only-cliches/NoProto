@@ -19,7 +19,13 @@ use alloc::borrow::ToOwned;
 use super::{NP_Cursor, NP_Scalar};
 
 /// Defines the behavior of the union data type
-pub struct NP_Union(String);
+#[derive(Debug)]
+pub struct NP_Union {
+    /// The value of this union
+    pub value: Option<String>,
+    /// If the set value is a default
+    pub is_default: bool
+}
 
 
 impl<'value> NP_Scalar<'value> for NP_Union {
@@ -38,10 +44,12 @@ impl<'value> NP_Scalar<'value> for NP_Union {
 
 
 impl NP_Union {
+
     /// Select into a union type
     pub fn select<M: NP_Memory>(mut cursor: NP_Cursor, types: &Vec<(u8, String, usize)>,  key: &str, make_path: bool, schema_query: bool, memory: &M) -> Result<Option<NP_Cursor>, NP_Error> {
         match types.iter().position(|val| { val.1 == key }) {
             Some(x) => {
+
                 if schema_query {
                     let schema_value = &types[x];
                     cursor.parent_schema_addr = cursor.schema_addr;
@@ -55,15 +63,34 @@ impl NP_Union {
 
                 if addr_value == 0 { // no value here
                     if make_path { // need to make a new value
-
+                        // 1 byte for union value, 2 bytes for pointer
+                        let new_addr = memory.malloc_borrow(&[0u8; 3])?;
+                        union_value.set_addr_value(new_addr as u16);
                     } else { // found nothing
                         return Ok(None)
                     }
-                } else { // value exists
-                    
                 }
 
-                todo!()
+                let addr_value = union_value.get_addr_value() as usize;
+
+                let union_index = memory.read_bytes()[addr_value];
+
+                // nothing set at union and can't make value, so return None
+                if union_index == 0 && make_path == false {
+                    return Ok(None)
+                }
+
+                if union_index == 0 { // no value at this union yet
+                    // set index of union value
+                    memory.write_bytes()[addr_value] = (x as u8) + 1;
+                    // return cursor 
+                    return Ok(Some(NP_Cursor::new(addr_value + 1, types[x].2, cursor.schema_addr)))
+                } else if union_index == (x as u8) + 1 { // union value matches query
+                    // return cursor
+                    return Ok(Some(NP_Cursor::new(addr_value + 1, types[x].2, cursor.schema_addr)))
+                } else { // value is set by requested index does not match value in union
+                    return Ok(None);
+                }
             },
             None => return Ok(None)
         }
@@ -166,8 +193,8 @@ impl<'value> NP_Value<'value> for NP_Union {
             default: 0
         };
 
-        if column_data.len() > 255 {
-            return Err(NP_Error::new("Unions cannot have more than 255 types!"))
+        if column_data.len() > 254 {
+            return Err(NP_Error::new("Unions cannot have more than 254 types!"))
         }
 
         if column_data.len() == 0 {
@@ -317,7 +344,7 @@ fn schema_parsing_works() -> Result<(), NP_Error> {
     assert_eq!(schema, factory2.schema.to_json()?.stringify());
 
     Ok(())
-}
+} 
 
 // #[test]
 // fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
