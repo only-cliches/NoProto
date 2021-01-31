@@ -624,8 +624,7 @@ impl<'fact> NP_Factory<'fact> {
 
     /// Generate a new empty buffer from this factory.
     /// 
-    /// The first opional argument, capacity, can be used to set the space of the underlying Vec<u8> when it's created.  If you know you're going to be putting lots of data into the buffer, it's a good idea to set this to a large number comparable to the amount of data you're putting in.  The default is 1,024 bytes.
-    /// 
+    /// Make sure the mutable slice is large enough to fit all the data you plan on putting into it.
     /// 
     pub fn new_buffer_ref_mut<'buffer>(&'buffer self, bytes: &'buffer mut [u8]) -> NP_Buffer<NP_Memory_Ref_Mut> {
         NP_Buffer::_new(NP_Memory_Ref_Mut::new(bytes, &self.schema.parsed, DEFAULT_ROOT_PTR_ADDR))
