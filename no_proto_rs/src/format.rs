@@ -186,7 +186,7 @@
 //! let mut new_buffer = factory.empty_buffer(None);
 //! new_buffer.set(&["0"], 20u8)?;
 //! new_buffer.set(&["1"], "hello")?;
-//! assert_eq!(vec!0, 0, 0, 4, 1, 20, 1, 0, 14, 0, 0, 0, 0, 0, 0, 5, 104, 101, 108, 108, 111], new_buffer.close());
+//! assert_eq!(vec![0, 0, 0, 4, 1, 20, 1, 0, 14, 0, 0, 0, 0, 0, 0, 5, 104, 101, 108, 108, 111], new_buffer.close());
 //! 
 //! // [0, 0, 0, 4,   1, 20,   1, 0, 14, 0, 0, 0, 0, 0, 0, 5, 104, 101, 108, 108, 111]
 //! // [  root ptr,      u8,    str ptr,           u32,         h,   e,   l,   l,   o]

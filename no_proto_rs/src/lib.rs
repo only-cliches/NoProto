@@ -320,7 +320,6 @@ pub mod idl;
 pub mod pointer;
 pub mod collection;
 pub mod buffer;
-pub mod buffer_ro;
 pub mod schema;
 pub mod error;
 pub mod json_flex;
@@ -338,7 +337,7 @@ mod utils;
 extern crate alloc;
 
 use core::ops::{Deref, DerefMut};
-use crate::buffer_ro::NP_Buffer_RO;
+// use crate::buffer_ro::NP_Buffer_RO;
 use crate::memory::NP_Memory;
 use crate::json_flex::NP_JSON;
 use crate::schema::NP_Schema;
@@ -348,7 +347,7 @@ use buffer::{NP_Buffer, DEFAULT_ROOT_PTR_ADDR};
 use alloc::vec::Vec;
 use alloc::string::String;
 use idl::JS_Schema;
-use memory::{NP_Memory_ReadOnly, NP_Memory_Writable};
+use memory::{NP_Memory_Ref, NP_Memory_Ref_Mut, NP_Memory_Owned};
 use schema::NP_Parsed_Schema;
 
 /// Generate a path from a string.  The path must use dot notation between the path segments.
@@ -587,27 +586,40 @@ impl<'fact> NP_Factory<'fact> {
 
     /// Open existing Vec<u8> as buffer for this factory.  
     /// 
-    pub fn open_buffer<'buffer>(&'buffer self, bytes: Vec<u8>) -> NP_Buffer<'buffer> {
-        NP_Buffer::_new(NP_Memory_Writable::existing(bytes, &self.schema.parsed, DEFAULT_ROOT_PTR_ADDR))
+    pub fn open_buffer(&self, bytes: Vec<u8>) -> NP_Buffer<NP_Memory_Owned> {
+        NP_Buffer::_new(NP_Memory_Owned::existing(bytes, &self.schema.parsed, DEFAULT_ROOT_PTR_ADDR))
     }
 
-    /// Open existing buffer as ready only, much faster if you don't need to mutate anything.
+    /// Open existing buffer as ready only ref, can much faster if you don't need to mutate anything.
+    /// 
+    /// All operations that would lead to mutation fail.  You can't perform any mutations on a buffer opened with this method.
     /// 
     /// Also, read only buffers are `Sync` and `Send` so good for multithreaded environments.
     /// 
-    pub fn open_buffer_ro<'buffer>(&'buffer self, bytes: &'buffer [u8]) -> NP_Buffer_RO<'buffer> {
-        NP_Buffer_RO::_new(NP_Memory_ReadOnly::existing(bytes, &self.schema.parsed, DEFAULT_ROOT_PTR_ADDR))
+    pub fn open_buffer_ref<'buffer>(&'buffer self, bytes: &'buffer [u8]) -> NP_Buffer<NP_Memory_Ref<'buffer>> {
+        NP_Buffer::_new(NP_Memory_Ref::existing(bytes, &self.schema.parsed, DEFAULT_ROOT_PTR_ADDR))
+    }
+
+    /// Open existing buffer as mutable ref, can be much faster to skip copying.  The `data_len` property is how many bytes the data in the buffer is using up.
+    /// 
+    /// Some mutations cannot be done without appending bytes to the existing buffer.  Since it's impossible to append bytes to a `&mut [u8]` type, you should provide mutable slice with extra bytes on the end if you plan to mutate the buffer.
+    /// 
+    /// The `data_len` is at which byte the data ends in the buffer, this will be moved as needed by compaction and mutation operations.  
+    /// 
+    /// If the `&mut [u8]` type has the same length as `data_len`, mutations that require additional bytes will fail. `&mut [u8].len() - data_len` is how many bytes the buffer has for new allocations.
+    /// 
+    /// 
+    pub fn open_buffer_ref_mut<'buffer>(&'buffer self, bytes: &'buffer mut [u8], data_len: usize) -> NP_Buffer<NP_Memory_Ref_Mut> {
+        NP_Buffer::_new(NP_Memory_Ref_Mut::existing(bytes, data_len, &self.schema.parsed, DEFAULT_ROOT_PTR_ADDR))
     }
 
     /// Generate a new empty buffer from this factory.
     /// 
     /// The first opional argument, capacity, can be used to set the space of the underlying Vec<u8> when it's created.  If you know you're going to be putting lots of data into the buffer, it's a good idea to set this to a large number comparable to the amount of data you're putting in.  The default is 1,024 bytes.
     /// 
-    /// The second optional argument, ptr_size, controls how much address space you get in the buffer and how large the addresses are.  Every value in the buffer contains at least one address, sometimes more.  `NP_Size::U16` (the default) gives you an address space of just over 16KB but is more space efficeint since the address pointers are only 2 bytes each.  `NP_Size::U32` gives you an address space of just over 4GB, but the addresses take up twice as much space in the buffer compared to `NP_Size::U16`.
-    /// You can change the address size through compaction after the buffer is created, so it's fine to start with a smaller address space and convert it to a larger one later as needed.  It's also possible to go the other way, you can convert larger address space down to a smaller one durring compaction.
     /// 
-    pub fn empty_buffer<'buffer>(&'buffer self, capacity: Option<usize>) -> NP_Buffer<'buffer> {
-        NP_Buffer::_new(NP_Memory_Writable::new(capacity, &self.schema.parsed, DEFAULT_ROOT_PTR_ADDR))
+    pub fn empty_buffer<'buffer>(&'buffer self, capacity: Option<usize>) -> NP_Buffer<NP_Memory_Owned> {
+        NP_Buffer::_new(NP_Memory_Owned::new(capacity, &self.schema.parsed, DEFAULT_ROOT_PTR_ADDR))
     }
 
     /// Convert a regular buffer into a packed buffer. A "packed" buffer contains the schema and the buffer data together.
@@ -616,9 +628,9 @@ impl<'fact> NP_Factory<'fact> {
     /// 
     /// The schema is stored in a very compact, binary format.  A JSON version of the schema can be generated from the binary version at any time.
     /// 
-    pub fn pack_buffer<'open>(&self, buffer: NP_Buffer) -> NP_Packed_Buffer<'open> {
+    pub fn pack_buffer(&self, buffer: NP_Buffer<NP_Memory_Owned>) -> NP_Packed_Buffer {
         NP_Packed_Buffer {
-            buffer: NP_Buffer::_new(NP_Memory_Writable::existing_owned(buffer.close(), self.schema.parsed.clone(), DEFAULT_ROOT_PTR_ADDR)),
+            buffer: NP_Buffer::_new(NP_Memory_Owned::existing(buffer.close(), unsafe { &self.schema.parsed as *const Vec<NP_Parsed_Schema> }, DEFAULT_ROOT_PTR_ADDR)),
             schema_bytes: self.export_schema_bytes().to_vec(),
             schema: self.schema.clone()
         }
@@ -626,14 +638,14 @@ impl<'fact> NP_Factory<'fact> {
 }
 
 /// Packed Buffer Container
-pub struct NP_Packed_Buffer<'packed> {
-    buffer: NP_Buffer<'packed>,
+pub struct NP_Packed_Buffer {
+    buffer: NP_Buffer<NP_Memory_Owned>,
     schema_bytes: Vec<u8>,
     /// Schema data for this packed buffer
     pub schema: NP_Schema
 }
 
-impl<'packed> NP_Packed_Buffer<'packed> {
+impl NP_Packed_Buffer {
 
     /// Open a packed buffer
     pub fn open(buffer: Vec<u8>) -> Result<Self, NP_Error> {
@@ -652,7 +664,7 @@ impl<'packed> NP_Packed_Buffer<'packed> {
         let buffer_bytes = &buffer[(3 + schema_len)..];
 
         Ok(Self {
-            buffer: NP_Buffer::_new(NP_Memory_Writable::existing_owned(buffer_bytes.to_vec(), schema.clone(), DEFAULT_ROOT_PTR_ADDR)),
+            buffer: NP_Buffer::_new(NP_Memory_Owned::existing(buffer_bytes.to_vec(), unsafe { &schema as *const Vec<NP_Parsed_Schema> }, DEFAULT_ROOT_PTR_ADDR)),
             schema_bytes: schema_bytes.to_vec(),
             schema: NP_Schema {
                 is_sortable: is_sortable,
@@ -676,7 +688,7 @@ impl<'packed> NP_Packed_Buffer<'packed> {
     }
 
     /// Convert this packed buffer into a regular buffer
-    pub fn into_buffer(self) -> NP_Buffer<'packed> {
+    pub fn into_buffer(self) -> NP_Buffer<NP_Memory_Owned> {
         self.buffer
     }
 
@@ -684,17 +696,29 @@ impl<'packed> NP_Packed_Buffer<'packed> {
     pub fn export_schema_bytes(&self) -> &[u8] {
         &self.schema_bytes[..]
     }
+
+    /// Exports this schema to ES6 IDL.  This works regardless of how the initial buffer schema was created.
+    /// 
+    pub fn export_schema_idl(&self) -> Result<String, NP_Error> {
+        self.schema.to_idl()
+    }
+
+    /// Exports this schema to JSON.  This works regardless of how the initial buffer schema was created.
+    /// 
+    pub fn export_schema_json(&self) -> Result<NP_JSON, NP_Error> {
+        self.schema.to_json()
+    }
 }
 
-impl<'packed> Deref for NP_Packed_Buffer<'packed> {
-    type Target = NP_Buffer<'packed>;
+impl Deref for NP_Packed_Buffer {
+    type Target = NP_Buffer<NP_Memory_Owned>;
 
     fn deref(&self) -> &Self::Target {
         &self.buffer
     }
 }
 
-impl<'packed> DerefMut for NP_Packed_Buffer<'packed> {
+impl DerefMut for NP_Packed_Buffer {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.buffer
     }

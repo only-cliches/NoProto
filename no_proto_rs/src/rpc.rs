@@ -293,7 +293,7 @@
 //! 
 
 use alloc::str::from_utf8_unchecked;
-use crate::{NP_Schema_Bytes, hashmap::{SEED, murmurhash3_x86_32}};
+use crate::{NP_Schema_Bytes, hashmap::{SEED, murmurhash3_x86_32}, memory::NP_Memory_Owned};
 
 use crate::{hashmap::NP_HashMap, pointer::uuid::NP_UUID, utils::opt_err};
 use crate::NP_Factory;
@@ -1129,8 +1129,8 @@ pub struct NP_RPC_Request<'request> {
     /// the name of the rpc function
     rpc: NP_Str_Addr,
     /// the request data
-    pub data: NP_Buffer<'request>,
-    empty: NP_Buffer<'request>
+    pub data: NP_Buffer<NP_Memory_Owned>,
+    empty: NP_Buffer<NP_Memory_Owned>
 }
 
 impl<'request> NP_RPC_Request<'request> {
@@ -1209,9 +1209,9 @@ pub struct NP_RPC_Response<'response> {
     rpc: NP_Str_Addr,
     spec: &'response NP_RPC_Specification<'response> ,
     /// the data of this response
-    pub data: NP_Buffer<'response>,
+    pub data: NP_Buffer<NP_Memory_Owned>,
     /// if this is an error, the error data
-    pub error: NP_Buffer<'response>
+    pub error: NP_Buffer<NP_Memory_Owned>
 }
 
 

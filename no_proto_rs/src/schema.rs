@@ -811,7 +811,7 @@ use crate::idl::{JS_AST, JS_Schema};
 use crate::{np_path, pointer::{NP_Cursor, union::NP_Union}};
 use alloc::string::String;
 use core::{fmt::Debug};
-use crate::{buffer::DEFAULT_ROOT_PTR_ADDR, json_flex::NP_JSON, memory::NP_Memory_Writable, pointer::{portal::{NP_Portal}, ulid::NP_ULID, uuid::NP_UUID}};
+use crate::{buffer::DEFAULT_ROOT_PTR_ADDR, json_flex::NP_JSON, memory::NP_Memory_Owned, pointer::{portal::{NP_Portal}, ulid::NP_ULID, uuid::NP_UUID}};
 use crate::pointer::any::NP_Any;
 use crate::pointer::date::NP_Date;
 use crate::pointer::geo::NP_Geo;
@@ -1220,7 +1220,7 @@ impl NP_Schema {
     /// Scan the schema for portals and resolve their locations
     pub fn resolve_portals(parsed: Vec<NP_Parsed_Schema>) -> Result<Vec<NP_Parsed_Schema>, NP_Error> {
 
-        let temp_memory = NP_Memory_Writable::new(None, &parsed, DEFAULT_ROOT_PTR_ADDR);
+        let temp_memory = NP_Memory_Owned::new(None, &parsed, DEFAULT_ROOT_PTR_ADDR);
 
         let mut completed: Vec<NP_Parsed_Schema> = Vec::with_capacity(parsed.len());
 

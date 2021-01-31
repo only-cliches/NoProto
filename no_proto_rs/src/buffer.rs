@@ -1,10 +1,10 @@
 //! Top level abstraction for buffer objects
 
 use alloc::prelude::v1::Box;
-use crate::{json_decode, json_flex::JSMAP, pointer::NP_Cursor_Parent};
+use crate::{json_decode, json_flex::JSMAP, memory::{NP_Mem_New, NP_Memory_Kind}, pointer::NP_Cursor_Parent};
 use alloc::string::String;
 use crate::{NP_Size_Data, schema::NP_TypeKeys};
-use crate::{memory::NP_Memory_Writable, utils::opt_err};
+use crate::{memory::NP_Memory_Owned, utils::opt_err};
 use crate::collection::tuple::NP_Tuple;
 
 use crate::{pointer::{NP_Scalar}};
@@ -35,13 +35,13 @@ pub const VTABLE_BYTES: usize = 10;
 /// 
 /// 
 #[derive(Debug)]
-pub struct NP_Buffer<'buffer> {
+pub struct NP_Buffer<M: NP_Memory + Clone + NP_Mem_New> {
     /// Schema data used by this buffer
-    memory: NP_Memory_Writable<'buffer>,
+    memory: M,
     cursor: NP_Cursor
 }
 
-impl<'buffer> Clone for NP_Buffer<'buffer> {
+impl<M: NP_Memory + Clone + NP_Mem_New> Clone for NP_Buffer<M> {
     fn clone(&self) -> Self {
         Self {
             memory: self.memory.clone(),
@@ -50,13 +50,13 @@ impl<'buffer> Clone for NP_Buffer<'buffer> {
     }
 }
 
-impl<'buffer> NP_Buffer<'buffer> {
+impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
 
     #[doc(hidden)]
-    pub fn _new(memory: NP_Memory_Writable<'buffer>) -> Self { // make new buffer
+    pub fn _new(memory: M) -> Self { // make new buffer
 
         NP_Buffer {
-            cursor: NP_Cursor::new(memory.root, 0, 0),
+            cursor: NP_Cursor::new(memory.get_root(), 0, 0),
             memory: memory
         }
     }
@@ -102,7 +102,11 @@ impl<'buffer> NP_Buffer<'buffer> {
 
     }
 
-    /// Moves the underlying bytes out of the buffer, consuming the buffer in the process.
+    /// Closes the buffer.
+    /// 
+    /// If the buffer is an onwed type typically opened with `.open_buffer` or created with `.new_empty` you will get the bytes of the buffer returned from this method.
+    /// 
+    /// If the buffer is a ref type typically opened with `.open_buffer_ref` or `.open_buffer_ref_mut` this method returns an empty `Vec<u8>`.
     /// 
     /// ```
     /// use no_proto::error::NP_Error;
@@ -153,7 +157,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// Moves cursor position to root of buffer, the default.
     /// 
     pub fn cursor_to_root(&mut self) {
-        self.cursor = NP_Cursor::new(self.memory.root, 0, 0);
+        self.cursor = NP_Cursor::new(self.memory.get_root(), 0, 0);
     }
 
     /// Set the max value allowed for the specific data type at the given key.
@@ -339,7 +343,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// let mut new_buffer = factory.empty_buffer(None);
     /// new_buffer.set_with_json(&[], r#"{"value": ["foo", "bar", null, "baz"]}"#)?;
     ///    
-    /// assert_eq!(new_buffer.length(&[])?, Some(4));
+    /// assert_eq!(new_buffer.get_length(&[])?, Some(4));
     /// assert_eq!(new_buffer.get::<&str>(&["0"])?, Some("foo"));
     /// assert_eq!(new_buffer.get::<&str>(&["1"])?, Some("bar"));
     /// assert_eq!(new_buffer.get::<&str>(&["2"])?, None);
@@ -518,7 +522,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// # Ok::<(), NP_Error>(()) 
     /// ```
     /// 
-    pub fn get_collection<'iter>(&'iter self, path: &'iter [&str]) -> Result<Option<NP_Generic_Iterator<'iter>>, NP_Error> {
+    pub fn get_collection<'iter>(&'iter self, path: &'iter [&str]) -> Result<Option<NP_Generic_Iterator<'iter, M>>, NP_Error> {
 
         let value = NP_Cursor::select(&self.memory, self.cursor.clone(), false, false, path)?;
 
@@ -589,7 +593,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// # Ok::<(), NP_Error>(()) 
     /// ```
     /// 
-    pub fn list_push<X: 'buffer>(&mut self, path: &[&str], value: X) -> Result<Option<u16>, NP_Error> where X: NP_Value<'buffer> + NP_Scalar<'buffer> {
+    pub fn list_push<'push, X: 'push>(&mut self, path: &[&str], value: X) -> Result<Option<u16>, NP_Error> where X: NP_Value<'push> + NP_Scalar<'push> {
 
         let list_cursor = if path.len() == 0 { self.cursor.clone() } else { match NP_Cursor::select(&self.memory, self.cursor.clone(), true, false, path)? {
             Some(x) => x,
@@ -646,7 +650,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// // set initial value
     /// new_buffer.set(&[], "hello")?;
     /// // get length of value at root (String)
-    /// assert_eq!(new_buffer.length(&[])?, Some(5));
+    /// assert_eq!(new_buffer.get_length(&[])?, Some(5));
     /// 
     /// # Ok::<(), NP_Error>(()) 
     /// ```
@@ -666,7 +670,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// // set value at 9th index
     /// new_buffer.set(&["9"], "hello")?;
     /// // get length of value at root (List)
-    /// assert_eq!(new_buffer.length(&[])?, Some(10));
+    /// assert_eq!(new_buffer.get_length(&[])?, Some(10));
     /// 
     /// # Ok::<(), NP_Error>(()) 
     /// ```
@@ -687,7 +691,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// 
     /// let mut new_buffer = factory.empty_buffer(None);
     /// // get length of value at root (Table)
-    /// assert_eq!(new_buffer.length(&[])?, Some(2));
+    /// assert_eq!(new_buffer.get_length(&[])?, Some(2));
     /// 
     /// # Ok::<(), NP_Error>(()) 
     /// ```
@@ -708,7 +712,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// new_buffer.set(&["foo"], "bar")?;
     /// new_buffer.set(&["foo2"], "bar2")?;
     /// // get length of value at root (Map)
-    /// assert_eq!(new_buffer.length(&[])?, Some(2));
+    /// assert_eq!(new_buffer.get_length(&[])?, Some(2));
     /// 
     /// # Ok::<(), NP_Error>(()) 
     /// ```
@@ -729,12 +733,12 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// 
     /// let mut new_buffer = factory.empty_buffer(None);
     /// // get length of value at root (Tuple)
-    /// assert_eq!(new_buffer.length(&[])?, Some(2));
+    /// assert_eq!(new_buffer.get_length(&[])?, Some(2));
     /// 
     /// # Ok::<(), NP_Error>(()) 
     /// ```
     /// 
-    pub fn length(&self, path: &[&str]) -> Result<Option<usize>, NP_Error> {
+    pub fn get_length(&self, path: &[&str]) -> Result<Option<usize>, NP_Error> {
         let value_cursor = NP_Cursor::select(&self.memory, self.cursor.clone(), false, false, path)?;
 
         let found_cursor = if let Some(x) = value_cursor {
@@ -1058,7 +1062,7 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// # Ok::<(), NP_Error>(()) 
     /// ```
     /// 
-    pub fn maybe_compact<F>(&mut self, new_capacity: Option<u32>, mut callback: F) -> Result<(), NP_Error> where F: FnMut(NP_Size_Data) -> bool {
+    pub fn maybe_compact<F>(&mut self, new_capacity: Option<usize>, mut callback: F) -> Result<(), NP_Error> where F: FnMut(NP_Size_Data) -> bool {
 
         let bytes_data = self.calc_bytes()?;
 
@@ -1073,6 +1077,10 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// This is a pretty expensive operation (requires full copy of the whole buffer) so should be done sparingly.
     /// 
     /// The first argument, new_capacity, is the capacity of the underlying Vec<u8> that we'll be copying the data into.  The default is the size of the old buffer.
+    /// 
+    /// - If this buffer is an owned type typically created with `empty_buffer` or opened with `open_buffer` the comapction will occur into the existing buffer. 
+    /// - If this buffer is a ref type typically opened with `open_buffer_ref` the compaction will fail.  Use `compact_into` instead.
+    /// - If this buffer is a mutable ref type typically opened with `open_buffer_ref_mut` the compaction will ocurr into the existing buffer and the length will be updated.
     /// 
     /// **WARNING** Your cursor location will be reset to the root.
     /// 
@@ -1114,25 +1122,79 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// # Ok::<(), NP_Error>(()) 
     /// ```
     /// 
-    pub fn compact<'compact>(&mut self, new_capacity: Option<u32>) -> Result<(), NP_Error> {
+    pub fn compact<'compact>(&mut self, new_capacity: Option<usize>) -> Result<(), NP_Error> {
 
-        let capacity = match new_capacity {
+        let capacity = Some(match new_capacity {
             Some(x) => { x as usize },
             None => self.memory.read_bytes().len()
-        };
+        });
 
-        let old_root = NP_Cursor::new(self.memory.root, 0, 0);
+        let old_root = NP_Cursor::new(self.memory.get_root(), 0, 0);
+        let new_root  = NP_Cursor::new(self.memory.get_root(), 0, 0);
 
-        let new_bytes = NP_Memory_Writable::new_owned(Some(capacity), self.memory.schema.get().clone(), self.memory.root);
-        let new_root  = NP_Cursor::new(self.memory.root, 0, 0);
+        // comapcting a RefMut buffer, we have to compact into a Vec<u8>, then write it back into the RefMut
+        if let NP_Memory_Kind::RefMut { .. } = self.memory.kind() {
+            let new_bytes = NP_Memory_Owned::new(capacity, unsafe { self.memory.get_schemas() as *const Vec<NP_Parsed_Schema> }, self.memory.get_root());
+            NP_Cursor::compact(0, old_root, &self.memory, new_root, &new_bytes)?;
+
+            let new_length = new_bytes.length();
+            let read_bytes = new_bytes.read_bytes();
+            let memory = self.memory.write_bytes();
+
+            for x in 0..memory.len() {
+                if x < new_length {
+                    memory[x] = read_bytes[x];
+                } else {
+                    memory[x] = 0;
+                }
+            }
+
+            self.memory.set_length(new_length)?;
+
+        // compacting from one owned buffer into itself
+        } else {
+            let new_bytes = self.memory.new_empty(capacity)?;
+            NP_Cursor::compact(0, old_root, &self.memory, new_root, &new_bytes)?;
+            self.memory = new_bytes;
+        }
+
+        self.cursor = NP_Cursor::new(self.memory.get_root(), 0, 0);
+
+        Ok(())
+    }
+
+    /// Compact the current buffer into a new owned buffer.
+    /// Returns an owned buffer of the compacted result.
+    /// 
+    /// This works identically to `.compact` except compaction happens into a new buffer, instead of into the existing buffer.
+    /// 
+    /// If the buffer was opened with as read only with `.open_buffer_ref` this is the only way to do compaction.
+    /// 
+    pub fn compact_into(&mut self, new_capacity: Option<usize>) -> Result<NP_Buffer<NP_Memory_Owned>, NP_Error> {
+
+        let capacity = Some(match new_capacity {
+            Some(x) => { x as usize },
+            None => self.memory.read_bytes().len()
+        });
+
+        let old_root = NP_Cursor::new(self.memory.get_root(), 0, 0);
+
+        let new_bytes = NP_Memory_Owned::new(capacity, unsafe { self.memory.get_schemas() as *const Vec<NP_Parsed_Schema> }, self.memory.get_root());
+        let new_root  = NP_Cursor::new(self.memory.get_root(), 0, 0);
 
         NP_Cursor::compact(0, old_root, &self.memory, new_root, &new_bytes)?;
 
-        self.cursor = NP_Cursor::new(self.memory.root, 0, 0);
+        self.cursor = NP_Cursor::new(self.memory.get_root(), 0, 0);
 
-        self.memory = new_bytes;
+        Ok(NP_Buffer::_new(new_bytes))
+    }
 
-        Ok(())
+    /// Copy the current buffer into a new owned buffer.
+    /// 
+    pub fn copy_buffer(&self) -> NP_Buffer<NP_Memory_Owned> {
+        let copy_bytes = self.memory.read_bytes().to_vec();
+        let new_memory = NP_Memory_Owned::existing(copy_bytes, unsafe { self.memory.get_schemas() as *const Vec<NP_Parsed_Schema> }, self.memory.get_root());
+        NP_Buffer::_new(new_memory)
     }
 
     /// Recursively measures how many bytes each element in the buffer is using.
@@ -1160,8 +1222,8 @@ impl<'buffer> NP_Buffer<'buffer> {
     /// 
     pub fn calc_bytes<'bytes>(&self) -> Result<NP_Size_Data, NP_Error> {
 
-        let root = NP_Cursor::new(self.memory.root, 0, 0);
-        let real_bytes = NP_Cursor::calc_size(0, &root, &self.memory)? + self.memory.root;
+        let root = NP_Cursor::new(self.memory.get_root(), 0, 0);
+        let real_bytes = NP_Cursor::calc_size(0, &root, &self.memory)? + self.memory.get_root();
         let total_size = self.memory.length();
 
         if total_size >= real_bytes {
@@ -1175,15 +1237,15 @@ impl<'buffer> NP_Buffer<'buffer> {
         }
     }
 
-    /// Get the number of bytes used by the buffer
+    /// Get the number of bytes used by the data in this buffer.
     /// 
-    pub fn buffer_length(&self) -> usize {
+    pub fn length(&self) -> usize {
         self.memory.length()
     }
 }
 
 /// NP Item
-pub struct NP_Item<'item> {
+pub struct NP_Item<'item, M: NP_Memory> {
     /// index of this value
     pub index: usize,
     /// Key at this index
@@ -1193,10 +1255,10 @@ pub struct NP_Item<'item> {
     /// Cursor value
     cursor: Option<NP_Cursor>,
     parent: NP_Cursor,
-    memory: &'item NP_Memory_Writable<'item>
+    memory: &'item M
 }
 
-impl<'item> NP_Item<'item> {
+impl<'item, M: NP_Memory> NP_Item<'item, M> {
 
     /// If this item has a value
     pub fn has_value(&self) -> bool {
@@ -1232,6 +1294,11 @@ impl<'item> NP_Item<'item> {
 
     /// Set value at this pointer
     pub fn set<X>(&'item mut self, value: X) -> Result<(), NP_Error> where X: NP_Value<'item> + NP_Scalar<'item> {
+
+        if self.memory.is_mutable() == false {
+            return Err(NP_Error::MemoryReadOnly)
+        }
+
         if let Some(cursor) = self.cursor {
             X::set_value(cursor.clone(), self.memory, value)?;
         } else {
@@ -1258,6 +1325,11 @@ impl<'item> NP_Item<'item> {
 
     /// Clear the value at this pointer
     pub fn del(&'item mut self) -> bool {
+
+        if self.memory.is_mutable() == false {
+            return false
+        }
+         
         if let Some(cursor) = self.cursor {
             let value = cursor.get_value(self.memory);
             value.set_addr_value(0);
@@ -1312,16 +1384,16 @@ impl<'col> NP_Iterator_Collection<'col> {
 }
 
 #[allow(missing_docs)]
-pub struct NP_Generic_Iterator<'it> {
+pub struct NP_Generic_Iterator<'it, M: NP_Memory> {
     root: NP_Cursor,
     value: NP_Iterator_Collection<'it>,
-    memory: &'it NP_Memory_Writable<'it>,
+    memory: &'it M,
     index: usize
 }
 
 #[allow(missing_docs)]
-impl<'it> NP_Generic_Iterator<'it> {
-    pub fn new(cursor: NP_Cursor, memory: &'it NP_Memory_Writable<'it>) -> Result<Self, NP_Error> {
+impl<'it, M: NP_Memory> NP_Generic_Iterator<'it, M> {
+    pub fn new(cursor: NP_Cursor, memory: &'it M) -> Result<Self, NP_Error> {
         Ok(Self { 
             root: cursor.clone(),
             value: NP_Iterator_Collection::new(cursor.clone(), memory)?,
@@ -1332,8 +1404,8 @@ impl<'it> NP_Generic_Iterator<'it> {
 }
 
 
-impl<'it> Iterator for NP_Generic_Iterator<'it> {
-    type Item = NP_Item<'it>;
+impl<'it, M: NP_Memory> Iterator for NP_Generic_Iterator<'it, M> {
+    type Item = NP_Item<'it, M>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match &mut self.value {
