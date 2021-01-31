@@ -240,6 +240,10 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
     /// ```
     /// 
     pub fn set_max(&mut self, path: &[&str]) -> Result<bool, NP_Error> {
+        if self.mutable == false {
+            return Err(NP_Error::MemoryReadOnly)
+        }
+        
         let value_cursor = NP_Cursor::select(&self.memory, self.cursor.clone(), self.mutable, false, path)?;
         match value_cursor {
             Some(x) => {
@@ -296,6 +300,11 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
     /// ```
     /// 
     pub fn set_min(&mut self, path: &[&str]) -> Result<bool, NP_Error> {
+
+        if self.mutable == false {
+            return Err(NP_Error::MemoryReadOnly)
+        }
+
         let value_cursor = NP_Cursor::select(&self.memory, self.cursor.clone(), self.mutable, false, path)?;
         match value_cursor {
             Some(x) => {
@@ -395,6 +404,11 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
     /// ```
     /// 
     pub fn set_with_json<S: Into<String>>(&mut self, path: &[&str], json_value: S) -> Result<bool, NP_Error> {
+
+        if self.mutable == false {
+            return Err(NP_Error::MemoryReadOnly)
+        }
+
         let value_cursor = NP_Cursor::select(&self.memory, self.cursor.clone(), self.mutable, false, path)?;
         match value_cursor {
             Some(x) => {
@@ -562,7 +576,7 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
     /// 
     pub fn get_collection<'iter>(&'iter self, path: &'iter [&str]) -> Result<Option<NP_Generic_Iterator<'iter, M>>, NP_Error> {
 
-        let value = NP_Cursor::select(&self.memory, self.cursor.clone(), self.mutable, false, path)?;
+        let value = NP_Cursor::select(&self.memory, self.cursor.clone(), false, false, path)?;
 
         let value = if let Some(x) = value {
             x
@@ -633,14 +647,14 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
     /// 
     pub fn list_push<'push, X: 'push>(&mut self, path: &[&str], value: X) -> Result<Option<u16>, NP_Error> where X: NP_Value<'push> + NP_Scalar<'push> {
 
-        let list_cursor = if path.len() == 0 { self.cursor.clone() } else { match NP_Cursor::select(&self.memory, self.cursor.clone(), self.mutable, false, path)? {
-            Some(x) => x,
-            None => return Ok(None)
-        }};
-
         if self.mutable == false {
             return Err(NP_Error::MemoryReadOnly)
         }
+
+        let list_cursor = if path.len() == 0 { self.cursor.clone() } else { match NP_Cursor::select(&self.memory, self.cursor.clone(), true, false, path)? {
+            Some(x) => x,
+            None => return Ok(None)
+        }};
 
         match &self.memory.get_schema(list_cursor.schema_addr) {
             NP_Parsed_Schema::List { of, .. } => {
@@ -879,6 +893,10 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
     /// ```
     /// 
     pub fn del(&mut self, path: &[&str]) -> Result<bool, NP_Error> {
+
+        if self.mutable == false {
+            return Err(NP_Error::MemoryReadOnly)
+        }
 
         let value_cursor = NP_Cursor::select(&self.memory, self.cursor.clone(), false, false, path)?;
         
@@ -1173,6 +1191,10 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
     /// ```
     /// 
     pub fn compact<'compact>(&mut self, new_capacity: Option<usize>) -> Result<(), NP_Error> {
+
+        if self.mutable == false {
+            return Err(NP_Error::MemoryReadOnly)
+        }
 
         let capacity = Some(match new_capacity {
             Some(x) => { x as usize },
