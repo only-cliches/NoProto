@@ -643,7 +643,7 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let factory = crate::NP_Factory::new_json(schema)?;
 
     // compaction removes cleared values
-    let mut buffer = factory.empty_buffer(None);
+    let mut buffer = factory.new_buffer(None);
     buffer.set(&["name"], "hello")?;
     assert_eq!(buffer.get::<&str>(&["name"])?, Some("hello"));
     assert_eq!(buffer.calc_bytes()?.after_compaction, buffer.calc_bytes()?.current_buffer);
@@ -653,7 +653,7 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);
 
     // good values are preserved through compaction
-    let mut buffer = factory.empty_buffer(None);
+    let mut buffer = factory.new_buffer(None);
     buffer.set(&crate::np_path!("name"), "hello")?;
     assert_eq!(buffer.get::<&str>(&["name"])?, Some("hello"));
     assert_eq!(buffer.calc_bytes()?.current_buffer, 21usize);
@@ -688,14 +688,14 @@ fn test_vtables() -> Result<(), NP_Error> {
     }"#)?;
 
     // compaction removes cleared values
-    let mut buffer = factory.empty_buffer(None);
+    let mut buffer = factory.new_buffer(None);
     buffer.set(&["age"], 20u8)?;
     buffer.set(&["name"], "hello")?;
     buffer.set(&["color"], "blue")?;
     buffer.set(&["car"], "Chevy")?;
     buffer.set(&["rating"], 98u8)?;
 
-    let mut new_buffer = factory.open_buffer(buffer.close());
+    let mut new_buffer = factory.open_buffer(buffer.finish().bytes());
     assert_eq!(new_buffer.get::<u8>(&["age"])?.unwrap(), 20u8);
     assert_eq!(new_buffer.get::<&str>(&["name"])?.unwrap(), "hello");
     assert_eq!(new_buffer.get::<&str>(&["color"])?.unwrap(), "blue");

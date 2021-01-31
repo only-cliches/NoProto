@@ -589,7 +589,7 @@ fn schema_parsing_works() -> Result<(), NP_Error> {
 fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = r#"{"type":"tuple","values":[{"type":"string"},{"type":"uuid"},{"type":"uint8"}]}"#;
     let factory = crate::NP_Factory::new_json(schema)?;
-    let mut buffer = factory.empty_buffer(None);
+    let mut buffer = factory.new_buffer(None);
     buffer.set(&["0"], "hello")?;
     assert_eq!(buffer.get::<&str>(&["0"])?, Some("hello"));
     assert_eq!(buffer.calc_bytes()?.after_compaction, buffer.calc_bytes()?.current_buffer);
@@ -610,7 +610,7 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
 fn sorting_tuples_works() -> Result<(), NP_Error> {
     let schema = r#"{"type":"tuple","values":[{"type":"string","size":10},{"type":"uuid"},{"type":"uint8"}],"sorted":true}"#;
     let factory = crate::NP_Factory::new_json(schema)?;
-    let mut buffer = factory.empty_buffer(None);
+    let mut buffer = factory.new_buffer(None);
     buffer.set_min(&[])?;
     assert_eq!(buffer.read_bytes(), &[0, 0, 0, 4, 1, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0]);
     buffer.set(&["0"], "hello")?;

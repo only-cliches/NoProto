@@ -20,6 +20,7 @@ pub trait NP_Memory {
     fn set_length(&mut self, _len: usize) -> Result<(), NP_Error> {
         Err(NP_Error::Unreachable)
     }
+    fn set_max_length(&mut self, len: usize);
     fn is_mutable(&self) -> bool;
     fn get_root(&self) -> usize;
     fn get_schemas(&self) -> &Vec<NP_Parsed_Schema>;
@@ -73,14 +74,15 @@ pub enum WritableBytes<'writable> {
 pub struct NP_Memory_Owned {
     bytes: UnsafeCell<Vec<u8>>,
     pub root: usize,
-    pub schema: *const Vec<NP_Parsed_Schema>
-    // pub schema: SchemaVec<'memory>
+    pub schema: *const Vec<NP_Parsed_Schema>,
+    pub max_size: usize
 }
 
 impl Clone for NP_Memory_Owned {
     fn clone(&self) -> Self {
         Self {
             root: self.root,
+            max_size: self.max_size,
             bytes: UnsafeCell::new(self.read_bytes().to_vec()),
             schema: self.schema.clone()
         }
@@ -95,20 +97,11 @@ impl NP_Memory_Owned {
 
         Self {
             root,
+            max_size: u16::MAX as usize,
             bytes: UnsafeCell::new(bytes),
             schema: schema
         }
     }
-
-    // #[inline(always)]
-    // pub fn existing_owned(bytes: Vec<u8>, schema: Vec<NP_Parsed_Schema>, root: usize) -> Self {
-
-    //     Self {
-    //         root,
-    //         bytes: UnsafeCell::new(bytes),
-    //         schema: SchemaVec::Owned(schema)
-    //     }
-    // }
 
     #[inline(always)]
     pub fn new(capacity: Option<usize>, schema: *const Vec<NP_Parsed_Schema>, root: usize) -> Self {
@@ -124,29 +117,11 @@ impl NP_Memory_Owned {
 
         Self {
             root,
+            max_size: u16::MAX as usize,
             bytes: UnsafeCell::new(new_bytes),
             schema: schema
         }
     }
-
-    // #[inline(always)]
-    // pub fn new_owned(capacity: Option<usize>, schema: Vec<NP_Parsed_Schema>, root: usize) -> Self {
-    //     let use_size = match capacity {
-    //         Some(x) => x,
-    //         None => 1024
-    //     };
-
-    //     let mut new_bytes = Vec::with_capacity(use_size);
-
-    //     // is_packed, size, root pointer
-    //     new_bytes.extend(&[0u8; 4]);
-
-    //     Self {
-    //         root,
-    //         bytes: UnsafeCell::new(new_bytes),
-    //         schema: SchemaVec::Owned(schema)
-    //     }
-    // }
 
 }
 
@@ -164,6 +139,7 @@ impl<'memory> NP_Mem_New for NP_Memory_Owned {
 
         Ok(Self {
             root: self.get_root(),
+            max_size: u16::MAX as usize,
             bytes: UnsafeCell::new(new_bytes),
             schema: self.schema
         })
@@ -171,6 +147,10 @@ impl<'memory> NP_Mem_New for NP_Memory_Owned {
 }
 
 impl<'memory> NP_Memory for NP_Memory_Owned {
+
+    fn set_max_length(&mut self, len: usize) {
+        self.max_size = usize::min(u16::MAX as usize, len);
+    }
 
     #[inline(always)]
     fn kind(&self) -> NP_Memory_Kind {
@@ -209,11 +189,11 @@ impl<'memory> NP_Memory for NP_Memory_Owned {
         let location = self_bytes.len();
 
         // not enough space left?
-        if location + bytes.len() >= core::u16::MAX as usize {
+        if location + bytes.len() >= self.max_size {
             return Err(NP_Error::new("Not enough space available in buffer!"))
         }
 
-        self_bytes.extend(bytes);
+        self_bytes.extend_from_slice(bytes);
         Ok(location)
     }
 
@@ -352,6 +332,7 @@ impl<'memory> NP_Memory for NP_Memory_Owned {
 pub struct NP_Memory_Ref<'memory> {
     bytes: &'memory [u8],
     pub root: usize,
+    pub max_size: usize,
     pub schema: &'memory Vec<NP_Parsed_Schema>
 }
 
@@ -359,6 +340,7 @@ impl<'memory> Clone for NP_Memory_Ref<'memory> {
     fn clone(&self) -> Self {
         Self {
             root: self.root,
+            max_size: self.max_size,
             bytes: self.bytes.clone(),
             schema: self.schema
         }
@@ -380,6 +362,7 @@ impl<'memory> NP_Memory_Ref<'memory> {
 
         Self {
             root,
+            max_size: u16::MAX as usize,
             bytes: bytes,
             schema: schema
         }
@@ -387,6 +370,10 @@ impl<'memory> NP_Memory_Ref<'memory> {
 }
 
 impl<'memory> NP_Memory for NP_Memory_Ref<'memory> {
+
+    fn set_max_length(&mut self, len: usize) {
+        self.max_size = usize::min(u16::MAX as usize, len);
+    }
 
     #[inline(always)]
     fn kind(&self) -> NP_Memory_Kind {
@@ -567,6 +554,7 @@ pub enum Bytes_Ref<'bytes> {
 pub struct NP_Memory_Ref_Mut<'memory> {
     bytes: UnsafeCell<Bytes_Ref<'memory>>,
     kind: UnsafeCell<NP_Memory_Kind>,
+    pub max_size: usize,
     pub root: usize,
     pub schema: SchemaVec<'memory>
 }
@@ -575,6 +563,7 @@ impl<'memory> Clone for NP_Memory_Ref_Mut<'memory> {
     fn clone(&self) -> Self {
         Self {
             root: self.root,
+            max_size: self.max_size,
             bytes: UnsafeCell::new(Bytes_Ref::Owned { b: self.read_bytes().to_vec() }),
             kind: UnsafeCell::new(NP_Memory_Kind::Owned),
             schema: self.schema.clone()
@@ -596,6 +585,7 @@ impl<'memory> NP_Mem_New for NP_Memory_Ref_Mut<'memory> {
 
         Ok(Self {
             root: self.get_root(),
+            max_size: u16::MAX as usize,
             bytes: UnsafeCell::new(Bytes_Ref::Owned { b: new_bytes }),
             kind: UnsafeCell::new(NP_Memory_Kind::Owned),
             schema: SchemaVec::Owned(self.get_schemas().clone())
@@ -607,10 +597,23 @@ impl<'memory> NP_Mem_New for NP_Memory_Ref_Mut<'memory> {
 impl<'memory> NP_Memory_Ref_Mut<'memory> {
 
     #[inline(always)]
+    pub fn new(bytes: &'memory mut [u8], schema: &'memory Vec<NP_Parsed_Schema>, root: usize) -> Self {
+
+        Self {
+            root,
+            kind: UnsafeCell::new(NP_Memory_Kind::RefMut { len: 4 }),
+            max_size: u16::MAX as usize,
+            bytes: UnsafeCell::new(Bytes_Ref::Value { b: bytes }),
+            schema: SchemaVec::Borrowed(schema)
+        }
+    }
+
+    #[inline(always)]
     pub fn existing(bytes: &'memory mut [u8], len: usize, schema: &'memory Vec<NP_Parsed_Schema>, root: usize) -> Self {
         Self {
             root,
             kind: UnsafeCell::new(NP_Memory_Kind::RefMut { len }),
+            max_size: u16::MAX as usize,
             bytes: UnsafeCell::new(Bytes_Ref::Value { b: bytes }),
             schema: SchemaVec::Borrowed(schema)
         }
@@ -618,6 +621,23 @@ impl<'memory> NP_Memory_Ref_Mut<'memory> {
 }
 
 impl<'memory> NP_Memory for NP_Memory_Ref_Mut<'memory> {
+
+    fn set_max_length(&mut self, len: usize) {
+        match unsafe { &*self.kind.get() } {
+            NP_Memory_Kind::RefMut { .. } => {
+                // Picks the smallest of these 3 numbers:
+                // 1. address space size (maximum limit, period)
+                // 2. The size of the ref mut buffer (also a hard limit)
+                // 3. The requested max length from the user
+                self.max_size = usize::min(u16::MAX as usize, usize::min(self.read_bytes().len(), len));
+            },
+            NP_Memory_Kind::Owned => {
+                self.max_size = usize::min(u16::MAX as usize, len);
+            },
+            _ => { } // unreachable
+        }
+        
+    }
 
     #[inline(always)]
     fn kind(&self) -> NP_Memory_Kind {
@@ -666,7 +686,7 @@ impl<'memory> NP_Memory for NP_Memory_Ref_Mut<'memory> {
 
                 let location = *len;
 
-                if location + bytes.len() >= usize::min(self_bytes.len(), core::u16::MAX as usize) {
+                if location + bytes.len() >= self.max_size {
                     return Err(NP_Error::new("Not enough space available in buffer!"))
                 }
 
@@ -683,7 +703,7 @@ impl<'memory> NP_Memory for NP_Memory_Ref_Mut<'memory> {
                     Bytes_Ref::Owned { b} => {
                         let location = self.read_bytes().len();
 
-                        if location + bytes.len() >= core::u16::MAX as usize {
+                        if location + bytes.len() >= self.max_size {
                             return Err(NP_Error::new("Not enough space available in buffer!"))
                         }
         
@@ -828,6 +848,10 @@ impl<'memory> NP_Memory for NP_Memory_Ref_Mut<'memory> {
     }
 
     fn dump(self) -> Vec<u8> {
-        Vec::new()
+        let len = self.length();
+        match self.bytes.into_inner() {
+            Bytes_Ref::Value { b} => b[0..len].to_vec(),
+            Bytes_Ref::Owned { b } => b
+        }
     }
 }

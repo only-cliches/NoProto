@@ -610,7 +610,7 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let factory = crate::NP_Factory::new_json(schema)?;
 
     // compaction removes values no longer in buffer
-    let mut buffer = factory.empty_buffer(None);
+    let mut buffer = factory.new_buffer(None);
     buffer.set(&["10"], "hello, world")?;
     assert_eq!(buffer.get::<&str>(&["10"])?, Some("hello, world"));
     assert_eq!(buffer.calc_bytes()?.after_compaction, buffer.calc_bytes()?.current_buffer);
@@ -620,7 +620,7 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);
 
     // values preserved through compaction
-    let mut buffer = factory.empty_buffer(None);
+    let mut buffer = factory.new_buffer(None);
     buffer.set(&["10"], "hello, world")?;
     buffer.set(&["12"], "hello, world2")?;
     assert_eq!(buffer.get::<&str>(&["10"])?, Some("hello, world"));
@@ -647,10 +647,10 @@ fn parseing_works() -> Result<(), NP_Error> {
     let factory = crate::NP_Factory::new_json(schema)?;
 
     // compaction removes values no longer in buffer
-    let mut buffer = factory.empty_buffer(None);
+    let mut buffer = factory.new_buffer(None);
     buffer.set(&["9"], "hello")?;
     buffer.set(&["10"], "world")?;
-    let new_buffer = factory.open_buffer(buffer.close());
+    let new_buffer = factory.open_buffer(buffer.finish().bytes());
     assert_eq!(new_buffer.get::<&str>(&["9"])?.unwrap(), "hello");
     assert_eq!(new_buffer.get::<&str>(&["10"])?.unwrap(), "world");
 

@@ -36,17 +36,49 @@ pub const VTABLE_BYTES: usize = 10;
 /// 
 #[derive(Debug)]
 pub struct NP_Buffer<M: NP_Memory + Clone + NP_Mem_New> {
-    /// Schema data used by this buffer
+    /// Memory object used by this buffer
     memory: M,
+    /// Is this buffer mutable?
+    pub mutable: bool,
     cursor: NP_Cursor
 }
 
 impl<M: NP_Memory + Clone + NP_Mem_New> Clone for NP_Buffer<M> {
     fn clone(&self) -> Self {
+        let new_mem = self.memory.clone();
         Self {
-            memory: self.memory.clone(),
+            mutable: new_mem.is_mutable(),
+            memory: new_mem,
             cursor: self.cursor.clone()
         }
+    }
+}
+/// Finished buffer, can't be edited.  Just exported.
+/// 
+#[derive(Debug)]
+pub struct NP_Finished_Buffer<M: NP_Memory + Clone + NP_Mem_New> {
+    memory: M
+}
+
+impl<M: NP_Memory + Clone + NP_Mem_New> NP_Finished_Buffer<M> {
+    /// How large the buffer is
+    /// 
+    pub fn buffer_len(&self) -> usize {
+        self.memory.read_bytes().len()
+    }
+
+    /// How many bytes the data is using in the buffer
+    /// 
+    pub fn data_len(&self) -> usize {
+        self.memory.length()
+    }
+
+    /// Get an owned copy of the bytes in the buffer
+    /// If the buffer was a `ref` or `ref_mut` this creates a copy of the underlying bytes.
+    /// If the buffer was an owned type, this moves the bytes out of the buffer
+    /// 
+    pub fn bytes(self) -> Vec<u8> {
+        self.memory.dump()
     }
 }
 
@@ -57,6 +89,7 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
 
         NP_Buffer {
             cursor: NP_Cursor::new(memory.get_root(), 0, 0),
+            mutable: memory.is_mutable(),
             memory: memory
         }
     }
@@ -75,7 +108,7 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
     ///     }})
     /// "#)?;
     /// 
-    /// let mut new_buffer = factory.empty_buffer(None);
+    /// let mut new_buffer = factory.new_buffer(None);
     /// new_buffer.set(&["name"], "Jeb Kermin");
     /// new_buffer.set(&["age"], 30u8);
     /// 
@@ -102,7 +135,7 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
 
     }
 
-    /// Closes the buffer.
+    /// Finish the buffer.
     /// 
     /// If the buffer is an onwed type typically opened with `.open_buffer` or created with `.new_empty` you will get the bytes of the buffer returned from this method.
     /// 
@@ -115,18 +148,18 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
     /// 
     /// let factory: NP_Factory = NP_Factory::new("string()")?;
     /// 
-    /// let mut new_buffer = factory.empty_buffer(None);
+    /// let mut new_buffer = factory.new_buffer(None);
     /// // set initial value
     /// new_buffer.set(&[], "hello")?;
     /// // close buffer and get bytes
-    /// let bytes: Vec<u8> = new_buffer.close();
+    /// let bytes: Vec<u8> = new_buffer.finish().bytes();
     /// assert_eq!([0, 0, 0, 4, 0, 5, 104, 101, 108, 108, 111].to_vec(), bytes);
     /// 
     /// # Ok::<(), NP_Error>(()) 
     /// ```
     /// 
-    pub fn close(self) -> Vec<u8> {
-        self.memory.dump()
+    pub fn finish(self) -> NP_Finished_Buffer<M> {
+        NP_Finished_Buffer { memory: self.memory }
     }
 
     /// Read the bytes of the buffer immutably.  No touching!
@@ -141,7 +174,7 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
     /// 
     pub fn move_cursor(&mut self, path: &[&str]) -> Result<bool, NP_Error> {
 
-        let value_cursor = NP_Cursor::select(&self.memory, self.cursor.clone(), true, false, path)?;
+        let value_cursor = NP_Cursor::select(&self.memory, self.cursor.clone(), self.mutable, false, path)?;
 
         let cursor = if let Some(x) = value_cursor {
             x
@@ -181,22 +214,22 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
     ///     })
     /// "#)?;
     /// 
-    /// let mut low_buffer = factory.empty_buffer(None);
+    /// let mut low_buffer = factory.new_buffer(None);
     /// // set all types to minimum value
     /// low_buffer.set_min(&[])?;
     /// // get bytes
-    /// let low_bytes: Vec<u8> = low_buffer.close();
+    /// let low_bytes: Vec<u8> = low_buffer.finish().bytes();
     /// 
-    /// let mut high_buffer = factory.empty_buffer(None);
+    /// let mut high_buffer = factory.new_buffer(None);
     /// // set all types to max value
     /// high_buffer.set_max(&[])?;
     /// // get bytes
-    /// let high_bytes: Vec<u8> = high_buffer.close();
+    /// let high_bytes: Vec<u8> = high_buffer.finish().bytes();
     /// 
-    /// let mut middle_buffer = factory.empty_buffer(None);
+    /// let mut middle_buffer = factory.new_buffer(None);
     /// middle_buffer.set(&["0"], "Light This Candle!");
     /// middle_buffer.set(&["1"], 22938u32);
-    /// let middle_bytes: Vec<u8> = middle_buffer.close();
+    /// let middle_bytes: Vec<u8> = middle_buffer.finish().bytes();
     /// 
     /// assert!(low_bytes < middle_bytes);
     /// assert!(middle_bytes < high_bytes);
@@ -207,7 +240,7 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
     /// ```
     /// 
     pub fn set_max(&mut self, path: &[&str]) -> Result<bool, NP_Error> {
-        let value_cursor = NP_Cursor::select(&self.memory, self.cursor.clone(), true, false, path)?;
+        let value_cursor = NP_Cursor::select(&self.memory, self.cursor.clone(), self.mutable, false, path)?;
         match value_cursor {
             Some(x) => {
                 Ok(NP_Cursor::set_max(x, &self.memory)?)
@@ -237,22 +270,22 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
     ///     })
     /// "#)?;
     /// 
-    /// let mut low_buffer = factory.empty_buffer(None);
+    /// let mut low_buffer = factory.new_buffer(None);
     /// // set all types to minimum value
     /// low_buffer.set_min(&[])?;
     /// // get bytes
-    /// let low_bytes: Vec<u8> = low_buffer.close();
+    /// let low_bytes: Vec<u8> = low_buffer.finish().bytes();
     /// 
-    /// let mut high_buffer = factory.empty_buffer(None);
+    /// let mut high_buffer = factory.new_buffer(None);
     /// // set all types to max value
     /// high_buffer.set_max(&[])?;
     /// // get bytes
-    /// let high_bytes: Vec<u8> = high_buffer.close();
+    /// let high_bytes: Vec<u8> = high_buffer.finish().bytes();
     /// 
-    /// let mut middle_buffer = factory.empty_buffer(None);
+    /// let mut middle_buffer = factory.new_buffer(None);
     /// middle_buffer.set(&["0"], "Light This Candle!");
     /// middle_buffer.set(&["1"], 22938u32);
-    /// let middle_bytes: Vec<u8> = middle_buffer.close();
+    /// let middle_bytes: Vec<u8> = middle_buffer.finish().bytes();
     /// 
     /// assert!(low_bytes < middle_bytes);
     /// assert!(middle_bytes < high_bytes);
@@ -263,7 +296,7 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
     /// ```
     /// 
     pub fn set_min(&mut self, path: &[&str]) -> Result<bool, NP_Error> {
-        let value_cursor = NP_Cursor::select(&self.memory, self.cursor.clone(), true, false, path)?;
+        let value_cursor = NP_Cursor::select(&self.memory, self.cursor.clone(), self.mutable, false, path)?;
         match value_cursor {
             Some(x) => {
                 Ok(NP_Cursor::set_min(x, &self.memory)?)
@@ -284,7 +317,7 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
     /// // a list where each item is a map where each key has a value containing a list of strings
     /// let factory: NP_Factory = NP_Factory::new(r#"list({of: map({value: list({of: string()})})})"#)?;
     /// 
-    /// let mut new_buffer = factory.empty_buffer(None);
+    /// let mut new_buffer = factory.new_buffer(None);
     /// // third item in the top level list -> key "alpha" of map at 3rd element -> 9th element of list at "alpha" key
     /// // 
     /// new_buffer.set(&["3", "alpha", "9"], "look at all this nesting madness")?;
@@ -298,7 +331,12 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
     /// ```
     /// 
     pub fn set<'set, X: 'set>(&mut self, path: &[&str], value: X) -> Result<bool, NP_Error> where X: NP_Value<'set> + NP_Scalar<'set> {
-        let value_cursor = NP_Cursor::select(&self.memory, self.cursor.clone(), true, false, path)?;
+
+        if self.mutable == false {
+            return Err(NP_Error::MemoryReadOnly);
+        }
+
+        let value_cursor = NP_Cursor::select(&self.memory, self.cursor.clone(), self.mutable, false, path)?;
         match value_cursor {
             Some(x) => {
 
@@ -340,7 +378,7 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
     /// 
     /// let factory: NP_Factory = NP_Factory::new("list({of: string()})")?;
     /// 
-    /// let mut new_buffer = factory.empty_buffer(None);
+    /// let mut new_buffer = factory.new_buffer(None);
     /// new_buffer.set_with_json(&[], r#"{"value": ["foo", "bar", null, "baz"]}"#)?;
     ///    
     /// assert_eq!(new_buffer.get_length(&[])?, Some(4));
@@ -357,7 +395,7 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
     /// ```
     /// 
     pub fn set_with_json<S: Into<String>>(&mut self, path: &[&str], json_value: S) -> Result<bool, NP_Error> {
-        let value_cursor = NP_Cursor::select(&self.memory, self.cursor.clone(), true, false, path)?;
+        let value_cursor = NP_Cursor::select(&self.memory, self.cursor.clone(), self.mutable, false, path)?;
         match value_cursor {
             Some(x) => {
                 let parsed = json_decode(json_value.into())?;
@@ -389,7 +427,7 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
     /// 
     /// let factory: NP_Factory = NP_Factory::new("list({of: string()})")?;
     /// 
-    /// let mut new_buffer = factory.empty_buffer(None);
+    /// let mut new_buffer = factory.new_buffer(None);
     /// // set value at 1 index
     /// new_buffer.set(&["1"], "hello")?;
     /// // set value at 4 index
@@ -429,7 +467,7 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
     ///     ]
     /// }"#)?;
     /// 
-    /// let mut new_buffer = factory.empty_buffer(None);
+    /// let mut new_buffer = factory.new_buffer(None);
     /// // set value of age
     /// new_buffer.set(&["age"], 20u8)?;
     /// // set value of name
@@ -469,7 +507,7 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
     ///    "value": {"type": "string"}
     /// }"#)?;
     /// 
-    /// let mut new_buffer = factory.empty_buffer(None);
+    /// let mut new_buffer = factory.new_buffer(None);
     /// // set value of color key
     /// new_buffer.set(&["color"], "blue")?;
     /// // set value of sport key
@@ -503,7 +541,7 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
     ///     ]
     /// }"#)?;
     /// 
-    /// let mut new_buffer = factory.empty_buffer(None);
+    /// let mut new_buffer = factory.new_buffer(None);
     /// // set value at 0 index
     /// new_buffer.set(&["0"], "hello")?;
     /// // set value at 2 index
@@ -524,7 +562,7 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
     /// 
     pub fn get_collection<'iter>(&'iter self, path: &'iter [&str]) -> Result<Option<NP_Generic_Iterator<'iter, M>>, NP_Error> {
 
-        let value = NP_Cursor::select(&self.memory, self.cursor.clone(), false, false, path)?;
+        let value = NP_Cursor::select(&self.memory, self.cursor.clone(), self.mutable, false, path)?;
 
         let value = if let Some(x) = value {
             x
@@ -557,7 +595,7 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
     ///     "of": {"type": "string"}
     /// }"#)?;
     /// 
-    /// let mut new_buffer = factory.empty_buffer(None);
+    /// let mut new_buffer = factory.new_buffer(None);
     /// new_buffer.set(&["3"], "launch")?;
     /// new_buffer.list_push(&[], "this")?;
     /// new_buffer.list_push(&[], "rocket")?;
@@ -575,7 +613,7 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
     ///     };
     /// });
     /// 
-    /// let mut new_buffer = factory.empty_buffer(None);
+    /// let mut new_buffer = factory.new_buffer(None);
     /// new_buffer.list_push(&[], "launch")?;
     /// new_buffer.list_push(&[], "this")?;
     /// new_buffer.list_push(&[], "rocket")?;
@@ -595,10 +633,14 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
     /// 
     pub fn list_push<'push, X: 'push>(&mut self, path: &[&str], value: X) -> Result<Option<u16>, NP_Error> where X: NP_Value<'push> + NP_Scalar<'push> {
 
-        let list_cursor = if path.len() == 0 { self.cursor.clone() } else { match NP_Cursor::select(&self.memory, self.cursor.clone(), true, false, path)? {
+        let list_cursor = if path.len() == 0 { self.cursor.clone() } else { match NP_Cursor::select(&self.memory, self.cursor.clone(), self.mutable, false, path)? {
             Some(x) => x,
             None => return Ok(None)
         }};
+
+        if self.mutable == false {
+            return Err(NP_Error::MemoryReadOnly)
+        }
 
         match &self.memory.get_schema(list_cursor.schema_addr) {
             NP_Parsed_Schema::List { of, .. } => {
@@ -646,7 +688,7 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
     ///    "type": "string"
     /// }"#)?;
     /// 
-    /// let mut new_buffer = factory.empty_buffer(None);
+    /// let mut new_buffer = factory.new_buffer(None);
     /// // set initial value
     /// new_buffer.set(&[], "hello")?;
     /// // get length of value at root (String)
@@ -666,7 +708,7 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
     ///     "of": {"type": "string"}
     /// }"#)?;
     /// 
-    /// let mut new_buffer = factory.empty_buffer(None);
+    /// let mut new_buffer = factory.new_buffer(None);
     /// // set value at 9th index
     /// new_buffer.set(&["9"], "hello")?;
     /// // get length of value at root (List)
@@ -689,7 +731,7 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
     ///     ]
     /// }"#)?;
     /// 
-    /// let mut new_buffer = factory.empty_buffer(None);
+    /// let mut new_buffer = factory.new_buffer(None);
     /// // get length of value at root (Table)
     /// assert_eq!(new_buffer.get_length(&[])?, Some(2));
     /// 
@@ -707,7 +749,7 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
     ///    "value": {"type": "string"}
     /// }"#)?;
     /// 
-    /// let mut new_buffer = factory.empty_buffer(None);
+    /// let mut new_buffer = factory.new_buffer(None);
     /// // set values
     /// new_buffer.set(&["foo"], "bar")?;
     /// new_buffer.set(&["foo2"], "bar2")?;
@@ -731,7 +773,7 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
     ///     ]
     /// }"#)?;
     /// 
-    /// let mut new_buffer = factory.empty_buffer(None);
+    /// let mut new_buffer = factory.new_buffer(None);
     /// // get length of value at root (Tuple)
     /// assert_eq!(new_buffer.get_length(&[])?, Some(2));
     /// 
@@ -825,7 +867,7 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
     ///     "of": {"type": "string"}
     /// }"#)?;
     /// 
-    /// let mut new_buffer = factory.empty_buffer(None);
+    /// let mut new_buffer = factory.new_buffer(None);
     /// // set index 0
     /// new_buffer.set(&["0"], "hello")?;
     /// // del index 0
@@ -865,7 +907,7 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
     ///     ]
     /// }"#)?;
     /// 
-    /// let mut new_buffer = factory.empty_buffer(None);
+    /// let mut new_buffer = factory.new_buffer(None);
     /// 
     /// assert_eq!(new_buffer.get_schema_type(&[])?.unwrap(), NP_TypeKeys::Tuple);
     /// assert_eq!(new_buffer.get_schema_type(&["0"])?.unwrap(), NP_TypeKeys::Geo);
@@ -908,7 +950,7 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
     ///     ]
     /// }"#)?;
     /// 
-    /// let mut new_buffer = factory.empty_buffer(None);
+    /// let mut new_buffer = factory.new_buffer(None);
     /// // Get an empty NP_Geo type that has the correct resolution for the schema
     /// // 
     /// let geo_default: NP_Geo = new_buffer.get_schema_default::<NP_Geo>(&["0"])?.unwrap();
@@ -960,7 +1002,7 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
     ///     }}
     /// }"#)?;
     /// 
-    /// let mut new_buffer = factory.empty_buffer(None);
+    /// let mut new_buffer = factory.new_buffer(None);
     /// // third item in the top level list -> key "alpha" of map at 3rd element -> 9th element of list at "alpha" key
     /// // 
     /// new_buffer.set(&["3", "alpha", "9"], "who would build a schema like this")?;
@@ -1009,6 +1051,14 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
         }
     }
 
+    /// Set the maximum allowed of size of this buffer, in bytes.
+    /// 
+    /// Once this value is set, the buffer will not be allowed to grow beyond this size.
+    /// 
+    pub fn set_max_length(&mut self, len: usize) {
+        self.memory.set_max_length(len);
+    }
+
     /// This performs a compaction if the closure provided as the second argument returns `true`.
     /// Compaction is a pretty expensive operation (requires full copy of the whole buffer) so should be done sparingly.
     /// The closure is provided an argument that contains the original size of the buffer, how many bytes could be saved by compaction, and how large the new buffer would be after compaction.  The closure should return `true` to perform compaction, `false` otherwise.
@@ -1026,7 +1076,7 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
     ///    "type": "string"
     /// }"#)?;
     /// 
-    /// let mut new_buffer = factory.empty_buffer(None);
+    /// let mut new_buffer = factory.new_buffer(None);
     /// // set initial value
     /// new_buffer.set(&[], "hello")?;
     /// // using 9 bytes
@@ -1078,7 +1128,7 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
     /// 
     /// The first argument, new_capacity, is the capacity of the underlying Vec<u8> that we'll be copying the data into.  The default is the size of the old buffer.
     /// 
-    /// - If this buffer is an owned type typically created with `empty_buffer` or opened with `open_buffer` the comapction will occur into the existing buffer. 
+    /// - If this buffer is an owned type typically created with `new_buffer` or opened with `open_buffer` the comapction will occur into the existing buffer. 
     /// - If this buffer is a ref type typically opened with `open_buffer_ref` the compaction will fail.  Use `compact_into` instead.
     /// - If this buffer is a mutable ref type typically opened with `open_buffer_ref_mut` the compaction will ocurr into the existing buffer and the length will be updated.
     /// 
@@ -1093,7 +1143,7 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
     ///    "type": "string"
     /// }"#)?;
     /// 
-    /// let mut new_buffer = factory.empty_buffer(None);
+    /// let mut new_buffer = factory.new_buffer(None);
     /// // set initial value
     /// new_buffer.set(&[], "hello")?;
     /// // using 11 bytes
@@ -1134,7 +1184,7 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
 
         // comapcting a RefMut buffer, we have to compact into a Vec<u8>, then write it back into the RefMut
         if let NP_Memory_Kind::RefMut { .. } = self.memory.kind() {
-            let new_bytes = NP_Memory_Owned::new(capacity, unsafe { self.memory.get_schemas() as *const Vec<NP_Parsed_Schema> }, self.memory.get_root());
+            let new_bytes = NP_Memory_Owned::new(capacity, self.memory.get_schemas() as *const Vec<NP_Parsed_Schema>, self.memory.get_root());
             NP_Cursor::compact(0, old_root, &self.memory, new_root, &new_bytes)?;
 
             let new_length = new_bytes.length();
@@ -1179,7 +1229,7 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
 
         let old_root = NP_Cursor::new(self.memory.get_root(), 0, 0);
 
-        let new_bytes = NP_Memory_Owned::new(capacity, unsafe { self.memory.get_schemas() as *const Vec<NP_Parsed_Schema> }, self.memory.get_root());
+        let new_bytes = NP_Memory_Owned::new(capacity, self.memory.get_schemas() as *const Vec<NP_Parsed_Schema>, self.memory.get_root());
         let new_root  = NP_Cursor::new(self.memory.get_root(), 0, 0);
 
         NP_Cursor::compact(0, old_root, &self.memory, new_root, &new_bytes)?;
@@ -1193,7 +1243,7 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
     /// 
     pub fn copy_buffer(&self) -> NP_Buffer<NP_Memory_Owned> {
         let copy_bytes = self.memory.read_bytes().to_vec();
-        let new_memory = NP_Memory_Owned::existing(copy_bytes, unsafe { self.memory.get_schemas() as *const Vec<NP_Parsed_Schema> }, self.memory.get_root());
+        let new_memory = NP_Memory_Owned::existing(copy_bytes, self.memory.get_schemas() as *const Vec<NP_Parsed_Schema>, self.memory.get_root());
         NP_Buffer::_new(new_memory)
     }
 
@@ -1209,7 +1259,7 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
     ///    "type": "string"
     /// }"#)?;
     /// 
-    /// let mut new_buffer = factory.empty_buffer(None);
+    /// let mut new_buffer = factory.new_buffer(None);
     /// new_buffer.set(&[], "hello")?;
     /// assert_eq!(NP_Size_Data {
     ///     current_buffer: 11,

@@ -264,9 +264,10 @@ impl<'cursor> NP_Cursor {
         
         let mut loop_count = 0u16;
 
-        if memory.is_mutable() == false && make_path == true {
-            return Err(NP_Error::MemoryReadOnly)
-        }
+        // This check happens at the caller now
+        // if memory.is_mutable() == false && make_path == true {
+        //     return Err(NP_Error::MemoryReadOnly)
+        // }
     
         loop {
     

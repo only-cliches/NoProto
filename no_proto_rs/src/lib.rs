@@ -150,7 +150,7 @@
 //! 
 //! 
 //! // create a new empty buffer
-//! let mut user_buffer = user_factory.empty_buffer(None); // optional capacity
+//! let mut user_buffer = user_factory.new_buffer(None); // optional capacity
 //! 
 //! // set the "name" field
 //! user_buffer.set(&["name"], "Billy Joel")?;
@@ -167,7 +167,7 @@
 //! assert_eq!(tag, Some("first tag"));
 //! 
 //! // close buffer and get internal bytes
-//! let user_bytes: Vec<u8> = user_buffer.close();
+//! let user_bytes: Vec<u8> = user_buffer.finish().bytes();
 //! 
 //! // open the buffer again
 //! let user_buffer = user_factory.open_buffer(user_bytes);
@@ -182,7 +182,7 @@
 //! assert_eq!(age, Some(0u16));
 //! 
 //! // close again
-//! let user_bytes: Vec<u8> = user_buffer.close();
+//! let user_bytes: Vec<u8> = user_buffer.finish().bytes();
 //! 
 //! 
 //! // we can now save user_bytes to disk, 
@@ -369,7 +369,7 @@ use schema::NP_Parsed_Schema;
 ///     }})
 /// "#)?;
 /// 
-/// let mut user_buffer = user_factory.empty_buffer(None);
+/// let mut user_buffer = user_factory.new_buffer(None);
 /// user_buffer.set(&np_path!("todos.2"), "some todo")?;
 /// user_buffer.set(&np_path!("name"), "Bob Dylan")?;
 /// 
@@ -416,7 +416,7 @@ macro_rules! np_path {
 /// // user_factory can now be used to make or open buffers that contain the data in the schema.
 /// 
 /// // create new buffer
-/// let mut user_buffer = user_factory.empty_buffer(None); // optional capacity, optional address size
+/// let mut user_buffer = user_factory.new_buffer(None); // optional capacity, optional address size
 ///    
 /// // set the "name" field of the struct
 /// user_buffer.set(&["name"], "Billy Joel")?;
@@ -425,7 +425,7 @@ macro_rules! np_path {
 /// user_buffer.set(&["todos", "0"], "Write a rust library.")?;
 /// 
 /// // close buffer 
-/// let user_vec:Vec<u8> = user_buffer.close();
+/// let user_vec:Vec<u8> = user_buffer.finish().bytes();
 /// 
 /// // open existing buffer for reading
 /// let user_buffer_2 = user_factory.open_buffer(user_vec);
@@ -445,7 +445,7 @@ macro_rules! np_path {
 /// 
 /// 
 /// // close buffer again
-/// let user_vec: Vec<u8> = user_buffer_2.close();
+/// let user_vec: Vec<u8> = user_buffer_2.finish().bytes();
 /// // user_vec is a serialized Vec<u8> with our data
 /// 
 /// # Ok::<(), NP_Error>(()) 
@@ -618,8 +618,17 @@ impl<'fact> NP_Factory<'fact> {
     /// The first opional argument, capacity, can be used to set the space of the underlying Vec<u8> when it's created.  If you know you're going to be putting lots of data into the buffer, it's a good idea to set this to a large number comparable to the amount of data you're putting in.  The default is 1,024 bytes.
     /// 
     /// 
-    pub fn empty_buffer<'buffer>(&'buffer self, capacity: Option<usize>) -> NP_Buffer<NP_Memory_Owned> {
+    pub fn new_buffer<'buffer>(&'buffer self, capacity: Option<usize>) -> NP_Buffer<NP_Memory_Owned> {
         NP_Buffer::_new(NP_Memory_Owned::new(capacity, &self.schema.parsed, DEFAULT_ROOT_PTR_ADDR))
+    }
+
+    /// Generate a new empty buffer from this factory.
+    /// 
+    /// The first opional argument, capacity, can be used to set the space of the underlying Vec<u8> when it's created.  If you know you're going to be putting lots of data into the buffer, it's a good idea to set this to a large number comparable to the amount of data you're putting in.  The default is 1,024 bytes.
+    /// 
+    /// 
+    pub fn new_buffer_ref_mut<'buffer>(&'buffer self, bytes: &'buffer mut [u8]) -> NP_Buffer<NP_Memory_Ref_Mut> {
+        NP_Buffer::_new(NP_Memory_Ref_Mut::new(bytes, &self.schema.parsed, DEFAULT_ROOT_PTR_ADDR))
     }
 
     /// Convert a regular buffer into a packed buffer. A "packed" buffer contains the schema and the buffer data together.
@@ -630,7 +639,7 @@ impl<'fact> NP_Factory<'fact> {
     /// 
     pub fn pack_buffer(&self, buffer: NP_Buffer<NP_Memory_Owned>) -> NP_Packed_Buffer {
         NP_Packed_Buffer {
-            buffer: NP_Buffer::_new(NP_Memory_Owned::existing(buffer.close(), unsafe { &self.schema.parsed as *const Vec<NP_Parsed_Schema> }, DEFAULT_ROOT_PTR_ADDR)),
+            buffer: NP_Buffer::_new(NP_Memory_Owned::existing(buffer.finish().bytes(), &self.schema.parsed as *const Vec<NP_Parsed_Schema>, DEFAULT_ROOT_PTR_ADDR)),
             schema_bytes: self.export_schema_bytes().to_vec(),
             schema: self.schema.clone()
         }
@@ -664,7 +673,7 @@ impl NP_Packed_Buffer {
         let buffer_bytes = &buffer[(3 + schema_len)..];
 
         Ok(Self {
-            buffer: NP_Buffer::_new(NP_Memory_Owned::existing(buffer_bytes.to_vec(), unsafe { &schema as *const Vec<NP_Parsed_Schema> }, DEFAULT_ROOT_PTR_ADDR)),
+            buffer: NP_Buffer::_new(NP_Memory_Owned::existing(buffer_bytes.to_vec(), &schema as *const Vec<NP_Parsed_Schema>, DEFAULT_ROOT_PTR_ADDR)),
             schema_bytes: schema_bytes.to_vec(),
             schema: NP_Schema {
                 is_sortable: is_sortable,
@@ -683,7 +692,7 @@ impl NP_Packed_Buffer {
         // schema data
         new_buffer.extend_from_slice(self.export_schema_bytes());
         // buffer data
-        new_buffer.extend(self.buffer.close());
+        new_buffer.extend(self.buffer.finish().bytes());
         new_buffer
     }
 

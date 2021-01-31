@@ -230,7 +230,7 @@ fn infinite_recursion() -> Result<(), NP_Error> {
         ]
     }"#;
     let factory = crate::NP_Factory::new_json(schema)?;
-    let mut buffer = factory.empty_buffer(None);
+    let mut buffer = factory.new_buffer(None);
 
     match buffer.set(&["nested","nested", "nested"], "hello infinite") {
         Ok(_done) => {
@@ -264,7 +264,7 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
         ]
     }"#;
     let factory = crate::NP_Factory::new_json(schema)?;
-    let mut buffer = factory.empty_buffer(None);
+    let mut buffer = factory.new_buffer(None);
 
     buffer.set(&["nested", "street"], "hello street")?;
     buffer.set(&["nested", "nested", "nested", "nested", "street"], "hello street 2")?;
@@ -297,7 +297,7 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
         ]
     }"#;
     let factory = crate::NP_Factory::new_json(schema)?;
-    let mut buffer = factory.empty_buffer(None);
+    let mut buffer = factory.new_buffer(None);
 
     buffer.set(&["address", "more", "more","more", "more","more", "more","more", "more", "street"], "hello")?;
 

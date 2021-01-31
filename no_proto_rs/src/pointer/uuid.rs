@@ -9,7 +9,7 @@
 //! 
 //! let factory: NP_Factory = NP_Factory::new("uuid()")?;
 //!
-//! let mut new_buffer = factory.empty_buffer(None);
+//! let mut new_buffer = factory.new_buffer(None);
 //! let uuid = NP_UUID::generate(50);
 //! new_buffer.set(&[], &uuid)?;
 //! 
@@ -390,7 +390,7 @@ fn schema_parsing_works() -> Result<(), NP_Error> {
 fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"uuid\"}";
     let factory = crate::NP_Factory::new_json(schema)?;
-    let mut buffer = factory.empty_buffer(None);
+    let mut buffer = factory.new_buffer(None);
     let set_value = NP_UUID::generate(212);
     buffer.set(&[] as &[&str], &set_value)?;
     assert_eq!(buffer.get::<&NP_UUID>(&[])?, Some(&NP_UUID::generate(212)));

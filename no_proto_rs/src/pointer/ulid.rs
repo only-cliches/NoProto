@@ -9,7 +9,7 @@
 //! 
 //! let factory: NP_Factory = NP_Factory::new("ulid()")?;
 //!
-//! let mut new_buffer = factory.empty_buffer(None);
+//! let mut new_buffer = factory.new_buffer(None);
 //! let ulid = NP_ULID::generate(1604965249484, 50);
 //! new_buffer.set(&[], &ulid)?;
 //! 
@@ -414,7 +414,7 @@ fn schema_parsing_works() -> Result<(), NP_Error> {
 fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     let schema = "{\"type\":\"ulid\"}";
     let factory = crate::NP_Factory::new_json(schema)?;
-    let mut buffer = factory.empty_buffer(None);
+    let mut buffer = factory.new_buffer(None);
     let set_value = NP_ULID::generate(1606680515909, 212);
     buffer.set(&[] as &[&str], &set_value)?;
     assert_eq!(buffer.get::<&NP_ULID>(&[])?, Some(&set_value));

@@ -65,7 +65,7 @@ impl NoProtoBench {
 
             // new_buff.compact(None)?;
 
-            assert_eq!(new_buff.close().len(), 209);
+            assert_eq!(new_buff.finish().bytes().len(), 209);
         }
 
         let time = SystemTime::now().duration_since(start).expect("Time went backwards");
@@ -174,7 +174,7 @@ impl NoProtoBench {
 
     #[inline(always)]
     pub fn encode_single(factory: &NP_Factory) ->Result<Vec<u8>, NP_Error> {
-        let mut new_buffer = factory.empty_buffer(None);
+        let mut new_buffer = factory.new_buffer(None);
 
         new_buffer.set(&["initialized"], true)?;
         new_buffer.set(&["location"], "http://arstechnica.com")?;
@@ -195,6 +195,6 @@ impl NoProtoBench {
             
         }
     
-        Ok(new_buffer.close())
+        Ok(new_buffer.finish().bytes())
     }
 }

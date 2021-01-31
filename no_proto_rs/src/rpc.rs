@@ -897,15 +897,15 @@ impl<'fact> NP_RPC_Factory<'fact> {
                             rpc_addr: *idx,
                             spec: &self.spec,
                             rpc: *full_name,
-                            empty: self.empty.empty_buffer(None),
+                            empty: self.empty.new_buffer(None),
                             data: match *arg {
                                 Some(arg) => {
                                     match &self.spec.specs[arg] {
-                                        NP_RPC_Spec::MSG { factory, .. } => factory.empty_buffer(None),
+                                        NP_RPC_Spec::MSG { factory, .. } => factory.new_buffer(None),
                                         _ => return Err(NP_Error::Unreachable)
                                     }
                                 },
-                                None => self.empty.empty_buffer(None)
+                                None => self.empty.new_buffer(None)
                             }
                         })
                     },
@@ -940,7 +940,7 @@ impl<'fact> NP_RPC_Factory<'fact> {
                     rpc_addr,
                     spec: &self.spec,
                     rpc: *full_name,
-                    empty: self.empty.empty_buffer(None),
+                    empty: self.empty.new_buffer(None),
                     data: match *arg {
                         Some(arg) => {
                             match &self.spec.specs[arg] {
@@ -948,7 +948,7 @@ impl<'fact> NP_RPC_Factory<'fact> {
                                 _ => return Err(NP_Error::Unreachable)
                             }
                         },
-                        None => self.empty.empty_buffer(None)
+                        None => self.empty.new_buffer(None)
                     }
                 })
             },
@@ -972,20 +972,20 @@ impl<'fact> NP_RPC_Factory<'fact> {
                             data: match *result {
                                 Some(result) => {
                                     match &self.spec.specs[result] {
-                                        NP_RPC_Spec::MSG { factory, .. } => factory.empty_buffer(None),
+                                        NP_RPC_Spec::MSG { factory, .. } => factory.new_buffer(None),
                                         _ => return Err(NP_Error::Unreachable)
                                     }
                                 },
-                                None => self.empty.empty_buffer(None)
+                                None => self.empty.new_buffer(None)
                             },
                             error: match *err {
                                 Some(err) => {
                                     match &self.spec.specs[err] {
-                                        NP_RPC_Spec::MSG { factory, .. } => factory.empty_buffer(None),
+                                        NP_RPC_Spec::MSG { factory, .. } => factory.new_buffer(None),
                                         _ => return Err(NP_Error::Unreachable)
                                     }
                                 },
-                                None => self.empty.empty_buffer(None)
+                                None => self.empty.new_buffer(None)
                             }
                         })
                     },
@@ -1025,8 +1025,8 @@ impl<'fact> NP_RPC_Factory<'fact> {
                             has_err: *err != Option::None,
                             spec: &self.spec,
                             rpc: *full_name,
-                            data: self.empty.empty_buffer(None),
-                            error: self.empty.empty_buffer(None)
+                            data: self.empty.new_buffer(None),
+                            error: self.empty.new_buffer(None)
                         })
                     },
                     _ => return Err(NP_Error::new("Can't find associated RPC Method."))
@@ -1048,9 +1048,9 @@ impl<'fact> NP_RPC_Factory<'fact> {
                                         _ => return Err(NP_Error::Unreachable)
                                     }
                                 },
-                                None => self.empty.empty_buffer(None)
+                                None => self.empty.new_buffer(None)
                             },
-                            error: self.empty.empty_buffer(None)
+                            error: self.empty.new_buffer(None)
                         })
                     },
                     _ => return Err(NP_Error::new("Can't find associated RPC Method."))
@@ -1065,7 +1065,7 @@ impl<'fact> NP_RPC_Factory<'fact> {
                             rpc: *full_name,
                             spec: &self.spec,
                             has_err: *err != Option::None,
-                            data: self.empty.empty_buffer(None),
+                            data: self.empty.new_buffer(None),
                             error: match *err {
                                 Some(err) => {
                                     match &self.spec.specs[err] {
@@ -1163,7 +1163,7 @@ impl<'request> NP_RPC_Request<'request> {
                     data: match *result {
                         Some(result) => {
                             match &self.spec.specs[result] {
-                                NP_RPC_Spec::MSG { factory, .. } => factory.empty_buffer(None),
+                                NP_RPC_Spec::MSG { factory, .. } => factory.new_buffer(None),
                                 _ => return Err(NP_Error::Unreachable)
                             }
                         },
@@ -1172,7 +1172,7 @@ impl<'request> NP_RPC_Request<'request> {
                     error: match *err {
                         Some(err) => {
                             match &self.spec.specs[err] {
-                                NP_RPC_Spec::MSG { factory, .. } => factory.empty_buffer(None),
+                                NP_RPC_Spec::MSG { factory, .. } => factory.new_buffer(None),
                                 _ => return Err(NP_Error::Unreachable)
                             }
                         },
@@ -1192,7 +1192,7 @@ impl<'request> NP_RPC_Request<'request> {
         response_bytes.extend_from_slice(&self.spec.id_hash);
         response_bytes.extend_from_slice(&(self.rpc_addr as u16).to_be_bytes());
         response_bytes.push(RPC_Type::Request as u8);
-        response_bytes.extend(self.data.close());
+        response_bytes.extend(self.data.finish().bytes());
 
         response_bytes
     }
@@ -1247,12 +1247,12 @@ impl<'request> NP_RPC_Response<'request> {
         response_bytes.push(self.kind as u8);
         match &self.kind {
             NP_ResponseKinds::Ok => {
-                response_bytes.extend(self.data.close());
+                response_bytes.extend(self.data.finish().bytes());
             },
             NP_ResponseKinds::None => { },
             NP_ResponseKinds::Error => {
                 if self.has_err {
-                    response_bytes.extend(self.error.close());
+                    response_bytes.extend(self.error.finish().bytes());
                 } else {
                     return Err(NP_Error::new("Attempted to close response as error type without error message defined in rpc method."))
                 }

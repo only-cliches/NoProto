@@ -4,6 +4,7 @@
 - Cleaned up read only buffer semantics, added mutable reference buffer type so mmap will work with NoProto buffers.
 - Added read only checks on all mutable methods.
 - Removed explicit read only buffer, the main buffer class handles all memory types generically now.
+- Added new `set_max_length` method that allows you to limit the maximium size of buffers.
 
 # 0.9.2 January 25, 2021
 - Restored `no_std`.  
