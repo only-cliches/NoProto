@@ -63,13 +63,13 @@ pub struct NP_Finished_Buffer<M: NP_Memory + Clone + NP_Mem_New> {
 impl<M: NP_Memory + Clone + NP_Mem_New> NP_Finished_Buffer<M> {
     /// How large the buffer is
     /// 
-    pub fn buffer_len(&self) -> usize {
+    pub fn buffer_len(self) -> usize {
         self.memory.read_bytes().len()
     }
 
     /// How many bytes the data is using in the buffer
     /// 
-    pub fn data_len(&self) -> usize {
+    pub fn data_len(self) -> usize {
         self.memory.length()
     }
 
