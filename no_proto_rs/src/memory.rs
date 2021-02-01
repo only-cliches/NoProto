@@ -18,6 +18,7 @@ pub trait NP_Memory {
     fn kind(&self) -> NP_Memory_Kind;
     fn length(&self) -> usize;
     fn set_length(&mut self, _len: usize) -> Result<(), NP_Error> {
+        // only called on RefMut memory
         Err(NP_Error::Unreachable)
     }
     fn set_max_length(&mut self, len: usize);

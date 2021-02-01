@@ -243,7 +243,7 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
         if self.mutable == false {
             return Err(NP_Error::MemoryReadOnly)
         }
-        
+
         let value_cursor = NP_Cursor::select(&self.memory, self.cursor.clone(), self.mutable, false, path)?;
         match value_cursor {
             Some(x) => {
@@ -1069,13 +1069,6 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
         }
     }
 
-    /// Set the maximum allowed of size of this buffer, in bytes.
-    /// 
-    /// Once this value is set, the buffer will not be allowed to grow beyond this size.
-    /// 
-    pub fn set_max_length(&mut self, len: usize) {
-        self.memory.set_max_length(len);
-    }
 
     /// This performs a compaction if the closure provided as the second argument returns `true`.
     /// Compaction is a pretty expensive operation (requires full copy of the whole buffer) so should be done sparingly.
@@ -1309,9 +1302,22 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
         }
     }
 
+
+    /// Set the maximum allowed of size of this buffer, in bytes.
+    /// 
+    /// Once this value is set, the buffer will not be allowed to grow beyond this size.
+    /// 
+    /// This doesn't cause any mutations, if the buffer is already larger than this value nothing will happen.  
+    /// 
+    pub fn set_max_data_length(&mut self, len: usize) {
+        self.memory.set_max_length(len);
+    }
+
     /// Get the number of bytes used by the data in this buffer.
     /// 
-    pub fn length(&self) -> usize {
+    /// This will be identical to `buffer.read_bytes().len()` unless you're using a RefMut buffer.
+    /// 
+    pub fn data_length(&self) -> usize {
         self.memory.length()
     }
 }

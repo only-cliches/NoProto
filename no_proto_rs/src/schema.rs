@@ -943,6 +943,7 @@ pub struct NP_Tuple_Field {
     pub offset: usize
 }
 
+
 /// When a schema is parsed from JSON or Bytes, it is stored in this recursive type
 /// 
 #[allow(missing_docs)]
