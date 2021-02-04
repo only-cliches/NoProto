@@ -19,6 +19,7 @@ flexbuffers = "0.2.1"
 json = "0.12.4"
 messagepack-rs = "0.8.0"
 no_proto = { path = "../no_proto_rs" }
+postcard = { version = "0.5.2", features = ["use-std"] }
 prost = "0.7.0"
 protobuf = "2.18.1"
 rand = "0.7.3"
@@ -30,5 +31,8 @@ rmpv = "0.4.6"
 serde = "1.0.118"
 serde_json = "1.0.61"
 
-[target.x86_64-apple-darwin]
+[target.x86_64-apple-darwin.build]
+rustflags = ["-Ctarget-cpu=native"]
+
+[target.x86_64-unknown-linux-gnu.build]
 rustflags = ["-Ctarget-cpu=native"]

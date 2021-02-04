@@ -10,6 +10,7 @@ use crate::run_bench_no_proto::NoProtoBench;
 use crate::run_bench_flatbuffers::FlatBufferBench;
 use crate::run_bench_bson::BSONBench;
 use crate::run_bench_bincode::BincodeBench;
+use crate::run_bench_postcard::PostcardBench;
 use crate::run_bench_avro::AvroBench;
 use crate::run_bench_prost::ProstBench;
 use crate::run_bench_flexbuffers::FlexBench;
@@ -20,13 +21,13 @@ mod bench_fb;
 mod bench_pb;
 extern crate protobuf;
 extern crate flatbuffers;
-#[macro_use] 
+#[macro_use]
 extern crate json;
 extern crate bson;
 extern crate rmp;
 extern crate serde;
 extern crate bincode;
-#[macro_use] 
+#[macro_use]
 extern crate abomonation;
 
 
@@ -38,6 +39,7 @@ mod run_bench_messagepack_rs;
 mod run_bench_json;
 mod run_bench_bson;
 mod run_bench_bincode;
+mod run_bench_postcard;
 mod run_bench_prost;
 mod run_bench_avro;
 mod run_bench_flexbuffers;
@@ -62,6 +64,7 @@ fn main() {
     let np_lib    = "       [no_proto](https://crates.io/crates/no_proto)      ";
     let fb_lib    = "    [flatbuffers](https://crates.io/crates/flatbuffers)   ";
     let bn_lib    = "        [bincode](https://crates.io/crates/bincode)       ";
+    let pc_lib    = "       [postcard](https://crates.io/crates/postcard)      ";
     let pb_lib    = "       [protobuf](https://crates.io/crates/protobuf)      ";
     let msg_lib   = "            [rmp](https://crates.io/crates/rmp)           ";
     let json_lib  = "           [json](https://crates.io/crates/json)          ";
@@ -80,6 +83,7 @@ fn main() {
     let np_size = NoProtoBench::size_bench();
     let fb_size = FlatBufferBench::size_bench();
     let bn_size = BincodeBench::size_bench();
+    let pc_size = PostcardBench::size_bench();
     let pb_size = ProtocolBufferBench::size_bench();
     let msg_size = MessagePackBench::size_bench();
     let json_size = JSONBench::size_bench();
@@ -94,10 +98,11 @@ fn main() {
     let json2_size = SerdeJSONBench::size_bench();
 
     println!("\n======== ENCODE BENCHMARK ========");
-    
+
     let (base, np_enc) = NoProtoBench::encode_bench().unwrap();
     let fb_enc = FlatBufferBench::encode_bench(base);
     let bn_enc = BincodeBench::encode_bench(base);
+    let pc_enc = PostcardBench::encode_bench(base);
     let pb_enc = ProtocolBufferBench::encode_bench(base);
     let msg_enc = MessagePackBench::encode_bench(base);
     let json_enc = JSONBench::encode_bench(base);
@@ -116,6 +121,7 @@ fn main() {
     let (base, np_dec) = NoProtoBench::decode_bench().unwrap();
     let fb_dec = FlatBufferBench::decode_bench(base);
     let bn_dec = BincodeBench::decode_bench(base);
+    let pc_dec = PostcardBench::decode_bench(base);
     let pb_dec = ProtocolBufferBench::decode_bench(base);
     let msg_dec = MessagePackBench::decode_bench(base);
     let json_dec = JSONBench::decode_bench(base);
@@ -134,6 +140,7 @@ fn main() {
     let (base, np_dec1) = NoProtoBench::decode_one_bench().unwrap();
     let fb_dec1 = FlatBufferBench::decode_one_bench(base);
     let bn_dec1 = BincodeBench::decode_one_bench(base);
+    let pc_dec1 = PostcardBench::decode_one_bench(base);
     let pb_dec1 = ProtocolBufferBench::decode_one_bench(base);
     let msg_dec1 = MessagePackBench::decode_one_bench(base);
     let json_dec1 = JSONBench::decode_one_bench(base);
@@ -152,6 +159,7 @@ fn main() {
     let (base, np_up) = NoProtoBench::update_bench().unwrap();
     let fb_up = FlatBufferBench::update_bench(base);
     let bn_up = BincodeBench::update_bench(base);
+    let pc_up = PostcardBench::update_bench(base);
     let pb_up = ProtocolBufferBench::update_bench(base);
     let msg_up = MessagePackBench::update_bench(base);
     let json_up = JSONBench::update_bench(base);
@@ -191,6 +199,8 @@ fn main() {
     println!("//! | {} |  {} |     {} |   {} |   {} |          {} |         {} |", fb_lib, fb_enc, fb_dec, fb_dec1, fb_up, fb_size.0, fb_size.1);
     println!("//! | Bincode                                                    |         |            |          |          |              |             |");
     println!("//! | {} |  {} |     {} |   {} |   {} |          {} |         {} |", bn_lib, bn_enc, bn_dec, bn_dec1, bn_up, bn_size.0, bn_size.1);
+    println!("//! | Postcard                                                   |         |            |          |          |              |             |");
+    println!("//! | {} |  {} |     {} |   {} |   {} |          {} |         {} |", pc_lib, pc_enc, pc_dec, pc_dec1, pc_up, pc_size.0, pc_size.1);
     println!("//! | Protocol Buffers                                           |         |            |          |          |              |             |");
     println!("//! | {} |  {} |     {} |   {} |   {} |          {} |         {} |", pb_lib, pb_enc, pb_dec, pb_dec1, pb_up, pb_size.0, pb_size.1);
     println!("//! | {} |  {} |     {} |   {} |   {} |          {} |         {} |", pro_lib, pro_enc, pro_dec, pro_dec1, pro_up, pro_size.0, pro_size.1);
