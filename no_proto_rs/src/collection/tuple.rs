@@ -1,4 +1,4 @@
-use crate::{idl::JS_AST, pointer::NP_Cursor_Parent, schema::{NP_Tuple_Field, NP_Value_Kind}};
+use crate::{idl::JS_AST, pointer::NP_Cursor_Parent, schema::{NP_Schema_Data, NP_Tuple_Field, NP_Value_Kind}};
 use alloc::string::String;
 use crate::{idl::JS_Schema};
 
@@ -24,44 +24,51 @@ pub struct NP_Tuple {
 impl NP_Tuple {
 
     #[inline(always)]
-    pub fn select<M: NP_Memory>(mut tuple_cursor: NP_Cursor, empty: &Vec<u8>, values: &Vec<NP_Tuple_Field>, index: usize, make_path: bool, schema_query: bool, memory: &M) -> Result<Option<NP_Cursor>, NP_Error> {
+    pub fn select<M: NP_Memory>(mut tuple_cursor: NP_Cursor, schema: &NP_Parsed_Schema, index: usize, make_path: bool, schema_query: bool, memory: &M) -> Result<Option<NP_Cursor>, NP_Error> {
+    // pub fn select<M: NP_Memory>(mut tuple_cursor: NP_Cursor, empty: &Vec<u8>, values: &Vec<NP_Tuple_Field>, index: usize, make_path: bool, schema_query: bool, memory: &M) -> Result<Option<NP_Cursor>, NP_Error> {
 
-        if index >= values.len() {
-            return Ok(None)
+        match &*schema.data {
+            NP_Schema_Data::Tuple { values, empty, .. } => {
+                if index >= values.len() {
+                    return Ok(None)
+                }
+
+                if schema_query {
+                    return Ok(Some(NP_Cursor::new(0, values[index].schema, tuple_cursor.schema_addr)));
+                }
+
+                let value_schema_data = values[index].schema;
+
+                let mut tuple = tuple_cursor.get_value(memory);
+                if tuple.get_addr_value() == 0 {
+                    if make_path {
+                        tuple_cursor = Self::alloc_tuple(tuple_cursor, empty, memory)?;
+
+                        tuple = tuple_cursor.get_value(memory);
+                    } else {
+                        return Ok(None);
+                    }
+                }
+                
+                let item_address = tuple.get_addr_value() as usize + values[index].offset;
+
+                let mut cursor = NP_Cursor::new(item_address, value_schema_data, tuple_cursor.schema_addr);
+
+                cursor.parent_type = NP_Cursor_Parent::Tuple;
+
+                if values[index].fixed {
+                    cursor.value_bytes = Some((item_address as u16).to_be_bytes()); 
+                }
+
+                if memory.read_bytes()[item_address - 1] == 0 && make_path == false {
+                    Ok(None)
+                } else {
+                    Ok(Some(cursor))
+                }
+            },
+            _ => Err(NP_Error::Unreachable)
         }
 
-        if schema_query {
-            return Ok(Some(NP_Cursor::new(0, values[index].schema, tuple_cursor.schema_addr)));
-        }
-
-        let value_schema_data = values[index].schema;
-
-        let mut tuple = tuple_cursor.get_value(memory);
-        if tuple.get_addr_value() == 0 {
-            if make_path {
-                tuple_cursor = Self::alloc_tuple(tuple_cursor, empty, memory)?;
-
-                tuple = tuple_cursor.get_value(memory);
-            } else {
-                return Ok(None);
-            }
-        }
-        
-        let item_address = tuple.get_addr_value() as usize + values[index].offset;
-
-        let mut cursor = NP_Cursor::new(item_address, value_schema_data, tuple_cursor.schema_addr);
-
-        cursor.parent_type = NP_Cursor_Parent::Tuple;
-
-        if values[index].fixed {
-            cursor.value_bytes = Some((item_address as u16).to_be_bytes()); 
-        }
-
-        if memory.read_bytes()[item_address - 1] == 0 && make_path == false {
-            Ok(None)
-        } else {
-            Ok(Some(cursor))
-        }
     }
 
     #[inline(always)]
@@ -85,8 +92,8 @@ impl NP_Tuple {
 
     pub fn step_iter<M: NP_Memory>(&mut self, memory: &M, show_empty: bool) -> Option<(usize, Option<NP_Cursor>)> {
 
-        match &memory.get_schema(self.table.schema_addr) {
-            NP_Parsed_Schema::Tuple { values, empty, .. } => {
+        match &*memory.get_schema(self.table.schema_addr).data {
+            NP_Schema_Data::Tuple { values, empty, .. } => {
 
                 if values.len() <= self.index {
                     return None;
@@ -95,7 +102,7 @@ impl NP_Tuple {
                 let this_index = self.index;
                 self.index += 1;
 
-                let next_cursor = Self::select(self.table, empty, values, this_index, true, false, memory);
+                let next_cursor = Self::select(self.table, memory.get_schema(self.table.schema_addr), this_index, true, false, memory);
 
                 match next_cursor {
                     Ok(next) => {
@@ -151,9 +158,9 @@ impl<'value> NP_Value<'value> for NP_Tuple {
         let mut schema_json = JSMAP::new();
         schema_json.insert("type".to_owned(), NP_JSON::String(Self::type_idx().0.to_string()));
 
-        let schema_state: (bool, Vec<NP_JSON>) = match &schema[address] {
-            NP_Parsed_Schema::Tuple { sortable, values, .. } => {
-                (*sortable, values.into_iter().map(|column| {
+        let schema_state: (bool, Vec<NP_JSON>) = match &*schema[address].data {
+            NP_Schema_Data::Tuple { values, .. } => {
+                (schema[address].sortable, values.into_iter().map(|column| {
                     NP_Schema::_type_to_json(schema, column.schema).unwrap_or(NP_JSON::Null)
                 }).collect())
             },
@@ -171,13 +178,13 @@ impl<'value> NP_Value<'value> for NP_Tuple {
 
     fn set_from_json<'set, M: NP_Memory>(depth: usize, apply_null: bool, cursor: NP_Cursor, memory: &'set M, value: &Box<NP_JSON>) -> Result<(), NP_Error> where Self: 'set + Sized {
         
-        match memory.get_schema(cursor.schema_addr) {
-            NP_Parsed_Schema::Tuple { values, empty, .. } => {
+        match &*memory.get_schema(cursor.schema_addr).data {
+            NP_Schema_Data::Tuple { values, empty, .. } => {
 
                 match &**value {
                     NP_JSON::Array(list) => {
                         for (idx, tuple_item) in list.iter().enumerate() {
-                            match NP_Tuple::select(cursor, empty, values, idx, true, false, memory)? {
+                            match NP_Tuple::select(cursor, memory.get_schema(cursor.schema_addr), idx, true, false, memory)? {
                                 Some(x) => {
                                     NP_Cursor::set_from_json(depth + 1, apply_null, x, memory, &Box::new(tuple_item.clone()))?;
                                 },
@@ -210,8 +217,8 @@ impl<'value> NP_Value<'value> for NP_Tuple {
 
         let mut tuple = Self::new_iter(&cursor, memory);
 
-        match memory.get_schema(cursor.schema_addr) {
-            NP_Parsed_Schema::Tuple { values, .. } => {
+        match &*memory.get_schema(cursor.schema_addr).data {
+            NP_Schema_Data::Tuple { values, .. } => {
                 while let Some((index, item)) = tuple.step_iter(memory, false) {
                     if let Some(cursor) = item {
                         acc_size += 1;
@@ -242,8 +249,8 @@ impl<'value> NP_Value<'value> for NP_Tuple {
 
         let c: Vec<NP_Tuple_Field>;
         let c2: Vec<u8> = Vec::new();
-        let (col_schemas, empty) = match &from_memory.get_schema(from_cursor.schema_addr) {
-            NP_Parsed_Schema::Tuple { values, empty,  .. } => {
+        let (col_schemas, empty) = match &*from_memory.get_schema(from_cursor.schema_addr).data {
+            NP_Schema_Data::Tuple { values, empty,  .. } => {
                 (values, empty)
             },
             _ => { c = Vec::new(); (&c, &c2) }
@@ -264,8 +271,8 @@ impl<'value> NP_Value<'value> for NP_Tuple {
     }
 
     fn schema_to_idl(schema: &Vec<NP_Parsed_Schema>, address: usize)-> Result<String, NP_Error> {
-        match &schema[address] {
-            NP_Parsed_Schema::Tuple { values, sortable, .. } => {
+        match &*schema[address].data {
+            NP_Schema_Data::Tuple { values, .. } => {
                 let mut result = String::from("tuple({values: [");
 
                 let last_index = values.len() - 1;
@@ -277,7 +284,7 @@ impl<'value> NP_Value<'value> for NP_Tuple {
                 }
 
                 result.push_str("]");
-                if *sortable == true {
+                if schema[address].sortable == true {
                     result.push_str(", sorted: true");
                 }
                 result.push_str("})");
@@ -328,12 +335,11 @@ impl<'value> NP_Value<'value> for NP_Tuple {
 
             let mut column_schemas: Vec<Vec<u8>> = Vec::new();
             let tuple_addr = schema.len();
-            schema.push(NP_Parsed_Schema::Tuple {
+            schema.push(NP_Parsed_Schema {
                 val: NP_Value_Kind::Pointer,
                 i: NP_TypeKeys::Tuple,
                 sortable: sorted,
-                values: Vec::new(),
-                empty: Vec::new()
+                data: Box::new(NP_Schema_Data::Tuple { values: Vec::new(), empty: Vec::new() })
             });
     
             let mut tuple_values: Vec<NP_Tuple_Field> = Vec::new();
@@ -345,14 +351,14 @@ impl<'value> NP_Value<'value> for NP_Tuple {
             for col in tuple_vals {
                 let schema_len = working_schema.len();
                 let (is_sortable, schema_bytes, schema ) = NP_Schema::from_idl(working_schema, idl, &col)?;
-                match schema[schema_len].get_offset() {
+                match schema[schema_len].val {
                     NP_Value_Kind::Pointer => {
                         tuple_values.push(NP_Tuple_Field { schema: schema_len, offset: data_offset, size: 0, fixed: false });
                         data_offset += 2;
                     },
                     NP_Value_Kind::Fixed(x) => {
-                        tuple_values.push(NP_Tuple_Field { schema: schema_len, offset: data_offset, size: *x as usize, fixed: true });
-                        data_offset += *x as usize;
+                        tuple_values.push(NP_Tuple_Field { schema: schema_len, offset: data_offset, size: x as usize, fixed: true });
+                        data_offset += x as usize;
                     }
                 }
                 data_offset += 1;
@@ -363,12 +369,11 @@ impl<'value> NP_Value<'value> for NP_Tuple {
                 column_schemas.push(schema_bytes);
             }
             
-            working_schema[tuple_addr] = NP_Parsed_Schema::Tuple {
+            working_schema[tuple_addr] = NP_Parsed_Schema {
                 val: NP_Value_Kind::Pointer,
                 i: NP_TypeKeys::Tuple,
                 sortable: sorted,
-                values: tuple_values,
-                empty: vec![0; data_offset - 1]
+                data: Box::new(NP_Schema_Data::Tuple { values: tuple_values, empty: vec![0; data_offset - 1] })
             };
 
             if column_schemas.len() > 255 {
@@ -415,12 +420,11 @@ impl<'value> NP_Value<'value> for NP_Tuple {
 
         let mut column_schemas: Vec<Vec<u8>> = Vec::new();
         let tuple_addr = schema.len();
-        schema.push(NP_Parsed_Schema::Tuple {
+        schema.push(NP_Parsed_Schema {
             val: NP_Value_Kind::Pointer,
             i: NP_TypeKeys::Tuple,
             sortable: sorted,
-            values: Vec::new(),
-            empty: Vec::new()
+            data: Box::new(NP_Schema_Data::Tuple { values: Vec::new(), empty: Vec::new() })
         });
 
         let mut tuple_values: Vec<NP_Tuple_Field> = Vec::new();
@@ -435,14 +439,14 @@ impl<'value> NP_Value<'value> for NP_Tuple {
                     let schema_len = working_schema.len();
                     let (is_sortable, schema_bytes, schema ) = NP_Schema::from_json(working_schema, &Box::new(col.clone()))?;
                     
-                    match schema[schema_len].get_offset() {
+                    match schema[schema_len].val {
                         NP_Value_Kind::Pointer => {
                             tuple_values.push(NP_Tuple_Field { schema: schema_len, offset: data_offset, size: 0, fixed: false });
                             data_offset += 2;
                         },
                         NP_Value_Kind::Fixed(x) => {
-                            tuple_values.push(NP_Tuple_Field { schema: schema_len, offset: data_offset, size: *x as usize, fixed: true });
-                            data_offset += *x as usize;
+                            tuple_values.push(NP_Tuple_Field { schema: schema_len, offset: data_offset, size: x as usize, fixed: true });
+                            data_offset += x as usize;
                         }
                     }
                     data_offset += 1;
@@ -458,12 +462,11 @@ impl<'value> NP_Value<'value> for NP_Tuple {
             }
         }
         
-        working_schema[tuple_addr] = NP_Parsed_Schema::Tuple {
+        working_schema[tuple_addr] = NP_Parsed_Schema {
             val: NP_Value_Kind::Pointer,
             i: NP_TypeKeys::Tuple,
             sortable: sorted,
-            values: tuple_values,
-            empty: vec![0; data_offset - 1]
+            data: Box::new(NP_Schema_Data::Tuple { values: tuple_values, empty: vec![0; data_offset - 1] })
         };
 
         if column_schemas.len() > 255 {
@@ -500,12 +503,11 @@ impl<'value> NP_Value<'value> for NP_Tuple {
         let mut working_schema = schema;
 
         let tuple_schema_addr = working_schema.len();
-        working_schema.push(NP_Parsed_Schema::Tuple {
+        working_schema.push(NP_Parsed_Schema {
             val: NP_Value_Kind::Pointer,
             i: NP_TypeKeys::Tuple,
-            values: Vec::new(), 
             sortable: is_sorted != 0,
-            empty: Vec::new()
+            data: Box::new(NP_Schema_Data::Tuple { values: Vec::new(), empty: Vec::new() })
         });
 
         let mut tuple_values: Vec<NP_Tuple_Field> = Vec::new();
@@ -522,14 +524,14 @@ impl<'value> NP_Value<'value> for NP_Tuple {
             ]) as usize;
             let schema_len = working_schema.len();
             let (_sortable, schema) = NP_Schema::from_bytes(working_schema, offset + 2, bytes);
-            match schema[schema_len].get_offset() {
+            match schema[schema_len].val {
                 NP_Value_Kind::Pointer => {
                     tuple_values.push(NP_Tuple_Field { schema: schema_len, offset: data_offset, size: 0, fixed: false });
                     data_offset += 2;
                 },
                 NP_Value_Kind::Fixed(x) => {
-                    tuple_values.push(NP_Tuple_Field { schema: schema_len, offset: data_offset, size: *x as usize, fixed: true });
-                    data_offset += *x as usize;
+                    tuple_values.push(NP_Tuple_Field { schema: schema_len, offset: data_offset, size: x as usize, fixed: true });
+                    data_offset += x as usize;
                 }
             }
             data_offset += 1;
@@ -538,12 +540,11 @@ impl<'value> NP_Value<'value> for NP_Tuple {
             offset += schema_size + 2;
         }
 
-        working_schema[tuple_schema_addr] = NP_Parsed_Schema::Tuple {
+        working_schema[tuple_schema_addr] = NP_Parsed_Schema {
             val: NP_Value_Kind::Pointer,
             i: NP_TypeKeys::Tuple,
-            values: tuple_values, 
             sortable: is_sorted != 0,
-            empty: vec![0; data_offset - 1]
+            data: Box::new(NP_Schema_Data::Tuple { values: tuple_values, empty: vec![0; data_offset - 1] })
         };
 
         (is_sorted != 0, working_schema)

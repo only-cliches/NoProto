@@ -28,7 +28,7 @@ pub mod union;
 use core::{fmt::{Debug}};
 
 use alloc::prelude::v1::Box;
-use crate::{idl::{JS_AST, JS_Schema}, pointer::dec::NP_Dec, schema::{NP_Schema_Addr}, utils::opt_err};
+use crate::{idl::{JS_AST, JS_Schema}, pointer::dec::NP_Dec, schema::{NP_Schema_Addr, NP_Schema_Data}, utils::opt_err};
 use crate::NP_Parsed_Schema;
 use crate::{json_flex::NP_JSON};
 use crate::memory::{NP_Memory};
@@ -234,14 +234,14 @@ impl<'cursor> NP_Cursor {
         if self.buff_addr == memory.get_root() || self.buff_addr > memory.read_bytes().len() {
             unsafe { &mut *(ptr.add(memory.get_root()) as *mut NP_Pointer_Scalar) }
         } else {
-            match memory.get_schema(self.parent_schema_addr) {
-                NP_Parsed_Schema::List { .. } => {
+            match memory.get_schema(self.parent_schema_addr).i {
+                NP_TypeKeys::List   => {
                     unsafe { &mut *(ptr.add(self.buff_addr) as *mut NP_Pointer_List_Item) }
                 },
-                NP_Parsed_Schema::Map { .. } => {
+                NP_TypeKeys::Map    => {
                     unsafe { &mut *(ptr.add(self.buff_addr) as *mut NP_Pointer_Map_Item) }
                 },
-                NP_Parsed_Schema::Tuple { .. } => {
+                NP_TypeKeys::Tuple  => {
                     match &self.value_bytes {
                         Some(x) => unsafe { &mut *(x as *const u8 as *mut NP_Pointer_Scalar) },
                         None => unsafe { &mut *(ptr.add(self.buff_addr) as *mut NP_Pointer_Scalar) }
@@ -256,6 +256,7 @@ impl<'cursor> NP_Cursor {
 
     /// Given a starting cursor, select into the buffer at a new location
     /// 
+    #[inline(always)]
     pub fn select<M: NP_Memory>(memory: &M, cursor: NP_Cursor, make_path: bool, schema_query: bool, path: &[&str]) -> Result<Option<NP_Cursor>, NP_Error> {
 
         let mut loop_cursor = cursor;
@@ -275,21 +276,23 @@ impl<'cursor> NP_Cursor {
             if loop_count > 256 {
                 return Err(NP_Error::RecursionLimit)
             }
+
+            let schema = memory.get_schema(loop_cursor.schema_addr);
     
             // now select into collections
-            match memory.get_schema(loop_cursor.schema_addr) {
-                NP_Parsed_Schema::Struct { fields, empty, .. } => {
-                    if let Some(next) = NP_Struct::select(loop_cursor, empty, fields, path[path_index], make_path, schema_query, memory)? {
+            match schema.i {
+                NP_TypeKeys::Struct => {
+                    if let Some(next) = NP_Struct::select(loop_cursor, schema, path[path_index], make_path, schema_query, memory)? {
                         loop_cursor = next;
                         path_index += 1;
                     } else {
                         return Ok(None);
                     }
                 },
-                NP_Parsed_Schema::Tuple { values, empty, .. } => {
+                NP_TypeKeys::Tuple => {
                     match path[path_index].parse::<usize>() {
                         Ok(x) => {
-                            if let Some(next) = NP_Tuple::select(loop_cursor, empty, values, x, make_path, schema_query, memory)? {
+                            if let Some(next) = NP_Tuple::select(loop_cursor, schema, x, make_path, schema_query, memory)? {
                                 loop_cursor = next;
                                 path_index += 1;
                             } else {
@@ -301,7 +304,7 @@ impl<'cursor> NP_Cursor {
                         }
                     }
                 },
-                NP_Parsed_Schema::List { .. } => {
+                NP_TypeKeys::List => {
                     match path[path_index].parse::<usize>() {
                         Ok(x) => {
                             if let Some(next) = NP_List::select(loop_cursor, x, make_path, schema_query, memory)? {
@@ -316,7 +319,7 @@ impl<'cursor> NP_Cursor {
                         }
                     }
                 },
-                NP_Parsed_Schema::Map { .. } => {
+                NP_TypeKeys::Map => {
                     if let Some(next) = NP_Map::select(loop_cursor, path[path_index], make_path, schema_query, memory)? {
                         loop_cursor = next;
                         path_index += 1;
@@ -325,17 +328,19 @@ impl<'cursor> NP_Cursor {
                     }
     
                 },
-                NP_Parsed_Schema::Union { types, .. } => {
-                    if let Some(next) = NP_Union::select(loop_cursor, types, path[path_index], make_path, schema_query, memory)? {
-                        loop_cursor = next;
-                        path_index += 1;
-                    } else {
-                        return Ok(None);
+                // NP_TypeKeys::Union { types, .. } => {
+                //     if let Some(next) = NP_Union::select(loop_cursor, types, path[path_index], make_path, schema_query, memory)? {
+                //         loop_cursor = next;
+                //         path_index += 1;
+                //     } else {
+                //         return Ok(None);
+                //     }
+                // },
+                NP_TypeKeys::Portal => {
+                    if let NP_Schema_Data::Portal { schema, parent_schema, .. } = &*schema.data {
+                        loop_cursor.schema_addr = *schema;
+                        loop_cursor.parent_schema_addr = *parent_schema;
                     }
-                },
-                NP_Parsed_Schema::Portal { schema, parent_schema, .. } => {
-                    loop_cursor.schema_addr = *schema;
-                    loop_cursor.parent_schema_addr = *parent_schema;
                 },
                 _ => { // we've reached a scalar value but not at the end of the path
                     return Ok(None);
@@ -351,27 +356,27 @@ impl<'cursor> NP_Cursor {
             memory.write_bytes()[cursor.buff_addr - 1] = 1;
         }
 
-        match memory.get_schema(cursor.schema_addr) {
-            NP_Parsed_Schema::Boolean    { .. } => {       bool::set_value(cursor, memory, opt_err(    bool::np_max_value(&cursor, memory))?)?; } ,
-            NP_Parsed_Schema::UTF8String { .. } => {     String::set_value(cursor, memory, opt_err(   String::np_max_value(&cursor, memory))?)?; } ,
-            NP_Parsed_Schema::Bytes      { .. } => {   NP_Bytes::set_value(cursor, memory, opt_err( NP_Bytes::np_max_value(&cursor, memory))?)?; } ,
-            NP_Parsed_Schema::Int8       { .. } => {         i8::set_value(cursor, memory, opt_err(       i8::np_max_value(&cursor, memory))?)?; } ,
-            NP_Parsed_Schema::Int16      { .. } => {        i16::set_value(cursor, memory, opt_err(      i16::np_max_value(&cursor, memory))?)?; } ,
-            NP_Parsed_Schema::Int32      { .. } => {        i32::set_value(cursor, memory, opt_err(      i32::np_max_value(&cursor, memory))?)?; } ,
-            NP_Parsed_Schema::Int64      { .. } => {        i64::set_value(cursor, memory, opt_err(      i64::np_max_value(&cursor, memory))?)?; } ,
-            NP_Parsed_Schema::Uint8      { .. } => {         u8::set_value(cursor, memory, opt_err(       u8::np_max_value(&cursor, memory))?)?; } ,
-            NP_Parsed_Schema::Uint16     { .. } => {        u16::set_value(cursor, memory, opt_err(      u16::np_max_value(&cursor, memory))?)?; } ,
-            NP_Parsed_Schema::Uint32     { .. } => {        u32::set_value(cursor, memory, opt_err(      u32::np_max_value(&cursor, memory))?)?; } ,
-            NP_Parsed_Schema::Uint64     { .. } => {        u64::set_value(cursor, memory, opt_err(      u64::np_max_value(&cursor, memory))?)?; } ,
-            NP_Parsed_Schema::Float      { .. } => {        f32::set_value(cursor, memory, opt_err(      f32::np_max_value(&cursor, memory))?)?; } ,
-            NP_Parsed_Schema::Double     { .. } => {        f64::set_value(cursor, memory, opt_err(      f64::np_max_value(&cursor, memory))?)?; } ,
-            NP_Parsed_Schema::Decimal    { .. } => {     NP_Dec::set_value(cursor, memory, opt_err(   NP_Dec::np_max_value(&cursor, memory))?)?; } ,
-            NP_Parsed_Schema::Geo        { .. } => {     NP_Geo::set_value(cursor, memory, opt_err(   NP_Geo::np_max_value(&cursor, memory))?)?; } ,
-            NP_Parsed_Schema::Date       { .. } => {    NP_Date::set_value(cursor, memory, opt_err(  NP_Date::np_max_value(&cursor, memory))?)?; } ,
-            NP_Parsed_Schema::Enum       { .. } => {    NP_Enum::set_value(cursor, memory, opt_err(  NP_Enum::np_max_value(&cursor, memory))?)?; } ,
-            NP_Parsed_Schema::Uuid       { .. } => {    NP_UUID::set_value(cursor, memory, opt_err(  NP_UUID::np_max_value(&cursor, memory))?)?; } ,
-            NP_Parsed_Schema::Ulid       { .. } => {    NP_ULID::set_value(cursor, memory, opt_err(  NP_ULID::np_max_value(&cursor, memory))?)?; } ,
-            NP_Parsed_Schema::Struct      { .. } => {
+        match memory.get_schema(cursor.schema_addr).i {
+            NP_TypeKeys::Boolean    => {       bool::set_value(cursor, memory, opt_err(    bool::np_max_value(&cursor, memory))?)?; } ,
+            NP_TypeKeys::UTF8String => {     String::set_value(cursor, memory, opt_err(   String::np_max_value(&cursor, memory))?)?; } ,
+            NP_TypeKeys::Bytes      => {   NP_Bytes::set_value(cursor, memory, opt_err( NP_Bytes::np_max_value(&cursor, memory))?)?; } ,
+            NP_TypeKeys::Int8       => {         i8::set_value(cursor, memory, opt_err(       i8::np_max_value(&cursor, memory))?)?; } ,
+            NP_TypeKeys::Int16      => {        i16::set_value(cursor, memory, opt_err(      i16::np_max_value(&cursor, memory))?)?; } ,
+            NP_TypeKeys::Int32      => {        i32::set_value(cursor, memory, opt_err(      i32::np_max_value(&cursor, memory))?)?; } ,
+            NP_TypeKeys::Int64      => {        i64::set_value(cursor, memory, opt_err(      i64::np_max_value(&cursor, memory))?)?; } ,
+            NP_TypeKeys::Uint8      => {         u8::set_value(cursor, memory, opt_err(       u8::np_max_value(&cursor, memory))?)?; } ,
+            NP_TypeKeys::Uint16     => {        u16::set_value(cursor, memory, opt_err(      u16::np_max_value(&cursor, memory))?)?; } ,
+            NP_TypeKeys::Uint32     => {        u32::set_value(cursor, memory, opt_err(      u32::np_max_value(&cursor, memory))?)?; } ,
+            NP_TypeKeys::Uint64     => {        u64::set_value(cursor, memory, opt_err(      u64::np_max_value(&cursor, memory))?)?; } ,
+            NP_TypeKeys::Float      => {        f32::set_value(cursor, memory, opt_err(      f32::np_max_value(&cursor, memory))?)?; } ,
+            NP_TypeKeys::Double     => {        f64::set_value(cursor, memory, opt_err(      f64::np_max_value(&cursor, memory))?)?; } ,
+            NP_TypeKeys::Decimal    => {     NP_Dec::set_value(cursor, memory, opt_err(   NP_Dec::np_max_value(&cursor, memory))?)?; } ,
+            NP_TypeKeys::Geo        => {     NP_Geo::set_value(cursor, memory, opt_err(   NP_Geo::np_max_value(&cursor, memory))?)?; } ,
+            NP_TypeKeys::Date       => {    NP_Date::set_value(cursor, memory, opt_err(  NP_Date::np_max_value(&cursor, memory))?)?; } ,
+            NP_TypeKeys::Enum       => {    NP_Enum::set_value(cursor, memory, opt_err(  NP_Enum::np_max_value(&cursor, memory))?)?; } ,
+            NP_TypeKeys::Uuid       => {    NP_UUID::set_value(cursor, memory, opt_err(  NP_UUID::np_max_value(&cursor, memory))?)?; } ,
+            NP_TypeKeys::Ulid       => {    NP_ULID::set_value(cursor, memory, opt_err(  NP_ULID::np_max_value(&cursor, memory))?)?; } ,
+            NP_TypeKeys::Struct     => {
                 let mut struc = NP_Struct::new_iter(&cursor, memory);
                 while let Some((_index, _key, item)) = struc.step_iter(memory) {
                     if let Some(item_cursor) = item {
@@ -379,7 +384,7 @@ impl<'cursor> NP_Cursor {
                     }
                 }
             },
-            NP_Parsed_Schema::Tuple      { .. } => {
+            NP_TypeKeys::Tuple      => {
                 let mut tuple = NP_Tuple::new_iter(&cursor, memory);
                 while let Some((_index, item)) = tuple.step_iter(memory, false) {
                     if let Some(item_cursor) = item {
@@ -387,7 +392,7 @@ impl<'cursor> NP_Cursor {
                     }
                 }
             },
-            NP_Parsed_Schema::List        { .. } => {
+            NP_TypeKeys::List       => {
                 let mut list = NP_List::new_iter(&cursor, memory, true, 0);
                 while let Some((_index, item)) = list.step_iter(memory) {
                     if let Some(item_cursor) = item {
@@ -395,7 +400,7 @@ impl<'cursor> NP_Cursor {
                     }
                 }
             },
-            NP_Parsed_Schema::Map        { .. } => {
+            NP_TypeKeys::Map        => {
                 let mut map = NP_Map::new_iter(&cursor, memory);
                 while let Some((_index, item_cursor)) = map.step_iter(memory) {
                     NP_Cursor::set_max(item_cursor.clone(), memory)?;
@@ -414,27 +419,27 @@ impl<'cursor> NP_Cursor {
             memory.write_bytes()[cursor.buff_addr - 1] = 1;
         }
 
-        match memory.get_schema(cursor.schema_addr) {
-            NP_Parsed_Schema::Boolean    { .. } => {       bool::set_value(cursor, memory, opt_err(    bool::np_min_value(&cursor, memory))?)?; } ,
-            NP_Parsed_Schema::UTF8String { .. } => {     String::set_value(cursor, memory, opt_err(   String::np_min_value(&cursor, memory))?)?; } ,
-            NP_Parsed_Schema::Bytes      { .. } => {   NP_Bytes::set_value(cursor, memory, opt_err( NP_Bytes::np_min_value(&cursor, memory))?)?; } ,
-            NP_Parsed_Schema::Int8       { .. } => {         i8::set_value(cursor, memory, opt_err(       i8::np_min_value(&cursor, memory))?)?; } ,
-            NP_Parsed_Schema::Int16      { .. } => {        i16::set_value(cursor, memory, opt_err(      i16::np_min_value(&cursor, memory))?)?; } ,
-            NP_Parsed_Schema::Int32      { .. } => {        i32::set_value(cursor, memory, opt_err(      i32::np_min_value(&cursor, memory))?)?; } ,
-            NP_Parsed_Schema::Int64      { .. } => {        i64::set_value(cursor, memory, opt_err(      i64::np_min_value(&cursor, memory))?)?; } ,
-            NP_Parsed_Schema::Uint8      { .. } => {         u8::set_value(cursor, memory, opt_err(       u8::np_min_value(&cursor, memory))?)?; } ,
-            NP_Parsed_Schema::Uint16     { .. } => {        u16::set_value(cursor, memory, opt_err(      u16::np_min_value(&cursor, memory))?)?; } ,
-            NP_Parsed_Schema::Uint32     { .. } => {        u32::set_value(cursor, memory, opt_err(      u32::np_min_value(&cursor, memory))?)?; } ,
-            NP_Parsed_Schema::Uint64     { .. } => {        u64::set_value(cursor, memory, opt_err(      u64::np_min_value(&cursor, memory))?)?; } ,
-            NP_Parsed_Schema::Float      { .. } => {        f32::set_value(cursor, memory, opt_err(      f32::np_min_value(&cursor, memory))?)?; } ,
-            NP_Parsed_Schema::Double     { .. } => {        f64::set_value(cursor, memory, opt_err(      f64::np_min_value(&cursor, memory))?)?; } ,
-            NP_Parsed_Schema::Decimal    { .. } => {     NP_Dec::set_value(cursor, memory, opt_err(   NP_Dec::np_min_value(&cursor, memory))?)?; } ,
-            NP_Parsed_Schema::Geo        { .. } => {     NP_Geo::set_value(cursor, memory, opt_err(   NP_Geo::np_min_value(&cursor, memory))?)?; } ,
-            NP_Parsed_Schema::Date       { .. } => {    NP_Date::set_value(cursor, memory, opt_err(  NP_Date::np_min_value(&cursor, memory))?)?; } ,
-            NP_Parsed_Schema::Enum       { .. } => {    NP_Enum::set_value(cursor, memory, opt_err(  NP_Enum::np_min_value(&cursor, memory))?)?; } ,
-            NP_Parsed_Schema::Uuid       { .. } => {    NP_UUID::set_value(cursor, memory, opt_err(  NP_UUID::np_min_value(&cursor, memory))?)?; } ,
-            NP_Parsed_Schema::Ulid       { .. } => {    NP_ULID::set_value(cursor, memory, opt_err(  NP_ULID::np_min_value(&cursor, memory))?)?; } ,
-            NP_Parsed_Schema::Struct      { .. } => {
+        match memory.get_schema(cursor.schema_addr).i {
+            NP_TypeKeys::Boolean    => {       bool::set_value(cursor, memory, opt_err(    bool::np_min_value(&cursor, memory))?)?; } ,
+            NP_TypeKeys::UTF8String => {     String::set_value(cursor, memory, opt_err(   String::np_min_value(&cursor, memory))?)?; } ,
+            NP_TypeKeys::Bytes      => {   NP_Bytes::set_value(cursor, memory, opt_err( NP_Bytes::np_min_value(&cursor, memory))?)?; } ,
+            NP_TypeKeys::Int8       => {         i8::set_value(cursor, memory, opt_err(       i8::np_min_value(&cursor, memory))?)?; } ,
+            NP_TypeKeys::Int16      => {        i16::set_value(cursor, memory, opt_err(      i16::np_min_value(&cursor, memory))?)?; } ,
+            NP_TypeKeys::Int32      => {        i32::set_value(cursor, memory, opt_err(      i32::np_min_value(&cursor, memory))?)?; } ,
+            NP_TypeKeys::Int64      => {        i64::set_value(cursor, memory, opt_err(      i64::np_min_value(&cursor, memory))?)?; } ,
+            NP_TypeKeys::Uint8      => {         u8::set_value(cursor, memory, opt_err(       u8::np_min_value(&cursor, memory))?)?; } ,
+            NP_TypeKeys::Uint16     => {        u16::set_value(cursor, memory, opt_err(      u16::np_min_value(&cursor, memory))?)?; } ,
+            NP_TypeKeys::Uint32     => {        u32::set_value(cursor, memory, opt_err(      u32::np_min_value(&cursor, memory))?)?; } ,
+            NP_TypeKeys::Uint64     => {        u64::set_value(cursor, memory, opt_err(      u64::np_min_value(&cursor, memory))?)?; } ,
+            NP_TypeKeys::Float      => {        f32::set_value(cursor, memory, opt_err(      f32::np_min_value(&cursor, memory))?)?; } ,
+            NP_TypeKeys::Double     => {        f64::set_value(cursor, memory, opt_err(      f64::np_min_value(&cursor, memory))?)?; } ,
+            NP_TypeKeys::Decimal    => {     NP_Dec::set_value(cursor, memory, opt_err(   NP_Dec::np_min_value(&cursor, memory))?)?; } ,
+            NP_TypeKeys::Geo        => {     NP_Geo::set_value(cursor, memory, opt_err(   NP_Geo::np_min_value(&cursor, memory))?)?; } ,
+            NP_TypeKeys::Date       => {    NP_Date::set_value(cursor, memory, opt_err(  NP_Date::np_min_value(&cursor, memory))?)?; } ,
+            NP_TypeKeys::Enum       => {    NP_Enum::set_value(cursor, memory, opt_err(  NP_Enum::np_min_value(&cursor, memory))?)?; } ,
+            NP_TypeKeys::Uuid       => {    NP_UUID::set_value(cursor, memory, opt_err(  NP_UUID::np_min_value(&cursor, memory))?)?; } ,
+            NP_TypeKeys::Ulid       => {    NP_ULID::set_value(cursor, memory, opt_err(  NP_ULID::np_min_value(&cursor, memory))?)?; } ,
+            NP_TypeKeys::Struct     => {
                 let mut struc = NP_Struct::new_iter(&cursor, memory);
                 while let Some((_index, _key, item)) = struc.step_iter(memory) {
                     if let Some(item_cursor) = item {
@@ -442,7 +447,7 @@ impl<'cursor> NP_Cursor {
                     }
                 }
             },
-            NP_Parsed_Schema::Tuple      { .. } => {
+            NP_TypeKeys::Tuple      => {
                 let mut tuple = NP_Tuple::new_iter(&cursor, memory);
                 while let Some((_index, item)) = tuple.step_iter(memory, false) {
                     if let Some(item_cursor) = item {
@@ -450,7 +455,7 @@ impl<'cursor> NP_Cursor {
                     }
                 }
             },
-            NP_Parsed_Schema::List        { .. } => {
+            NP_TypeKeys::List        => {
                 let mut list = NP_List::new_iter(&cursor, memory, true, 0);
                 while let Some((_index, item)) = list.step_iter(memory) {
                     if let Some(item_cursor) = item {
@@ -458,7 +463,7 @@ impl<'cursor> NP_Cursor {
                     }
                 }
             },
-            NP_Parsed_Schema::Map        { .. } => {
+            NP_TypeKeys::Map        => {
                 let mut map = NP_Map::new_iter(&cursor, memory);
                 while let Some((_index, item_cursor)) = map.step_iter(memory) {
                     NP_Cursor::set_min(item_cursor.clone(), memory)?;
@@ -477,7 +482,7 @@ impl<'cursor> NP_Cursor {
 
         if depth > 255 { return NP_JSON::Null }
 
-        match memory.get_schema(cursor.schema_addr).get_type_key() {
+        match memory.get_schema(cursor.schema_addr).i {
             NP_TypeKeys::None           => { NP_JSON::Null },
             NP_TypeKeys::Any            => { NP_JSON::Null },
             NP_TypeKeys::UTF8String     => {    String::to_json(depth, cursor, memory) },
@@ -499,7 +504,7 @@ impl<'cursor> NP_Cursor {
             NP_TypeKeys::Ulid           => {   NP_ULID::to_json(depth, cursor, memory) },
             NP_TypeKeys::Date           => {   NP_Date::to_json(depth, cursor, memory) },
             NP_TypeKeys::Enum           => {   NP_Enum::to_json(depth, cursor, memory) },
-            NP_TypeKeys::Struct          => {  NP_Struct::to_json(depth, cursor, memory) },
+            NP_TypeKeys::Struct         => { NP_Struct::to_json(depth, cursor, memory) },
             NP_TypeKeys::Map            => {    NP_Map::to_json(depth, cursor, memory) },
             NP_TypeKeys::List           => {   NP_List::to_json(depth, cursor, memory) },
             NP_TypeKeys::Tuple          => {  NP_Tuple::to_json(depth, cursor, memory) },
@@ -515,7 +520,7 @@ impl<'cursor> NP_Cursor {
 
         if depth > 255 { return Err(NP_Error::RecursionLimit)}
 
-        match from_memory.get_schema(from_cursor.schema_addr).get_type_key() {
+        match from_memory.get_schema(from_cursor.schema_addr).i {
             NP_TypeKeys::Any           => { Ok(to_cursor) }
             NP_TypeKeys::UTF8String    => {    String::do_compact(depth, from_cursor, from_memory, to_cursor, to_memory) }
             NP_TypeKeys::Bytes         => {  NP_Bytes::do_compact(depth, from_cursor, from_memory, to_cursor, to_memory) }
@@ -553,7 +558,7 @@ impl<'cursor> NP_Cursor {
 
         let schema = memory.get_schema(cursor.schema_addr);
 
-        match schema.get_type_key() {
+        match schema.i {
             NP_TypeKeys::None        => { return Err(NP_Error::Unreachable); },
             NP_TypeKeys::Any         => { return Err(NP_Error::Unreachable); },
             NP_TypeKeys::Struct       => { return Err(NP_Error::Unreachable); },
@@ -602,7 +607,7 @@ impl<'cursor> NP_Cursor {
             memory.write_bytes()[cursor.buff_addr - 1] = 1;
         }
 
-        match memory.get_schema(cursor.schema_addr).get_type_key() {
+        match memory.get_schema(cursor.schema_addr).i {
             NP_TypeKeys::None           => { Ok(()) },
             NP_TypeKeys::Any            => { Ok(()) },
             NP_TypeKeys::UTF8String     => {    String::set_from_json(depth, apply_null, cursor, memory, json) },
@@ -624,7 +629,7 @@ impl<'cursor> NP_Cursor {
             NP_TypeKeys::Ulid           => {   NP_ULID::set_from_json(depth, apply_null, cursor, memory, json) },
             NP_TypeKeys::Date           => {   NP_Date::set_from_json(depth, apply_null, cursor, memory, json) },
             NP_TypeKeys::Enum           => {   NP_Enum::set_from_json(depth, apply_null, cursor, memory, json) },
-            NP_TypeKeys::Struct          => {  NP_Struct::set_from_json(depth, apply_null, cursor, memory, json) },
+            NP_TypeKeys::Struct         => { NP_Struct::set_from_json(depth, apply_null, cursor, memory, json) },
             NP_TypeKeys::Map            => {    NP_Map::set_from_json(depth, apply_null, cursor, memory, json) },
             NP_TypeKeys::List           => {   NP_List::set_from_json(depth, apply_null, cursor, memory, json) },
             NP_TypeKeys::Tuple          => {  NP_Tuple::set_from_json(depth, apply_null, cursor, memory, json) },
@@ -647,17 +652,14 @@ impl<'cursor> NP_Cursor {
             memory.write_bytes()[cursor.buff_addr - 1] = 0;
         }
 
-        let is_sortable = match memory.get_schema(0) {
-            NP_Parsed_Schema::Tuple { sortable , ..} => *sortable,
-            _ => false
-        };
+        let is_sortable = memory.get_schema(0).sortable;
         
         if is_sortable {
-            match memory.get_schema(cursor.schema_addr) {
-                NP_Parsed_Schema::Struct { .. } => { return Ok(false) },
-                NP_Parsed_Schema::Tuple { .. } => { return Ok(false) },
-                NP_Parsed_Schema::List  { .. } => { return Ok(false) },
-                NP_Parsed_Schema::Map   { .. } => { return Ok(false) },
+            match memory.get_schema(cursor.schema_addr).i {
+                NP_TypeKeys::Struct  => { return Ok(false) },
+                NP_TypeKeys::Tuple   => { return Ok(false) },
+                NP_TypeKeys::List    => { return Ok(false) },
+                NP_TypeKeys::Map     => { return Ok(false) },
                 _ => NP_Cursor::set_schema_default(cursor, memory)?
             }
         } else {
@@ -676,10 +678,10 @@ impl<'cursor> NP_Cursor {
         
         let value = cursor.get_value(memory);
 
-        let type_key = memory.get_schema(cursor.schema_addr).get_type_key();
+        let type_key = memory.get_schema(cursor.schema_addr).i;
 
         // size of pointer
-        let base_size = if *type_key == NP_TypeKeys::Portal { 0 } else { value.get_size() };
+        let base_size = if type_key == NP_TypeKeys::Portal { 0 } else { value.get_size() };
 
         // pointer is in buffer but has no value set
         if value.get_addr_value() == 0 { // no value, just base size
@@ -709,7 +711,7 @@ impl<'cursor> NP_Cursor {
             NP_TypeKeys::Ulid         => {   NP_ULID::get_size(depth, cursor, memory) },
             NP_TypeKeys::Date         => {   NP_Date::get_size(depth, cursor, memory) },
             NP_TypeKeys::Enum         => {   NP_Enum::get_size(depth, cursor, memory) },
-            NP_TypeKeys::Struct        => {  NP_Struct::get_size(depth, cursor, memory) },
+            NP_TypeKeys::Struct       => { NP_Struct::get_size(depth, cursor, memory) },
             NP_TypeKeys::Map          => {    NP_Map::get_size(depth, cursor, memory) },
             NP_TypeKeys::List         => {   NP_List::get_size(depth, cursor, memory) },
             NP_TypeKeys::Tuple        => {  NP_Tuple::get_size(depth, cursor, memory) },

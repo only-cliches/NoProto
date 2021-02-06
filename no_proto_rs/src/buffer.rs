@@ -1,7 +1,7 @@
 //! Top level abstraction for buffer objects
 
 use alloc::prelude::v1::Box;
-use crate::{json_decode, json_flex::JSMAP, memory::{NP_Mem_New, NP_Memory_Kind}, pointer::NP_Cursor_Parent};
+use crate::{json_decode, json_flex::JSMAP, memory::{NP_Mem_New, NP_Memory_Kind}, pointer::NP_Cursor_Parent, schema::NP_Schema_Data};
 use alloc::string::String;
 use crate::{NP_Size_Data, schema::NP_TypeKeys};
 use crate::{memory::NP_Memory_Owned, utils::opt_err};
@@ -350,11 +350,11 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
             Some(x) => {
 
                 // type does not match schema
-                if X::type_idx().1 != *self.memory.get_schema(x.schema_addr).get_type_key() {
+                if X::type_idx().1 != self.memory.get_schema(x.schema_addr).i {
                     let mut err = "TypeError: Attempted to set value for type (".to_owned();
                     err.push_str(X::type_idx().0);
                     err.push_str(") into schema of type (");
-                    err.push_str(self.memory.get_schema(x.schema_addr).get_type_data().0);
+                    err.push_str(self.memory.get_schema(x.schema_addr).i.into_type_idx().0);
                     err.push_str(")\n");
                     return Err(NP_Error::new(err));
                 }
@@ -656,17 +656,25 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
             None => return Ok(None)
         }};
 
-        match &self.memory.get_schema(list_cursor.schema_addr) {
-            NP_Parsed_Schema::List { of, .. } => {
+        let schema = self.memory.get_schema(list_cursor.schema_addr);
 
-                let of_schema = &self.memory.get_schema(*of);
+        match schema.i {
+            NP_TypeKeys::List => {
+
+                let of = if let NP_Schema_Data::List { of, .. } = &*schema.data {
+                    *of
+                } else {
+                    0
+                };
+                    
+                let of_schema = &self.memory.get_schema(of);
 
                 // type does not match schema
-                if X::type_idx().1 != *of_schema.get_type_key() {
+                if X::type_idx().1 != of_schema.i {
                     let mut err = "TypeError: Attempted to set value for type (".to_owned();
                     err.push_str(X::type_idx().0);
                     err.push_str(") into schema of type (");
-                    err.push_str(of_schema.get_type_data().0);
+                    err.push_str(of_schema.i.into_type_idx().0);
                     err.push_str(")\n");
                     return Err(NP_Error::new(err));
                 }
@@ -805,24 +813,31 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
 
         let addr_value = found_cursor.get_value(&self.memory).get_addr_value();
 
+        let schema = self.memory.get_schema(found_cursor.schema_addr);
 
-        match &self.memory.get_schema(found_cursor.schema_addr) {
-            NP_Parsed_Schema::List { of, .. } => {
+        match schema.i {
+            NP_TypeKeys::List => {
                 if addr_value == 0 {
                     return Ok(None);
                 }
+
+                let of = if let NP_Schema_Data::List { of, .. } = &*schema.data {
+                    *of
+                } else {
+                    0
+                };
 
                 let list_data = NP_List::get_list(addr_value as usize, &self.memory);
                 let tail_addr = list_data.get_tail() as usize;
                 if tail_addr == 0 {
                     Ok(Some(0))
                 } else {
-                    let tail_cursor = NP_Cursor::new(tail_addr, *of, found_cursor.schema_addr);
+                    let tail_cursor = NP_Cursor::new(tail_addr, of, found_cursor.schema_addr);
                     let cursor_data = tail_cursor.get_value(&self.memory);
                     Ok(Some(cursor_data.get_index() as usize + 1))
                 }
             },
-            NP_Parsed_Schema::Map { .. } => {
+            NP_TypeKeys::Map => {
                 if addr_value == 0 {
                     return Ok(None);
                 }
@@ -837,26 +852,42 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
 
                 Ok(Some(count))
             },
-            NP_Parsed_Schema::Struct { fields, ..} => {
-                Ok(Some(fields.len()))
-            },
-            NP_Parsed_Schema::Tuple { values, .. } => {
-                Ok(Some(values.len()))
-            },
-            NP_Parsed_Schema::Bytes {  size, ..} => {
-                if *size > 0 {
-                    Ok(Some(*size as usize))
+            NP_TypeKeys::Struct => {
+                if let NP_Schema_Data::Struct { fields, .. } = &*schema.data {
+                    Ok(Some(fields.len()))
                 } else {
-                    let length_bytes = self.memory.get_2_bytes(addr_value as usize).unwrap_or(&[0u8; 2]);
-                    Ok(Some(u16::from_be_bytes(*length_bytes) as usize))
+                    Err(NP_Error::Unreachable)
                 }
             },
-            NP_Parsed_Schema::UTF8String { size, .. } => {
-                if *size > 0 {
-                    Ok(Some(*size as usize))
+            NP_TypeKeys::Tuple => {
+                if let NP_Schema_Data::Tuple { values, .. } = &*schema.data {
+                    Ok(Some(values.len()))
                 } else {
-                    let length_bytes = self.memory.get_2_bytes(addr_value as usize).unwrap_or(&[0u8; 2]);
-                    Ok(Some(u16::from_be_bytes(*length_bytes) as usize))
+                    Err(NP_Error::Unreachable)
+                }
+            },
+            NP_TypeKeys::Bytes => {
+                if let NP_Schema_Data::Bytes { size, .. } = &*schema.data {
+                    if *size > 0 {
+                        Ok(Some(*size as usize))
+                    } else {
+                        let length_bytes = self.memory.get_2_bytes(addr_value as usize).unwrap_or(&[0u8; 2]);
+                        Ok(Some(u16::from_be_bytes(*length_bytes) as usize))
+                    }
+                } else {
+                    Err(NP_Error::Unreachable)
+                }
+            },
+            NP_TypeKeys::UTF8String => {
+                if let NP_Schema_Data::UTF8String { size, .. } = &*schema.data {
+                    if *size > 0 {
+                        Ok(Some(*size as usize))
+                    } else {
+                        let length_bytes = self.memory.get_2_bytes(addr_value as usize).unwrap_or(&[0u8; 2]);
+                        Ok(Some(u16::from_be_bytes(*length_bytes) as usize))
+                    }
+                } else {
+                    Err(NP_Error::Unreachable)
                 }
             },
             _ => {
@@ -939,7 +970,7 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
 
         match NP_Cursor::select(&self.memory, self.cursor.clone(), false, true, path)? {
             Some(x) => {
-                Ok(Some(*self.memory.get_schema(x.schema_addr).get_type_key()))
+                Ok(Some(self.memory.get_schema(x.schema_addr).i))
             }
             None => Ok(None)
         }
@@ -988,11 +1019,11 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
             Some(x) => {
                                 
                 // type does not match schema
-                if X::type_idx().1 != *self.memory.get_schema(x.schema_addr).get_type_key() {
+                if X::type_idx().1 != self.memory.get_schema(x.schema_addr).i {
                     let mut err = "TypeError: Attempted to get schema for type (".to_owned();
                     err.push_str(X::type_idx().0);
                     err.push_str(") for schema of type (");
-                    err.push_str(self.memory.get_schema(x.schema_addr).get_type_data().0);
+                    err.push_str(self.memory.get_schema(x.schema_addr).i.into_type_idx().0);
                     err.push_str(")\n");
                     return Err(NP_Error::new(err));
                 }
@@ -1040,11 +1071,11 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
             Some(x) => {
                                 
                 // type does not match schema
-                if X::type_idx().1 != *self.memory.get_schema(x.schema_addr).get_type_key() {
+                if X::type_idx().1 != self.memory.get_schema(x.schema_addr).i {
                     let mut err = "TypeError: Attempted to get value for type (".to_owned();
                     err.push_str(X::type_idx().0);
                     err.push_str(") for schema of type (");
-                    err.push_str(self.memory.get_schema(x.schema_addr).get_type_data().0);
+                    err.push_str(self.memory.get_schema(x.schema_addr).i.into_type_idx().0);
                     err.push_str(")\n");
                     return Err(NP_Error::new(err));
                 }
@@ -1124,6 +1155,10 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
     /// ```
     /// 
     pub fn maybe_compact<F>(&mut self, new_capacity: Option<usize>, mut callback: F) -> Result<(), NP_Error> where F: FnMut(NP_Size_Data) -> bool {
+
+        if self.mutable == false {
+            return Err(NP_Error::MemoryReadOnly)
+        }
 
         let bytes_data = self.calc_bytes()?;
 
@@ -1233,7 +1268,7 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
     /// 
     /// This works identically to `.compact` except compaction happens into a new buffer, instead of into the existing buffer.
     /// 
-    /// If the buffer was opened with as read only with `.open_buffer_ref` this is the only way to do compaction.
+    /// If the buffer was opened as read only with `.open_buffer_ref` this is the only way to do compaction.
     /// 
     pub fn compact_into(&mut self, new_capacity: Option<usize>) -> Result<NP_Buffer<NP_Memory_Owned>, NP_Error> {
 
@@ -1380,18 +1415,19 @@ impl<'item, M: NP_Memory> NP_Item<'item, M> {
         if let Some(cursor) = self.cursor {
             X::set_value(cursor.clone(), self.memory, value)?;
         } else {
-            match self.memory.get_schema(self.parent.schema_addr) {
+            let schema = self.memory.get_schema(self.parent.schema_addr);
+            match schema.i {
                 // maps don't let you select values that don't exist in the buffer yet
-                NP_Parsed_Schema::List { .. } => {
+                NP_TypeKeys::List => {
                     let item = opt_err(opt_err(NP_List::select(self.parent.clone(), self.index, true, false, self.memory)?)?.1)?;
                     X::set_value(item, self.memory, value)?;
                 }
-                NP_Parsed_Schema::Struct { fields, empty, .. } => {
-                    let item = opt_err(NP_Struct::select(self.parent.clone(), empty, fields, &self.key, true, false, self.memory)?)?;
+                NP_TypeKeys::Struct => {
+                    let item = opt_err(NP_Struct::select(self.parent.clone(), schema, &self.key, true, false, self.memory)?)?;
                     X::set_value(item, self.memory, value)?;
                 },
-                NP_Parsed_Schema::Tuple { values, empty,  .. } => {
-                    let item = opt_err(NP_Tuple::select(self.parent.clone(), empty, values, self.index, true, false, self.memory)?)?;
+                NP_TypeKeys::Tuple => {
+                    let item = opt_err(NP_Tuple::select(self.parent.clone(), schema, self.index, true, false, self.memory)?)?;
                     X::set_value(item, self.memory, value)?;
                 }
                 _ => { }
@@ -1439,20 +1475,20 @@ pub enum NP_Iterator_Collection<'col> {
 #[allow(missing_docs)]
 impl<'col> NP_Iterator_Collection<'col> {
     pub fn new<M: NP_Memory>(cursor: NP_Cursor, memory: &'col M) -> Result<Self, NP_Error> {
-        match memory.get_schema(cursor.schema_addr) {
-            NP_Parsed_Schema::Struct { .. } => {
+        match memory.get_schema(cursor.schema_addr).i {
+            NP_TypeKeys::Struct  => {
                 let struc = NP_Struct::new_iter(&cursor, memory);
                 Ok(NP_Iterator_Collection::Struct(struc))
             },
-            NP_Parsed_Schema::List { .. } => {
+            NP_TypeKeys::List    => {
                 let list = NP_List::new_iter(&cursor, memory, false, 0);
                 Ok(NP_Iterator_Collection::List(list))
             },
-            NP_Parsed_Schema::Tuple { .. } => {
+            NP_TypeKeys::Tuple   => {
                 let tuple = NP_Tuple::new_iter(&cursor, memory);
                 Ok(NP_Iterator_Collection::Tuple(tuple))
             },
-            NP_Parsed_Schema::Map { .. } => {
+            NP_TypeKeys::Map     => {
                 let map = NP_Map::new_iter(&cursor, memory);
                 Ok(NP_Iterator_Collection::Map(map))
             },

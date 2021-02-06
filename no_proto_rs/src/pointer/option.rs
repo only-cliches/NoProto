@@ -19,7 +19,7 @@
 //! ```
 //! 
 
-use crate::{JS_Schema, idl::JS_AST, schema::NP_Value_Kind};
+use crate::{JS_Schema, idl::JS_AST, schema::{NP_Schema_Data, NP_Value_Kind}};
 use crate::{memory::NP_Memory, schema::{NP_Parsed_Schema}};
 use alloc::vec::Vec;
 use crate::json_flex::{JSMAP, NP_JSON};
@@ -51,8 +51,8 @@ impl<'value> super::NP_Scalar<'value> for NP_Enum {
     }
 
     fn np_max_value<M: NP_Memory>(cursor: &NP_Cursor, memory: &M) -> Option<Self> {
-        match memory.get_schema(cursor.schema_addr) {
-            NP_Parsed_Schema::Enum { choices, .. } => {
+        match &*memory.get_schema(cursor.schema_addr).data {
+            NP_Schema_Data::Enum { choices, .. } => {
                 Some(choices[choices.len() - 1].clone())
             },
             _ => None
@@ -60,8 +60,8 @@ impl<'value> super::NP_Scalar<'value> for NP_Enum {
     }
 
     fn np_min_value<M: NP_Memory>(cursor: &NP_Cursor, memory: &M) -> Option<Self> {
-        match memory.get_schema(cursor.schema_addr) {
-            NP_Parsed_Schema::Enum { choices, .. } => {
+        match &*memory.get_schema(cursor.schema_addr).data {
+            NP_Schema_Data::Enum { choices, .. } => {
                 Some(choices[0].clone())
             },
             _ => None
@@ -126,8 +126,8 @@ impl<'value> NP_Value<'value> for NP_Enum {
         let mut schema_json = JSMAP::new();
         schema_json.insert("type".to_owned(), NP_JSON::String(Self::type_idx().0.to_string()));
 
-        match &schema[address] {
-            NP_Parsed_Schema::Enum { choices, default, .. } => {
+        match &*schema[address].data {
+            NP_Schema_Data::Enum { choices, default, .. } => {
 
                 let options: Vec<NP_JSON> = choices.into_iter().map(|value| {
                     NP_JSON::String(value.to_string())
@@ -162,8 +162,8 @@ impl<'value> NP_Value<'value> for NP_Enum {
 
         let c_value = || { cursor.get_value(memory) };
 
-        match &memory.get_schema(cursor.schema_addr) {
-            NP_Parsed_Schema::Enum { choices, ..} => {
+        match &*memory.get_schema(cursor.schema_addr).data {
+            NP_Schema_Data::Enum { choices, ..} => {
 
                 let mut value_num: i32 = -1;
 
@@ -208,8 +208,8 @@ impl<'value> NP_Value<'value> for NP_Enum {
     fn schema_to_idl(schema: &Vec<NP_Parsed_Schema>, address: usize)-> Result<String, NP_Error> {
         let mut result = String::from("enum({");
 
-        match &schema[address] {
-            NP_Parsed_Schema::Enum { choices, default, .. } => {
+        match &*schema[address].data {
+            NP_Schema_Data::Enum { choices, default, .. } => {
                 if let Some(x) = default {
                     if let NP_Enum::Some(stri) = x {
                         result.push_str("default: \"");
@@ -320,12 +320,11 @@ impl<'value> NP_Value<'value> for NP_Enum {
             schema_data.extend(choice.as_bytes().to_vec())
         }
 
-        schema.push(NP_Parsed_Schema::Enum { 
+        schema.push(NP_Parsed_Schema { 
             val: NP_Value_Kind::Fixed(1),
             i: NP_TypeKeys::Enum,
-            default: default_value,
-            choices: choices,
-            sortable: true
+            sortable: true,
+            data: Box::new(NP_Schema_Data::Enum { choices, default: default_value})
         });
 
         return Ok((true, schema_data, schema));
@@ -342,8 +341,8 @@ impl<'value> NP_Value<'value> for NP_Enum {
             return Ok(None);
         }
   
-        match &memory.get_schema(cursor.schema_addr) {
-            NP_Parsed_Schema::Enum { choices, .. } => {
+        match &*memory.get_schema(cursor.schema_addr).data {
+            NP_Schema_Data::Enum { choices, .. } => {
                 Ok(match memory.get_1_byte(value_addr) {
                     Some(x) => {
                         let value_num = x as usize;
@@ -362,8 +361,8 @@ impl<'value> NP_Value<'value> for NP_Enum {
     }
 
     fn default_value(_depth: usize, schema_addr: usize,schema: &Vec<NP_Parsed_Schema>) -> Option<Self> {
-        match &schema[schema_addr] {
-            NP_Parsed_Schema::Enum {default, ..} => {
+        match &*schema[schema_addr].data {
+            NP_Schema_Data::Enum {default, ..} => {
                 if let Some(d) = default {
                     Some(d.clone())
                 } else {
@@ -385,8 +384,8 @@ impl<'value> NP_Value<'value> for NP_Enum {
                                 NP_JSON::String(str_value.to_string())
                             },
                             NP_Enum::None => {
-                                match &memory.get_schema(cursor.schema_addr) {
-                                    NP_Parsed_Schema::Enum { default, .. } => {
+                                match &*memory.get_schema(cursor.schema_addr).data {
+                                    NP_Schema_Data::Enum { default, .. } => {
                                         if let Some(d) = default {
                                             match d {
                                                 NP_Enum::Some(val) => {
@@ -406,8 +405,8 @@ impl<'value> NP_Value<'value> for NP_Enum {
                         }
                     },
                     None => {
-                        match &memory.get_schema(cursor.schema_addr) {
-                            NP_Parsed_Schema::Enum { default, .. } => {
+                        match &*memory.get_schema(cursor.schema_addr).data {
+                            NP_Schema_Data::Enum { default, .. } => {
                                 if let Some(d) = default {
                                     match d {
                                         NP_Enum::Some(x) => NP_JSON::String(x.clone()),
@@ -503,12 +502,11 @@ impl<'value> NP_Value<'value> for NP_Enum {
             schema_data.extend(choice.as_bytes().to_vec())
         }
 
-        schema.push(NP_Parsed_Schema::Enum { 
+        schema.push(NP_Parsed_Schema { 
             val: NP_Value_Kind::Fixed(1),
             i: NP_TypeKeys::Enum,
-            default: default_value,
-            choices: choices,
-            sortable: true
+            sortable: true,
+            data: Box::new(NP_Schema_Data::Enum { choices: choices, default: default_value })
         });
 
         return Ok((true, schema_data, schema));
@@ -541,12 +539,11 @@ impl<'value> NP_Value<'value> for NP_Enum {
             }
         }
 
-        schema.push(NP_Parsed_Schema::Enum {
+        schema.push(NP_Parsed_Schema {
             val: NP_Value_Kind::Fixed(1),
             i: NP_TypeKeys::Enum,
             sortable: true,
-            default: default_value,
-            choices: choices
+            data: Box::new(NP_Schema_Data::Enum { choices: choices, default: default_value })
         });
 
         (true, schema)

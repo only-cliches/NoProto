@@ -19,7 +19,7 @@
 //! 
 
 use alloc::string::String;
-use crate::{idl::{JS_AST, JS_Schema}, schema::{NP_Parsed_Schema, NP_Value_Kind}};
+use crate::{idl::{JS_AST, JS_Schema}, schema::{NP_Parsed_Schema, NP_Schema_Data, NP_Value_Kind}};
 use alloc::vec::Vec;
 use crate::json_flex::{JSMAP, NP_JSON};
 use crate::schema::{NP_TypeKeys};
@@ -89,8 +89,8 @@ impl<'value> NP_Value<'value> for NP_Date {
         let mut schema_json = JSMAP::new();
         schema_json.insert("type".to_owned(), NP_JSON::String(Self::type_idx().0.to_string()));
 
-        match &schema[address] {
-            NP_Parsed_Schema::Date { default, .. } => {
+        match &*schema[address].data {
+            NP_Schema_Data::Date { default, .. } => {
                 if let Some(d) = default {
                     schema_json.insert("default".to_owned(), NP_JSON::Integer(d.value as i64));
                 }
@@ -102,8 +102,8 @@ impl<'value> NP_Value<'value> for NP_Date {
     }
 
     fn default_value(_depth: usize, addr: usize, schema: &Vec<NP_Parsed_Schema>) -> Option<Self> {
-        match &schema[addr] {
-            NP_Parsed_Schema::Date { default, .. } => {
+        match &*schema[addr].data {
+            NP_Schema_Data::Date { default, .. } => {
                 if let Some(d) = default {
                     Some(d.clone())
                 } else {
@@ -180,8 +180,8 @@ impl<'value> NP_Value<'value> for NP_Date {
                         NP_JSON::Integer(y.value as i64)
                     },
                     None => {
-                        match memory.get_schema(cursor.schema_addr) {
-                            NP_Parsed_Schema::Date { default, .. } => {
+                        match &*memory.get_schema(cursor.schema_addr).data {
+                            NP_Schema_Data::Date { default, .. } => {
                                 if let Some(d) = default {
                                     NP_JSON::Integer(d.value.clone() as i64)
                                 } else {
@@ -212,8 +212,8 @@ impl<'value> NP_Value<'value> for NP_Date {
 
 
     fn schema_to_idl(schema: &Vec<NP_Parsed_Schema>, address: usize)-> Result<String, NP_Error> {
-        match &schema[address] {
-            NP_Parsed_Schema::Date { default , .. } => {
+        match &*schema[address].data {
+            NP_Schema_Data::Date { default , .. } => {
                 let mut result = String::from("date(");
                 if let Some(x) = default {
                     result.push_str("{default: ");
@@ -271,11 +271,11 @@ impl<'value> NP_Value<'value> for NP_Date {
             }
         };
         
-        schema.push(NP_Parsed_Schema::Date {
+        schema.push(NP_Parsed_Schema {
             val: NP_Value_Kind::Fixed(8),
             i: NP_TypeKeys::Date,
-            default: default,
-            sortable: true
+            sortable: true,
+            data: Box::new(NP_Schema_Data::Date { default })
         });
 
         return Ok((true, schema_data, schema));
@@ -299,10 +299,10 @@ impl<'value> NP_Value<'value> for NP_Date {
             }
         };
         
-        schema.push(NP_Parsed_Schema::Date {
+        schema.push(NP_Parsed_Schema {
             val: NP_Value_Kind::Fixed(8),
             i: NP_TypeKeys::Date,
-            default: default,
+            data: Box::new(NP_Schema_Data::Date { default }),
             sortable: true
         });
 
@@ -323,11 +323,11 @@ impl<'value> NP_Value<'value> for NP_Date {
             Some(NP_Date { value: u64::from_be_bytes(u64_bytes)})
         };
 
-        schema.push(NP_Parsed_Schema::Date {
+        schema.push(NP_Parsed_Schema {
             val: NP_Value_Kind::Fixed(8),
             i: NP_TypeKeys::Date,
             sortable: true,
-            default: default
+            data: Box::new(NP_Schema_Data::Date { default })
         });
         (true, schema)
     }

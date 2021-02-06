@@ -270,6 +270,9 @@
 //! 7. `no_std` Support<br/>
 //! If you need a serialization format with low memory usage that works in `no_std` environments, NoProto is one of the few good choices.
 //! 
+//! 8. Stable
+//! NoProto will never cause a panic in your application.  It has *zero* panics or unwraps, meaning there is no code path that could lead to a panic.  Fallback behavior is to provide a sane default path or bubble an error up to the caller.
+//! 
 //! 
 //! ### When to use Flatbuffers / Bincode / CapN Proto
 //! If you can safely compile all your data types into your application, all the buffers/data is trusted, and you don't intend to mutate buffers after they're created, Bincode/Flatbuffers/CapNProto is a better choice for you.
@@ -286,7 +289,7 @@
 //! - Buffers cannot be larger than 2^16 bytes or ~64KB.
 //! 
 //! ## Unsafe
-//! This library makes use of `unsafe` to get better performance.  Generally speaking, it's not possible to have a high performance serialization library without `unsafe`.  It is only used where absolutely necessary and additional checks are performed so that the worst case for any `unsafe` block is it leads to junk data in a buffer.
+//! This library makes use of `unsafe` to get better performance.  Generally speaking, it's not possible to have a high performance serialization library without `unsafe`.  It is only used where performance improvements are significant and additional checks are performed so that the worst case for any `unsafe` block is it leads to junk data in a buffer.
 //! 
 //! ----------------------
 //! 

@@ -108,24 +108,25 @@ impl<'value> NP_Value<'value> for NP_Union {
     }
 
     fn schema_to_json(schema: &Vec<NP_Parsed_Schema>, address: usize)-> Result<NP_JSON, NP_Error> {
-        let mut schema_json = JSMAP::new();
-        schema_json.insert("type".to_owned(), NP_JSON::String(Self::type_idx().0.to_string()));
+        // let mut schema_json = JSMAP::new();
+        // schema_json.insert("type".to_owned(), NP_JSON::String(Self::type_idx().0.to_string()));
 
-        let types: Vec<NP_JSON> = match &schema[address] {
-            NP_Parsed_Schema::Union { types, .. } => {
-                types.into_iter().map(|column| {
-                    let mut cols: Vec<NP_JSON> = Vec::new();
-                    cols.push(NP_JSON::String(column.1.to_string()));
-                    cols.push(NP_Schema::_type_to_json(&schema, column.2).unwrap_or(NP_JSON::Null));
-                    NP_JSON::Array(cols)
-                }).collect()
-            },
-            _ => Vec::new()
-        };
+        // let types: Vec<NP_JSON> = match &schema[address] {
+        //     NP_TypeKeys::Union { types, .. } => {
+        //         types.into_iter().map(|column| {
+        //             let mut cols: Vec<NP_JSON> = Vec::new();
+        //             cols.push(NP_JSON::String(column.1.to_string()));
+        //             cols.push(NP_Schema::_type_to_json(&schema, column.2).unwrap_or(NP_JSON::Null));
+        //             NP_JSON::Array(cols)
+        //         }).collect()
+        //     },
+        //     _ => Vec::new()
+        // };
 
-        schema_json.insert("types".to_owned(), NP_JSON::Array(types));
+        // schema_json.insert("types".to_owned(), NP_JSON::Array(types));
 
-        Ok(NP_JSON::Dictionary(schema_json))
+        // Ok(NP_JSON::Dictionary(schema_json))
+        todo!()
     }
 
     fn schema_to_idl(_schema: &Vec<NP_Parsed_Schema>, _address: usize)-> Result<String, NP_Error> {
@@ -138,141 +139,143 @@ impl<'value> NP_Value<'value> for NP_Union {
 
     fn from_json_to_schema(mut schema: Vec<NP_Parsed_Schema>, json_schema: &Box<NP_JSON>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {
 
-        let mut schema_bytes: Vec<u8> = Vec::new();
-        schema_bytes.push(NP_TypeKeys::Union as u8);
+        // let mut schema_bytes: Vec<u8> = Vec::new();
+        // schema_bytes.push(NP_TypeKeys::Union as u8);
 
-        let schema_table_addr = schema.len();
-        schema.push(NP_Parsed_Schema::Union {
-            val: NP_Value_Kind::Pointer,
-            i: NP_TypeKeys::Union,
-            sortable: false,
-            types: Vec::new(),
-            default: 0
-        });
+        // let schema_table_addr = schema.len();
+        // schema.push(NP_TypeKeys::Union {
+        //     val: NP_Value_Kind::Pointer,
+        //     i: NP_TypeKeys::Union,
+        //     sortable: false,
+        //     types: Vec::new(),
+        //     default: 0
+        // });
 
-        let mut columns_mapped = Vec::new();
+        // let mut columns_mapped = Vec::new();
 
-        let mut types: Vec<(u8, String, NP_Schema_Addr)> = Vec::new();
+        // let mut types: Vec<(u8, String, NP_Schema_Addr)> = Vec::new();
 
-        let mut column_data: Vec<(String, Vec<u8>)> = Vec::new();
+        // let mut column_data: Vec<(String, Vec<u8>)> = Vec::new();
 
-        let mut schema_parsed: Vec<NP_Parsed_Schema> = schema;
+        // let mut schema_parsed: Vec<NP_Parsed_Schema> = schema;
 
-        match &json_schema["types"] {
-            NP_JSON::Array(cols) => {
-                let mut x: u8 = 0;
-                for col in cols {
-                    let column_name = match &col[0] {
-                        NP_JSON::String(x) => x.clone(),
-                        _ => "".to_owned()
-                    };
-                    if column_name.len() > 255 {
-                        return Err(NP_Error::new("Union type names cannot be longer than 255 characters!"))
-                    }
+        // match &json_schema["types"] {
+        //     NP_JSON::Array(cols) => {
+        //         let mut x: u8 = 0;
+        //         for col in cols {
+        //             let column_name = match &col[0] {
+        //                 NP_JSON::String(x) => x.clone(),
+        //                 _ => "".to_owned()
+        //             };
+        //             if column_name.len() > 255 {
+        //                 return Err(NP_Error::new("Union type names cannot be longer than 255 characters!"))
+        //             }
 
-                    let column_schema_addr = schema_parsed.len();
-                    types.push((x, column_name.clone(), column_schema_addr));
-                    let (_is_sortable, column_type, schema_p) = NP_Schema::from_json(schema_parsed, &Box::new(col[1].clone()))?;
-                    schema_parsed = schema_p;
-                    columns_mapped.push(column_name.to_string());
-                    column_data.push((column_name, column_type));
-                    x += 1;
-                }
-            },
-            _ => { 
-                return Err(NP_Error::new("Unions require a 'types' property that is an array of schemas!"))
-            }
-        }
+        //             let column_schema_addr = schema_parsed.len();
+        //             types.push((x, column_name.clone(), column_schema_addr));
+        //             let (_is_sortable, column_type, schema_p) = NP_Schema::from_json(schema_parsed, &Box::new(col[1].clone()))?;
+        //             schema_parsed = schema_p;
+        //             columns_mapped.push(column_name.to_string());
+        //             column_data.push((column_name, column_type));
+        //             x += 1;
+        //         }
+        //     },
+        //     _ => { 
+        //         return Err(NP_Error::new("Unions require a 'types' property that is an array of schemas!"))
+        //     }
+        // }
 
 
-        schema_parsed[schema_table_addr] = NP_Parsed_Schema::Union {
-            val: NP_Value_Kind::Pointer,
-            i: NP_TypeKeys::Union,
-            sortable: false,
-            types: types,
-            default: 0
-        };
+        // schema_parsed[schema_table_addr] = NP_TypeKeys::Union {
+        //     val: NP_Value_Kind::Pointer,
+        //     i: NP_TypeKeys::Union,
+        //     sortable: false,
+        //     types: types,
+        //     default: 0
+        // };
 
-        if column_data.len() > 254 {
-            return Err(NP_Error::new("Unions cannot have more than 254 types!"))
-        }
+        // if column_data.len() > 254 {
+        //     return Err(NP_Error::new("Unions cannot have more than 254 types!"))
+        // }
 
-        if column_data.len() == 0 {
-            return Err(NP_Error::new("Unions must have at least one type!"))
-        }
+        // if column_data.len() == 0 {
+        //     return Err(NP_Error::new("Unions must have at least one type!"))
+        // }
 
-        // number of columns
-        schema_bytes.push(column_data.len() as u8);
+        // // number of columns
+        // schema_bytes.push(column_data.len() as u8);
 
-        for col in column_data {
-            // colum name
-            let bytes = col.0.as_bytes().to_vec();
-            schema_bytes.push(bytes.len() as u8);
-            schema_bytes.extend(bytes);
+        // for col in column_data {
+        //     // colum name
+        //     let bytes = col.0.as_bytes().to_vec();
+        //     schema_bytes.push(bytes.len() as u8);
+        //     schema_bytes.extend(bytes);
 
-            if col.1.len() > u16::MAX as usize {
-                return Err(NP_Error::new("Schema overflow error!"))
-            }
+        //     if col.1.len() > u16::MAX as usize {
+        //         return Err(NP_Error::new("Schema overflow error!"))
+        //     }
             
-            // column type
-            schema_bytes.extend((col.1.len() as u16).to_be_bytes().to_vec());
-            schema_bytes.extend(col.1);
-        }
+        //     // column type
+        //     schema_bytes.extend((col.1.len() as u16).to_be_bytes().to_vec());
+        //     schema_bytes.extend(col.1);
+        // }
 
-        return Ok((false, schema_bytes, schema_parsed))
+        // return Ok((false, schema_bytes, schema_parsed))
+        todo!()
    
     }
 
     fn from_bytes_to_schema(mut schema: Vec<NP_Parsed_Schema>, address: usize, bytes: &[u8]) -> (bool, Vec<NP_Parsed_Schema>) {
-        let column_len = bytes[address + 1];
+        // let column_len = bytes[address + 1];
 
-        let mut parsed_types: Vec<(u8, String,  NP_Schema_Addr)> = Vec::new();
+        // let mut parsed_types: Vec<(u8, String,  NP_Schema_Addr)> = Vec::new();
 
-        let table_schema_addr = schema.len();
+        // let table_schema_addr = schema.len();
 
-        schema.push(NP_Parsed_Schema::Union {
-            val: NP_Value_Kind::Pointer,
-            i: NP_TypeKeys::Union,
-            sortable: false,
-            default: 0,
-            types: Vec::new()
-        });
+        // schema.push(NP_TypeKeys::Union {
+        //     val: NP_Value_Kind::Pointer,
+        //     i: NP_TypeKeys::Union,
+        //     sortable: false,
+        //     default: 0,
+        //     types: Vec::new()
+        // });
 
-        let mut schema_parsed = schema;
+        // let mut schema_parsed = schema;
 
-        let mut offset = address + 2;
+        // let mut offset = address + 2;
 
-        let mut hash_map = Vec::new();
+        // let mut hash_map = Vec::new();
 
-        for x in 0..column_len as usize {
-            let col_name_len = bytes[offset] as usize;
-            let col_name_bytes = &bytes[(offset + 1)..(offset + 1 + col_name_len)];
-            let col_name = unsafe { core::str::from_utf8_unchecked(col_name_bytes) };
+        // for x in 0..column_len as usize {
+        //     let col_name_len = bytes[offset] as usize;
+        //     let col_name_bytes = &bytes[(offset + 1)..(offset + 1 + col_name_len)];
+        //     let col_name = unsafe { core::str::from_utf8_unchecked(col_name_bytes) };
 
-            offset += 1 + col_name_len;
+        //     offset += 1 + col_name_len;
 
-            let schema_size = u16::from_be_bytes([
-                bytes[offset],
-                bytes[offset + 1]
-            ]) as usize;
+        //     let schema_size = u16::from_be_bytes([
+        //         bytes[offset],
+        //         bytes[offset + 1]
+        //     ]) as usize;
 
-            let column_addr = schema_parsed.len();
-            let (_, schema) = NP_Schema::from_bytes(schema_parsed, offset + 2, bytes);
-            schema_parsed = schema;
-            parsed_types.push((x as u8, col_name.to_string(), column_addr));
-            hash_map.push(col_name.to_string());
-            offset += schema_size + 2;
-        }
+        //     let column_addr = schema_parsed.len();
+        //     let (_, schema) = NP_Schema::from_bytes(schema_parsed, offset + 2, bytes);
+        //     schema_parsed = schema;
+        //     parsed_types.push((x as u8, col_name.to_string(), column_addr));
+        //     hash_map.push(col_name.to_string());
+        //     offset += schema_size + 2;
+        // }
 
-        schema_parsed[table_schema_addr] = NP_Parsed_Schema::Union {
-            val: NP_Value_Kind::Pointer,
-            i: NP_TypeKeys::Union,
-            sortable: false,
-            types: parsed_types,
-            default: 0
-        };
+        // schema_parsed[table_schema_addr] = NP_TypeKeys::Union {
+        //     val: NP_Value_Kind::Pointer,
+        //     i: NP_TypeKeys::Union,
+        //     sortable: false,
+        //     types: parsed_types,
+        //     default: 0
+        // };
 
-        (false, schema_parsed)
+        // (false, schema_parsed)
+        todo!()
     }
 
     fn set_from_json<'set, M: NP_Memory>(_depth: usize, _apply_null: bool, _cursor: NP_Cursor, _memory: &'set M, _value: &Box<NP_JSON>) -> Result<(), NP_Error> where Self: 'set + Sized {
@@ -293,7 +296,7 @@ impl<'value> NP_Value<'value> for NP_Union {
 
     fn to_json<M: NP_Memory>(_depth:usize, _cursor: &NP_Cursor, _memory: &'value M) -> NP_JSON {
         // match memory.get_schema(cursor.schema_addr) {
-        //     NP_Parsed_Schema::Portal { schema, parent_schema, .. } => {
+        //     NP_TypeKeys::Portal { schema, parent_schema, .. } => {
         //         let mut next = cursor.clone();
         //         next.schema_addr = *schema;
         //         next.parent_schema_addr = *parent_schema;
@@ -306,7 +309,7 @@ impl<'value> NP_Value<'value> for NP_Union {
 
     fn get_size<M: NP_Memory>(_depth:usize, _cursor: &'value NP_Cursor, _memory: &'value M) -> Result<usize, NP_Error> {
         // match memory.get_schema(cursor.schema_addr) {
-        //     NP_Parsed_Schema::Portal { schema, parent_schema, .. } => {
+        //     NP_TypeKeys::Portal { schema, parent_schema, .. } => {
         //         let mut next = cursor.clone();
         //         next.schema_addr = *schema;
         //         next.parent_schema_addr = *parent_schema;
@@ -319,7 +322,7 @@ impl<'value> NP_Value<'value> for NP_Union {
 
     fn do_compact<M: NP_Memory, M2: NP_Memory>(_depth:usize, mut _from_cursor: NP_Cursor, _from_memory: &'value M, mut _to_cursor: NP_Cursor, _to_memory: &'value M2) -> Result<NP_Cursor, NP_Error> where Self: 'value + Sized {
         // match from_memory.get_schema(from_cursor.schema_addr) {
-        //     NP_Parsed_Schema::Portal { schema, parent_schema, .. } => {
+        //     NP_TypeKeys::Portal { schema, parent_schema, .. } => {
         //         from_cursor.schema_addr = *schema;
         //         from_cursor.parent_schema_addr = *parent_schema;
         //         to_cursor.schema_addr = *schema;

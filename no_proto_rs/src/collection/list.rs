@@ -1,5 +1,5 @@
 use alloc::string::String;
-use crate::{idl::{JS_AST, JS_Schema}, schema::NP_Value_Kind, utils::opt_err};
+use crate::{idl::{JS_AST, JS_Schema}, schema::{NP_Schema_Data, NP_Value_Kind}, utils::opt_err};
 use crate::{error::NP_Error, json_flex::{JSMAP, NP_JSON}, memory::{NP_Memory}, pointer::{NP_Value}, pointer::{NP_Cursor}, schema::NP_Parsed_Schema, schema::{NP_Schema, NP_TypeKeys}};
 
 use alloc::borrow::ToOwned;
@@ -70,8 +70,8 @@ impl NP_List {
 
         if index > 255 { return Ok(None) }
 
-        let schema_of = match memory.get_schema(list_cursor.schema_addr) {
-            NP_Parsed_Schema::List { of, .. } => *of,
+        let schema_of = match &*memory.get_schema(list_cursor.schema_addr).data {
+            NP_Schema_Data::List { of, .. } => *of,
             _ => 0
         };
 
@@ -210,8 +210,8 @@ impl NP_List {
 
         let list_addr = value.get_addr_value() as usize;
 
-        let schema_of = match memory.get_schema(list_cursor.schema_addr) {
-            NP_Parsed_Schema::List { of, .. } => *of,
+        let schema_of = match &*memory.get_schema(list_cursor.schema_addr).data {
+            NP_Schema_Data::List { of, .. } => *of,
             _ => 0
         };
 
@@ -322,8 +322,8 @@ impl NP_List {
             Self::make_list(&list_cursor, memory)?;
         }
 
-        match memory.get_schema(list_cursor.schema_addr) {
-            NP_Parsed_Schema::List {  of, .. } => {
+        match &*memory.get_schema(list_cursor.schema_addr).data {
+            NP_Schema_Data::List {  of, .. } => {
 
                 let mut new_index: usize = index.unwrap_or(0);
 
@@ -399,8 +399,8 @@ impl<'value> NP_Value<'value> for NP_List {
         schema_json.insert("type".to_owned(), NP_JSON::String(Self::type_idx().0.to_string()));
 
 
-        let list_of = match &schema[address] {
-            NP_Parsed_Schema::List { of, .. } => { *of },
+        let list_of = match &*schema[address].data {
+            NP_Schema_Data::List { of, .. } => { *of },
             _ => 0
         };
 
@@ -485,8 +485,8 @@ impl<'value> NP_Value<'value> for NP_List {
     }
 
     fn schema_to_idl(schema: &Vec<NP_Parsed_Schema>, address: usize)-> Result<String, NP_Error> {
-        match &schema[address] {
-            NP_Parsed_Schema::List { of, .. } => {
+        match &*schema[address].data {
+            NP_Schema_Data::List { of, .. } => {
                 let mut result = String::from("list({of: ");
                 result.push_str(NP_Schema::_type_to_idl(&schema, *of)?.as_str());
                 result.push_str("})");
@@ -501,11 +501,11 @@ impl<'value> NP_Value<'value> for NP_List {
         schema_bytes.push(NP_TypeKeys::List as u8);
 
         let list_schema_addr = schema.len();
-        schema.push(NP_Parsed_Schema::List {
+        schema.push(NP_Parsed_Schema {
             val: NP_Value_Kind::Pointer,
             i: NP_TypeKeys::List,
-            of: list_schema_addr + 1,
-            sortable: false
+            sortable: false,
+            data: Box::new(NP_Schema_Data::List { of: list_schema_addr + 1})
         });
 
         let mut of_jst: Option<&JS_AST> = None;
@@ -541,10 +541,10 @@ impl<'value> NP_Value<'value> for NP_List {
         schema_bytes.push(NP_TypeKeys::List as u8);
 
         let list_schema_addr = schema.len();
-        schema.push(NP_Parsed_Schema::List {
+        schema.push(NP_Parsed_Schema {
             val: NP_Value_Kind::Pointer,
             i: NP_TypeKeys::List,
-            of: list_schema_addr + 1,
+            data: Box::new(NP_Schema_Data::List { of: list_schema_addr + 1}),
             sortable: false
         });
 
@@ -570,11 +570,11 @@ impl<'value> NP_Value<'value> for NP_List {
     fn from_bytes_to_schema(mut schema: Vec<NP_Parsed_Schema>, address: usize, bytes: &[u8]) -> (bool, Vec<NP_Parsed_Schema>) {
 
         let list_schema_addr = schema.len();
-        schema.push(NP_Parsed_Schema::List {
+        schema.push(NP_Parsed_Schema {
             val: NP_Value_Kind::Pointer,
             i: NP_TypeKeys::List,
             sortable: false,
-            of: list_schema_addr + 1
+            data: Box::new(NP_Schema_Data::List { of: list_schema_addr + 1})
         });
         
         let (_sortable, schema) = NP_Schema::from_bytes(schema, address + 1, bytes);

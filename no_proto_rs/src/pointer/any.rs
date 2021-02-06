@@ -1,5 +1,5 @@
 use alloc::string::String;
-use crate::{idl::{JS_AST, JS_Schema}, json_flex::{JSMAP}, schema::{NP_Parsed_Schema, NP_Value_Kind}};
+use crate::{idl::{JS_AST, JS_Schema}, json_flex::{JSMAP}, schema::{NP_Parsed_Schema, NP_Schema_Data, NP_Value_Kind}};
 use alloc::vec::Vec;
 use crate::error::NP_Error;
 use crate::{schema::{NP_TypeKeys}, pointer::NP_Value, json_flex::NP_JSON};
@@ -58,10 +58,11 @@ impl<'value> NP_Value<'value> for NP_Any {
 
         let mut schema_data: Vec<u8> = Vec::new();
         schema_data.push(NP_TypeKeys::Any as u8);
-        schema.push(NP_Parsed_Schema::Any {
+        schema.push(NP_Parsed_Schema {
             val: NP_Value_Kind::Pointer,
             i: NP_TypeKeys::Any,
-            sortable: false
+            sortable: false,
+            data: Box::new(NP_Schema_Data::Any)
         });
         return Ok((false, schema_data, schema));
 
@@ -72,10 +73,11 @@ impl<'value> NP_Value<'value> for NP_Any {
     }
 
     fn from_bytes_to_schema(mut schema: Vec<NP_Parsed_Schema>, _address: usize, _bytes: &[u8]) -> (bool, Vec<NP_Parsed_Schema>) {
-        schema.push(NP_Parsed_Schema::Any {
+        schema.push(NP_Parsed_Schema {
             val: NP_Value_Kind::Pointer,
             i: NP_TypeKeys::Any,
-            sortable: false
+            sortable: false,
+            data: Box::new(NP_Schema_Data::Any)
         });
         (false, schema)
     }

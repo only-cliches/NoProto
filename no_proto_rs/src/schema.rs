@@ -893,7 +893,7 @@ impl NP_TypeKeys {
             NP_TypeKeys::Struct     => { NP_Struct::type_idx() }
             NP_TypeKeys::Map        => {    NP_Map::type_idx() }
             NP_TypeKeys::List       => {   NP_List::type_idx() }
-            NP_TypeKeys::Tuple      => {  NP_Tuple::type_idx() },
+            NP_TypeKeys::Tuple      => {  NP_Tuple::type_idx() }
             _ => ("", NP_TypeKeys::None)
         }
     }
@@ -926,7 +926,7 @@ pub enum NP_Value_Kind {
 }
 
 #[allow(missing_docs)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct NP_Struct_Field {
     pub idx: u8,
     pub col: String,
@@ -935,7 +935,7 @@ pub struct NP_Struct_Field {
 }
 
 #[allow(missing_docs)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct NP_Tuple_Field {
     pub schema: usize,
     pub fixed: bool,
@@ -943,175 +943,306 @@ pub struct NP_Tuple_Field {
     pub offset: usize
 }
 
-
-/// When a schema is parsed from JSON or Bytes, it is stored in this recursive type
-/// 
 #[allow(missing_docs)]
 #[derive(Debug, Clone)]
-pub enum NP_Parsed_Schema {
-    None,
-    Any        { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys },
-    UTF8String { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<String>, size: u16, case: String_Case },
-    Bytes      { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<Vec<u8>>, size: u16 },
-    Int8       { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<i8> },
-    Int16      { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<i16> },
-    Int32      { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<i32> },
-    Int64      { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<i64> },
-    Uint8      { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<u8> },
-    Uint16     { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<u16> },
-    Uint32     { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<u32> },
-    Uint64     { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<u64> },
-    Float      { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<f32> },
-    Double     { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<f64> },
-    Decimal    { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<NP_Dec>, exp: u8 },
-    Boolean    { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<bool> },
-    Geo        { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<NP_Geo>, size: u8 },
-    Date       { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<NP_Date> },
-    Enum       { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<NP_Enum>, choices: Vec<NP_Enum> },
-    Uuid       { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys },
-    Ulid       { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys },
-    Struct     { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, fields: Vec<NP_Struct_Field>, empty: Vec<u8> },
-    Map        { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, value: NP_Schema_Addr}, 
-    List       { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, of: NP_Schema_Addr },
-    Tuple      { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, values: Vec<NP_Tuple_Field>, empty: Vec<u8>},
-    Portal     { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, path: String, schema: usize, parent_schema: usize },
-    Union      { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, types: Vec<(u8, String, NP_Schema_Addr)>, default: usize },
+pub struct NP_Parsed_Schema {
+    pub val: NP_Value_Kind, 
+    pub sortable: bool, 
+    pub i: NP_TypeKeys, 
+    pub data: Box<NP_Schema_Data>
 }
 
-impl NP_Parsed_Schema {
+#[allow(missing_docs)]
+#[derive(Debug, Clone, PartialEq)]
+pub enum NP_Schema_Data {
+    None       ,
+    Any        ,
+    Uuid       ,
+    Ulid       ,
+    UTF8String { default: Option<String>, size: u16, case: String_Case },
+    Bytes      { default: Option<Vec<u8>>, size: u16 },
+    Int8       { default: Option<i8> },
+    Int16      { default: Option<i16> },
+    Int32      { default: Option<i32> },
+    Int64      { default: Option<i64> },
+    Uint8      { default: Option<u8> },
+    Uint16     { default: Option<u16> },
+    Uint32     { default: Option<u32> },
+    Uint64     { default: Option<u64> },
+    Float      { default: Option<f32> },
+    Double     { default: Option<f64> },
+    Decimal    { default: Option<NP_Dec>, exp: u8 },
+    Boolean    { default: Option<bool> },
+    Geo        { default: Option<NP_Geo>, size: u8 },
+    Date       { default: Option<NP_Date> },
+    Enum       { default: Option<NP_Enum>, choices: Vec<NP_Enum> },
+    Struct     { fields: Vec<NP_Struct_Field>, empty: Vec<u8> },
+    Map        { value: NP_Schema_Addr}, 
+    List       { of: NP_Schema_Addr },
+    Tuple      { values: Vec<NP_Tuple_Field>, empty: Vec<u8>},
+    Portal     { path: String, schema: usize, parent_schema: usize },
+    Union      { types: Vec<(u8, String, NP_Schema_Addr)>, default: usize },
+}
 
-        /// Get the type key for this schema
-        pub fn get_offset(&self) -> &NP_Value_Kind {
-            match self {
-                NP_Parsed_Schema::None                                 => { &NP_Value_Kind::Pointer }
-                NP_Parsed_Schema::Any        { val, .. }     => { val }
-                NP_Parsed_Schema::UTF8String { val, .. }     => { val }
-                NP_Parsed_Schema::Bytes      { val, .. }     => { val }
-                NP_Parsed_Schema::Int8       { val, .. }     => { val }
-                NP_Parsed_Schema::Int16      { val, .. }     => { val }
-                NP_Parsed_Schema::Int32      { val, .. }     => { val }
-                NP_Parsed_Schema::Int64      { val, .. }     => { val }
-                NP_Parsed_Schema::Uint8      { val, .. }     => { val }
-                NP_Parsed_Schema::Uint16     { val, .. }     => { val }
-                NP_Parsed_Schema::Uint32     { val, .. }     => { val }
-                NP_Parsed_Schema::Uint64     { val, .. }     => { val }
-                NP_Parsed_Schema::Float      { val, .. }     => { val }
-                NP_Parsed_Schema::Double     { val, .. }     => { val }
-                NP_Parsed_Schema::Decimal    { val, .. }     => { val }
-                NP_Parsed_Schema::Boolean    { val, .. }     => { val }
-                NP_Parsed_Schema::Geo        { val, .. }     => { val }
-                NP_Parsed_Schema::Uuid       { val, .. }     => { val }
-                NP_Parsed_Schema::Ulid       { val, .. }     => { val }
-                NP_Parsed_Schema::Date       { val, .. }     => { val }
-                NP_Parsed_Schema::Enum       { val, .. }     => { val }
-                NP_Parsed_Schema::Struct     { val, .. }     => { val }
-                NP_Parsed_Schema::Map        { val, .. }     => { val }
-                NP_Parsed_Schema::List       { val, .. }     => { val }
-                NP_Parsed_Schema::Tuple      { val, .. }     => { val }
-                NP_Parsed_Schema::Portal     { val, .. }     => { val }
-                NP_Parsed_Schema::Union      { val, .. }     => { val }
-            }
-        }
-
-    /// Get the type key for this schema
-    pub fn get_type_key(&self) -> &NP_TypeKeys {
-        match self {
-            NP_Parsed_Schema::None                                 => { &NP_TypeKeys::None }
-            NP_Parsed_Schema::Any        { i, .. }     => { i }
-            NP_Parsed_Schema::UTF8String { i, .. }     => { i }
-            NP_Parsed_Schema::Bytes      { i, .. }     => { i }
-            NP_Parsed_Schema::Int8       { i, .. }     => { i }
-            NP_Parsed_Schema::Int16      { i, .. }     => { i }
-            NP_Parsed_Schema::Int32      { i, .. }     => { i }
-            NP_Parsed_Schema::Int64      { i, .. }     => { i }
-            NP_Parsed_Schema::Uint8      { i, .. }     => { i }
-            NP_Parsed_Schema::Uint16     { i, .. }     => { i }
-            NP_Parsed_Schema::Uint32     { i, .. }     => { i }
-            NP_Parsed_Schema::Uint64     { i, .. }     => { i }
-            NP_Parsed_Schema::Float      { i, .. }     => { i }
-            NP_Parsed_Schema::Double     { i, .. }     => { i }
-            NP_Parsed_Schema::Decimal    { i, .. }     => { i }
-            NP_Parsed_Schema::Boolean    { i, .. }     => { i }
-            NP_Parsed_Schema::Geo        { i, .. }     => { i }
-            NP_Parsed_Schema::Uuid       { i, .. }     => { i }
-            NP_Parsed_Schema::Ulid       { i, .. }     => { i }
-            NP_Parsed_Schema::Date       { i, .. }     => { i }
-            NP_Parsed_Schema::Enum       { i, .. }     => { i }
-            NP_Parsed_Schema::Struct     { i, .. }     => { i }
-            NP_Parsed_Schema::Map        { i, .. }     => { i }
-            NP_Parsed_Schema::List       { i, .. }     => { i }
-            NP_Parsed_Schema::Tuple      { i, .. }     => { i }
-            NP_Parsed_Schema::Portal     { i, .. }     => { i }
-            NP_Parsed_Schema::Union      { i, .. }     => { i }
-        }
-    }
-
-    /// Get the type data fo a given schema value
-    pub fn get_type_data(&self) -> (&str, NP_TypeKeys) {
-        match self {
-            NP_Parsed_Schema::None =>      ("", NP_TypeKeys::None),
-            NP_Parsed_Schema::Portal     { i, .. }     => { i.into_type_idx() }
-            NP_Parsed_Schema::Any        { i, .. }     => { i.into_type_idx() }
-            NP_Parsed_Schema::UTF8String { i, .. }     => { i.into_type_idx() }
-            NP_Parsed_Schema::Bytes      { i, .. }     => { i.into_type_idx() }
-            NP_Parsed_Schema::Int8       { i, .. }     => { i.into_type_idx() }
-            NP_Parsed_Schema::Int16      { i, .. }     => { i.into_type_idx() }
-            NP_Parsed_Schema::Int32      { i, .. }     => { i.into_type_idx() }
-            NP_Parsed_Schema::Int64      { i, .. }     => { i.into_type_idx() }
-            NP_Parsed_Schema::Uint8      { i, .. }     => { i.into_type_idx() }
-            NP_Parsed_Schema::Uint16     { i, .. }     => { i.into_type_idx() }
-            NP_Parsed_Schema::Uint32     { i, .. }     => { i.into_type_idx() }
-            NP_Parsed_Schema::Uint64     { i, .. }     => { i.into_type_idx() }
-            NP_Parsed_Schema::Float      { i, .. }     => { i.into_type_idx() }
-            NP_Parsed_Schema::Double     { i, .. }     => { i.into_type_idx() }
-            NP_Parsed_Schema::Decimal    { i, .. }     => { i.into_type_idx() }
-            NP_Parsed_Schema::Boolean    { i, .. }     => { i.into_type_idx() }
-            NP_Parsed_Schema::Geo        { i, .. }     => { i.into_type_idx() }
-            NP_Parsed_Schema::Uuid       { i, .. }     => { i.into_type_idx() }
-            NP_Parsed_Schema::Ulid       { i, .. }     => { i.into_type_idx() }
-            NP_Parsed_Schema::Date       { i, .. }     => { i.into_type_idx() }
-            NP_Parsed_Schema::Enum       { i, .. }     => { i.into_type_idx() }
-            NP_Parsed_Schema::Struct     { i, .. }     => { i.into_type_idx() }
-            NP_Parsed_Schema::Map        { i, .. }     => { i.into_type_idx() }
-            NP_Parsed_Schema::List       { i, .. }     => { i.into_type_idx() }
-            NP_Parsed_Schema::Tuple      { i, .. }     => { i.into_type_idx() }
-            NP_Parsed_Schema::Union      { i, .. }     => { i.into_type_idx() }
-        }
-    }
-
-    /// Return if this schema is sortable
-    pub fn is_sortable(&self) -> bool {
-        match self {
-            NP_Parsed_Schema::None => false,
-            NP_Parsed_Schema::Any        { sortable, .. }     => { *sortable }
-            NP_Parsed_Schema::UTF8String { sortable, .. }     => { *sortable }
-            NP_Parsed_Schema::Bytes      { sortable, .. }     => { *sortable }
-            NP_Parsed_Schema::Int8       { sortable, .. }     => { *sortable }
-            NP_Parsed_Schema::Int16      { sortable, .. }     => { *sortable }
-            NP_Parsed_Schema::Int32      { sortable, .. }     => { *sortable }
-            NP_Parsed_Schema::Int64      { sortable, .. }     => { *sortable }
-            NP_Parsed_Schema::Uint8      { sortable, .. }     => { *sortable }
-            NP_Parsed_Schema::Uint16     { sortable, .. }     => { *sortable }
-            NP_Parsed_Schema::Uint32     { sortable, .. }     => { *sortable }
-            NP_Parsed_Schema::Uint64     { sortable, .. }     => { *sortable }
-            NP_Parsed_Schema::Float      { sortable, .. }     => { *sortable }
-            NP_Parsed_Schema::Double     { sortable, .. }     => { *sortable }
-            NP_Parsed_Schema::Decimal    { sortable, .. }     => { *sortable }
-            NP_Parsed_Schema::Boolean    { sortable, .. }     => { *sortable }
-            NP_Parsed_Schema::Geo        { sortable, .. }     => { *sortable }
-            NP_Parsed_Schema::Uuid       { sortable, .. }     => { *sortable }
-            NP_Parsed_Schema::Ulid       { sortable, .. }     => { *sortable }
-            NP_Parsed_Schema::Date       { sortable, .. }     => { *sortable }
-            NP_Parsed_Schema::Enum       { sortable, .. }     => { *sortable }
-            NP_Parsed_Schema::Struct     { sortable, .. }     => { *sortable }
-            NP_Parsed_Schema::Map        { sortable, .. }     => { *sortable }
-            NP_Parsed_Schema::List       { sortable, .. }     => { *sortable }
-            NP_Parsed_Schema::Tuple      { sortable, .. }     => { *sortable }
-            NP_Parsed_Schema::Portal     { sortable, .. }     => { *sortable }
-            NP_Parsed_Schema::Union      { sortable, .. }     => { *sortable }
+impl Default for NP_Parsed_Schema {
+    fn default() -> Self {
+        Self {
+            val: NP_Value_Kind::Pointer,
+            i: NP_TypeKeys::None,
+            sortable: false,
+            data: Box::new(NP_Schema_Data::None),
         }
     }
 }
+
+// #[allow(missing_docs)]
+// #[derive(Debug, Clone)]
+// pub struct NP_Bytes_Data {
+//     pub size: u16,
+//     pub case: String_Case
+// }
+
+// #[allow(missing_docs)]
+// #[derive(Debug, Clone)]
+// pub struct NP_Geo_Data {
+//     pub size: u8,
+// }
+
+// #[allow(missing_docs)]
+// #[derive(Debug, Clone)]
+// pub struct NP_Dec_Data {
+//     pub exp: u8
+// }
+
+// #[allow(missing_docs)]
+// #[derive(Debug, Clone)]
+// pub struct NP_Enum_Data {
+//     pub choices: Vec<NP_Enum>
+// }
+
+// #[allow(missing_docs)]
+// #[derive(Debug, Clone)]
+// pub struct NP_Struct_Data {
+//     pub fields: Vec<NP_Struct_Field>, 
+//     pub empty: Vec<u8>
+// }
+
+// #[allow(missing_docs)]
+// #[derive(Debug, Clone)]
+// pub struct NP_Map_List_Data {
+//     pub child: usize
+// }
+
+// #[allow(missing_docs)]
+// #[derive(Debug, Clone)]
+// pub struct NP_Tuple_Data {
+//     pub values: Vec<NP_Tuple_Field>, 
+//     pub empty: Vec<u8>
+// }
+
+// #[allow(missing_docs)]
+// #[derive(Debug, Clone)]
+// pub struct NP_Portal_Data {
+//     pub path: String, 
+//     pub schema: usize, 
+//     pub parent_schema: usize
+// }
+
+// impl Drop for NP_Parsed_Schema {
+//     fn drop(&mut self) {
+//         match self.i {
+//             NP_TypeKeys::None => {}
+//             NP_TypeKeys::Any => {}
+//             NP_TypeKeys::Uuid => {}
+//             NP_TypeKeys::Ulid => {}
+//             NP_TypeKeys::UTF8String => {
+//                 if let Some(d) = self.data {
+//                     drop(unsafe { Box::from_raw(d as *mut NP_Bytes_Data) });
+//                 }
+//                 if let Some(d) = self.default {
+//                     drop(unsafe { Box::from_raw(d as *mut String) });
+//                 }
+//             }
+//             NP_TypeKeys::Bytes => {
+//                 if let Some(d) = self.data {
+//                     drop(unsafe { Box::from_raw(d as *mut NP_Bytes_Data) });
+//                 }
+//                 if let Some(d) = self.default {
+//                     drop(unsafe { Box::from_raw(d as *mut Vec<u8>) });
+//                 }
+//             }
+//             NP_TypeKeys::Uint8 => {
+//                 if let Some(d) = self.default {
+//                     drop(unsafe { Box::from_raw(d as *mut u8) });
+//                 }
+//             }
+//             NP_TypeKeys::Uint16 => {
+//                 if let Some(d) = self.default {
+//                     drop(unsafe { Box::from_raw(d as *mut u16) });
+//                 }
+//             }
+//             NP_TypeKeys::Uint32 => {
+//                 if let Some(d) = self.default {
+//                     drop(unsafe { Box::from_raw(d as *mut u32) });
+//                 }
+//             }
+//             NP_TypeKeys::Uint64 => {
+//                 if let Some(d) = self.default {
+//                     drop(unsafe { Box::from_raw(d as *mut u64) });
+//                 }
+//             }
+//             NP_TypeKeys::Int8 => {
+//                 if let Some(d) = self.default {
+//                     drop(unsafe { Box::from_raw(d as *mut i8) });
+//                 }
+//             }
+//             NP_TypeKeys::Int16 => {
+//                 if let Some(d) = self.default {
+//                     drop(unsafe { Box::from_raw(d as *mut i16) });
+//                 }
+//             }
+//             NP_TypeKeys::Int32 => {
+//                 if let Some(d) = self.default {
+//                     drop(unsafe { Box::from_raw(d as *mut i32) });
+//                 }
+//             }
+//             NP_TypeKeys::Int64 => {
+//                 if let Some(d) = self.default {
+//                     drop(unsafe { Box::from_raw(d as *mut i64) });
+//                 }
+//             }
+//             NP_TypeKeys::Float => {
+//                 if let Some(d) = self.default {
+//                     drop(unsafe { Box::from_raw(d as *mut f32) });
+//                 }
+//             }
+//             NP_TypeKeys::Double => {
+//                 if let Some(d) = self.default {
+//                     drop(unsafe { Box::from_raw(d as *mut f64) });
+//                 }
+//             }
+//             NP_TypeKeys::Decimal => {
+//                 if let Some(d) = self.data {
+//                     drop(unsafe { Box::from_raw(d as *mut NP_Dec_Data) });
+//                 }
+//                 if let Some(d) = self.default {
+//                     drop(unsafe { Box::from_raw(d as *mut NP_Dec) });
+//                 }
+//             }
+//             NP_TypeKeys::Boolean => {
+//                 if let Some(d) = self.default {
+//                     drop(unsafe { Box::from_raw(d as *mut bool) });
+//                 }
+//             }
+//             NP_TypeKeys::Geo => {
+//                 if let Some(d) = self.data {
+//                     drop(unsafe { Box::from_raw(d as *mut NP_Geo_Data) });
+//                 }
+//                 if let Some(d) = self.default {
+//                     drop(unsafe { Box::from_raw(d as *mut NP_Geo) });
+//                 }
+//             }
+//             NP_TypeKeys::Date => {
+//                 if let Some(d) = self.default {
+//                     drop(unsafe { Box::from_raw(d as *mut u64) });
+//                 }
+//             }
+//             NP_TypeKeys::Enum => {
+//                 if let Some(d) = self.data {
+//                     drop(unsafe { Box::from_raw(d as *mut NP_Enum_Data) });
+//                 }
+//                 if let Some(d) = self.default {
+//                     drop(unsafe { Box::from_raw(d as *mut NP_Enum) });
+//                 }
+//             }
+//             NP_TypeKeys::Struct => {
+//                 if let Some(d) = self.data {
+//                     drop(unsafe { Box::from_raw(d as *mut NP_Struct_Data) });
+//                 }
+//             }
+//             NP_TypeKeys::Map => {
+//                 if let Some(d) = self.data {
+//                     drop(unsafe { Box::from_raw(d as *mut NP_Map_List_Data) });
+//                 }
+//             }
+//             NP_TypeKeys::List => {
+//                 if let Some(d) = self.data {
+//                     drop(unsafe { Box::from_raw(d as *mut NP_Map_List_Data) });
+//                 }
+//             }
+//             NP_TypeKeys::Tuple => {
+//                 if let Some(d) = self.data {
+//                     drop(unsafe { Box::from_raw(d as *mut NP_Tuple_Data) });
+//                 }
+//             }
+//             NP_TypeKeys::Portal => {
+//                 if let Some(d) = self.data {
+//                     drop(unsafe { Box::from_raw(d as *mut NP_Portal_Data) });
+//                 }
+//             }
+//             NP_TypeKeys::Union => {
+                
+//             }
+//         }
+//     }
+// }
+
+// /// When a schema is parsed from JSON or Bytes, it is stored in this recursive type
+// /// 
+// #[allow(missing_docs)]
+// #[derive(Debug, Clone)]
+// pub enum NP_Parsed_Schema {
+//     None,
+//     Any        { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys },
+//     UTF8String { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<String>, size: u16, case: String_Case },
+//     Bytes      { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<Vec<u8>>, size: u16 },
+//     Int8       { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<i8> },
+//     Int16      { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<i16> },
+//     Int32      { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<i32> },
+//     Int64      { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<i64> },
+//     Uint8      { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<u8> },
+//     Uint16     { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<u16> },
+//     Uint32     { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<u32> },
+//     Uint64     { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<u64> },
+//     Float      { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<f32> },
+//     Double     { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<f64> },
+//     Decimal    { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<NP_Dec>, exp: u8 },
+//     Boolean    { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<bool> },
+//     Geo        { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<NP_Geo>, size: u8 },
+//     Date       { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<NP_Date> },
+//     Enum       { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<NP_Enum>, choices: Vec<NP_Enum> },
+//     Uuid       { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys },
+//     Ulid       { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys },
+//     Struct     { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, fields: Vec<NP_Struct_Field>, empty: Vec<u8> },
+//     Map        { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, value: NP_Schema_Addr}, 
+//     List       { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, of: NP_Schema_Addr },
+//     Tuple      { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, values: Vec<NP_Tuple_Field>, empty: Vec<u8>},
+//     Portal     { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, path: String, schema: usize, parent_schema: usize },
+//     Union      { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, types: Vec<(u8, String, NP_Schema_Addr)>, default: usize },
+// }
+
+// impl NP_Parsed_Schema {
+
+//     /// Get the type key for this schema
+//     pub fn get_offset(&self) -> &NP_Value_Kind {
+//         &self.val
+//     }
+
+//     /// Get the type key for this schema
+//     pub fn get_type_key(&self) -> &NP_TypeKeys {
+//         &self.i
+//     }
+
+//     /// Get the type data fo a given schema value
+//     pub fn get_type_data(&self) -> (&str, NP_TypeKeys) {
+//         self.i.into_type_idx()
+//     }
+
+//     /// Return if this schema is sortable
+//     pub fn is_sortable(&self) -> bool {
+//         self.sortable
+//     }
+// }
 
 
 
@@ -1125,6 +1256,7 @@ pub struct NP_Schema {
     pub parsed: Vec<NP_Parsed_Schema>
 }
 
+
 impl NP_Schema {
 
     /// Get a IDL represenatation of this schema
@@ -1135,33 +1267,33 @@ impl NP_Schema {
     /// Recursive function parse schema into IDL
     #[doc(hidden)]
     pub fn _type_to_idl(parsed_schema: &Vec<NP_Parsed_Schema>, address: usize) -> Result<String, NP_Error> {
-        match parsed_schema[address] {
-            NP_Parsed_Schema::Any        { .. }      => {    NP_Any::schema_to_idl(parsed_schema, address) }
-            NP_Parsed_Schema::UTF8String { .. }      => {    String::schema_to_idl(parsed_schema, address) }
-            NP_Parsed_Schema::Bytes      { .. }      => {  NP_Bytes::schema_to_idl(parsed_schema, address) }
-            NP_Parsed_Schema::Int8       { .. }      => {        i8::schema_to_idl(parsed_schema, address) }
-            NP_Parsed_Schema::Int16      { .. }      => {       i16::schema_to_idl(parsed_schema, address) }
-            NP_Parsed_Schema::Int32      { .. }      => {       i32::schema_to_idl(parsed_schema, address) }
-            NP_Parsed_Schema::Int64      { .. }      => {       i64::schema_to_idl(parsed_schema, address) }
-            NP_Parsed_Schema::Uint8      { .. }      => {        u8::schema_to_idl(parsed_schema, address) }
-            NP_Parsed_Schema::Uint16     { .. }      => {       u16::schema_to_idl(parsed_schema, address) }
-            NP_Parsed_Schema::Uint32     { .. }      => {       u32::schema_to_idl(parsed_schema, address) }
-            NP_Parsed_Schema::Uint64     { .. }      => {       u64::schema_to_idl(parsed_schema, address) }
-            NP_Parsed_Schema::Float      { .. }      => {       f32::schema_to_idl(parsed_schema, address) }
-            NP_Parsed_Schema::Double     { .. }      => {       f64::schema_to_idl(parsed_schema, address) }
-            NP_Parsed_Schema::Decimal    { .. }      => {    NP_Dec::schema_to_idl(parsed_schema, address) }
-            NP_Parsed_Schema::Boolean    { .. }      => {      bool::schema_to_idl(parsed_schema, address) } 
-            NP_Parsed_Schema::Geo        { .. }      => {    NP_Geo::schema_to_idl(parsed_schema, address) }
-            NP_Parsed_Schema::Uuid       { .. }      => {   NP_UUID::schema_to_idl(parsed_schema, address) }
-            NP_Parsed_Schema::Ulid       { .. }      => {   NP_ULID::schema_to_idl(parsed_schema, address) }
-            NP_Parsed_Schema::Date       { .. }      => {   NP_Date::schema_to_idl(parsed_schema, address) }
-            NP_Parsed_Schema::Enum       { .. }      => {   NP_Enum::schema_to_idl(parsed_schema, address) }
-            NP_Parsed_Schema::Struct     { .. }      => { NP_Struct::schema_to_idl(parsed_schema, address) }
-            NP_Parsed_Schema::Map        { .. }      => {    NP_Map::schema_to_idl(parsed_schema, address) }
-            NP_Parsed_Schema::List       { .. }      => {   NP_List::schema_to_idl(parsed_schema, address) }
-            NP_Parsed_Schema::Tuple      { .. }      => {  NP_Tuple::schema_to_idl(parsed_schema, address) }
-            NP_Parsed_Schema::Portal     { .. }      => { NP_Portal::schema_to_idl(parsed_schema, address) }
-            NP_Parsed_Schema::Union      { .. }      => {  NP_Union::schema_to_idl(parsed_schema, address) }
+        match parsed_schema[address].i {
+            NP_TypeKeys::Any           => {    NP_Any::schema_to_idl(parsed_schema, address) }
+            NP_TypeKeys::UTF8String    => {    String::schema_to_idl(parsed_schema, address) }
+            NP_TypeKeys::Bytes         => {  NP_Bytes::schema_to_idl(parsed_schema, address) }
+            NP_TypeKeys::Int8          => {        i8::schema_to_idl(parsed_schema, address) }
+            NP_TypeKeys::Int16         => {       i16::schema_to_idl(parsed_schema, address) }
+            NP_TypeKeys::Int32         => {       i32::schema_to_idl(parsed_schema, address) }
+            NP_TypeKeys::Int64         => {       i64::schema_to_idl(parsed_schema, address) }
+            NP_TypeKeys::Uint8         => {        u8::schema_to_idl(parsed_schema, address) }
+            NP_TypeKeys::Uint16        => {       u16::schema_to_idl(parsed_schema, address) }
+            NP_TypeKeys::Uint32        => {       u32::schema_to_idl(parsed_schema, address) }
+            NP_TypeKeys::Uint64        => {       u64::schema_to_idl(parsed_schema, address) }
+            NP_TypeKeys::Float         => {       f32::schema_to_idl(parsed_schema, address) }
+            NP_TypeKeys::Double        => {       f64::schema_to_idl(parsed_schema, address) }
+            NP_TypeKeys::Decimal       => {    NP_Dec::schema_to_idl(parsed_schema, address) }
+            NP_TypeKeys::Boolean       => {      bool::schema_to_idl(parsed_schema, address) } 
+            NP_TypeKeys::Geo           => {    NP_Geo::schema_to_idl(parsed_schema, address) }
+            NP_TypeKeys::Uuid          => {   NP_UUID::schema_to_idl(parsed_schema, address) }
+            NP_TypeKeys::Ulid          => {   NP_ULID::schema_to_idl(parsed_schema, address) }
+            NP_TypeKeys::Date          => {   NP_Date::schema_to_idl(parsed_schema, address) }
+            NP_TypeKeys::Enum          => {   NP_Enum::schema_to_idl(parsed_schema, address) }
+            NP_TypeKeys::Struct        => { NP_Struct::schema_to_idl(parsed_schema, address) }
+            NP_TypeKeys::Map           => {    NP_Map::schema_to_idl(parsed_schema, address) }
+            NP_TypeKeys::List          => {   NP_List::schema_to_idl(parsed_schema, address) }
+            NP_TypeKeys::Tuple         => {  NP_Tuple::schema_to_idl(parsed_schema, address) }
+            NP_TypeKeys::Portal        => { NP_Portal::schema_to_idl(parsed_schema, address) }
+            NP_TypeKeys::Union         => {  NP_Union::schema_to_idl(parsed_schema, address) }
             _ => { Ok(String::from("")) }
         }
     }
@@ -1174,33 +1306,33 @@ impl NP_Schema {
     /// Recursive function parse schema into JSON
     #[doc(hidden)]
     pub fn _type_to_json(parsed_schema: &Vec<NP_Parsed_Schema>, address: usize) -> Result<NP_JSON, NP_Error> {
-        match parsed_schema[address] {
-            NP_Parsed_Schema::Any        { .. }      => {    NP_Any::schema_to_json(parsed_schema, address) }
-            NP_Parsed_Schema::UTF8String { .. }      => {    String::schema_to_json(parsed_schema, address) }
-            NP_Parsed_Schema::Bytes      { .. }      => {  NP_Bytes::schema_to_json(parsed_schema, address) }
-            NP_Parsed_Schema::Int8       { .. }      => {        i8::schema_to_json(parsed_schema, address) }
-            NP_Parsed_Schema::Int16      { .. }      => {       i16::schema_to_json(parsed_schema, address) }
-            NP_Parsed_Schema::Int32      { .. }      => {       i32::schema_to_json(parsed_schema, address) }
-            NP_Parsed_Schema::Int64      { .. }      => {       i64::schema_to_json(parsed_schema, address) }
-            NP_Parsed_Schema::Uint8      { .. }      => {        u8::schema_to_json(parsed_schema, address) }
-            NP_Parsed_Schema::Uint16     { .. }      => {       u16::schema_to_json(parsed_schema, address) }
-            NP_Parsed_Schema::Uint32     { .. }      => {       u32::schema_to_json(parsed_schema, address) }
-            NP_Parsed_Schema::Uint64     { .. }      => {       u64::schema_to_json(parsed_schema, address) }
-            NP_Parsed_Schema::Float      { .. }      => {       f32::schema_to_json(parsed_schema, address) }
-            NP_Parsed_Schema::Double     { .. }      => {       f64::schema_to_json(parsed_schema, address) }
-            NP_Parsed_Schema::Decimal    { .. }      => {    NP_Dec::schema_to_json(parsed_schema, address) }
-            NP_Parsed_Schema::Boolean    { .. }      => {      bool::schema_to_json(parsed_schema, address) } 
-            NP_Parsed_Schema::Geo        { .. }      => {    NP_Geo::schema_to_json(parsed_schema, address) }
-            NP_Parsed_Schema::Uuid       { .. }      => {   NP_UUID::schema_to_json(parsed_schema, address) }
-            NP_Parsed_Schema::Ulid       { .. }      => {   NP_ULID::schema_to_json(parsed_schema, address) }
-            NP_Parsed_Schema::Date       { .. }      => {   NP_Date::schema_to_json(parsed_schema, address) }
-            NP_Parsed_Schema::Enum       { .. }      => {   NP_Enum::schema_to_json(parsed_schema, address) }
-            NP_Parsed_Schema::Struct     { .. }      => { NP_Struct::schema_to_json(parsed_schema, address) }
-            NP_Parsed_Schema::Map        { .. }      => {    NP_Map::schema_to_json(parsed_schema, address) }
-            NP_Parsed_Schema::List       { .. }      => {   NP_List::schema_to_json(parsed_schema, address) }
-            NP_Parsed_Schema::Tuple      { .. }      => {  NP_Tuple::schema_to_json(parsed_schema, address) }
-            NP_Parsed_Schema::Portal     { .. }      => { NP_Portal::schema_to_json(parsed_schema, address) }
-            NP_Parsed_Schema::Union      { .. }      => {  NP_Union::schema_to_json(parsed_schema, address) }
+        match parsed_schema[address].i {
+            NP_TypeKeys::Any           => {    NP_Any::schema_to_json(parsed_schema, address) }
+            NP_TypeKeys::UTF8String    => {    String::schema_to_json(parsed_schema, address) }
+            NP_TypeKeys::Bytes         => {  NP_Bytes::schema_to_json(parsed_schema, address) }
+            NP_TypeKeys::Int8          => {        i8::schema_to_json(parsed_schema, address) }
+            NP_TypeKeys::Int16         => {       i16::schema_to_json(parsed_schema, address) }
+            NP_TypeKeys::Int32         => {       i32::schema_to_json(parsed_schema, address) }
+            NP_TypeKeys::Int64         => {       i64::schema_to_json(parsed_schema, address) }
+            NP_TypeKeys::Uint8         => {        u8::schema_to_json(parsed_schema, address) }
+            NP_TypeKeys::Uint16        => {       u16::schema_to_json(parsed_schema, address) }
+            NP_TypeKeys::Uint32        => {       u32::schema_to_json(parsed_schema, address) }
+            NP_TypeKeys::Uint64        => {       u64::schema_to_json(parsed_schema, address) }
+            NP_TypeKeys::Float         => {       f32::schema_to_json(parsed_schema, address) }
+            NP_TypeKeys::Double        => {       f64::schema_to_json(parsed_schema, address) }
+            NP_TypeKeys::Decimal       => {    NP_Dec::schema_to_json(parsed_schema, address) }
+            NP_TypeKeys::Boolean       => {      bool::schema_to_json(parsed_schema, address) } 
+            NP_TypeKeys::Geo           => {    NP_Geo::schema_to_json(parsed_schema, address) }
+            NP_TypeKeys::Uuid          => {   NP_UUID::schema_to_json(parsed_schema, address) }
+            NP_TypeKeys::Ulid          => {   NP_ULID::schema_to_json(parsed_schema, address) }
+            NP_TypeKeys::Date          => {   NP_Date::schema_to_json(parsed_schema, address) }
+            NP_TypeKeys::Enum          => {   NP_Enum::schema_to_json(parsed_schema, address) }
+            NP_TypeKeys::Struct        => { NP_Struct::schema_to_json(parsed_schema, address) }
+            NP_TypeKeys::Map           => {    NP_Map::schema_to_json(parsed_schema, address) }
+            NP_TypeKeys::List          => {   NP_List::schema_to_json(parsed_schema, address) }
+            NP_TypeKeys::Tuple         => {  NP_Tuple::schema_to_json(parsed_schema, address) }
+            NP_TypeKeys::Portal        => { NP_Portal::schema_to_json(parsed_schema, address) }
+            NP_TypeKeys::Union         => {  NP_Union::schema_to_json(parsed_schema, address) }
             _ => { Ok(NP_JSON::Null) }
         }
     }
@@ -1219,34 +1351,39 @@ impl NP_Schema {
     }
 
     /// Scan the schema for portals and resolve their locations
-    pub fn resolve_portals(parsed: Vec<NP_Parsed_Schema>) -> Result<Vec<NP_Parsed_Schema>, NP_Error> {
+    pub fn resolve_portals(mut parsed: Vec<NP_Parsed_Schema>) -> Result<Vec<NP_Parsed_Schema>, NP_Error> {
 
         let temp_memory = NP_Memory_Owned::new(None, &parsed, DEFAULT_ROOT_PTR_ADDR);
 
         let mut completed: Vec<NP_Parsed_Schema> = Vec::with_capacity(parsed.len());
 
         for schema in parsed.iter() {
-            match schema {
-                NP_Parsed_Schema::Portal { path, .. } => {
+            if schema.i == NP_TypeKeys::Portal {
+                if let NP_Schema_Data::Portal { path, .. } = &*schema.data {
+
                     let root_cursor = NP_Cursor::new(temp_memory.root, 0, 0);
                     let str_path = np_path!(path);
                     match NP_Cursor::select(&temp_memory, root_cursor, false, true, &str_path)? {
                         Some(next) => {
-                            completed.push(NP_Parsed_Schema::Portal {
+
+                            completed.push(NP_Parsed_Schema {
                                 val: NP_Value_Kind::Pointer,
-                                path: path.clone(),
-                                schema: next.schema_addr,
-                                parent_schema: next.parent_schema_addr,
                                 i: NP_TypeKeys::Portal,
-                                sortable: false
+                                sortable: false,
+                                data: Box::new(NP_Schema_Data::Portal {
+                                    path: path.clone(),
+                                    schema: next.schema_addr,
+                                    parent_schema: next.parent_schema_addr
+                                })
                             });
                         },
-                        None => return Err(NP_Error::new("Portal 'to' property failed to reoslve!"))
+                        None => return Err(NP_Error::new("Portal 'to' property failed to resolve!"))
                     }
-                },
-                _ => { 
-                    completed.push(schema.clone());
+                } else {
+                    return Err(NP_Error::Unreachable)
                 }
+            } else {
+                completed.push(schema.clone());
             }
         }
 
@@ -1320,7 +1457,7 @@ impl NP_Schema {
     pub fn from_bytes(mut cache: Vec<NP_Parsed_Schema>, address: usize, bytes: &[u8]) -> (bool, Vec<NP_Parsed_Schema>) {
         let this_type = NP_TypeKeys::from(bytes[address]);
         match this_type {
-            NP_TypeKeys::None       => {  cache.push(NP_Parsed_Schema::None);  (false, cache) }
+            NP_TypeKeys::None       => {  cache.push(NP_Parsed_Schema::default());  (false, cache) }
             NP_TypeKeys::Any        => {       NP_Any::from_bytes_to_schema(cache, address, bytes) }
             NP_TypeKeys::UTF8String => {       String::from_bytes_to_schema(cache, address, bytes) }
             NP_TypeKeys::Bytes      => {     NP_Bytes::from_bytes_to_schema(cache, address, bytes) }

@@ -22,7 +22,7 @@
 //! ```
 //! 
 
-use crate::{JS_Schema, idl::JS_AST, schema::NP_Value_Kind};
+use crate::{JS_Schema, idl::JS_AST, schema::{NP_Schema_Data, NP_Value_Kind}};
 use alloc::prelude::v1::Box;
 use crate::pointer::NP_Scalar;
 use crate::{memory::NP_Memory, schema::{NP_Parsed_Schema}};
@@ -243,10 +243,11 @@ impl<'value> NP_Value<'value> for NP_UUID {
        
         let mut schema_bytes: Vec<u8> = Vec::new();
         schema_bytes.push(NP_TypeKeys::Uuid as u8);
-        schema.push(NP_Parsed_Schema::Uuid { 
+        schema.push(NP_Parsed_Schema {
             val: NP_Value_Kind::Fixed(16),
             i: NP_TypeKeys::Uuid,
-            sortable: true
+            sortable: true,
+            data: Box::new(NP_Schema_Data::Uuid)
         });
         return Ok((true, schema_bytes, schema))
     
@@ -254,10 +255,11 @@ impl<'value> NP_Value<'value> for NP_UUID {
 
 
     fn from_bytes_to_schema(mut schema: Vec<NP_Parsed_Schema>, _address: usize, _bytes: &[u8]) -> (bool, Vec<NP_Parsed_Schema>) {
-        schema.push(NP_Parsed_Schema::Uuid {
+        schema.push(NP_Parsed_Schema {
             val: NP_Value_Kind::Fixed(16),
             i: NP_TypeKeys::Uuid,
-            sortable: true
+            sortable: true,
+            data: Box::new(NP_Schema_Data::Uuid)
         });
         (true, schema)
     }

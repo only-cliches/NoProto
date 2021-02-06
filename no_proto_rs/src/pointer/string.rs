@@ -16,7 +16,7 @@
 
 use alloc::string::String;
 use alloc::prelude::v1::Box;
-use crate::{error::NP_Error, idl::{JS_AST, JS_Schema}, schema::{NP_Value_Kind, String_Case}};
+use crate::{error::NP_Error, idl::{JS_AST, JS_Schema}, schema::{NP_Schema_Data, NP_Value_Kind, String_Case}};
 use crate::{
     json_flex::JSMAP,
     memory::NP_Memory,
@@ -41,28 +41,29 @@ pub type NP_String<'string> = &'string str;
 
 impl<'value> NP_Scalar<'value> for String {
     fn schema_default(schema: &NP_Parsed_Schema) -> Option<Self> where Self: Sized {
-        match schema {
-            NP_Parsed_Schema::UTF8String { size, .. } => {
-                Some(if *size > 0 {
-                    let mut v: String = String::with_capacity(*size as usize);
-                    for _x in 0..*size {
-                        v.push(' ');
-                    }
-                    v
-                } else {
-                    String::from("")
-                })
-            },
-            _ => None
-        }
+        let size = if let NP_Schema_Data::UTF8String { size, .. } = &*schema.data {
+            *size
+        } else {
+            0
+        };
+
+        Some(if size > 0 {
+            let mut v: String = String::with_capacity(size as usize);
+            for _x in 0..size {
+                v.push(' ');
+            }
+            v
+        } else {
+            String::from("")
+        })
     }
 
     fn np_max_value<M: NP_Memory>(cursor: &NP_Cursor, memory: &M) -> Option<Self> {
-        let size = match memory.get_schema(cursor.schema_addr) {
-            NP_Parsed_Schema::UTF8String { size, .. } => {
-                *size
-            },
-            _ => 0
+
+        let size = if let NP_Schema_Data::UTF8String { size, .. } = &*memory.get_schema(cursor.schema_addr).data {
+            *size
+        } else {
+            0
         };
 
         if size == 0 {
@@ -79,11 +80,10 @@ impl<'value> NP_Scalar<'value> for String {
     }
 
     fn np_min_value<M: NP_Memory>(cursor: &NP_Cursor, memory: &M) -> Option<Self> {
-        let size = match memory.get_schema(cursor.schema_addr) {
-            NP_Parsed_Schema::UTF8String { size, .. } => {
-                *size
-            },
-            _ => 0
+        let size = if let NP_Schema_Data::UTF8String { size, .. } = &*memory.get_schema(cursor.schema_addr).data {
+            *size
+        } else {
+            0
         };
 
         if size == 0 {
@@ -113,83 +113,83 @@ impl<'value> NP_Value<'value> for String {
     }
 
     fn schema_to_json(schema: &Vec<NP_Parsed_Schema>, address: usize) -> Result<NP_JSON, NP_Error> {
-        match &schema[address] {
-            NP_Parsed_Schema::UTF8String { size, default, case, ..} => {
-                let mut schema_json = JSMAP::new();
+        let schema = &schema[address];
+
+        if let NP_Schema_Data::UTF8String { size, default, case, .. } = &*schema.data {
+            let mut schema_json = JSMAP::new();
+            schema_json.insert(
+                "type".to_owned(),
+                NP_JSON::String(Self::type_idx().0.to_string()),
+            );
+
+            match case {
+                String_Case::Uppercase => {
+                    schema_json.insert("uppercase".to_owned(), NP_JSON::True);
+                },
+                String_Case::Lowercase => {
+                    schema_json.insert("lowercase".to_owned(), NP_JSON::True);
+                },
+                _ => {}
+            }
+
+            if *size > 0 {
+                schema_json.insert("size".to_owned(), NP_JSON::Integer(size.clone().into()));
+            }
+
+            if let Some(default_value) = default {
                 schema_json.insert(
-                    "type".to_owned(),
-                    NP_JSON::String(Self::type_idx().0.to_string()),
+                    "default".to_owned(),
+                    NP_JSON::String(default_value.to_string()),
                 );
+            }
 
-                match case {
-                    String_Case::Uppercase => {
-                        schema_json.insert("uppercase".to_owned(), NP_JSON::True);
-                    },
-                    String_Case::Lowercase => {
-                        schema_json.insert("lowercase".to_owned(), NP_JSON::True);
-                    },
-                    _ => {}
-                }
-
-                if *size > 0 {
-                    schema_json.insert("size".to_owned(), NP_JSON::Integer(size.clone().into()));
-                }
-
-                if let Some(default_value) = default {
-                    schema_json.insert(
-                        "default".to_owned(),
-                        NP_JSON::String(default_value.to_string()),
-                    );
-                }
-
-                Ok(NP_JSON::Dictionary(schema_json))
-            },
-            _ => Ok(NP_JSON::Null)
+            Ok(NP_JSON::Dictionary(schema_json))
+        } else {
+            Ok(NP_JSON::Null)
         }
     }
 
     fn schema_to_idl(schema: &Vec<NP_Parsed_Schema>, address: usize)-> Result<String, NP_Error> {
-        Ok(match &schema[address] {
-            NP_Parsed_Schema::UTF8String { default, size, case, .. } => {
-                let mut properties: Vec<String> = Vec::new();
+        let schema = &schema[address];
 
-                if let Some(x) = default {
-                    let mut def = String::from("default: ");
-                    def.push_str("\"");
-                    def.push_str(x.as_str());
-                    def.push_str("\"");
-                    properties.push(def);
-                }
+        if let NP_Schema_Data::UTF8String { size, default, case, .. } = &*schema.data {
+            let mut properties: Vec<String> = Vec::new();
 
-                if *size > 0 {
-                    let mut def = String::from("size: ");
-                    def.push_str(size.to_string().as_str());
-                    properties.push(def);
-                }
+            if let Some(x) = default {
+                let mut def = String::from("default: ");
+                def.push_str("\"");
+                def.push_str(x.as_str());
+                def.push_str("\"");
+                properties.push(def);
+            }
 
-                match case {
-                    String_Case::Uppercase => {
-                        properties.push(String::from("uppercase: true"));
-                    },
-                    String_Case::Lowercase => {
-                        properties.push(String::from("lowercase: true"));
-                    },
-                    _ => {}
-                }
+            if *size > 0 {
+                let mut def = String::from("size: ");
+                def.push_str(size.to_string().as_str());
+                properties.push(def);
+            }
 
-                if properties.len() == 0 {
-                    String::from("string()")
-                } else {
-                    let mut final_str = String::from("string({");
-                    final_str.push_str(properties.join(", ").as_str());
-                    final_str.push_str("})");
-                    final_str
-                }
+            match case {
+                String_Case::Uppercase => {
+                    properties.push(String::from("uppercase: true"));
+                },
+                String_Case::Lowercase => {
+                    properties.push(String::from("lowercase: true"));
+                },
+                _ => {}
+            }
 
-                
-            },
-            _ => { String::from("") }
-        })
+            if properties.len() == 0 {
+                Ok(String::from("string()"))
+            } else {
+                let mut final_str = String::from("string({");
+                final_str.push_str(properties.join(", ").as_str());
+                final_str.push_str("})");
+                Ok(final_str)
+            }
+        } else {
+            Err(NP_Error::Unreachable)
+        }
     }
 
     fn from_idl_to_schema(mut schema: Vec<NP_Parsed_Schema>, _name: &str, idl: &JS_Schema, args: &Vec<JS_AST>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {
@@ -270,17 +270,15 @@ impl<'value> NP_Value<'value> for String {
         }
 
 
-        schema.push(NP_Parsed_Schema::UTF8String {
+        schema.push(NP_Parsed_Schema {
             val: if size > 0 {
                 NP_Value_Kind::Fixed(size as u32)
             } else {
                 NP_Value_Kind::Pointer
             },
             i: NP_TypeKeys::UTF8String,
-            size: size,
-            default: default,
-            case: case_byte,
             sortable: has_fixed_size,
+            data:  Box::new(NP_Schema_Data::UTF8String { size: size, default, case: case_byte })
         });
 
         return Ok((has_fixed_size, schema_data, schema));
@@ -309,32 +307,28 @@ impl<'value> NP_Value<'value> for String {
         let default_size = u16::from_be_bytes([bytes[address + 4], bytes[address + 5]]) as usize;
 
         if default_size == 0 {
-            schema.push(NP_Parsed_Schema::UTF8String {
+            schema.push(NP_Parsed_Schema {
                 val: if fixed_size > 0 {
                     NP_Value_Kind::Fixed(fixed_size as u32)
                 } else {
                     NP_Value_Kind::Pointer
                 },
                 i: NP_TypeKeys::UTF8String,
-                default: None,
-                case: case_byte,
                 sortable: fixed_size > 0,
-                size: fixed_size,
+                data:  Box::new(NP_Schema_Data::UTF8String { size: fixed_size, default: None, case: case_byte })
             })
         } else {
             let default_bytes = str::from_utf8(&bytes[(address + 6)..(address + 6 + (default_size - 1))]).unwrap_or_default();
 
-            schema.push(NP_Parsed_Schema::UTF8String {
+            schema.push(NP_Parsed_Schema {
                 val: if fixed_size > 0 {
                     NP_Value_Kind::Fixed(fixed_size as u32)
                 } else {
                     NP_Value_Kind::Pointer
                 },
                 i: NP_TypeKeys::UTF8String,
-                default: Some(default_bytes.to_string()),
-                size: fixed_size,
-                case: case_byte,
                 sortable: fixed_size > 0,
+                data:  Box::new(NP_Schema_Data::UTF8String { size: fixed_size, default: Some(default_bytes.to_string()), case: case_byte })
             })
         }
 
@@ -363,8 +357,8 @@ impl<'value> NP_Value<'value> for String {
             return Ok(0);
         }
 
-        match memory.get_schema(cursor.schema_addr) {
-            NP_Parsed_Schema::UTF8String { size, .. } => {
+        match &*memory.get_schema(cursor.schema_addr).data {
+            NP_Schema_Data::UTF8String { size, .. } => {
                 // fixed size
                 if *size > 0 {
                     return Ok(*size as usize);
@@ -462,17 +456,15 @@ impl<'value> NP_Value<'value> for String {
             }
         };
 
-        schema.push(NP_Parsed_Schema::UTF8String {
+        schema.push(NP_Parsed_Schema {
             val: if size > 0 {
                 NP_Value_Kind::Fixed(size as u32)
             } else {
                 NP_Value_Kind::Pointer
             },
             i: NP_TypeKeys::UTF8String,
-            size: size,
-            default: default,
-            case: case_byte,
             sortable: has_fixed_size,
+            data:  Box::new(NP_Schema_Data::UTF8String { size, default, case: case_byte })
         });
 
         return Ok((has_fixed_size, schema_data, schema));
@@ -484,8 +476,8 @@ impl<'value> NP_Value<'value> for String {
             Ok(x) => match x {
                 Some(y) => NP_JSON::String(y.to_string()),
                 None => {
-                    match &memory.get_schema(cursor.schema_addr) {
-                        NP_Parsed_Schema::UTF8String { default, .. } => match default {
+                    match &*memory.get_schema(cursor.schema_addr).data {
+                        NP_Schema_Data::UTF8String { default, .. } => match default {
                             Some(x) => NP_JSON::String(x.to_string()),
                             None => NP_JSON::Null,
                         },
@@ -538,8 +530,8 @@ impl<'value> NP_Value<'value> for NP_String<'value> {
 
         let c_value = || { cursor.get_value(memory) };
 
-        let (size, case) = match memory.get_schema(cursor.schema_addr) {
-            NP_Parsed_Schema::UTF8String { size, case, .. } => (*size, *case),
+        let (size, case) = match &*memory.get_schema(cursor.schema_addr).data {
+            NP_Schema_Data::UTF8String { size, case, .. } => (*size, *case),
             _ => (0, String_Case::None)
         };
 
@@ -647,8 +639,8 @@ impl<'value> NP_Value<'value> for NP_String<'value> {
     }
 
     fn default_value(_depth: usize, schema_addr: usize,schema: &'value Vec<NP_Parsed_Schema>) -> Option<Self> {
-        match &schema[schema_addr] {
-            NP_Parsed_Schema::UTF8String { default, .. } => match default {
+        match &*schema[schema_addr].data {
+            NP_Schema_Data::UTF8String { default, .. } => match default {
                 Some(x) => Some(x),
                 None => None,
             },
@@ -676,8 +668,8 @@ impl<'value> NP_Value<'value> for NP_String<'value> {
             return Ok(None);
         }
 
-        match memory.get_schema(cursor.schema_addr) {
-            NP_Parsed_Schema::UTF8String { size, .. } => {
+        match &*memory.get_schema(cursor.schema_addr).data {
+            NP_Schema_Data::UTF8String { size, .. } => {
                 if *size > 0 {
                     // fixed size
 

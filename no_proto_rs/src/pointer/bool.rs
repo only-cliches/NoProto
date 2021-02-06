@@ -16,7 +16,7 @@
 //! ```
 
 use alloc::string::String;
-use crate::{idl::{JS_AST, JS_Schema}, json_flex::JSMAP, schema::{NP_Parsed_Schema, NP_Value_Kind}};
+use crate::{idl::{JS_AST, JS_Schema}, json_flex::JSMAP, schema::{NP_Parsed_Schema, NP_Schema_Data, NP_Value_Kind}};
 use crate::error::NP_Error;
 use crate::{schema::{NP_TypeKeys}, pointer::NP_Value, json_flex::NP_JSON};
 
@@ -51,8 +51,8 @@ impl<'value> NP_Value<'value> for bool {
         let mut schema_json = JSMAP::new();
         schema_json.insert("type".to_owned(), NP_JSON::String(Self::type_idx().0.to_string()));
 
-        match &schema[address] {
-            NP_Parsed_Schema::Boolean { default, .. } => {
+        match &*schema[address].data {
+            NP_Schema_Data::Boolean { default, .. } => {
                 if let Some(d) = default {
                     schema_json.insert("default".to_owned(), match *d {
                         true => NP_JSON::True,
@@ -66,9 +66,9 @@ impl<'value> NP_Value<'value> for bool {
         Ok(NP_JSON::Dictionary(schema_json))
     }
 
-    fn default_value(_depth: usize, addr: usize, schema: &Vec<NP_Parsed_Schema>) -> Option<Self> {
-        match &schema[addr] {
-            NP_Parsed_Schema::Boolean { default, .. } => {
+    fn default_value(_depth: usize, address: usize, schema: &Vec<NP_Parsed_Schema>) -> Option<Self> {
+        match &*schema[address].data {
+            NP_Schema_Data::Boolean { default, .. } => {
                 match default {
                     Some(x) => Some(*x),
                     None => None
@@ -157,8 +157,8 @@ impl<'value> NP_Value<'value> for bool {
                         }
                     },
                     None => {                        
-                        match memory.get_schema(cursor.schema_addr) {
-                            NP_Parsed_Schema::Boolean { default, .. } => {
+                        match &*memory.get_schema(cursor.schema_addr).data {
+                            NP_Schema_Data::Boolean { default, .. } => {
                                 if let Some(d) = default {
                                     if *d == true {
                                         NP_JSON::True
@@ -190,8 +190,8 @@ impl<'value> NP_Value<'value> for bool {
     }
 
     fn schema_to_idl(schema: &Vec<NP_Parsed_Schema>, address: usize)-> Result<String, NP_Error> {
-        match &schema[address] {
-            NP_Parsed_Schema::Boolean { default , .. } => {
+        match &*schema[address].data {
+            NP_Schema_Data::Boolean { default , .. } => {
                 let mut result = String::from("bool(");
                 if let Some(x) = default {
                     result.push_str("{default: ");
@@ -251,11 +251,11 @@ impl<'value> NP_Value<'value> for bool {
             }
         };
 
-        schema.push(NP_Parsed_Schema::Boolean {
+        schema.push(NP_Parsed_Schema {
             val: NP_Value_Kind::Fixed(1),
             i: NP_TypeKeys::Boolean,
-            default: default,
-            sortable: true
+            sortable: true,
+            data: Box::new(NP_Schema_Data::Boolean { default })
         });
 
         return Ok((true, schema_data, schema));
@@ -282,10 +282,10 @@ impl<'value> NP_Value<'value> for bool {
             }
         };
 
-        schema.push(NP_Parsed_Schema::Boolean {
+        schema.push(NP_Parsed_Schema {
             val: NP_Value_Kind::Fixed(1),
             i: NP_TypeKeys::Boolean,
-            default: default,
+            data: Box::new(NP_Schema_Data::Boolean { default }),
             sortable: true
         });
 
@@ -293,16 +293,16 @@ impl<'value> NP_Value<'value> for bool {
   
     }
     fn from_bytes_to_schema(mut schema: Vec<NP_Parsed_Schema>, address: usize, bytes: &[u8]) -> (bool, Vec<NP_Parsed_Schema>) {
-        schema.push(NP_Parsed_Schema::Boolean {
+        schema.push(NP_Parsed_Schema {
             val: NP_Value_Kind::Fixed(1),
             i: NP_TypeKeys::Boolean,
             sortable: true,
-            default: match bytes[address + 1] {
+            data: Box::new(NP_Schema_Data::Boolean { default: match bytes[address + 1] {
                 0 => None,
                 1 => Some(true),
                 2 => Some(false),
                 _ => unreachable!()
-            }
+            } })
         });
         (true, schema)
      }
