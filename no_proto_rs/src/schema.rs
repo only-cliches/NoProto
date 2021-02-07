@@ -1069,7 +1069,8 @@ pub struct NP_Bool_Data {
 pub struct NP_String_Data {
     pub default: Option<String>,
     pub size: u16,
-    pub case: String_Case
+    pub case: String_Case,
+    pub empty: Vec<u8>
 }
 
 #[allow(missing_docs)]

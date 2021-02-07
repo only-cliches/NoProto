@@ -265,6 +265,11 @@ impl<'value> NP_Value<'value> for String {
             schema_data.extend_from_slice(&0u16.to_be_bytes());
         }
 
+        let mut empty: Vec<u8> = Vec::new();
+
+        for _x in 0..size {
+            empty.push(32);
+        }
 
         schema.push(NP_Parsed_Schema {
             val: if size > 0 {
@@ -274,7 +279,7 @@ impl<'value> NP_Value<'value> for String {
             },
             i: NP_TypeKeys::UTF8String,
             sortable: has_fixed_size,
-            data:  Arc::new(Box::into_raw(Box::new(NP_String_Data { size: size, default, case: case_byte })) as *const u8)
+            data:  Arc::new(Box::into_raw(Box::new(NP_String_Data { size: size, default, case: case_byte, empty })) as *const u8)
         });
 
         return Ok((has_fixed_size, schema_data, schema));
@@ -302,6 +307,12 @@ impl<'value> NP_Value<'value> for String {
         // default value size
         let default_size = u16::from_be_bytes([bytes[address + 4], bytes[address + 5]]) as usize;
 
+        let mut empty: Vec<u8> = Vec::new();
+
+        for _x in 0..fixed_size {
+            empty.push(32);
+        }
+
         if default_size == 0 {
             schema.push(NP_Parsed_Schema {
                 val: if fixed_size > 0 {
@@ -311,7 +322,7 @@ impl<'value> NP_Value<'value> for String {
                 },
                 i: NP_TypeKeys::UTF8String,
                 sortable: fixed_size > 0,
-                data:  Arc::new(Box::into_raw(Box::new(NP_String_Data { size: fixed_size, default: None, case: case_byte })) as *const u8)
+                data:  Arc::new(Box::into_raw(Box::new(NP_String_Data { size: fixed_size, default: None, case: case_byte, empty })) as *const u8)
             })
         } else {
             let default_bytes = str::from_utf8(&bytes[(address + 6)..(address + 6 + (default_size - 1))]).unwrap_or_default();
@@ -324,7 +335,7 @@ impl<'value> NP_Value<'value> for String {
                 },
                 i: NP_TypeKeys::UTF8String,
                 sortable: fixed_size > 0,
-                data:  Arc::new(Box::into_raw(Box::new(NP_String_Data { size: fixed_size, default: Some(default_bytes.to_string()), case: case_byte })) as *const u8)
+                data:  Arc::new(Box::into_raw(Box::new(NP_String_Data { size: fixed_size, default: Some(default_bytes.to_string()), case: case_byte, empty })) as *const u8)
             })
         }
 
@@ -451,6 +462,12 @@ impl<'value> NP_Value<'value> for String {
             }
         };
 
+        let mut empty: Vec<u8> = Vec::new();
+
+        for _x in 0..size {
+            empty.push(32);
+        }
+
         schema.push(NP_Parsed_Schema {
             val: if size > 0 {
                 NP_Value_Kind::Fixed(size as u32)
@@ -459,7 +476,7 @@ impl<'value> NP_Value<'value> for String {
             },
             i: NP_TypeKeys::UTF8String,
             sortable: has_fixed_size,
-            data:  Arc::new(Box::into_raw(Box::new(NP_String_Data { size, default, case: case_byte })) as *const u8)
+            data:  Arc::new(Box::into_raw(Box::new(NP_String_Data { size, default, case: case_byte, empty })) as *const u8)
         });
 
         return Ok((has_fixed_size, schema_data, schema));
@@ -553,13 +570,7 @@ impl<'value> NP_Value<'value> for NP_String<'value> {
     
             if c_value().get_addr_value() == 0 {
                 // malloc new bytes
-    
-                let mut empty_bytes: Vec<u8> = Vec::with_capacity(size as usize);
-                for _x in 0..size {
-                    empty_bytes.push(32); // white space
-                }
-    
-                let new_addr = memory.malloc(empty_bytes)? as usize;
+                let new_addr = memory.malloc_borrow(&data.empty)? as usize;
                 cursor.get_value_mut(memory).set_addr_value(new_addr as u16);
             }
 
