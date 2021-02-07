@@ -1,8 +1,8 @@
 //! Clone type for recursive or duplicating data types.
 //! 
 
-use crate::{idl::{JS_AST, JS_Schema}, memory::NP_Memory, schema::{NP_Parsed_Schema, NP_Schema_Data, NP_Value_Kind}};
-use alloc::vec::Vec;
+use crate::{idl::{JS_AST, JS_Schema}, memory::NP_Memory, schema::{NP_Parsed_Schema, NP_Portal_Data, NP_Value_Kind}};
+use alloc::{sync::Arc, vec::Vec};
 
 use crate::json_flex::{JSMAP, NP_JSON};
 use crate::schema::{NP_TypeKeys};
@@ -32,35 +32,32 @@ impl<'value> NP_Value<'value> for NP_Portal {
     fn schema_to_json(schema: &Vec<NP_Parsed_Schema>, address: usize)-> Result<NP_JSON, NP_Error> {
         let schema = &schema[address];
 
-        if let NP_Schema_Data::Portal { path, .. } = &*schema.data {
+        let data = unsafe { &*(*schema.data as *const NP_Portal_Data) };
 
-            let mut schema_json = JSMAP::new();
-            schema_json.insert(
-                "type".to_owned(),
-                NP_JSON::String(Self::type_idx().0.to_string()),
-            );
+        let mut schema_json = JSMAP::new();
+        schema_json.insert(
+            "type".to_owned(),
+            NP_JSON::String(Self::type_idx().0.to_string()),
+        );
 
-            schema_json.insert(
-                "to".to_owned(),
-                NP_JSON::String(path.clone())
-            );
+        schema_json.insert(
+            "to".to_owned(),
+            NP_JSON::String(data.path.clone())
+        );
 
-            Ok(NP_JSON::Dictionary(schema_json))      
-        } else {
-            Ok(NP_JSON::Null)
-        }
+        Ok(NP_JSON::Dictionary(schema_json))      
+       
     }
 
     fn schema_to_idl(schema: &Vec<NP_Parsed_Schema>, address: usize)-> Result<String, NP_Error> {
 
-        if let NP_Schema_Data::Portal { path, .. } = &*schema[address].data {
-            let mut result = String::from("portal({to: \"");
-            result.push_str(path.as_str());
-            result.push_str("\"});");
-            Ok(result)
-        } else {
-            Err(NP_Error::Unreachable)
-        }
+        let data = unsafe { &*(*schema[address].data as *const NP_Portal_Data) };
+
+        let mut result = String::from("portal({to: \"");
+        result.push_str(data.path.as_str());
+        result.push_str("\"});");
+        Ok(result)
+       
     }
 
     fn from_idl_to_schema(mut schema: Vec<NP_Parsed_Schema>, _name: &str, idl: &JS_Schema, args: &Vec<JS_AST>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {
@@ -94,7 +91,7 @@ impl<'value> NP_Value<'value> for NP_Portal {
                 val: NP_Value_Kind::Pointer,
                 i: NP_TypeKeys::Portal,
                 sortable: false,
-                data: Box::new(NP_Schema_Data::Portal { path: path.clone(), schema: 0, parent_schema: 0 })
+                data: Arc::new(Box::into_raw(Box::new(NP_Portal_Data { path: path.clone(), schema: 0, parent_schema: 0 })) as *const u8)
             });
             let path_bytes = path.as_bytes();
             schema_vec.extend(&(path_bytes.len() as u16).to_be_bytes()[..]);
@@ -115,7 +112,7 @@ impl<'value> NP_Value<'value> for NP_Portal {
                     val: NP_Value_Kind::Pointer,
                     i: NP_TypeKeys::Portal,
                     sortable: false,
-                    data: Box::new(NP_Schema_Data::Portal { path: path.clone(), schema: 0, parent_schema: 0 })
+                    data: Arc::new(Box::into_raw(Box::new(NP_Portal_Data { path: path.clone(), schema: 0, parent_schema: 0 })) as *const u8)
                 });
                 let path_bytes = path.as_bytes();
                 schema_vec.extend(&(path_bytes.len() as u16).to_be_bytes()[..]);
@@ -140,7 +137,7 @@ impl<'value> NP_Value<'value> for NP_Portal {
             val: NP_Value_Kind::Pointer,
             i: NP_TypeKeys::Portal,
             sortable: false,
-            data: Box::new(NP_Schema_Data::Portal { path: String::from(path_str), schema: 0, parent_schema: 0 })
+            data: Arc::new(Box::into_raw(Box::new(NP_Portal_Data { path: String::from(path_str), schema: 0, parent_schema: 0 })) as *const u8)
         });
 
         (false, schema)
@@ -151,52 +148,44 @@ impl<'value> NP_Value<'value> for NP_Portal {
     }
 
     fn to_json<M: NP_Memory>(depth:usize, cursor: &NP_Cursor, memory: &'value M) -> NP_JSON {
-        match &*memory.get_schema(cursor.schema_addr).data {
-            NP_Schema_Data::Portal { schema, parent_schema, .. } => {
-                let mut next = cursor.clone();
-                next.schema_addr = *schema;
-                next.parent_schema_addr = *parent_schema;
-                NP_Cursor::json_encode(depth + 1, &next, memory)
-            },
-            _ => NP_JSON::Null
-        }
+        let data = unsafe { &*(*memory.get_schema(cursor.schema_addr).data as *const NP_Portal_Data) };
+
+        let mut next = cursor.clone();
+        next.schema_addr = data.schema;
+        next.parent_schema_addr = data.parent_schema;
+        NP_Cursor::json_encode(depth + 1, &next, memory)
     }
 
     fn set_from_json<'set, M: NP_Memory>(depth: usize, apply_null: bool, cursor: NP_Cursor, memory: &'set M, value: &Box<NP_JSON>) -> Result<(), NP_Error> where Self: 'set + Sized {
-        match &*memory.get_schema(cursor.schema_addr).data {
-            NP_Schema_Data::Portal { schema, parent_schema, .. } => {
-                let mut next = cursor.clone();
-                next.schema_addr = *schema;
-                next.parent_schema_addr = *parent_schema;
-                NP_Cursor::set_from_json(depth + 1, apply_null, next, memory, value)
-            },
-            _ => { Ok(()) }
-        }
+        
+        let data = unsafe { &*(*memory.get_schema(cursor.schema_addr).data as *const NP_Portal_Data) };
+
+        let mut next = cursor.clone();
+        next.schema_addr = data.schema;
+        next.parent_schema_addr = data.parent_schema;
+        NP_Cursor::set_from_json(depth + 1, apply_null, next, memory, value)
+       
     }
 
     fn get_size<M: NP_Memory>(depth:usize, cursor: &'value NP_Cursor, memory: &'value M) -> Result<usize, NP_Error> {
-        match &*memory.get_schema(cursor.schema_addr).data {
-            NP_Schema_Data::Portal { schema, parent_schema, .. } => {
-                let mut next = cursor.clone();
-                next.schema_addr = *schema;
-                next.parent_schema_addr = *parent_schema;
-                NP_Cursor::calc_size(depth + 1, &next, memory)
-            },
-            _ => Err(NP_Error::Unreachable)
-        }
+        let data = unsafe { &*(*memory.get_schema(cursor.schema_addr).data as *const NP_Portal_Data) };
+        let mut next = cursor.clone();
+        next.schema_addr = data.schema;
+        next.parent_schema_addr = data.parent_schema;
+        NP_Cursor::calc_size(depth + 1, &next, memory)
+         
     }
 
     fn do_compact<M: NP_Memory, M2: NP_Memory>(depth:usize, mut from_cursor: NP_Cursor, from_memory: &'value M, mut to_cursor: NP_Cursor, to_memory: &'value M2) -> Result<NP_Cursor, NP_Error> where Self: 'value + Sized {
-        match &*from_memory.get_schema(from_cursor.schema_addr).data {
-            NP_Schema_Data::Portal { schema, parent_schema, .. } => {
-                from_cursor.schema_addr = *schema;
-                from_cursor.parent_schema_addr = *parent_schema;
-                to_cursor.schema_addr = *schema;
-                to_cursor.parent_schema_addr = *parent_schema;
-                NP_Cursor::compact(depth + 1, from_cursor, from_memory, to_cursor, to_memory)
-            },
-            _ => Err(NP_Error::Unreachable)
-        }
+        
+        let data = unsafe { &*(*from_memory.get_schema(from_cursor.schema_addr).data as *const NP_Portal_Data) };
+
+        from_cursor.schema_addr = data.schema;
+        from_cursor.parent_schema_addr = data.parent_schema;
+        to_cursor.schema_addr = data.schema;
+        to_cursor.parent_schema_addr = data.parent_schema;
+        NP_Cursor::compact(depth + 1, from_cursor, from_memory, to_cursor, to_memory)
+        
     }
 }
 

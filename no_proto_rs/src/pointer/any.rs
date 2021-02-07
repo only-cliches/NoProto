@@ -1,5 +1,5 @@
-use alloc::string::String;
-use crate::{idl::{JS_AST, JS_Schema}, json_flex::{JSMAP}, schema::{NP_Parsed_Schema, NP_Schema_Data, NP_Value_Kind}};
+use alloc::{string::String, sync::Arc};
+use crate::{idl::{JS_AST, JS_Schema}, json_flex::{JSMAP}, schema::{NP_Parsed_Schema, NP_Value_Kind, NULL}};
 use alloc::vec::Vec;
 use crate::error::NP_Error;
 use crate::{schema::{NP_TypeKeys}, pointer::NP_Value, json_flex::NP_JSON};
@@ -62,7 +62,7 @@ impl<'value> NP_Value<'value> for NP_Any {
             val: NP_Value_Kind::Pointer,
             i: NP_TypeKeys::Any,
             sortable: false,
-            data: Box::new(NP_Schema_Data::Any)
+            data: Arc::new(NULL())
         });
         return Ok((false, schema_data, schema));
 
@@ -77,7 +77,7 @@ impl<'value> NP_Value<'value> for NP_Any {
             val: NP_Value_Kind::Pointer,
             i: NP_TypeKeys::Any,
             sortable: false,
-            data: Box::new(NP_Schema_Data::Any)
+            data: Arc::new(NULL())
         });
         (false, schema)
     }

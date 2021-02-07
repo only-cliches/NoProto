@@ -23,12 +23,12 @@ pub mod uuid;
 pub mod option;
 pub mod date;
 pub mod portal;
-pub mod union;
+// pub mod union;
 
 use core::{fmt::{Debug}};
 
 use alloc::prelude::v1::Box;
-use crate::{idl::{JS_AST, JS_Schema}, pointer::dec::NP_Dec, schema::{NP_Schema_Addr, NP_Schema_Data}, utils::opt_err};
+use crate::{idl::{JS_AST, JS_Schema}, pointer::dec::NP_Dec, schema::{NP_Portal_Data, NP_Schema_Addr}, utils::opt_err};
 use crate::NP_Parsed_Schema;
 use crate::{json_flex::NP_JSON};
 use crate::memory::{NP_Memory};
@@ -38,7 +38,7 @@ use crate::{schema::{NP_TypeKeys}, collection::{map::NP_Map, struc::NP_Struct, l
 use alloc::{string::String, vec::Vec, borrow::ToOwned};
 use bytes::NP_Bytes;
 
-use self::{date::NP_Date, geo::NP_Geo, option::NP_Enum, portal::NP_Portal, ulid::{NP_ULID}, union::NP_Union, uuid::{NP_UUID}};
+use self::{date::NP_Date, geo::NP_Geo, option::NP_Enum, portal::NP_Portal, ulid::{NP_ULID}, uuid::{NP_UUID}};
 
 #[doc(hidden)]
 #[derive(Debug, Copy, Clone)]
@@ -228,31 +228,59 @@ impl<'cursor> NP_Cursor {
     
     /// Get the value bytes of this cursor
     #[inline(always)]
-    pub fn get_value<X: NP_Memory>(&self, memory: &X) -> &'cursor mut dyn NP_Pointer_Bytes {
+    pub fn get_value<X: NP_Memory>(&self, memory: &X) -> &'cursor dyn NP_Pointer_Bytes {
         let ptr = memory.write_bytes().as_mut_ptr();
         // if requesting root pointer or address is higher than buffer length
         if self.buff_addr == memory.get_root() || self.buff_addr > memory.read_bytes().len() {
-            unsafe { &mut *(ptr.add(memory.get_root()) as *mut NP_Pointer_Scalar) }
+            unsafe { & *(ptr.add(memory.get_root()) as *const NP_Pointer_Scalar) }
         } else {
             match memory.get_schema(self.parent_schema_addr).i {
                 NP_TypeKeys::List   => {
-                    unsafe { &mut *(ptr.add(self.buff_addr) as *mut NP_Pointer_List_Item) }
+                    unsafe { & *(ptr.add(self.buff_addr) as *const NP_Pointer_List_Item) }
                 },
                 NP_TypeKeys::Map    => {
-                    unsafe { &mut *(ptr.add(self.buff_addr) as *mut NP_Pointer_Map_Item) }
+                    unsafe { & *(ptr.add(self.buff_addr) as *const NP_Pointer_Map_Item) }
                 },
                 NP_TypeKeys::Tuple  => {
                     match &self.value_bytes {
-                        Some(x) => unsafe { &mut *(x as *const u8 as *mut NP_Pointer_Scalar) },
-                        None => unsafe { &mut *(ptr.add(self.buff_addr) as *mut NP_Pointer_Scalar) }
+                        Some(x) => unsafe { & *(x.as_ptr() as *const u8 as *const NP_Pointer_Scalar) },
+                        None => unsafe { & *(ptr.add(self.buff_addr) as *const NP_Pointer_Scalar) }
                     }
                 },
                 _ => { // parent is scalar or struct
-                    unsafe { &mut *(ptr.add(self.buff_addr) as *mut NP_Pointer_Scalar) }
+                    unsafe { & *(ptr.add(self.buff_addr) as *const NP_Pointer_Scalar) }
                 }
             }                   
         }
     }
+
+        /// Get the value bytes of this cursor
+        #[inline(always)]
+        pub fn get_value_mut<X: NP_Memory>(&self, memory: &X) -> &'cursor mut dyn NP_Pointer_Bytes {
+            let ptr = memory.write_bytes().as_mut_ptr();
+            // if requesting root pointer or address is higher than buffer length
+            if self.buff_addr == memory.get_root() || self.buff_addr > memory.read_bytes().len() {
+                unsafe { &mut *(ptr.add(memory.get_root()) as *mut NP_Pointer_Scalar) }
+            } else {
+                match memory.get_schema(self.parent_schema_addr).i {
+                    NP_TypeKeys::List   => {
+                        unsafe { &mut *(ptr.add(self.buff_addr) as *mut NP_Pointer_List_Item) }
+                    },
+                    NP_TypeKeys::Map    => {
+                        unsafe { &mut *(ptr.add(self.buff_addr) as *mut NP_Pointer_Map_Item) }
+                    },
+                    NP_TypeKeys::Tuple  => {
+                        match &self.value_bytes {
+                            Some(x) => unsafe { &mut *(x.as_ptr() as *mut u8 as *mut NP_Pointer_Scalar) },
+                            None => unsafe { &mut *(ptr.add(self.buff_addr) as *mut NP_Pointer_Scalar) }
+                        }
+                    },
+                    _ => { // parent is scalar or struct
+                        unsafe { &mut *(ptr.add(self.buff_addr) as *mut NP_Pointer_Scalar) }
+                    }
+                }                   
+            }
+        }
 
     /// Given a starting cursor, select into the buffer at a new location
     /// 
@@ -337,10 +365,11 @@ impl<'cursor> NP_Cursor {
                 //     }
                 // },
                 NP_TypeKeys::Portal => {
-                    if let NP_Schema_Data::Portal { schema, parent_schema, .. } = &*schema.data {
-                        loop_cursor.schema_addr = *schema;
-                        loop_cursor.parent_schema_addr = *parent_schema;
-                    }
+                    let portal_data = unsafe { &*(*schema.data as *const NP_Portal_Data) };
+
+                    loop_cursor.schema_addr = portal_data.schema;
+                    loop_cursor.parent_schema_addr = portal_data.parent_schema;
+                    
                 },
                 _ => { // we've reached a scalar value but not at the end of the path
                     return Ok(None);
@@ -509,7 +538,7 @@ impl<'cursor> NP_Cursor {
             NP_TypeKeys::List           => {   NP_List::to_json(depth, cursor, memory) },
             NP_TypeKeys::Tuple          => {  NP_Tuple::to_json(depth, cursor, memory) },
             NP_TypeKeys::Portal         => { NP_Portal::to_json(depth, cursor, memory) },
-            NP_TypeKeys::Union          => {  NP_Union::to_json(depth, cursor, memory) },
+            // NP_TypeKeys::Union          => {  NP_Union::to_json(depth, cursor, memory) },
         }
 
     }
@@ -546,7 +575,7 @@ impl<'cursor> NP_Cursor {
             NP_TypeKeys::List          => {   NP_List::do_compact(depth, from_cursor, from_memory, to_cursor, to_memory) }
             NP_TypeKeys::Tuple         => {  NP_Tuple::do_compact(depth, from_cursor, from_memory, to_cursor, to_memory) }
             NP_TypeKeys::Portal        => { NP_Portal::do_compact(depth, from_cursor, from_memory, to_cursor, to_memory) }
-            NP_TypeKeys::Union         => {  NP_Union::do_compact(depth, from_cursor, from_memory, to_cursor, to_memory) }
+            // NP_TypeKeys::Union         => {  NP_Union::do_compact(depth, from_cursor, from_memory, to_cursor, to_memory) }
             _ => { Err(NP_Error::Unreachable) }
         }
     }
@@ -566,7 +595,7 @@ impl<'cursor> NP_Cursor {
             NP_TypeKeys::List        => { return Err(NP_Error::Unreachable); },
             NP_TypeKeys::Tuple       => { return Err(NP_Error::Unreachable); },
             NP_TypeKeys::Portal      => { return Err(NP_Error::new("Portal type does not have a default type")); },
-            NP_TypeKeys::Union       => { return Err(NP_Error::new("Union type does not have a default type")); },
+            // NP_TypeKeys::Union       => { return Err(NP_Error::new("Union type does not have a default type")); },
             NP_TypeKeys::UTF8String  => {     String::set_value(cursor, memory, opt_err(String::schema_default(schema))?)?; },
             NP_TypeKeys::Bytes       => {   NP_Bytes::set_value(cursor, memory, opt_err(NP_Bytes::schema_default(schema))?)?; },
             NP_TypeKeys::Int8        => {         i8::set_value(cursor, memory, opt_err(i8::schema_default(schema))?)?; },
@@ -634,7 +663,7 @@ impl<'cursor> NP_Cursor {
             NP_TypeKeys::List           => {   NP_List::set_from_json(depth, apply_null, cursor, memory, json) },
             NP_TypeKeys::Tuple          => {  NP_Tuple::set_from_json(depth, apply_null, cursor, memory, json) },
             NP_TypeKeys::Portal         => { NP_Portal::set_from_json(depth, apply_null, cursor, memory, json) },
-            NP_TypeKeys::Union          => {  NP_Union::set_from_json(depth, apply_null, cursor, memory, json) },
+            // NP_TypeKeys::Union          => {  NP_Union::set_from_json(depth, apply_null, cursor, memory, json) },
         }
     }
 
@@ -650,21 +679,9 @@ impl<'cursor> NP_Cursor {
 
         if cursor.parent_type == NP_Cursor_Parent::Tuple {
             memory.write_bytes()[cursor.buff_addr - 1] = 0;
-        }
-
-        let is_sortable = memory.get_schema(0).sortable;
-        
-        if is_sortable {
-            match memory.get_schema(cursor.schema_addr).i {
-                NP_TypeKeys::Struct  => { return Ok(false) },
-                NP_TypeKeys::Tuple   => { return Ok(false) },
-                NP_TypeKeys::List    => { return Ok(false) },
-                NP_TypeKeys::Map     => { return Ok(false) },
-                _ => NP_Cursor::set_schema_default(cursor, memory)?
-            }
+            NP_Cursor::set_schema_default(cursor, memory)?
         } else {
-            // clear value address in buffer
-            cursor.get_value(memory).set_addr_value(0);
+            cursor.get_value_mut(memory).set_addr_value(0);
         }
 
         Ok(true)
@@ -716,7 +733,7 @@ impl<'cursor> NP_Cursor {
             NP_TypeKeys::List         => {   NP_List::get_size(depth, cursor, memory) },
             NP_TypeKeys::Tuple        => {  NP_Tuple::get_size(depth, cursor, memory) },
             NP_TypeKeys::Portal       => { NP_Portal::get_size(depth, cursor, memory) },
-            NP_TypeKeys::Union        => {  NP_Union::get_size(depth, cursor, memory) },
+            // NP_TypeKeys::Union        => {  NP_Union::get_size(depth, cursor, memory) },
         }?;
 
         Ok(type_size + base_size)

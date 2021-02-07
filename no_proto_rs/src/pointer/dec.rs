@@ -63,9 +63,9 @@
 //! ```
 //!
 
-use alloc::string::String;
+use alloc::{string::String, sync::Arc};
 use alloc::prelude::v1::Box;
-use crate::{idl::{JS_AST, JS_Schema}, schema::{NP_Schema_Data, NP_Value_Kind}, utils::to_signed};
+use crate::{idl::{JS_AST, JS_Schema}, schema::{NP_Dec_Data, NP_Value_Kind}, utils::to_signed};
 use crate::schema::{NP_Parsed_Schema};
 use alloc::vec::Vec;
 use crate::utils::to_unsigned;
@@ -93,30 +93,18 @@ pub struct NP_Dec {
 
 impl<'value> super::NP_Scalar<'value> for NP_Dec {
     fn schema_default(schema: &NP_Parsed_Schema) -> Option<Self> where Self: Sized {
-        match &*schema.data {
-            NP_Schema_Data::Decimal { exp, ..} => {
-                Some(NP_Dec { exp: *exp, num: 0})
-            },
-            _ => None
-        }
+        let data = unsafe { &*(*schema.data as *const NP_Dec_Data) };
+        Some(NP_Dec { exp: data.exp, num: 0})
     }
 
     fn np_max_value<M: NP_Memory>(cursor: &NP_Cursor, memory: &M) -> Option<Self> {
-        match &*memory.get_schema(cursor.schema_addr).data {
-            NP_Schema_Data::Decimal { exp, .. } => {
-                Some(NP_Dec::new(i64::MAX, *exp))
-            },
-            _ => None
-        }
+        let data = unsafe { &*(*memory.get_schema(cursor.schema_addr).data as *const NP_Dec_Data) };
+        Some(NP_Dec::new(i64::MAX, data.exp))
     }
 
     fn np_min_value<M: NP_Memory>(cursor: &NP_Cursor, memory: &M) -> Option<Self> {
-        match &*memory.get_schema(cursor.schema_addr).data {
-            NP_Schema_Data::Decimal { exp, .. } => {
-                Some(NP_Dec::new(i64::MIN, *exp))
-            },
-            _ => None
-        }
+        let data = unsafe { &*(*memory.get_schema(cursor.schema_addr).data as *const NP_Dec_Data) };
+        Some(NP_Dec::new(i64::MIN, data.exp))
     }
 }
 
@@ -706,32 +694,28 @@ impl<'value> NP_Value<'value> for NP_Dec {
         let mut schema_json = JSMAP::new();
         schema_json.insert("type".to_owned(), NP_JSON::String(Self::type_idx().0.to_string()));
 
-        match &*schema[address].data {
-            NP_Schema_Data::Decimal { default, exp, .. } => {
-                schema_json.insert("exp".to_owned(), NP_JSON::Integer(exp.clone() as i64));
-    
-                if let Some(d) = default {
-                    let value = NP_Dec::new(d.num.clone(), exp.clone());
-                    schema_json.insert("default".to_owned(), NP_JSON::Float(value.into()));
-                }
-        
-                Ok(NP_JSON::Dictionary(schema_json))
-            },
-            _ => Err(NP_Error::Unreachable)
+        let data = unsafe { &*(*schema[address].data as *const NP_Dec_Data) };
+
+        schema_json.insert("exp".to_owned(), NP_JSON::Integer(data.exp.clone() as i64));
+
+        if let Some(d) = data.default {
+            let value = NP_Dec::new(d.num.clone(), data.exp.clone());
+            schema_json.insert("default".to_owned(), NP_JSON::Float(value.into()));
         }
+
+        Ok(NP_JSON::Dictionary(schema_json))
+         
     }
 
     fn default_value(_depth: usize, addr: usize, schema: &Vec<NP_Parsed_Schema>) -> Option<Self> {
-        match &*schema[addr].data {
-            NP_Schema_Data::Decimal { default, .. } => {
-                if let Some(d) = default {
-                    Some(d.clone())
-                } else {
-                    None
-                }
-            },
-            _ => None
+        let data = unsafe { &*(*schema[addr].data as *const NP_Dec_Data) };
+    
+        if let Some(d) = data.default {
+            Some(d.clone())
+        } else {
+            None
         }
+          
     }
 
     fn set_from_json<'set, M: NP_Memory>(_depth: usize, _apply_null: bool, cursor: NP_Cursor, memory: &'set M, value: &Box<NP_JSON>) -> Result<(), NP_Error> where Self: 'set + Sized {
@@ -763,13 +747,9 @@ impl<'value> NP_Value<'value> for NP_Dec {
 
         let mut value_address = c_value().get_addr_value() as usize;
 
-        let exp = match &*memory.get_schema(cursor.schema_addr).data {
-            NP_Schema_Data::Decimal { exp, .. } => {
-                *exp
-            },
-            _ => 0
-        };
+        let data = unsafe { &*(*memory.get_schema(cursor.schema_addr).data as *const NP_Dec_Data) };
 
+        let exp = data.exp;
 
         let mut cloned_value = (value).clone();
         cloned_value.shift_exp(exp);
@@ -797,7 +777,7 @@ impl<'value> NP_Value<'value> for NP_Dec {
             be_bytes[0] = to_unsigned(be_bytes[0]);
 
             value_address = memory.malloc_borrow(&be_bytes)?;
-            c_value().set_addr_value(value_address as u16);
+            cursor.get_value_mut(memory).set_addr_value(value_address as u16);
 
         }
 
@@ -815,13 +795,9 @@ impl<'value> NP_Value<'value> for NP_Dec {
             return Ok(None);
         }
 
-        let exp = match &*memory.get_schema(cursor.schema_addr).data {
-            NP_Schema_Data::Decimal { exp, .. } => {
-                *exp
-            },
-            _ => 0
-        };
+        let data = unsafe { &*(*memory.get_schema(cursor.schema_addr).data as *const NP_Dec_Data) };
 
+        let exp = data.exp;
 
         Ok(match memory.get_8_bytes(value_addr) {
             Some(x) => {
@@ -835,13 +811,9 @@ impl<'value> NP_Value<'value> for NP_Dec {
 
     fn to_json<M: NP_Memory>(_depth:usize, cursor: &NP_Cursor, memory: &'value M) -> NP_JSON {
 
-        let exp = match &*memory.get_schema(cursor.schema_addr).data {
-            NP_Schema_Data::Decimal { exp, .. } => {
-                *exp
-            },
-            _ => 0
-        };
+        let data = unsafe { &*(*memory.get_schema(cursor.schema_addr).data as *const NP_Dec_Data) };
 
+        let exp = data.exp;
 
         match Self::into_value(cursor, memory) {
             Ok(x) => {
@@ -859,24 +831,22 @@ impl<'value> NP_Value<'value> for NP_Dec {
                         NP_JSON::Dictionary(object)
                     },
                     None => {
-                        match &*memory.get_schema(cursor.schema_addr).data {
-                            NP_Schema_Data::Decimal { default, exp, .. } => {
-                                if let Some(d) = default {
-                                    let mut object = JSMAP::new();
-                                    let mut parts = JSMAP::new();
+                        let data = unsafe { &*(*memory.get_schema(cursor.schema_addr).data as *const NP_Dec_Data) };
 
-                                    parts.insert("num".to_owned(), NP_JSON::Integer(d.num.clone()));
-                                    parts.insert("exp".to_owned(), NP_JSON::Integer(*exp as i64));
-                                    object.insert("value".to_owned(), NP_JSON::Float(d.to_float()));
-                                    object.insert("parts".to_owned(), NP_JSON::Dictionary(parts));
-                                    
-                                    NP_JSON::Dictionary(object)
-                                } else {
-                                    NP_JSON::Null
-                                }
-                            },
-                            _ => NP_JSON::Null
+                        if let Some(d) = data.default {
+                            let mut object = JSMAP::new();
+                            let mut parts = JSMAP::new();
+
+                            parts.insert("num".to_owned(), NP_JSON::Integer(d.num.clone()));
+                            parts.insert("exp".to_owned(), NP_JSON::Integer(data.exp as i64));
+                            object.insert("value".to_owned(), NP_JSON::Float(d.to_float()));
+                            object.insert("parts".to_owned(), NP_JSON::Dictionary(parts));
+                            
+                            NP_JSON::Dictionary(object)
+                        } else {
+                            NP_JSON::Null
                         }
+                         
                     }
                 }
             },
@@ -899,19 +869,17 @@ impl<'value> NP_Value<'value> for NP_Dec {
 
 
     fn schema_to_idl(schema: &Vec<NP_Parsed_Schema>, address: usize)-> Result<String, NP_Error> {
-        match &*schema[address].data {
-            NP_Schema_Data::Decimal { exp, default , .. } => {
-                let mut result = String::from("dec({exp: ");
-                result.push_str(exp.to_string().as_str());
-                if let Some(x) = default {
-                    result.push_str(", default: ");
-                    result.push_str(x.to_float().to_string().as_str());
-                }
-                result.push_str("})");
-                Ok(result)
-            },
-            _ => { Err(NP_Error::Unreachable) }
+        let data = unsafe { &*(*schema[address].data as *const NP_Dec_Data) };
+
+        let mut result = String::from("dec({exp: ");
+        result.push_str(data.exp.to_string().as_str());
+        if let Some(x) = data.default {
+            result.push_str(", default: ");
+            result.push_str(x.to_float().to_string().as_str());
         }
+        result.push_str("})");
+        Ok(result)
+       
     }
 
     fn from_idl_to_schema(mut schema: Vec<NP_Parsed_Schema>, _name: &str, idl: &JS_Schema, args: &Vec<JS_AST>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {
@@ -988,7 +956,7 @@ impl<'value> NP_Value<'value> for NP_Dec {
             val: NP_Value_Kind::Fixed(8),
             i: NP_TypeKeys::Decimal,
             sortable: true,
-            data: Box::new(NP_Schema_Data::Decimal { exp, default })
+            data: Arc::new(Box::into_raw(Box::new(NP_Dec_Data { exp, default })) as *const u8)
         });
 
         return Ok((true, schema_data, schema))
@@ -1041,7 +1009,7 @@ impl<'value> NP_Value<'value> for NP_Dec {
             val: NP_Value_Kind::Fixed(8),
             i: NP_TypeKeys::Decimal,
             sortable: true,
-            data: Box::new(NP_Schema_Data::Decimal { exp, default })
+            data: Arc::new(Box::into_raw(Box::new(NP_Dec_Data { exp, default })) as *const u8)
         });
 
         return Ok((true, schema_data, schema))
@@ -1064,7 +1032,7 @@ impl<'value> NP_Value<'value> for NP_Dec {
             val: NP_Value_Kind::Fixed(8),
             i: NP_TypeKeys::Decimal,
             sortable: true,
-            data: Box::new(NP_Schema_Data::Decimal { exp, default })
+            data: Arc::new(Box::into_raw(Box::new(NP_Dec_Data { exp, default })) as *const u8)
         });
 
         (true, schema)

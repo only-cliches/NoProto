@@ -15,8 +15,9 @@
 //! # Ok::<(), NP_Error>(()) 
 //! ```
 
+use alloc::sync::Arc;
 use alloc::string::String;
-use crate::{idl::{JS_AST, JS_Schema}, json_flex::JSMAP, schema::{NP_Parsed_Schema, NP_Schema_Data, NP_Value_Kind}};
+use crate::{idl::{JS_AST, JS_Schema}, json_flex::JSMAP, schema::{NP_Bool_Data, NP_Parsed_Schema, NP_Value_Kind}};
 use crate::error::NP_Error;
 use crate::{schema::{NP_TypeKeys}, pointer::NP_Value, json_flex::NP_JSON};
 
@@ -51,31 +52,23 @@ impl<'value> NP_Value<'value> for bool {
         let mut schema_json = JSMAP::new();
         schema_json.insert("type".to_owned(), NP_JSON::String(Self::type_idx().0.to_string()));
 
-        match &*schema[address].data {
-            NP_Schema_Data::Boolean { default, .. } => {
-                if let Some(d) = default {
-                    schema_json.insert("default".to_owned(), match *d {
-                        true => NP_JSON::True,
-                        false => NP_JSON::False
-                    });
-                }
-            },
-            _ =>  { }
+        let data = unsafe { &*(*schema[address].data as *const NP_Bool_Data) };
+
+        if let Some(d) = data.default {
+            schema_json.insert("default".to_owned(), match d {
+                true => NP_JSON::True,
+                false => NP_JSON::False
+            });
         }
+         
 
         Ok(NP_JSON::Dictionary(schema_json))
     }
 
     fn default_value(_depth: usize, address: usize, schema: &Vec<NP_Parsed_Schema>) -> Option<Self> {
-        match &*schema[address].data {
-            NP_Schema_Data::Boolean { default, .. } => {
-                match default {
-                    Some(x) => Some(*x),
-                    None => None
-                }
-            },
-            _ => None
-        }
+        let data = unsafe { &*(*schema[address].data as *const NP_Bool_Data) };
+
+        data.default
     }
 
     fn set_from_json<'set, M: NP_Memory>(_depth: usize, _apply_null: bool, cursor: NP_Cursor, memory: &'set M, value: &Box<NP_JSON>) -> Result<(), NP_Error> where Self: 'set + Sized {
@@ -117,7 +110,7 @@ impl<'value> NP_Value<'value> for bool {
             };
 
             value_address = memory.malloc_borrow(&bytes)? as u16;
-            c_value().set_addr_value(value_address as u16);
+            cursor.get_value_mut(memory).set_addr_value(value_address as u16);
 
             return Ok(cursor);
 
@@ -156,21 +149,20 @@ impl<'value> NP_Value<'value> for bool {
                             NP_JSON::False
                         }
                     },
-                    None => {                        
-                        match &*memory.get_schema(cursor.schema_addr).data {
-                            NP_Schema_Data::Boolean { default, .. } => {
-                                if let Some(d) = default {
-                                    if *d == true {
-                                        NP_JSON::True
-                                    } else {
-                                        NP_JSON::False
-                                    }
-                                } else {
-                                    NP_JSON::Null
-                                }
-                            },
-                            _ => NP_JSON::Null
+                    None => {
+                        
+                        let data = unsafe { &*(*memory.get_schema(cursor.schema_addr).data as *const NP_Bool_Data) };
+
+                        if let Some(d) = data.default {
+                            if d == true {
+                                NP_JSON::True
+                            } else {
+                                NP_JSON::False
+                            }
+                        } else {
+                            NP_JSON::Null
                         }
+                           
                     }
                 }
             },
@@ -190,23 +182,22 @@ impl<'value> NP_Value<'value> for bool {
     }
 
     fn schema_to_idl(schema: &Vec<NP_Parsed_Schema>, address: usize)-> Result<String, NP_Error> {
-        match &*schema[address].data {
-            NP_Schema_Data::Boolean { default , .. } => {
-                let mut result = String::from("bool(");
-                if let Some(x) = default {
-                    result.push_str("{default: ");
-                    if *x == true {
-                        result.push_str("true");
-                    } else {
-                        result.push_str("false");
-                    }
-                    result.push_str("}");
-                }
-                result.push_str(")");
-                Ok(result)
-            },
-            _ => { Err(NP_Error::Unreachable) }
+
+        let data = unsafe { &*(*schema[address].data as *const NP_Bool_Data) };
+        
+        let mut result = String::from("bool(");
+        if let Some(x) = data.default {
+            result.push_str("{default: ");
+            if x == true {
+                result.push_str("true");
+            } else {
+                result.push_str("false");
+            }
+            result.push_str("}");
         }
+        result.push_str(")");
+        Ok(result)
+          
     }
 
     fn from_idl_to_schema(mut schema: Vec<NP_Parsed_Schema>, _name: &str, idl: &JS_Schema, args: &Vec<JS_AST>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {
@@ -255,7 +246,7 @@ impl<'value> NP_Value<'value> for bool {
             val: NP_Value_Kind::Fixed(1),
             i: NP_TypeKeys::Boolean,
             sortable: true,
-            data: Box::new(NP_Schema_Data::Boolean { default })
+            data: Arc::new(Box::into_raw(Box::new(NP_Bool_Data { default })) as *const u8)
         });
 
         return Ok((true, schema_data, schema));
@@ -285,7 +276,7 @@ impl<'value> NP_Value<'value> for bool {
         schema.push(NP_Parsed_Schema {
             val: NP_Value_Kind::Fixed(1),
             i: NP_TypeKeys::Boolean,
-            data: Box::new(NP_Schema_Data::Boolean { default }),
+            data: Arc::new(Box::into_raw(Box::new(NP_Bool_Data { default })) as *const u8),
             sortable: true
         });
 
@@ -297,12 +288,12 @@ impl<'value> NP_Value<'value> for bool {
             val: NP_Value_Kind::Fixed(1),
             i: NP_TypeKeys::Boolean,
             sortable: true,
-            data: Box::new(NP_Schema_Data::Boolean { default: match bytes[address + 1] {
+            data: Arc::new(Box::into_raw(Box::new(NP_Bool_Data { default: match bytes[address + 1] {
                 0 => None,
                 1 => Some(true),
                 2 => Some(false),
                 _ => unreachable!()
-            } })
+            } })) as *const u8)
         });
         (true, schema)
      }

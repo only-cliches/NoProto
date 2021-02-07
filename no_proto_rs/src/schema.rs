@@ -808,8 +808,8 @@
 //! 
 
 use crate::idl::{JS_AST, JS_Schema};
-use crate::{np_path, pointer::{NP_Cursor, union::NP_Union}};
-use alloc::string::String;
+use crate::{np_path, pointer::{NP_Cursor}};
+use alloc::{string::String, sync::Arc};
 use core::{fmt::Debug};
 use crate::{buffer::DEFAULT_ROOT_PTR_ADDR, json_flex::NP_JSON, memory::NP_Memory_Owned, pointer::{portal::{NP_Portal}, ulid::NP_ULID, uuid::NP_UUID}};
 use crate::pointer::any::NP_Any;
@@ -855,7 +855,7 @@ pub enum NP_TypeKeys {
     List       = 23,
     Tuple      = 24,
     Portal     = 25,
-    Union      = 26
+    // Union      = 26
 }
 
 impl From<u8> for NP_TypeKeys {
@@ -943,46 +943,49 @@ pub struct NP_Tuple_Field {
     pub offset: usize
 }
 
+// NULL pointer value
+pub static NULL: fn() -> *const u8 = || { 0x0 as *const u8 };
+
 #[allow(missing_docs)]
 #[derive(Debug, Clone)]
 pub struct NP_Parsed_Schema {
     pub val: NP_Value_Kind, 
     pub sortable: bool, 
     pub i: NP_TypeKeys, 
-    pub data: Box<NP_Schema_Data>
+    pub data: Arc<*const u8>
 }
 
-#[allow(missing_docs)]
-#[derive(Debug, Clone, PartialEq)]
-pub enum NP_Schema_Data {
-    None       ,
-    Any        ,
-    Uuid       ,
-    Ulid       ,
-    UTF8String { default: Option<String>, size: u16, case: String_Case },
-    Bytes      { default: Option<Vec<u8>>, size: u16 },
-    Int8       { default: Option<i8> },
-    Int16      { default: Option<i16> },
-    Int32      { default: Option<i32> },
-    Int64      { default: Option<i64> },
-    Uint8      { default: Option<u8> },
-    Uint16     { default: Option<u16> },
-    Uint32     { default: Option<u32> },
-    Uint64     { default: Option<u64> },
-    Float      { default: Option<f32> },
-    Double     { default: Option<f64> },
-    Decimal    { default: Option<NP_Dec>, exp: u8 },
-    Boolean    { default: Option<bool> },
-    Geo        { default: Option<NP_Geo>, size: u8 },
-    Date       { default: Option<NP_Date> },
-    Enum       { default: Option<NP_Enum>, choices: Vec<NP_Enum> },
-    Struct     { fields: Vec<NP_Struct_Field>, empty: Vec<u8> },
-    Map        { value: NP_Schema_Addr}, 
-    List       { of: NP_Schema_Addr },
-    Tuple      { values: Vec<NP_Tuple_Field>, empty: Vec<u8>},
-    Portal     { path: String, schema: usize, parent_schema: usize },
-    Union      { types: Vec<(u8, String, NP_Schema_Addr)>, default: usize },
-}
+// #[allow(missing_docs)]
+// #[derive(Debug, Clone, PartialEq)]
+// pub enum NP_Schema_Data {
+//     None       ,
+//     Any        ,
+//     Uuid       ,
+//     Ulid       ,
+//     UTF8String { default: Option<String>, size: u16, case: String_Case },
+//     Bytes      { default: Option<Vec<u8>>, size: u16 },
+//     Int8       { default: Option<i8> },
+//     Int16      { default: Option<i16> },
+//     Int32      { default: Option<i32> },
+//     Int64      { default: Option<i64> },
+//     Uint8      { default: Option<u8> },
+//     Uint16     { default: Option<u16> },
+//     Uint32     { default: Option<u32> },
+//     Uint64     { default: Option<u64> },
+//     Float      { default: Option<f32> },
+//     Double     { default: Option<f64> },
+//     Decimal    { default: Option<NP_Dec>, exp: u8 },
+//     Boolean    { default: Option<bool> },
+//     Geo        { default: Option<NP_Geo>, size: u8 },
+//     Date       { default: Option<NP_Date> },
+//     Enum       { default: Option<NP_Enum>, choices: Vec<NP_Enum> },
+//     Struct     { fields: Vec<NP_Struct_Field>, empty: Vec<u8> },
+//     Map        { value: NP_Schema_Addr}, 
+//     List       { of: NP_Schema_Addr },
+//     Tuple      { values: Vec<NP_Tuple_Field>, empty: Vec<u8>},
+//     Portal     { path: String, schema: usize, parent_schema: usize },
+//     Union      { types: Vec<(u8, String, NP_Schema_Addr)>, default: usize },
+// }
 
 impl Default for NP_Parsed_Schema {
     fn default() -> Self {
@@ -990,202 +993,264 @@ impl Default for NP_Parsed_Schema {
             val: NP_Value_Kind::Pointer,
             i: NP_TypeKeys::None,
             sortable: false,
-            data: Box::new(NP_Schema_Data::None),
+            data: Arc::new(NULL()),
         }
     }
 }
 
-// #[allow(missing_docs)]
-// #[derive(Debug, Clone)]
-// pub struct NP_Bytes_Data {
-//     pub size: u16,
-//     pub case: String_Case
-// }
+#[allow(missing_docs)]
+#[derive(Debug, Clone)]
+pub struct NP_u8_Data {
+    pub default: Option<u8>
+}
 
-// #[allow(missing_docs)]
-// #[derive(Debug, Clone)]
-// pub struct NP_Geo_Data {
-//     pub size: u8,
-// }
+#[allow(missing_docs)]
+#[derive(Debug, Clone)]
+pub struct NP_u16_Data {
+    pub default: Option<u16>
+}
 
-// #[allow(missing_docs)]
-// #[derive(Debug, Clone)]
-// pub struct NP_Dec_Data {
-//     pub exp: u8
-// }
+#[allow(missing_docs)]
+#[derive(Debug, Clone)]
+pub struct NP_u32_Data {
+    pub default: Option<u32>
+}
 
-// #[allow(missing_docs)]
-// #[derive(Debug, Clone)]
-// pub struct NP_Enum_Data {
-//     pub choices: Vec<NP_Enum>
-// }
+#[allow(missing_docs)]
+#[derive(Debug, Clone)]
+pub struct NP_u64_Data {
+    pub default: Option<u64>
+}
 
-// #[allow(missing_docs)]
-// #[derive(Debug, Clone)]
-// pub struct NP_Struct_Data {
-//     pub fields: Vec<NP_Struct_Field>, 
-//     pub empty: Vec<u8>
-// }
+#[allow(missing_docs)]
+#[derive(Debug, Clone)]
+pub struct NP_i8_Data {
+    pub default: Option<i8>
+}
 
-// #[allow(missing_docs)]
-// #[derive(Debug, Clone)]
-// pub struct NP_Map_List_Data {
-//     pub child: usize
-// }
+#[allow(missing_docs)]
+#[derive(Debug, Clone)]
+pub struct NP_i16_Data {
+    pub default: Option<i16>
+}
 
-// #[allow(missing_docs)]
-// #[derive(Debug, Clone)]
-// pub struct NP_Tuple_Data {
-//     pub values: Vec<NP_Tuple_Field>, 
-//     pub empty: Vec<u8>
-// }
+#[allow(missing_docs)]
+#[derive(Debug, Clone)]
+pub struct NP_i32_Data {
+    pub default: Option<i32>
+}
 
-// #[allow(missing_docs)]
-// #[derive(Debug, Clone)]
-// pub struct NP_Portal_Data {
-//     pub path: String, 
-//     pub schema: usize, 
-//     pub parent_schema: usize
-// }
+#[allow(missing_docs)]
+#[derive(Debug, Clone)]
+pub struct NP_i64_Data {
+    pub default: Option<i64>
+}
 
-// impl Drop for NP_Parsed_Schema {
-//     fn drop(&mut self) {
-//         match self.i {
-//             NP_TypeKeys::None => {}
-//             NP_TypeKeys::Any => {}
-//             NP_TypeKeys::Uuid => {}
-//             NP_TypeKeys::Ulid => {}
-//             NP_TypeKeys::UTF8String => {
-//                 if let Some(d) = self.data {
-//                     drop(unsafe { Box::from_raw(d as *mut NP_Bytes_Data) });
-//                 }
-//                 if let Some(d) = self.default {
-//                     drop(unsafe { Box::from_raw(d as *mut String) });
-//                 }
-//             }
-//             NP_TypeKeys::Bytes => {
-//                 if let Some(d) = self.data {
-//                     drop(unsafe { Box::from_raw(d as *mut NP_Bytes_Data) });
-//                 }
-//                 if let Some(d) = self.default {
-//                     drop(unsafe { Box::from_raw(d as *mut Vec<u8>) });
-//                 }
-//             }
-//             NP_TypeKeys::Uint8 => {
-//                 if let Some(d) = self.default {
-//                     drop(unsafe { Box::from_raw(d as *mut u8) });
-//                 }
-//             }
-//             NP_TypeKeys::Uint16 => {
-//                 if let Some(d) = self.default {
-//                     drop(unsafe { Box::from_raw(d as *mut u16) });
-//                 }
-//             }
-//             NP_TypeKeys::Uint32 => {
-//                 if let Some(d) = self.default {
-//                     drop(unsafe { Box::from_raw(d as *mut u32) });
-//                 }
-//             }
-//             NP_TypeKeys::Uint64 => {
-//                 if let Some(d) = self.default {
-//                     drop(unsafe { Box::from_raw(d as *mut u64) });
-//                 }
-//             }
-//             NP_TypeKeys::Int8 => {
-//                 if let Some(d) = self.default {
-//                     drop(unsafe { Box::from_raw(d as *mut i8) });
-//                 }
-//             }
-//             NP_TypeKeys::Int16 => {
-//                 if let Some(d) = self.default {
-//                     drop(unsafe { Box::from_raw(d as *mut i16) });
-//                 }
-//             }
-//             NP_TypeKeys::Int32 => {
-//                 if let Some(d) = self.default {
-//                     drop(unsafe { Box::from_raw(d as *mut i32) });
-//                 }
-//             }
-//             NP_TypeKeys::Int64 => {
-//                 if let Some(d) = self.default {
-//                     drop(unsafe { Box::from_raw(d as *mut i64) });
-//                 }
-//             }
-//             NP_TypeKeys::Float => {
-//                 if let Some(d) = self.default {
-//                     drop(unsafe { Box::from_raw(d as *mut f32) });
-//                 }
-//             }
-//             NP_TypeKeys::Double => {
-//                 if let Some(d) = self.default {
-//                     drop(unsafe { Box::from_raw(d as *mut f64) });
-//                 }
-//             }
-//             NP_TypeKeys::Decimal => {
-//                 if let Some(d) = self.data {
-//                     drop(unsafe { Box::from_raw(d as *mut NP_Dec_Data) });
-//                 }
-//                 if let Some(d) = self.default {
-//                     drop(unsafe { Box::from_raw(d as *mut NP_Dec) });
-//                 }
-//             }
-//             NP_TypeKeys::Boolean => {
-//                 if let Some(d) = self.default {
-//                     drop(unsafe { Box::from_raw(d as *mut bool) });
-//                 }
-//             }
-//             NP_TypeKeys::Geo => {
-//                 if let Some(d) = self.data {
-//                     drop(unsafe { Box::from_raw(d as *mut NP_Geo_Data) });
-//                 }
-//                 if let Some(d) = self.default {
-//                     drop(unsafe { Box::from_raw(d as *mut NP_Geo) });
-//                 }
-//             }
-//             NP_TypeKeys::Date => {
-//                 if let Some(d) = self.default {
-//                     drop(unsafe { Box::from_raw(d as *mut u64) });
-//                 }
-//             }
-//             NP_TypeKeys::Enum => {
-//                 if let Some(d) = self.data {
-//                     drop(unsafe { Box::from_raw(d as *mut NP_Enum_Data) });
-//                 }
-//                 if let Some(d) = self.default {
-//                     drop(unsafe { Box::from_raw(d as *mut NP_Enum) });
-//                 }
-//             }
-//             NP_TypeKeys::Struct => {
-//                 if let Some(d) = self.data {
-//                     drop(unsafe { Box::from_raw(d as *mut NP_Struct_Data) });
-//                 }
-//             }
-//             NP_TypeKeys::Map => {
-//                 if let Some(d) = self.data {
-//                     drop(unsafe { Box::from_raw(d as *mut NP_Map_List_Data) });
-//                 }
-//             }
-//             NP_TypeKeys::List => {
-//                 if let Some(d) = self.data {
-//                     drop(unsafe { Box::from_raw(d as *mut NP_Map_List_Data) });
-//                 }
-//             }
-//             NP_TypeKeys::Tuple => {
-//                 if let Some(d) = self.data {
-//                     drop(unsafe { Box::from_raw(d as *mut NP_Tuple_Data) });
-//                 }
-//             }
-//             NP_TypeKeys::Portal => {
-//                 if let Some(d) = self.data {
-//                     drop(unsafe { Box::from_raw(d as *mut NP_Portal_Data) });
-//                 }
-//             }
-//             NP_TypeKeys::Union => {
+#[allow(missing_docs)]
+#[derive(Debug, Clone)]
+pub struct NP_f32_Data {
+    pub default: Option<f32>
+}
+
+#[allow(missing_docs)]
+#[derive(Debug, Clone)]
+pub struct NP_f64_Data {
+    pub default: Option<f64>
+}
+
+#[allow(missing_docs)]
+#[derive(Debug, Clone)]
+pub struct NP_Bool_Data {
+    pub default: Option<bool>
+}
+
+#[allow(missing_docs)]
+#[derive(Debug, Clone)]
+pub struct NP_String_Data {
+    pub default: Option<String>,
+    pub size: u16,
+    pub case: String_Case
+}
+
+#[allow(missing_docs)]
+#[derive(Debug, Clone)]
+pub struct NP_Bytes_Data {
+    pub default: Option<Vec<u8>>,
+    pub size: u16
+}
+
+#[allow(missing_docs)]
+#[derive(Debug, Clone)]
+pub struct NP_Geo_Data {
+    pub default: Option<NP_Geo>,
+    pub size: u8,
+}
+
+#[allow(missing_docs)]
+#[derive(Debug, Clone)]
+pub struct NP_Dec_Data {
+    pub default: Option<NP_Dec>,
+    pub exp: u8
+}
+
+#[allow(missing_docs)]
+#[derive(Debug, Clone)]
+pub struct NP_Enum_Data {
+    pub default: Option<NP_Enum>,
+    pub choices: Vec<NP_Enum>
+}
+
+#[allow(missing_docs)]
+#[derive(Debug, Clone)]
+pub struct NP_Struct_Data {
+    pub fields: Vec<NP_Struct_Field>, 
+    pub empty: Vec<u8>
+}
+
+#[allow(missing_docs)]
+#[derive(Debug, Clone)]
+pub struct NP_Map_List_Data {
+    pub child: usize
+}
+
+#[allow(missing_docs)]
+#[derive(Debug, Clone)]
+pub struct NP_Tuple_Data {
+    pub values: Vec<NP_Tuple_Field>, 
+    pub empty: Vec<u8>
+}
+
+#[allow(missing_docs)]
+#[derive(Debug, Clone)]
+pub struct NP_Portal_Data {
+    pub path: String, 
+    pub schema: usize, 
+    pub parent_schema: usize
+}
+
+impl Drop for NP_Parsed_Schema {
+    fn drop(&mut self) {
+        match self.i {
+            NP_TypeKeys::None => {}
+            NP_TypeKeys::Any => {}
+            NP_TypeKeys::Uuid => {}
+            NP_TypeKeys::Ulid => {}
+            NP_TypeKeys::UTF8String => {
+                if NULL() != *self.data && Arc::strong_count(&self.data) == 1 {
+                    drop(unsafe { Box::from_raw(*self.data as *mut NP_String_Data) });
+                }
+            }
+            NP_TypeKeys::Bytes => {
+                if NULL() != *self.data && Arc::strong_count(&self.data) == 1 {
+                    drop(unsafe { Box::from_raw(*self.data as *mut NP_Bytes_Data) });
+                }
+            }
+            NP_TypeKeys::Uint8 => {
+                if NULL() != *self.data && Arc::strong_count(&self.data) == 1 {
+                    drop(unsafe { Box::from_raw(*self.data as *mut NP_u8_Data) });
+                }
+            }
+            NP_TypeKeys::Uint16 => {
+                if NULL() != *self.data && Arc::strong_count(&self.data) == 1 {
+                    drop(unsafe { Box::from_raw(*self.data as *mut NP_u16_Data) });
+                }
+            }
+            NP_TypeKeys::Uint32 => {
+                if NULL() != *self.data && Arc::strong_count(&self.data) == 1 {
+                    drop(unsafe { Box::from_raw(*self.data as *mut NP_u32_Data) });
+                }
+            }
+            NP_TypeKeys::Uint64 => {
+                if NULL() != *self.data && Arc::strong_count(&self.data) == 1 {
+                    drop(unsafe { Box::from_raw(*self.data as *mut NP_u64_Data) });
+                }
+            }
+            NP_TypeKeys::Int8 => {
+                if NULL() != *self.data && Arc::strong_count(&self.data) == 1 {
+                    drop(unsafe { Box::from_raw(*self.data as *mut NP_i8_Data) });
+                }
+            }
+            NP_TypeKeys::Int16 => {
+                if NULL() != *self.data && Arc::strong_count(&self.data) == 1 {
+                    drop(unsafe { Box::from_raw(*self.data as *mut NP_i16_Data) });
+                }
+            }
+            NP_TypeKeys::Int32 => {
+                if NULL() != *self.data && Arc::strong_count(&self.data) == 1 {
+                    drop(unsafe { Box::from_raw(*self.data as *mut NP_i32_Data) });
+                }
+            }
+            NP_TypeKeys::Int64 => {
+                if NULL() != *self.data && Arc::strong_count(&self.data) == 1 {
+                    drop(unsafe { Box::from_raw(*self.data as *mut NP_i64_Data) });
+                }
+            }
+            NP_TypeKeys::Float => {
+                if NULL() != *self.data && Arc::strong_count(&self.data) == 1 {
+                    drop(unsafe { Box::from_raw(*self.data as *mut NP_f32_Data) });
+                }
+            }
+            NP_TypeKeys::Double => {
+                if NULL() != *self.data && Arc::strong_count(&self.data) == 1 {
+                    drop(unsafe { Box::from_raw(*self.data as *mut NP_f64_Data) });
+                }
+            }
+            NP_TypeKeys::Decimal => {
+                if NULL() != *self.data && Arc::strong_count(&self.data) == 1 {
+                    drop(unsafe { Box::from_raw(*self.data as *mut NP_Dec_Data) });
+                }
+            }
+            NP_TypeKeys::Boolean => {
+                if NULL() != *self.data && Arc::strong_count(&self.data) == 1 {
+                    drop(unsafe { Box::from_raw(*self.data as *mut NP_Bool_Data) });
+                }
+            }
+            NP_TypeKeys::Geo => {
+                if NULL() != *self.data && Arc::strong_count(&self.data) == 1 {
+                    drop(unsafe { Box::from_raw(*self.data as *mut NP_Geo_Data) });
+                }
+            }
+            NP_TypeKeys::Date => {
+                if NULL() != *self.data && Arc::strong_count(&self.data) == 1 {
+                    drop(unsafe { Box::from_raw(*self.data as *mut NP_u64_Data) });
+                }
+            }
+            NP_TypeKeys::Enum => {
+                if NULL() != *self.data && Arc::strong_count(&self.data) == 1 {
+                    drop(unsafe { Box::from_raw(*self.data as *mut NP_Enum_Data) });
+                }
+            }
+            NP_TypeKeys::Struct => {
+                if NULL() != *self.data && Arc::strong_count(&self.data) == 1 {
+                    drop(unsafe { Box::from_raw(*self.data as *mut NP_Struct_Data) });
+                }
+            }
+            NP_TypeKeys::Map => {
+                if NULL() != *self.data && Arc::strong_count(&self.data) == 1 {
+                    drop(unsafe { Box::from_raw(*self.data as *mut NP_Map_List_Data) });
+                }
+            }
+            NP_TypeKeys::List => {
+                if NULL() != *self.data && Arc::strong_count(&self.data) == 1 {
+                    drop(unsafe { Box::from_raw(*self.data as *mut NP_Map_List_Data) });
+                }
+            }
+            NP_TypeKeys::Tuple => {
+                if NULL() != *self.data && Arc::strong_count(&self.data) == 1 {
+                    drop(unsafe { Box::from_raw(*self.data as *mut NP_Tuple_Data) });
+                }
+            }
+            NP_TypeKeys::Portal => {
+                if NULL() != *self.data && Arc::strong_count(&self.data) == 1 {
+                    drop(unsafe { Box::from_raw(*self.data as *mut NP_Portal_Data) });
+                }
+            }
+            // NP_TypeKeys::Union => {
                 
-//             }
-//         }
-//     }
-// }
+            // }
+        }
+    }
+}
 
 // /// When a schema is parsed from JSON or Bytes, it is stored in this recursive type
 // /// 
@@ -1293,7 +1358,7 @@ impl NP_Schema {
             NP_TypeKeys::List          => {   NP_List::schema_to_idl(parsed_schema, address) }
             NP_TypeKeys::Tuple         => {  NP_Tuple::schema_to_idl(parsed_schema, address) }
             NP_TypeKeys::Portal        => { NP_Portal::schema_to_idl(parsed_schema, address) }
-            NP_TypeKeys::Union         => {  NP_Union::schema_to_idl(parsed_schema, address) }
+            // NP_TypeKeys::Union         => {  NP_Union::schema_to_idl(parsed_schema, address) }
             _ => { Ok(String::from("")) }
         }
     }
@@ -1332,7 +1397,7 @@ impl NP_Schema {
             NP_TypeKeys::List          => {   NP_List::schema_to_json(parsed_schema, address) }
             NP_TypeKeys::Tuple         => {  NP_Tuple::schema_to_json(parsed_schema, address) }
             NP_TypeKeys::Portal        => { NP_Portal::schema_to_json(parsed_schema, address) }
-            NP_TypeKeys::Union         => {  NP_Union::schema_to_json(parsed_schema, address) }
+            // NP_TypeKeys::Union         => {  NP_Union::schema_to_json(parsed_schema, address) }
             _ => { Ok(NP_JSON::Null) }
         }
     }
@@ -1351,7 +1416,7 @@ impl NP_Schema {
     }
 
     /// Scan the schema for portals and resolve their locations
-    pub fn resolve_portals(mut parsed: Vec<NP_Parsed_Schema>) -> Result<Vec<NP_Parsed_Schema>, NP_Error> {
+    pub fn resolve_portals(parsed: Vec<NP_Parsed_Schema>) -> Result<Vec<NP_Parsed_Schema>, NP_Error> {
 
         let temp_memory = NP_Memory_Owned::new(None, &parsed, DEFAULT_ROOT_PTR_ADDR);
 
@@ -1359,29 +1424,29 @@ impl NP_Schema {
 
         for schema in parsed.iter() {
             if schema.i == NP_TypeKeys::Portal {
-                if let NP_Schema_Data::Portal { path, .. } = &*schema.data {
 
-                    let root_cursor = NP_Cursor::new(temp_memory.root, 0, 0);
-                    let str_path = np_path!(path);
-                    match NP_Cursor::select(&temp_memory, root_cursor, false, true, &str_path)? {
-                        Some(next) => {
+                let portal_data = unsafe { &*(*schema.data as *const NP_Portal_Data) };
+             
+                let root_cursor = NP_Cursor::new(temp_memory.root, 0, 0);
+                let path = &portal_data.path;
+                let str_path = np_path!(path);
+                match NP_Cursor::select(&temp_memory, root_cursor, false, true, &str_path)? {
+                    Some(next) => {
 
-                            completed.push(NP_Parsed_Schema {
-                                val: NP_Value_Kind::Pointer,
-                                i: NP_TypeKeys::Portal,
-                                sortable: false,
-                                data: Box::new(NP_Schema_Data::Portal {
-                                    path: path.clone(),
-                                    schema: next.schema_addr,
-                                    parent_schema: next.parent_schema_addr
-                                })
-                            });
-                        },
-                        None => return Err(NP_Error::new("Portal 'to' property failed to resolve!"))
-                    }
-                } else {
-                    return Err(NP_Error::Unreachable)
+                        completed.push(NP_Parsed_Schema {
+                            val: NP_Value_Kind::Pointer,
+                            i: NP_TypeKeys::Portal,
+                            sortable: false,
+                            data: Arc::new(Box::into_raw(Box::new(NP_Portal_Data {
+                                path: path.clone(),
+                                schema: next.schema_addr,
+                                parent_schema: next.parent_schema_addr
+                            })) as *const u8)
+                        });
+                    },
+                    None => return Err(NP_Error::new("Portal 'to' property failed to resolve!"))
                 }
+            
             } else {
                 completed.push(schema.clone());
             }
@@ -1441,7 +1506,7 @@ impl NP_Schema {
                     "map"      => {    NP_Map::from_idl_to_schema(parsed, type_name, idl, args) },
                     "tuple"    => {  NP_Tuple::from_idl_to_schema(parsed, type_name, idl, args) },
                     "portal"   => { NP_Portal::from_idl_to_schema(parsed, type_name, idl, args) },
-                    "union"    => {  NP_Union::from_idl_to_schema(parsed, type_name, idl, args) },
+                    // "union"    => {  NP_Union::from_idl_to_schema(parsed, type_name, idl, args) },
                     _ => {
                         let mut err_msg = String::from("Can't find a type that matches this schema! ");
                         err_msg.push_str(idl.get_str(name));
@@ -1483,7 +1548,7 @@ impl NP_Schema {
             NP_TypeKeys::List       => {      NP_List::from_bytes_to_schema(cache, address, bytes) }
             NP_TypeKeys::Tuple      => {     NP_Tuple::from_bytes_to_schema(cache, address, bytes) }
             NP_TypeKeys::Portal     => {    NP_Portal::from_bytes_to_schema(cache, address, bytes) }
-            NP_TypeKeys::Union      => {     NP_Union::from_bytes_to_schema(cache, address, bytes) }
+            // NP_TypeKeys::Union      => {     NP_Union::from_bytes_to_schema(cache, address, bytes) }
         }
     }
 
@@ -1544,7 +1609,7 @@ impl NP_Schema {
                     "map"      => {    NP_Map::from_json_to_schema(schema, &json_schema) },
                     "tuple"    => {  NP_Tuple::from_json_to_schema(schema, &json_schema) },
                     "portal"   => { NP_Portal::from_json_to_schema(schema, &json_schema) },
-                    "union"    => {  NP_Union::from_json_to_schema(schema, &json_schema) },
+                    // "union"    => {  NP_Union::from_json_to_schema(schema, &json_schema) },
                     _ => {
                         let mut err_msg = String::from("Can't find a type that matches this schema! ");
                         err_msg.push_str(json_schema.stringify().as_str());

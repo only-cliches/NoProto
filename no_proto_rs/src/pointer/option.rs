@@ -19,9 +19,9 @@
 //! ```
 //! 
 
-use crate::{JS_Schema, idl::JS_AST, schema::{NP_Schema_Data, NP_Value_Kind}};
+use crate::{JS_Schema, idl::JS_AST, schema::{NP_Enum_Data, NP_Value_Kind}};
 use crate::{memory::NP_Memory, schema::{NP_Parsed_Schema}};
-use alloc::vec::Vec;
+use alloc::{sync::Arc, vec::Vec};
 use crate::json_flex::{JSMAP, NP_JSON};
 use crate::schema::{NP_TypeKeys};
 use crate::{pointer::NP_Value, error::NP_Error};
@@ -51,21 +51,13 @@ impl<'value> super::NP_Scalar<'value> for NP_Enum {
     }
 
     fn np_max_value<M: NP_Memory>(cursor: &NP_Cursor, memory: &M) -> Option<Self> {
-        match &*memory.get_schema(cursor.schema_addr).data {
-            NP_Schema_Data::Enum { choices, .. } => {
-                Some(choices[choices.len() - 1].clone())
-            },
-            _ => None
-        }
+        let data = unsafe { &*(*memory.get_schema(cursor.schema_addr).data as *const NP_Enum_Data) };
+        Some(data.choices[data.choices.len() - 1].clone())
     }
 
     fn np_min_value<M: NP_Memory>(cursor: &NP_Cursor, memory: &M) -> Option<Self> {
-        match &*memory.get_schema(cursor.schema_addr).data {
-            NP_Schema_Data::Enum { choices, .. } => {
-                Some(choices[0].clone())
-            },
-            _ => None
-        }
+        let data = unsafe { &*(*memory.get_schema(cursor.schema_addr).data as *const NP_Enum_Data) };
+        Some(data.choices[0].clone())
     }
 
 }
@@ -126,23 +118,20 @@ impl<'value> NP_Value<'value> for NP_Enum {
         let mut schema_json = JSMAP::new();
         schema_json.insert("type".to_owned(), NP_JSON::String(Self::type_idx().0.to_string()));
 
-        match &*schema[address].data {
-            NP_Schema_Data::Enum { choices, default, .. } => {
+        let data = unsafe { &*(*schema[address].data as *const NP_Enum_Data) };
 
-                let options: Vec<NP_JSON> = choices.into_iter().map(|value| {
-                    NP_JSON::String(value.to_string())
-                }).collect();
-            
-                if let Some(d) = default {
-                    if let NP_Enum::Some(x) = &d {
-                        schema_json.insert("default".to_owned(), NP_JSON::String(x.to_string()));
-                    }
-                }
-        
-                schema_json.insert("choices".to_owned(), NP_JSON::Array(options));
-            },
-            _ => { }
+        let options: Vec<NP_JSON> = data.choices.iter().map(|value| {
+            NP_JSON::String(value.to_string())
+        }).collect();
+    
+        if let Some(d) = &data.default {
+            if let NP_Enum::Some(x) = &d {
+                schema_json.insert("default".to_owned(), NP_JSON::String(x.to_string()));
+            }
         }
+
+        schema_json.insert("choices".to_owned(), NP_JSON::Array(options));
+        
 
         Ok(NP_JSON::Dictionary(schema_json))
     }
@@ -162,79 +151,74 @@ impl<'value> NP_Value<'value> for NP_Enum {
 
         let c_value = || { cursor.get_value(memory) };
 
-        match &*memory.get_schema(cursor.schema_addr).data {
-            NP_Schema_Data::Enum { choices, ..} => {
+        let data = unsafe { &*(*memory.get_schema(cursor.schema_addr).data as *const NP_Enum_Data) };
 
-                let mut value_num: i32 = -1;
+        let mut value_num: i32 = -1;
 
-                {
-                    let mut ct: u16 = 0;
-        
-                    for opt in choices {
-                        if *opt == value {
-                            value_num = ct as i32;
-                        }
-                        ct += 1;
-                    };
-        
-                    if value_num == -1 {
-                        return Err(NP_Error::new("Option not found, cannot set uknown option!"));
-                    }
+        {
+            let mut ct: u16 = 0;
+
+            for opt in &data.choices {
+                if opt == &value {
+                    value_num = ct as i32;
                 }
-        
-                let bytes = value_num as u8;
+                ct += 1;
+            };
 
-                let mut addr_value = c_value().get_addr_value() as usize;
-        
-                if addr_value != 0 { // existing value, replace
-        
-                    let write_bytes = memory.write_bytes();
-        
-                    write_bytes[addr_value] = bytes;
-                    return Ok(cursor);
-        
-                } else { // new value
-        
-                    addr_value = memory.malloc_borrow(&[bytes])?;
-                    c_value().set_addr_value(addr_value as u16);
+            if value_num == -1 {
+                return Err(NP_Error::new("Option not found, cannot set uknown option!"));
+            }
+        }
 
-                    return Ok(cursor);
-                }     
-            },
-            _ => Err(NP_Error::Unreachable)
-        }               
+        let bytes = value_num as u8;
+
+        let mut addr_value = c_value().get_addr_value() as usize;
+
+        if addr_value != 0 { // existing value, replace
+
+            let write_bytes = memory.write_bytes();
+
+            write_bytes[addr_value] = bytes;
+            return Ok(cursor);
+
+        } else { // new value
+
+            addr_value = memory.malloc_borrow(&[bytes])?;
+            cursor.get_value_mut(memory).set_addr_value(addr_value as u16);
+
+            return Ok(cursor);
+        }     
+                     
     }
 
     fn schema_to_idl(schema: &Vec<NP_Parsed_Schema>, address: usize)-> Result<String, NP_Error> {
         let mut result = String::from("enum({");
 
-        match &*schema[address].data {
-            NP_Schema_Data::Enum { choices, default, .. } => {
-                if let Some(x) = default {
-                    if let NP_Enum::Some(stri) = x {
-                        result.push_str("default: \"");
-                        result.push_str(stri);
-                        result.push_str("\", ");
-                    }
-                }
+        let data = unsafe { &*(*schema[address].data as *const NP_Enum_Data) };
 
-                result.push_str("choices: [");
-
-                let last_choice = choices.len() - 1;
-                for (idx, choice) in choices.iter().enumerate() {
-                    result.push_str("\"");
-                    if let NP_Enum::Some(stri) = choice {
-                        result.push_str(stri);
-                    }
-                    result.push_str("\"");
-                    if idx < last_choice {
-                        result.push_str(", ");
-                    }
-                }
-                result.push_str("]");
-            },
-            _ => return Err(NP_Error::Unreachable)
+        if let Some(x) = &data.default {
+            if let NP_Enum::Some(stri) = x {
+                result.push_str("default: \"");
+                result.push_str(&stri);
+                result.push_str("\", ");
+            }
         }
+
+        result.push_str("choices: [");
+
+        let last_choice = data.choices.len() - 1;
+        for (idx, choice) in data.choices.iter().enumerate() {
+            result.push_str("\"");
+            if let NP_Enum::Some(stri) = choice {
+                result.push_str(stri);
+            }
+            result.push_str("\"");
+            if idx < last_choice {
+                result.push_str(", ");
+            }
+        }
+        result.push_str("]");
+       
 
         result.push_str("})");
 
@@ -324,7 +308,7 @@ impl<'value> NP_Value<'value> for NP_Enum {
             val: NP_Value_Kind::Fixed(1),
             i: NP_TypeKeys::Enum,
             sortable: true,
-            data: Box::new(NP_Schema_Data::Enum { choices, default: default_value})
+            data: Arc::new(Box::into_raw(Box::new(NP_Enum_Data { choices, default: default_value})) as *const u8)
         });
 
         return Ok((true, schema_data, schema));
@@ -340,37 +324,35 @@ impl<'value> NP_Value<'value> for NP_Enum {
         if value_addr == 0 {
             return Ok(None);
         }
+
+        let data = unsafe { &*(*memory.get_schema(cursor.schema_addr).data as *const NP_Enum_Data) };
   
-        match &*memory.get_schema(cursor.schema_addr).data {
-            NP_Schema_Data::Enum { choices, .. } => {
-                Ok(match memory.get_1_byte(value_addr) {
-                    Some(x) => {
-                        let value_num = x as usize;
-        
-                        if value_num > choices.len() {
-                            None
-                        } else {
-                            Some(choices[value_num].clone())
-                        }
-                    },
-                    None => None
-                })
+        Ok(match memory.get_1_byte(value_addr) {
+            Some(x) => {
+                let value_num = x as usize;
+
+                if value_num > data.choices.len() {
+                    None
+                } else {
+                    Some(data.choices[value_num].clone())
+                }
             },
-            _ => Err(NP_Error::Unreachable)
-        }
+            None => None
+        })
+        
     }
 
     fn default_value(_depth: usize, schema_addr: usize,schema: &Vec<NP_Parsed_Schema>) -> Option<Self> {
-        match &*schema[schema_addr].data {
-            NP_Schema_Data::Enum {default, ..} => {
-                if let Some(d) = default {
-                    Some(d.clone())
-                } else {
-                    None
-                }
-            },
-            _ => None
+
+        let data = unsafe { &*(*schema[schema_addr].data as *const NP_Enum_Data) };
+
+
+        if let Some(d) = &data.default {
+            Some(d.clone())
+        } else {
+            None
         }
+           
     }
 
     fn to_json<M: NP_Memory>(_depth:usize, cursor: &NP_Cursor, memory: &'value M) -> NP_JSON {
@@ -384,40 +366,36 @@ impl<'value> NP_Value<'value> for NP_Enum {
                                 NP_JSON::String(str_value.to_string())
                             },
                             NP_Enum::None => {
-                                match &*memory.get_schema(cursor.schema_addr).data {
-                                    NP_Schema_Data::Enum { default, .. } => {
-                                        if let Some(d) = default {
-                                            match d {
-                                                NP_Enum::Some(val) => {
-                                                    NP_JSON::String(val.clone())
-                                                },
-                                                NP_Enum::None => {
-                                                    NP_JSON::Null
-                                                }
-                                            }
-                                        } else {
+                                let data = unsafe { &*(*memory.get_schema(cursor.schema_addr).data as *const NP_Enum_Data) };
+
+                                if let Some(d) = &data.default {
+                                    match d {
+                                        NP_Enum::Some(val) => {
+                                            NP_JSON::String(val.clone())
+                                        },
+                                        NP_Enum::None => {
                                             NP_JSON::Null
                                         }
-                                    },
-                                    _ => NP_JSON::Null
-                                }
-                            }
-                        }
-                    },
-                    None => {
-                        match &*memory.get_schema(cursor.schema_addr).data {
-                            NP_Schema_Data::Enum { default, .. } => {
-                                if let Some(d) = default {
-                                    match d {
-                                        NP_Enum::Some(x) => NP_JSON::String(x.clone()),
-                                        NP_Enum::None => NP_JSON::Null
                                     }
                                 } else {
                                     NP_JSON::Null
                                 }
-                            },
-                            _ => NP_JSON::Null
+                                  
+                            }
                         }
+                    },
+                    None => {
+                        let data = unsafe { &*(*memory.get_schema(cursor.schema_addr).data as *const NP_Enum_Data) };
+
+                        if let Some(d) = &data.default {
+                            match d {
+                                NP_Enum::Some(x) => NP_JSON::String(x.clone()),
+                                NP_Enum::None => NP_JSON::Null
+                            }
+                        } else {
+                            NP_JSON::Null
+                        }
+                          
                     }
                 }
             },
@@ -506,7 +484,7 @@ impl<'value> NP_Value<'value> for NP_Enum {
             val: NP_Value_Kind::Fixed(1),
             i: NP_TypeKeys::Enum,
             sortable: true,
-            data: Box::new(NP_Schema_Data::Enum { choices: choices, default: default_value })
+            data: Arc::new(Box::into_raw(Box::new(NP_Enum_Data { choices: choices, default: default_value })) as *const u8)
         });
 
         return Ok((true, schema_data, schema));
@@ -543,7 +521,7 @@ impl<'value> NP_Value<'value> for NP_Enum {
             val: NP_Value_Kind::Fixed(1),
             i: NP_TypeKeys::Enum,
             sortable: true,
-            data: Box::new(NP_Schema_Data::Enum { choices: choices, default: default_value })
+            data: Arc::new(Box::into_raw(Box::new(NP_Enum_Data { choices: choices, default: default_value })) as *const u8)
         });
 
         (true, schema)

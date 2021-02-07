@@ -22,7 +22,8 @@
 //! ```
 //! 
 
-use crate::{JS_Schema, idl::JS_AST, schema::{NP_Schema_Data, NP_Value_Kind}};
+use alloc::sync::Arc;
+use crate::{JS_Schema, idl::JS_AST, schema::{NP_Value_Kind, NULL}};
 use alloc::prelude::v1::Box;
 use crate::pointer::NP_Scalar;
 use crate::{memory::NP_Memory, schema::{NP_Parsed_Schema}};
@@ -247,7 +248,7 @@ impl<'value> NP_Value<'value> for NP_UUID {
             val: NP_Value_Kind::Fixed(16),
             i: NP_TypeKeys::Uuid,
             sortable: true,
-            data: Box::new(NP_Schema_Data::Uuid)
+            data: Arc::new(NULL())
         });
         return Ok((true, schema_bytes, schema))
     
@@ -259,7 +260,7 @@ impl<'value> NP_Value<'value> for NP_UUID {
             val: NP_Value_Kind::Fixed(16),
             i: NP_TypeKeys::Uuid,
             sortable: true,
-            data: Box::new(NP_Schema_Data::Uuid)
+            data: Arc::new(NULL())
         });
         (true, schema)
     }
@@ -306,7 +307,7 @@ impl<'value> NP_Value<'value> for &NP_UUID {
         } else { // new value
 
             value_address = memory.malloc_borrow(&value.value)?;
-            c_value().set_addr_value(value_address as u16);
+            cursor.get_value_mut(memory).set_addr_value(value_address as u16);
         }
         
         Ok(cursor)

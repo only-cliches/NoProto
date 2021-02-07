@@ -1,5 +1,5 @@
-use alloc::string::String;
-use crate::{idl::{JS_AST, JS_Schema}, pointer::NP_Cursor, schema::{NP_Schema_Data, NP_Value_Kind}};
+use alloc::{string::String, sync::Arc};
+use crate::{idl::{JS_AST, JS_Schema}, pointer::NP_Cursor, schema::{NP_Map_List_Data, NP_Value_Kind}};
 use crate::{json_flex::JSMAP};
 use crate::pointer::{NP_Value};
 use crate::{memory::{NP_Memory}, schema::{NP_Schema, NP_TypeKeys, NP_Parsed_Schema}, error::NP_Error, json_flex::NP_JSON};
@@ -60,11 +60,10 @@ impl<'map> NP_Map<'map> {
     #[inline(always)]
     pub fn select<M: NP_Memory>(map_cursor: NP_Cursor, key: &str, make_path: bool, schema_query: bool, memory: &'map M) -> Result<Option<NP_Cursor>, NP_Error> {
 
+        let data = unsafe { &*(*memory.get_schema(map_cursor.schema_addr).data as *const NP_Map_List_Data) };
+
         if schema_query {
-            let value_of = match &*memory.get_schema(map_cursor.schema_addr).data {
-                NP_Schema_Data::Map { value, .. } => *value,
-                _ => 0
-            };
+            let value_of = data.child;
 
             return Ok(Some(NP_Cursor::new(0, value_of, map_cursor.schema_addr)));
         }
@@ -98,10 +97,9 @@ impl<'map> NP_Map<'map> {
     #[inline(always)]
     pub fn new_iter<M: NP_Memory>(map_cursor: &NP_Cursor, memory: &'map M) -> Self {
 
-        let value_of = match &*memory.get_schema(map_cursor.schema_addr).data {
-            NP_Schema_Data::Map { value, .. } => *value,
-            _ => 0
-        };
+        let data = unsafe { &*(*memory.get_schema(map_cursor.schema_addr).data as *const NP_Map_List_Data) };
+
+        let value_of = data.child;
 
         if map_cursor.get_value(memory).get_addr_value() == 0 {
             return Self {
@@ -169,10 +167,9 @@ impl<'map> NP_Map<'map> {
     #[inline(always)]
     pub fn insert<M: NP_Memory>(map_cursor: &NP_Cursor, memory: &M, key: &str) -> Result<NP_Cursor, NP_Error> {
 
-        let value_of = match &*memory.get_schema(map_cursor.schema_addr).data {
-            NP_Schema_Data::Map { value, .. } => *value,
-            _ => 0
-        };
+        let data = unsafe { &*(*memory.get_schema(map_cursor.schema_addr).data as *const NP_Map_List_Data) };
+
+        let value_of = data.child;
 
         if key.len() >= 255 {
             return Err(NP_Error::new("Key length cannot be larger than 255 charecters!"));
@@ -182,20 +179,19 @@ impl<'map> NP_Map<'map> {
 
         let new_cursor_addr = memory.malloc_borrow(&[0u8; 6])?;
         let new_cursor = NP_Cursor::new(new_cursor_addr, value_of, map_cursor.schema_addr);
-        let new_cursor_value = || { new_cursor.get_value(memory) };
 
         // set key
         let key_item_addr = memory.malloc_borrow(&[key.len() as u8])?;
         memory.malloc_borrow(key.as_bytes())?;
-        new_cursor_value().set_key_addr(key_item_addr as u16);
+        new_cursor.get_value_mut(memory).set_key_addr(key_item_addr as u16);
 
         let head = map_value().get_addr_value() as usize;
 
         // Set head of map to new cursor
-        map_value().set_addr_value(new_cursor_addr as u16);
+        map_cursor.get_value_mut(memory).set_addr_value(new_cursor_addr as u16);
 
         if head != 0 { // set new cursors NEXT to old HEAD
-            new_cursor_value().set_next_addr(head as u16);
+            new_cursor.get_value_mut(memory).set_next_addr(head as u16);
         }
 
         Ok(new_cursor)
@@ -249,10 +245,9 @@ impl<'value> NP_Value<'value> for NP_Map<'value> {
         let mut schema_json = JSMAP::new();
         schema_json.insert("type".to_owned(), NP_JSON::String(Self::type_idx().0.to_string()));
 
-        let value_of = match &*schema[address].data {
-            NP_Schema_Data::Map { value, .. } => { *value },
-            _ => 0
-        };
+        let data = unsafe { &*(*schema[address].data as *const NP_Map_List_Data) };
+
+        let value_of = data.child;
 
         schema_json.insert("value".to_owned(), NP_Schema::_type_to_json(schema, value_of)?);
 
@@ -305,27 +300,26 @@ impl<'value> NP_Value<'value> for NP_Map<'value> {
     }
 
     fn schema_to_idl(schema: &Vec<NP_Parsed_Schema>, address: usize)-> Result<String, NP_Error> {
-        match &*schema[address].data {
-            NP_Schema_Data::Map { value, .. } => {
-                let mut result = String::from("map({value: ");
-                result.push_str(NP_Schema::_type_to_idl(&schema, *value)?.as_str());
-                result.push_str("})");
-                Ok(result)
-            },
-            _ => { Err(NP_Error::Unreachable) }
-        }
+        let data = unsafe { &*(*schema[address].data as *const NP_Map_List_Data) };
+
+        let mut result = String::from("map({value: ");
+        result.push_str(NP_Schema::_type_to_idl(&schema, data.child)?.as_str());
+        result.push_str("})");
+        Ok(result)
+         
     }
 
     fn from_idl_to_schema(mut schema: Vec<NP_Parsed_Schema>, _name: &str, idl: &JS_Schema, args: &Vec<JS_AST>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {
         let mut schema_data: Vec<u8> = Vec::new();
         schema_data.push(NP_TypeKeys::Map as u8);
+        
 
         let value_addr = schema.len();
         schema.push(NP_Parsed_Schema {
             val: NP_Value_Kind::Pointer,
             i: NP_TypeKeys::Map,
             sortable: false,
-            data: Box::new(NP_Schema_Data::Map { value: value_addr + 1 })
+            data: Arc::new(Box::into_raw(Box::new(NP_Map_List_Data { child: value_addr + 1 })) as *const u8)
         });
 
         let mut value_jst: Option<&JS_AST> = None;
@@ -364,7 +358,7 @@ impl<'value> NP_Value<'value> for NP_Map<'value> {
         schema.push(NP_Parsed_Schema {
             val: NP_Value_Kind::Pointer,
             i: NP_TypeKeys::Map,
-            data: Box::new(NP_Schema_Data::Map { value: value_addr + 1 }),
+            data: Arc::new(Box::into_raw(Box::new(NP_Map_List_Data { child: value_addr + 1 })) as *const u8),
             sortable: false
         });
 
@@ -394,7 +388,7 @@ impl<'value> NP_Value<'value> for NP_Map<'value> {
             val: NP_Value_Kind::Pointer,
             i: NP_TypeKeys::Map,
             sortable: false,
-            data: Box::new(NP_Schema_Data::Map { value: of_addr + 1 })
+            data: Arc::new(Box::into_raw(Box::new(NP_Map_List_Data { child: of_addr + 1 })) as *const u8)
         });
         let (_sortable, schema) = NP_Schema::from_bytes(schema, address + 1, bytes);
         (false, schema)

@@ -1,7 +1,7 @@
 //! Top level abstraction for buffer objects
 
 use alloc::prelude::v1::Box;
-use crate::{json_decode, json_flex::JSMAP, memory::{NP_Mem_New, NP_Memory_Kind}, pointer::NP_Cursor_Parent, schema::NP_Schema_Data};
+use crate::{json_decode, json_flex::JSMAP, memory::{NP_Mem_New, NP_Memory_Kind}, pointer::NP_Cursor_Parent, schema::{NP_Bytes_Data, NP_Map_List_Data, NP_String_Data, NP_Struct_Data, NP_Tuple_Data}};
 use alloc::string::String;
 use crate::{NP_Size_Data, schema::NP_TypeKeys};
 use crate::{memory::NP_Memory_Owned, utils::opt_err};
@@ -661,11 +661,9 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
         match schema.i {
             NP_TypeKeys::List => {
 
-                let of = if let NP_Schema_Data::List { of, .. } = &*schema.data {
-                    *of
-                } else {
-                    0
-                };
+                let data = unsafe { &*(*schema.data as *const NP_Map_List_Data) };
+
+                let of = data.child;
                     
                 let of_schema = &self.memory.get_schema(of);
 
@@ -821,11 +819,9 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
                     return Ok(None);
                 }
 
-                let of = if let NP_Schema_Data::List { of, .. } = &*schema.data {
-                    *of
-                } else {
-                    0
-                };
+                let data = unsafe { &*(*schema.data as *const NP_Map_List_Data) };
+
+                let of = data.child;
 
                 let list_data = NP_List::get_list(addr_value as usize, &self.memory);
                 let tail_addr = list_data.get_tail() as usize;
@@ -853,42 +849,40 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
                 Ok(Some(count))
             },
             NP_TypeKeys::Struct => {
-                if let NP_Schema_Data::Struct { fields, .. } = &*schema.data {
-                    Ok(Some(fields.len()))
-                } else {
-                    Err(NP_Error::Unreachable)
-                }
+                let data = unsafe { &*(*schema.data as *const NP_Struct_Data) };
+                Ok(Some(data.fields.len()))
             },
             NP_TypeKeys::Tuple => {
-                if let NP_Schema_Data::Tuple { values, .. } = &*schema.data {
-                    Ok(Some(values.len()))
-                } else {
-                    Err(NP_Error::Unreachable)
-                }
+                let data = unsafe { &*(*schema.data as *const NP_Tuple_Data) };
+                Ok(Some(data.values.len()))
             },
             NP_TypeKeys::Bytes => {
-                if let NP_Schema_Data::Bytes { size, .. } = &*schema.data {
-                    if *size > 0 {
-                        Ok(Some(*size as usize))
-                    } else {
-                        let length_bytes = self.memory.get_2_bytes(addr_value as usize).unwrap_or(&[0u8; 2]);
-                        Ok(Some(u16::from_be_bytes(*length_bytes) as usize))
-                    }
+
+                let data = unsafe { &*(*schema.data as *const NP_Bytes_Data) };
+
+                let size = data.size;
+         
+                if size > 0 {
+                    Ok(Some(size as usize))
                 } else {
-                    Err(NP_Error::Unreachable)
+                    let length_bytes = self.memory.get_2_bytes(addr_value as usize).unwrap_or(&[0u8; 2]);
+                    Ok(Some(u16::from_be_bytes(*length_bytes) as usize))
                 }
+               
             },
             NP_TypeKeys::UTF8String => {
-                if let NP_Schema_Data::UTF8String { size, .. } = &*schema.data {
-                    if *size > 0 {
-                        Ok(Some(*size as usize))
-                    } else {
-                        let length_bytes = self.memory.get_2_bytes(addr_value as usize).unwrap_or(&[0u8; 2]);
-                        Ok(Some(u16::from_be_bytes(*length_bytes) as usize))
-                    }
+
+                let data = unsafe { &*(*schema.data as *const NP_String_Data) };
+
+                let size = data.size;
+            
+                if size > 0 {
+                    Ok(Some(size as usize))
                 } else {
-                    Err(NP_Error::Unreachable)
+                    let length_bytes = self.memory.get_2_bytes(addr_value as usize).unwrap_or(&[0u8; 2]);
+                    Ok(Some(u16::from_be_bytes(*length_bytes) as usize))
                 }
+    
             },
             _ => {
                 Ok(None)
@@ -1445,9 +1439,11 @@ impl<'item, M: NP_Memory> NP_Item<'item, M> {
         }
          
         if let Some(cursor) = self.cursor {
-            let value = cursor.get_value(self.memory);
-            value.set_addr_value(0);
-            true
+            
+            match NP_Cursor::delete(cursor, self.memory) {
+                Ok(result) => result,
+                Err(_e) => false
+            }
         } else {
             false
         }

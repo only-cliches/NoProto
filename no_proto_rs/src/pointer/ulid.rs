@@ -19,8 +19,8 @@
 //! ```
 //! 
 
-use crate::{idl::{JS_AST, JS_Schema}, memory::NP_Memory, schema::{NP_Parsed_Schema, NP_Schema_Data, NP_Value_Kind}, utils::from_base32};
-use alloc::vec::Vec;
+use crate::{idl::{JS_AST, JS_Schema}, memory::NP_Memory, schema::{NP_Parsed_Schema, NP_Value_Kind, NULL}, utils::from_base32};
+use alloc::{sync::Arc, vec::Vec};
 use crate::utils::to_base32;
 use crate::json_flex::{JSMAP, NP_JSON};
 use crate::schema::{NP_TypeKeys};
@@ -267,7 +267,7 @@ impl<'value> NP_Value<'value> for NP_ULID {
             val: NP_Value_Kind::Fixed(16),
             i: NP_TypeKeys::Ulid,
             sortable: true,
-            data: Box::new(NP_Schema_Data::Ulid)
+            data: Arc::new(NULL())
         });
         return Ok((true, schema_bytes, schema))
 
@@ -280,7 +280,7 @@ impl<'value> NP_Value<'value> for NP_ULID {
             val: NP_Value_Kind::Fixed(16),
             i: NP_TypeKeys::Ulid,
             sortable: true,
-            data: Box::new(NP_Schema_Data::Ulid)
+            data: Arc::new(NULL())
         });
         (true, schema)
     }
@@ -341,7 +341,7 @@ impl<'value> NP_Value<'value> for &NP_ULID {
         } else { // new value
 
             value_address = memory.malloc_borrow(&value.value)?;
-            c_value().set_addr_value(value_address as u16);
+            cursor.get_value_mut(memory).set_addr_value(value_address as u16);
         }                    
         
         Ok(cursor)

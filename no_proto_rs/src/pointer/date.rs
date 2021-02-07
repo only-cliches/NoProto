@@ -18,8 +18,8 @@
 //! ```
 //! 
 
-use alloc::string::String;
-use crate::{idl::{JS_AST, JS_Schema}, schema::{NP_Parsed_Schema, NP_Schema_Data, NP_Value_Kind}};
+use alloc::{string::String, sync::Arc};
+use crate::{idl::{JS_AST, JS_Schema}, schema::{NP_Parsed_Schema, NP_Value_Kind, NP_u64_Data}};
 use alloc::vec::Vec;
 use crate::json_flex::{JSMAP, NP_JSON};
 use crate::schema::{NP_TypeKeys};
@@ -89,29 +89,24 @@ impl<'value> NP_Value<'value> for NP_Date {
         let mut schema_json = JSMAP::new();
         schema_json.insert("type".to_owned(), NP_JSON::String(Self::type_idx().0.to_string()));
 
-        match &*schema[address].data {
-            NP_Schema_Data::Date { default, .. } => {
-                if let Some(d) = default {
-                    schema_json.insert("default".to_owned(), NP_JSON::Integer(d.value as i64));
-                }
-            },
-            _ => { }
+        let data = unsafe { &*(*schema[address].data as *const NP_u64_Data) };
+
+        if let Some(d) = data.default {
+            schema_json.insert("default".to_owned(), NP_JSON::Integer(d as i64));
         }
-    
+         
         Ok(NP_JSON::Dictionary(schema_json))
     }
 
     fn default_value(_depth: usize, addr: usize, schema: &Vec<NP_Parsed_Schema>) -> Option<Self> {
-        match &*schema[addr].data {
-            NP_Schema_Data::Date { default, .. } => {
-                if let Some(d) = default {
-                    Some(d.clone())
-                } else {
-                    None
-                }
-            },
-            _ => None
+        let data = unsafe { &*(*schema[addr].data as *const NP_u64_Data) };
+
+        if let Some(d) = data.default {
+            Some(NP_Date { value: d.clone() })
+        } else {
+            None
         }
+         
     }
 
     fn set_from_json<'set, M: NP_Memory>(_depth: usize, _apply_null: bool, cursor: NP_Cursor, memory: &'set M, value: &Box<NP_JSON>) -> Result<(), NP_Error> where Self: 'set + Sized {
@@ -146,7 +141,7 @@ impl<'value> NP_Value<'value> for NP_Date {
 
             let bytes = value.value.to_be_bytes();
             value_address = memory.malloc_borrow(&bytes)?;
-            c_value().set_addr_value(value_address as u16);
+            cursor.get_value_mut(memory).set_addr_value(value_address as u16);
         }                    
 
         Ok(cursor)
@@ -180,15 +175,12 @@ impl<'value> NP_Value<'value> for NP_Date {
                         NP_JSON::Integer(y.value as i64)
                     },
                     None => {
-                        match &*memory.get_schema(cursor.schema_addr).data {
-                            NP_Schema_Data::Date { default, .. } => {
-                                if let Some(d) = default {
-                                    NP_JSON::Integer(d.value.clone() as i64)
-                                } else {
-                                    NP_JSON::Null
-                                }
-                            },
-                            _ => NP_JSON::Null
+                        let data = unsafe { &*(*memory.get_schema(cursor.schema_addr).data as *const NP_u64_Data) };
+
+                        if let Some(d) = data.default {
+                            NP_JSON::Integer(d.clone() as i64)
+                        } else {
+                            NP_JSON::Null
                         }
                     }
                 }
@@ -212,19 +204,17 @@ impl<'value> NP_Value<'value> for NP_Date {
 
 
     fn schema_to_idl(schema: &Vec<NP_Parsed_Schema>, address: usize)-> Result<String, NP_Error> {
-        match &*schema[address].data {
-            NP_Schema_Data::Date { default , .. } => {
-                let mut result = String::from("date(");
-                if let Some(x) = default {
-                    result.push_str("{default: ");
-                    result.push_str(x.value.to_string().as_str());
-                    result.push_str("}");
-                }
-                result.push_str(")");
-                Ok(result)
-            },
-            _ => { Err(NP_Error::Unreachable) }
+        let data = unsafe { &*(*schema[address].data as *const NP_u64_Data) };
+
+        let mut result = String::from("date(");
+        if let Some(x) = data.default {
+            result.push_str("{default: ");
+            result.push_str(x.to_string().as_str());
+            result.push_str("}");
         }
+        result.push_str(")");
+        Ok(result)
+         
     }
 
     fn from_idl_to_schema(mut schema: Vec<NP_Parsed_Schema>, _name: &str, idl: &JS_Schema, args: &Vec<JS_AST>) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {
@@ -263,7 +253,7 @@ impl<'value> NP_Value<'value> for NP_Date {
             Some(x) => {
                 schema_data.push(1);
                 schema_data.extend_from_slice(&(x as u64).to_be_bytes());
-                Some(NP_Date { value: x as u64})
+                Some(x as u64)
             },
             _ => {
                 schema_data.push(0);
@@ -275,7 +265,7 @@ impl<'value> NP_Value<'value> for NP_Date {
             val: NP_Value_Kind::Fixed(8),
             i: NP_TypeKeys::Date,
             sortable: true,
-            data: Box::new(NP_Schema_Data::Date { default })
+            data: Arc::new(Box::into_raw(Box::new(NP_u64_Data { default })) as *const u8)
         });
 
         return Ok((true, schema_data, schema));
@@ -291,7 +281,7 @@ impl<'value> NP_Value<'value> for NP_Date {
             NP_JSON::Integer(x) => {
                 schema_data.push(1);
                 schema_data.extend((x as u64).to_be_bytes().to_vec());
-                Some(NP_Date { value: x as u64})
+                Some(x as u64)
             },
             _ => {
                 schema_data.push(0);
@@ -302,7 +292,7 @@ impl<'value> NP_Value<'value> for NP_Date {
         schema.push(NP_Parsed_Schema {
             val: NP_Value_Kind::Fixed(8),
             i: NP_TypeKeys::Date,
-            data: Box::new(NP_Schema_Data::Date { default }),
+            data: Arc::new(Box::into_raw(Box::new(NP_u64_Data { default })) as *const u8),
             sortable: true
         });
 
@@ -320,14 +310,14 @@ impl<'value> NP_Value<'value> for NP_Date {
 
             let mut u64_bytes = 0u64.to_be_bytes();
             u64_bytes.copy_from_slice(bytes_slice);
-            Some(NP_Date { value: u64::from_be_bytes(u64_bytes)})
+            Some(u64::from_be_bytes(u64_bytes))
         };
 
         schema.push(NP_Parsed_Schema {
             val: NP_Value_Kind::Fixed(8),
             i: NP_TypeKeys::Date,
             sortable: true,
-            data: Box::new(NP_Schema_Data::Date { default })
+            data: Arc::new(Box::into_raw(Box::new(NP_u64_Data { default })) as *const u8)
         });
         (true, schema)
     }
