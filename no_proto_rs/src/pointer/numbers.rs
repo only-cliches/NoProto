@@ -16,9 +16,7 @@
 //! use no_proto::error::NP_Error;
 //! use no_proto::NP_Factory;
 //! 
-//! let factory: NP_Factory = NP_Factory::new_json(r#"{
-//!    "type": "u32"
-//! }"#)?;
+//! let factory: NP_Factory = NP_Factory::new("u32()")?;
 //!
 //! let mut new_buffer = factory.new_buffer(None);
 //! new_buffer.set(&[], 20380u32)?;

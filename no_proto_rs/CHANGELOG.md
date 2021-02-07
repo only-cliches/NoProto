@@ -1,10 +1,11 @@
-# 0.9.3
+# 0.9.3 February 7th, 2021
 - Tuple types are now packed much tighter but cannot be mutated in schema.  But no longer need `close_sortable` and `open_sortable` methods.
 - Updated open buffer methods and export schema methods to be consistent.
 - Cleaned up read only buffer semantics, added mutable reference buffer type so mmap will work with NoProto buffers.
 - Added read only checks on all mutable methods.
 - Removed explicit read only buffer, the main buffer class handles all memory types generically now.
 - Added new `set_max_length` method that allows you to limit the maximium size of buffers.
+- Major performance improvement, around 20% increase in performance from benchmarks.
 
 # 0.9.2 January 25, 2021
 - Restored `no_std`.  

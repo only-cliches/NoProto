@@ -43,9 +43,9 @@
 ### Why ANOTHER Serialization Format?
 1. NoProto combines the **performance** of compiled formats with the **flexibilty** of dynamic formats:
 
-**Compiled** formats like Flatbuffers, CapN Proto and bincode have amazing performance and extremely compact storage buffers, but you MUST compile the data types into your application.  This means if the schema of the data changes the application must be recompiled to accomodate the new schema.
+**Compiled** formats like Flatbuffers, CapN Proto and bincode have amazing performance and extremely compact buffers, but you MUST compile the data types into your application.  This means if the schema of the data changes the application must be recompiled to accomodate the new schema.
 
-**Dynamic** formats like JSON, MessagePack and BSON give flexibilty to store any data with any schema at runtime but the storage buffers are fat and performance is somewhere between horrible and hopefully acceptable.
+**Dynamic** formats like JSON, MessagePack and BSON give flexibilty to store any data with any schema at runtime but the buffers are fat and performance is somewhere between horrible and hopefully acceptable.
 
 NoProto takes the performance advantages of compiled formats and implements them in a flexible format.
 
@@ -84,6 +84,7 @@ NoProto takes the performance advantages of compiled formats and implements them
 - Byte-wise sorting is first class operation<br/>
 - Updates without deserializng/serializing<br/>
 - Safely handle untrusted data.<br/>
+- All values are optional and can be inserted in any order.<br/>
 </details>
 <br/>
 <details>
@@ -107,6 +108,7 @@ NoProto takes the performance advantages of compiled formats and implements them
 - Updates without deserializng/serializing<br/>
 - Works with `no_std`.<br/>
 - Safely handle untrusted data.<br/>
+- All values are optional and can be inserted in any order.<br/>
 </details>
 <br/><br/>
 
@@ -144,7 +146,7 @@ let user_factory = NP_Factory::new(r#"
 
 
 // create a new empty buffer
-let mut user_buffer = user_factory.empty_buffer(None); // optional capacity
+let mut user_buffer = user_factory.new_buffer(None); // optional capacity
 
 // set the "name" field
 user_buffer.set(&["name"], "Billy Joel")?;
@@ -161,7 +163,7 @@ let tag = user_buffer.get::<&str>(&["tags", "0"])?;
 assert_eq!(tag, Some("first tag"));
 
 // close buffer and get internal bytes
-let user_bytes: Vec<u8> = user_buffer.close();
+let user_bytes: Vec<u8> = user_buffer.finish().bytes();
 
 // open the buffer again
 let user_buffer = user_factory.open_buffer(user_bytes);
@@ -176,7 +178,7 @@ let age = user_buffer.get::<u16>(&["age"])?;
 assert_eq!(age, Some(0u16));
 
 // close again
-let user_bytes: Vec<u8> = user_buffer.close();
+let user_bytes: Vec<u8> = user_buffer.finish().bytes();
 
 
 // we can now save user_bytes to disk, 
@@ -204,32 +206,34 @@ The format and data used in the benchmarks were taken from the `flatbuffers` ben
 |------------------------------------------------------------|---------|------------|----------|----------|--------------|-------------|
 | **Runtime Libs**                                           |         |            |          |          |              |             |
 | *NoProto*                                                  |         |            |          |          |              |             |
-|        [no_proto](https://crates.io/crates/no_proto)       |    1011 |       1653 |    45455 |    11236 |          209 |         167 |
+|        [no_proto](https://crates.io/crates/no_proto)       |    1258 |       1901 |    55556 |    12821 |          209 |         167 |
 | Apache Avro                                                |         |            |          |          |              |             |
-|         [avro-rs](https://crates.io/crates/avro-rs)        |     156 |         57 |       56 |       40 |          702 |         336 |
+|         [avro-rs](https://crates.io/crates/avro-rs)        |     155 |         56 |       57 |       41 |          702 |         339 |
 | FlexBuffers                                                |         |            |          |          |              |             |
-|     [flexbuffers](https://crates.io/crates/flexbuffers)    |     453 |        964 |    25000 |      300 |          490 |         309 |
+|     [flexbuffers](https://crates.io/crates/flexbuffers)    |     455 |        955 |    24390 |      297 |          490 |         309 |
 | JSON                                                       |         |            |          |          |              |             |
-|            [json](https://crates.io/crates/json)           |     606 |        489 |      612 |      440 |          439 |         184 |
-|      [serde_json](https://crates.io/crates/serde_json)     |     951 |        649 |      649 |      400 |          446 |         198 |
+|            [json](https://crates.io/crates/json)           |     616 |        497 |      619 |      456 |          439 |         184 |
+|      [serde_json](https://crates.io/crates/serde_json)     |     929 |        640 |      650 |      405 |          446 |         198 |
 | BSON                                                       |         |            |          |          |              |             |
-|            [bson](https://crates.io/crates/bson)           |     133 |        117 |      125 |       90 |          414 |         216 |
-|         [rawbson](https://crates.io/crates/rawbson)        |     124 |       1133 |    17857 |       89 |          414 |         216 |
+|            [bson](https://crates.io/crates/bson)           |     129 |        116 |      124 |       90 |          414 |         216 |
+|         [rawbson](https://crates.io/crates/rawbson)        |     129 |       1134 |    17857 |       90 |          414 |         216 |
 | MessagePack                                                |         |            |          |          |              |             |
-|             [rmp](https://crates.io/crates/rmp)            |     677 |        636 |      826 |      203 |          311 |         193 |
-|  [messagepack-rs](https://crates.io/crates/messagepack-rs) |     153 |        245 |      265 |      129 |          296 |         187 |
+|             [rmp](https://crates.io/crates/rmp)            |     661 |        657 |      879 |      213 |          311 |         193 |
+|  [messagepack-rs](https://crates.io/crates/messagepack-rs) |     149 |        263 |      283 |      135 |          296 |         187 |
 | **Compiled Libs**                                          |         |            |          |          |              |             |
 | Flatbuffers                                                |         |            |          |          |              |             |
-|     [flatbuffers](https://crates.io/crates/flatbuffers)    |    3115 |      16129 |   250000 |     2538 |          264 |         181 |
+|     [flatbuffers](https://crates.io/crates/flatbuffers)    |    3086 |      16393 |   250000 |     2551 |          264 |         181 |
 | Bincode                                                    |         |            |          |          |              |             |
-|         [bincode](https://crates.io/crates/bincode)        |    5917 |       9615 |    10101 |     4608 |          163 |         129 |
+|         [bincode](https://crates.io/crates/bincode)        |    6849 |       9524 |    10204 |     4310 |          163 |         129 |
+| Postcard                                                   |         |            |          |          |              |             |
+|        [postcard](https://crates.io/crates/postcard)       |    2841 |       7634 |     7937 |     2273 |          128 |         119 |
 | Protocol Buffers                                           |         |            |          |          |              |             |
-|        [protobuf](https://crates.io/crates/protobuf)       |     989 |       1202 |     1304 |      529 |          154 |         141 |
-|           [prost](https://crates.io/crates/prost)          |    1538 |       2123 |     2198 |     1093 |          154 |         142 |
+|        [protobuf](https://crates.io/crates/protobuf)       |     956 |       1269 |     1252 |      533 |          154 |         141 |
+|           [prost](https://crates.io/crates/prost)          |    1570 |       2096 |     2151 |     1079 |          154 |         142 |
 | Abomonation                                                |         |            |          |          |              |             |
-|     [abomonation](https://crates.io/crates/abomonation)    |    2558 |     125000 |   500000 |     2012 |          261 |         163 |
+|     [abomonation](https://crates.io/crates/abomonation)    |    2347 |     125000 |   500000 |     2041 |          261 |         163 |
 | Rkyv                                                       |         |            |          |          |              |             |
-|            [rkyv](https://crates.io/crates/rkyv)           |    1572 |      37037 |   200000 |     1513 |          180 |         154 |
+|            [rkyv](https://crates.io/crates/rkyv)           |    1684 |      37037 |   200000 |     1560 |          180 |         152 |
 
 - **Encode**: Transfer a collection of fields of test data into a serialized `Vec<u8>`.
 - **Decode All**: Deserialize the test object from the `Vec<u8>` into all fields.
@@ -241,25 +245,31 @@ The format and data used in the benchmarks were taken from the `flatbuffers` ben
 Complete benchmark source code is available [here](https://github.com/only-cliches/NoProto/tree/master/bench).  Suggestions for improving the quality of these benchmarks is appreciated.
 
 ## NoProto Strengths
-If your use case fits any of the points below, NoProto is a good choice for your application.  You should always benchmark to verify.
+If your use case fits any of the points below, NoProto might be a good choice for your application.
 
 1. Flexible At Runtime<br/>
-If you need to work with data types that will change or be created at runtime, you normally have to pick something like JSON since highly optimized formats like Flatbuffers and Bincode depend on compiling the data types into your application (making everything fixed at runtime). When it comes to formats that can change/implement data types at runtime, NoProto is fastest format I've been able to find (if you know if one that might be faster, let me know!).
+If you need to work with data types that will change or be created at runtime, you normally have to pick something like JSON since highly optimized formats like Flatbuffers and Bincode depend on compiling the data types into your application (making everything fixed at runtime). When it comes to formats that can change/implement data types at runtime, NoProto is fastest format we're aware of (if you know if one that might be faster, let us know!).
 
 2. Safely Accept Untrusted Data</br>
 The worse case failure mode for NoProto buffers is junk data.  While other formats can cause denial of service attacks or allow unsafe memory access, there is no such failure case with NoProto.  There is no way to construct a NoProto buffer that would cause any detrement in performance to the host application or lead to unsafe memory access.  Also, there is no panic causing code in the library, meaning it will never crash your application.
 
 3. Extremely Fast Updates<br/>
-If you have a workflow in your application that is read -> modify -> write with buffers, NoProto will usually outperform every other format, including Bincode and Flatbuffers. This is because NoProto never actually deserializes, it doesn't need to.  This includes complicated mutations like pushing a value onto a list or adding a value into the middle of a list.
+If you have a workflow in your application that is read -> modify -> write with buffers, NoProto will usually outperform every other format, including Bincode and Flatbuffers. This is because NoProto never actually deserializes, it doesn't need to.  This includes complicated mutations like pushing a value onto a nested list or replacing entire structs.
 
-4. Incremental Deserializing<br/>
-You only pay for the fields you read, no more. There is no deserializing step in NoProto, opening a buffer typically performs no operations (except for sorted buffers, which is opt in). Once you start asking for fields, the library will navigate the buffer using the format rules to get just what you asked for and nothing else. If you have a workflow in your application where you read a buffer and only grab a few fields inside it, NoProto will outperform most other libraries.
+4. All Fields Optional, Insert/Update In Any Order<br/>
+Many formats require that all values be present to close the buffer, further they may require data to be inserted in a specific order to accomodate the encoding/decoding scheme.  With NoProto, all fields are optional and any update/insert can happen in any order.  
 
-5. Bytewise Sorting<br/>
+5. Incremental Deserializing<br/>
+You only pay for the fields you read, no more. There is no deserializing step in NoProto, opening a buffer performs no operations. Once you start asking for fields, the library will navigate the buffer using the format rules to get just what you asked for and nothing else. If you have a workflow in your application where you read a buffer and only grab a few fields inside it, NoProto will outperform most other libraries.
+
+6. Bytewise Sorting<br/>
 Almost all of NoProto's data types are designed to serialize into bytewise sortable values, *including signed integers*.  When used with Tuples, making database keys with compound sorting is extremly easy.  When you combine that with first class support for `UUID`s and `ULID`s NoProto makes an excellent tool for parsing and creating primary keys for databases like RocksDB, LevelDB and TiKV. 
 
-6. `no_std` Support<br/>
+7. `no_std` Support<br/>
 If you need a serialization format with low memory usage that works in `no_std` environments, NoProto is one of the few good choices.
+
+8. Stable<br/>
+NoProto will never cause a panic in your application.  It has *zero* panics or unwraps, meaning there is no code path that could lead to a panic.  Fallback behavior is to provide a sane default path or bubble an error up to the caller.
 
 
 ### When to use Flatbuffers / Bincode / CapN Proto
@@ -277,7 +287,7 @@ If your data changes so often that schemas don't really make sense or the format
 - Buffers cannot be larger than 2^16 bytes or ~64KB.
 
 ## Unsafe
-This library makes use of `unsafe` to get better performance.  Generally speaking, it's not possible to have a high performance serialization library without `unsafe`.  It is only used where absolutely necessary and additional checks are performed so that the worst case for any `unsafe` block is it leads to junk data in a buffer.
+This library makes use of `unsafe` to get better performance.  Generally speaking, it's not possible to have a high performance serialization library without `unsafe`.  It is only used where performance improvements are significant and additional checks are performed so that the worst case for any `unsafe` block is it leads to junk data in a buffer.
 
 ----------------------
 

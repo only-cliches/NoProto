@@ -7,9 +7,7 @@
 //! use no_proto::NP_Factory;
 //! use no_proto::pointer::geo::NP_Geo;
 //! 
-//! let factory: NP_Factory = NP_Factory::new_json(r#"{
-//!    "type": "geo4"
-//! }"#)?;
+//! let factory: NP_Factory = NP_Factory::new("geo4()")?;
 //!
 //! let mut new_buffer = factory.new_buffer(None);
 //! new_buffer.set(&[], NP_Geo::new(4, 45.509616, -122.714625))?;
