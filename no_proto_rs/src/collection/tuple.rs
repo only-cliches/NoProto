@@ -166,8 +166,6 @@ impl<'value> NP_Value<'value> for NP_Tuple {
     }
 
     fn set_from_json<'set, M: NP_Memory>(depth: usize, apply_null: bool, cursor: NP_Cursor, memory: &'set M, value: &Box<NP_JSON>) -> Result<(), NP_Error> where Self: 'set + Sized {
-
-        let data = unsafe { &*(*memory.get_schema(cursor.schema_addr).data as *const NP_Tuple_Data) };
         
         match &**value {
             NP_JSON::Array(list) => {
@@ -226,12 +224,9 @@ impl<'value> NP_Value<'value> for NP_Tuple {
             return Ok(to_cursor) 
         }
 
-        let c: Vec<NP_Tuple_Field>;
-        let c2: Vec<u8> = Vec::new();
-
         let data = unsafe { &*(*from_memory.get_schema(from_cursor.schema_addr).data as *const NP_Tuple_Data) };
 
-        let (col_schemas, empty) = (&data.values, &data.empty);
+        let (col_schemas, _empty) = (&data.values, &data.empty);
 
         to_cursor = Self::alloc_tuple(to_cursor, &data.empty, to_memory)?;
 

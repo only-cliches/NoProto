@@ -499,7 +499,6 @@ trait NP_BigEndian {
 
 impl NP_BigEndian for i8 {
     fn np_get_default<'default>(schema_addr: usize, ptr: &'default Vec<NP_Parsed_Schema>) -> Option<Self> where Self: Sized {
-        let schema = &ptr[schema_addr];
 
         let data = unsafe { &*(*ptr[schema_addr].data as *const NP_i8_Data) };
         data.default

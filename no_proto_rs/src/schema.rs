@@ -943,7 +943,7 @@ pub struct NP_Tuple_Field {
     pub offset: usize
 }
 
-// NULL pointer value
+/// NULL pointer value
 pub static NULL: fn() -> *const u8 = || { 0x0 as *const u8 };
 
 #[allow(missing_docs)]
