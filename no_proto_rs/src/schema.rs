@@ -2,7 +2,7 @@
 //! 
 //! NoProto schemas describe how the data in a buffer is stored and what types of data are stored.  Schemas are required to create buffers and each buffer is a descendant of the schema that created it.
 //! 
-//! Schemas can be created with JSON, ES6 or Bytes.
+//! Schemas can be loaded from JSON, ES6 or Bytes.
 //! 
 //! As a quick example, the schemas below are indentical in what they describe, only different in syntax.
 //! ```text
@@ -46,6 +46,7 @@
 //!         ["age",      {"type": "u8"}]     // age field contains a Uint8 number (0 - 255)
 //!     ]
 //! }
+//! 
 //! // ES6
 //! struct({fields: {
 //!     userID: string(),    // userID field contains a string
@@ -55,7 +56,7 @@
 //! }})
 //! ```
 //! 
-//! There are multiple collection types, and they can be nested.
+//! There are multiple collection types and they can be nested.
 //! 
 //! For example, this is a list of structs.  Every item in the list is a struct with two fields: id and title.  Both fields are a string type.
 //! ```text
@@ -458,7 +459,7 @@
 //! ```
 //! 
 //! More Details:
-//! - [Using NP_Bytes data type](../pointer/bytes/struct.NP_Bytes.html)
+//! - [Using NP_Bytes data type](../pointer/bytes/index.html)
 //! 
 //! ## int8, int16, int32, int64
 //! Signed integers allow positive or negative whole numbers to be stored.  The bytes are stored in big endian format and converted to unsigned types to allow bytewise sorting.
@@ -582,7 +583,7 @@
 //! ```
 //! 
 //! More Details:
-//! - [Using NP_Enum data type](../pointer/option/struct.NP_Enum.html)
+//! - [Using NP_Enum data type](../pointer/option/index.html)
 //! 
 //! ## bool
 //! Allows efficent storage of a true or false value.  The value is stored as a single byte that is set to either 1 or 0.
@@ -610,6 +611,7 @@
 //! ```
 //! 
 //! More Details:
+//! - [Using Bool data type](../pointer/bool/index.html)
 //! 
 //! ## decimal
 //! Allows you to store fixed point decimal numbers.  The number of decimal places must be declared in the schema as `exp` property and will be used for every value.
@@ -641,7 +643,7 @@
 //! ```
 //! 
 //! More Details:
-//! - [Using NP_Dec data type](../pointer/dec/struct.NP_Dec.html)
+//! - [Using NP_Dec data type](../pointer/dec/index.html)
 //! 
 //! ## geo4, ge8, geo16
 //! Allows you to store geographic coordinates with varying levels of accuracy and space usage.  
@@ -676,7 +678,7 @@
 //! ```
 //! 
 //! More Details:
-//! - [Using NP_Geo data type](../pointer/geo/struct.NP_Geo.html)
+//! - [Using NP_Geo data type](../pointer/geo/index.html)
 //! 
 //! ## ulid
 //! Allows you to store a unique ID with a timestamp.  The timestamp is stored in milliseconds since the unix epoch.
@@ -696,7 +698,7 @@
 //! ```
 //! 
 //! More Details:
-//! - [Using NP_ULID data type](../pointer/ulid/struct.NP_ULID.html)
+//! - [Using NP_ULID data type](../pointer/ulid/index.html)
 //! 
 //! ## uuid
 //! Allows you to store a universally unique ID.
@@ -716,7 +718,7 @@
 //! ```
 //! 
 //! More Details:
-//! - [Using NP_UUID data type](../pointer/uuid/struct.NP_UUID.html)
+//! - [Using NP_UUID data type](../pointer/uuid/index.html)
 //! 
 //! ## date
 //! Allows you to store a timestamp as a u64 value.  This is just a thin wrapper around the u64 type.
@@ -744,7 +746,7 @@
 //! ```
 //! 
 //! More Details:
-//! - [Using NP_Date data type](../pointer/date/struct.NP_Date.html)
+//! - [Using NP_Date data type](../pointer/date/index.html)
 //!  
 //! ## portal
 //! Portals allow types/schemas to be "teleported" from one part of a schema to another.
@@ -799,6 +801,8 @@
 //! 
 //! Even though structs are the only type used in the examples above, the `portal` type will work with any collection type.
 //! 
+//! More Details:
+//! - [Using Portal data type](../pointer/portal/index.html)
 //! 
 //! ## Next Step
 //! 
@@ -900,10 +904,12 @@ impl NP_TypeKeys {
 }
 
 /// Schema Address (usize alias)
+#[doc(hidden)]
 pub type NP_Schema_Addr = usize;
 
 #[derive(Debug, Clone, Eq, PartialEq, Copy)]
 #[repr(u8)]
+#[doc(hidden)]
 #[allow(missing_docs)]
 pub enum String_Case {
     None = 0,
@@ -919,6 +925,7 @@ impl From<u8> for String_Case {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Copy)]
+#[doc(hidden)]
 #[allow(missing_docs)]
 pub enum NP_Value_Kind {
     Pointer,
@@ -926,6 +933,7 @@ pub enum NP_Value_Kind {
 }
 
 #[allow(missing_docs)]
+#[doc(hidden)]
 #[derive(Debug, Clone, PartialEq)]
 pub struct NP_Struct_Field {
     pub idx: u8,
@@ -935,6 +943,7 @@ pub struct NP_Struct_Field {
 }
 
 #[allow(missing_docs)]
+#[doc(hidden)]
 #[derive(Debug, Clone, PartialEq)]
 pub struct NP_Tuple_Field {
     pub schema: usize,
@@ -944,9 +953,11 @@ pub struct NP_Tuple_Field {
 }
 
 /// NULL pointer value
+#[doc(hidden)]
 pub static NULL: fn() -> *const u8 = || { 0x0 as *const u8 };
 
 #[allow(missing_docs)]
+#[doc(hidden)]
 #[derive(Debug, Clone)]
 pub struct NP_Parsed_Schema {
     pub val: NP_Value_Kind, 
@@ -954,38 +965,6 @@ pub struct NP_Parsed_Schema {
     pub i: NP_TypeKeys, 
     pub data: Arc<*const u8>
 }
-
-// #[allow(missing_docs)]
-// #[derive(Debug, Clone, PartialEq)]
-// pub enum NP_Schema_Data {
-//     None       ,
-//     Any        ,
-//     Uuid       ,
-//     Ulid       ,
-//     UTF8String { default: Option<String>, size: u16, case: String_Case },
-//     Bytes      { default: Option<Vec<u8>>, size: u16 },
-//     Int8       { default: Option<i8> },
-//     Int16      { default: Option<i16> },
-//     Int32      { default: Option<i32> },
-//     Int64      { default: Option<i64> },
-//     Uint8      { default: Option<u8> },
-//     Uint16     { default: Option<u16> },
-//     Uint32     { default: Option<u32> },
-//     Uint64     { default: Option<u64> },
-//     Float      { default: Option<f32> },
-//     Double     { default: Option<f64> },
-//     Decimal    { default: Option<NP_Dec>, exp: u8 },
-//     Boolean    { default: Option<bool> },
-//     Geo        { default: Option<NP_Geo>, size: u8 },
-//     Date       { default: Option<NP_Date> },
-//     Enum       { default: Option<NP_Enum>, choices: Vec<NP_Enum> },
-//     Struct     { fields: Vec<NP_Struct_Field>, empty: Vec<u8> },
-//     Map        { value: NP_Schema_Addr}, 
-//     List       { of: NP_Schema_Addr },
-//     Tuple      { values: Vec<NP_Tuple_Field>, empty: Vec<u8>},
-//     Portal     { path: String, schema: usize, parent_schema: usize },
-//     Union      { types: Vec<(u8, String, NP_Schema_Addr)>, default: usize },
-// }
 
 impl Default for NP_Parsed_Schema {
     fn default() -> Self {
@@ -999,72 +978,84 @@ impl Default for NP_Parsed_Schema {
 }
 
 #[allow(missing_docs)]
+#[doc(hidden)]
 #[derive(Debug, Clone)]
 pub struct NP_u8_Data {
     pub default: Option<u8>
 }
 
 #[allow(missing_docs)]
+#[doc(hidden)]
 #[derive(Debug, Clone)]
 pub struct NP_u16_Data {
     pub default: Option<u16>
 }
 
 #[allow(missing_docs)]
+#[doc(hidden)]
 #[derive(Debug, Clone)]
 pub struct NP_u32_Data {
     pub default: Option<u32>
 }
 
 #[allow(missing_docs)]
+#[doc(hidden)]
 #[derive(Debug, Clone)]
 pub struct NP_u64_Data {
     pub default: Option<u64>
 }
 
 #[allow(missing_docs)]
+#[doc(hidden)]
 #[derive(Debug, Clone)]
 pub struct NP_i8_Data {
     pub default: Option<i8>
 }
 
 #[allow(missing_docs)]
+#[doc(hidden)]
 #[derive(Debug, Clone)]
 pub struct NP_i16_Data {
     pub default: Option<i16>
 }
 
 #[allow(missing_docs)]
+#[doc(hidden)]
 #[derive(Debug, Clone)]
 pub struct NP_i32_Data {
     pub default: Option<i32>
 }
 
 #[allow(missing_docs)]
+#[doc(hidden)]
 #[derive(Debug, Clone)]
 pub struct NP_i64_Data {
     pub default: Option<i64>
 }
 
 #[allow(missing_docs)]
+#[doc(hidden)]
 #[derive(Debug, Clone)]
 pub struct NP_f32_Data {
     pub default: Option<f32>
 }
 
 #[allow(missing_docs)]
+#[doc(hidden)]
 #[derive(Debug, Clone)]
 pub struct NP_f64_Data {
     pub default: Option<f64>
 }
 
 #[allow(missing_docs)]
+#[doc(hidden)]
 #[derive(Debug, Clone)]
 pub struct NP_Bool_Data {
     pub default: Option<bool>
 }
 
 #[allow(missing_docs)]
+#[doc(hidden)]
 #[derive(Debug, Clone)]
 pub struct NP_String_Data {
     pub default: Option<String>,
@@ -1074,6 +1065,7 @@ pub struct NP_String_Data {
 }
 
 #[allow(missing_docs)]
+#[doc(hidden)]
 #[derive(Debug, Clone)]
 pub struct NP_Bytes_Data {
     pub default: Option<Vec<u8>>,
@@ -1081,6 +1073,7 @@ pub struct NP_Bytes_Data {
 }
 
 #[allow(missing_docs)]
+#[doc(hidden)]
 #[derive(Debug, Clone)]
 pub struct NP_Geo_Data {
     pub default: Option<NP_Geo>,
@@ -1088,6 +1081,7 @@ pub struct NP_Geo_Data {
 }
 
 #[allow(missing_docs)]
+#[doc(hidden)]
 #[derive(Debug, Clone)]
 pub struct NP_Dec_Data {
     pub default: Option<NP_Dec>,
@@ -1095,6 +1089,7 @@ pub struct NP_Dec_Data {
 }
 
 #[allow(missing_docs)]
+#[doc(hidden)]
 #[derive(Debug, Clone)]
 pub struct NP_Enum_Data {
     pub default: Option<NP_Enum>,
@@ -1102,6 +1097,7 @@ pub struct NP_Enum_Data {
 }
 
 #[allow(missing_docs)]
+#[doc(hidden)]
 #[derive(Debug, Clone)]
 pub struct NP_Struct_Data {
     pub fields: Vec<NP_Struct_Field>, 
@@ -1109,12 +1105,14 @@ pub struct NP_Struct_Data {
 }
 
 #[allow(missing_docs)]
+#[doc(hidden)]
 #[derive(Debug, Clone)]
 pub struct NP_Map_List_Data {
     pub child: usize
 }
 
 #[allow(missing_docs)]
+#[doc(hidden)]
 #[derive(Debug, Clone)]
 pub struct NP_Tuple_Data {
     pub values: Vec<NP_Tuple_Field>, 
@@ -1122,6 +1120,7 @@ pub struct NP_Tuple_Data {
 }
 
 #[allow(missing_docs)]
+#[doc(hidden)]
 #[derive(Debug, Clone)]
 pub struct NP_Portal_Data {
     pub path: String, 
@@ -1252,65 +1251,6 @@ impl Drop for NP_Parsed_Schema {
         }
     }
 }
-
-// /// When a schema is parsed from JSON or Bytes, it is stored in this recursive type
-// /// 
-// #[allow(missing_docs)]
-// #[derive(Debug, Clone)]
-// pub enum NP_Parsed_Schema {
-//     None,
-//     Any        { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys },
-//     UTF8String { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<String>, size: u16, case: String_Case },
-//     Bytes      { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<Vec<u8>>, size: u16 },
-//     Int8       { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<i8> },
-//     Int16      { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<i16> },
-//     Int32      { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<i32> },
-//     Int64      { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<i64> },
-//     Uint8      { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<u8> },
-//     Uint16     { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<u16> },
-//     Uint32     { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<u32> },
-//     Uint64     { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<u64> },
-//     Float      { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<f32> },
-//     Double     { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<f64> },
-//     Decimal    { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<NP_Dec>, exp: u8 },
-//     Boolean    { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<bool> },
-//     Geo        { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<NP_Geo>, size: u8 },
-//     Date       { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<NP_Date> },
-//     Enum       { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, default: Option<NP_Enum>, choices: Vec<NP_Enum> },
-//     Uuid       { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys },
-//     Ulid       { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys },
-//     Struct     { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, fields: Vec<NP_Struct_Field>, empty: Vec<u8> },
-//     Map        { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, value: NP_Schema_Addr}, 
-//     List       { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, of: NP_Schema_Addr },
-//     Tuple      { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, values: Vec<NP_Tuple_Field>, empty: Vec<u8>},
-//     Portal     { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, path: String, schema: usize, parent_schema: usize },
-//     Union      { val: NP_Value_Kind, sortable: bool, i:NP_TypeKeys, types: Vec<(u8, String, NP_Schema_Addr)>, default: usize },
-// }
-
-// impl NP_Parsed_Schema {
-
-//     /// Get the type key for this schema
-//     pub fn get_offset(&self) -> &NP_Value_Kind {
-//         &self.val
-//     }
-
-//     /// Get the type key for this schema
-//     pub fn get_type_key(&self) -> &NP_TypeKeys {
-//         &self.i
-//     }
-
-//     /// Get the type data fo a given schema value
-//     pub fn get_type_data(&self) -> (&str, NP_TypeKeys) {
-//         self.i.into_type_idx()
-//     }
-
-//     /// Return if this schema is sortable
-//     pub fn is_sortable(&self) -> bool {
-//         self.sortable
-//     }
-// }
-
-
 
 /// New NP Schema
 #[doc(hidden)]

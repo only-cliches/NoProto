@@ -49,10 +49,7 @@
 //! use no_proto::NP_Factory;
 //! use no_proto::pointer::dec::NP_Dec;
 //! 
-//! let factory: NP_Factory = NP_Factory::new_json(r#"{
-//!    "type": "dec",
-//!    "exp": 2
-//! }"#)?;
+//! let factory: NP_Factory = NP_Factory::new("dec({exp: 2})")?;
 //!
 //! let mut new_buffer = factory.new_buffer(None);
 //! new_buffer.set(&[], NP_Dec::new(50283, 2))?;

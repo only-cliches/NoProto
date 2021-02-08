@@ -29,7 +29,6 @@ impl<'table> NP_Struct<'table> {
     
     #[inline(always)]
     pub fn select<M: NP_Memory>(mut table_cursor: NP_Cursor, schema: &NP_Parsed_Schema,  key: &str, make_path: bool, schema_query: bool, memory: &M) -> Result<Option<NP_Cursor>, NP_Error> {   
-    // pub fn select<M: NP_Memory>(mut table_cursor: NP_Cursor, _empty: &Vec<u8>, fields: &Vec<NP_Struct_Field>,  key: &str, make_path: bool, schema_query: bool, memory: &M) -> Result<Option<NP_Cursor>, NP_Error> {
         
         let data = unsafe { &*(*schema.data as *const NP_Struct_Data) };
 

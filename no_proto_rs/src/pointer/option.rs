@@ -5,10 +5,7 @@
 //! use no_proto::NP_Factory;
 //! use no_proto::pointer::option::NP_Enum;
 //! 
-//! let factory: NP_Factory = NP_Factory::new_json(r#"{
-//!    "type": "option",
-//!    "choices": ["red", "green", "blue"]
-//! }"#)?;
+//! let factory: NP_Factory = NP_Factory::new(r#"enum({choices: ["red", "green", "blue"] })"#)?;
 //!
 //! let mut new_buffer = factory.new_buffer(None);
 //! new_buffer.set(&[], NP_Enum::new("green"))?;

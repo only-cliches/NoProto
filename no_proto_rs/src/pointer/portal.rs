@@ -1,4 +1,54 @@
-//! Clone type for recursive or duplicating data types.
+//! Clone type for recursion or duplicating data types.
+//! 
+//! Portal types allow you to teleport a type from one part of a schema to another.
+//! 
+//! This is useful for recursive types or if you'd like one type to be duplicated into multiple fields.
+//! 
+//! ```
+//! use no_proto::error::NP_Error;
+//! use no_proto::NP_Factory;
+//! 
+//! // use portal to duplicate type
+//! let factory: NP_Factory = NP_Factory::new(r#"struct({fields: {
+//!     point1: struct({fields: { x: i32(), y: i32() }}),
+//!     point2: portal({ to: "point1" }) // point2 is a "clone" of point1
+//! }})"#)?;
+//!
+//! let mut new_buffer = factory.new_buffer(None);
+//! new_buffer.set(&["point1", "x"], 200i32)?;
+//! new_buffer.set(&["point1", "y"], 100i32)?;
+//! 
+//! // point2 can be treated just like point1
+//! new_buffer.set(&["point2", "x"], 250i32)?;
+//! new_buffer.set(&["point2", "y"], 150i32)?;
+//! 
+//! assert_eq!(new_buffer.get::<i32>(&["point1", "x"])?, Some(200i32));
+//! assert_eq!(new_buffer.get::<i32>(&["point1", "y"])?, Some(100i32));
+//! 
+//! assert_eq!(new_buffer.get::<i32>(&["point2", "x"])?, Some(250i32));
+//! assert_eq!(new_buffer.get::<i32>(&["point2", "y"])?, Some(150i32));
+//! 
+//! // use portal for recursive type
+//! let factory: NP_Factory = NP_Factory::new(r#"struct({fields: {
+//!     node: u32(),
+//!     child: portal({ to: "" }) // child is a clone of the root object
+//! }})"#)?;
+//! 
+//! let mut new_buffer = factory.new_buffer(None);
+//! new_buffer.set(&["node"], 1u32)?;
+//! new_buffer.set(&["child", "node"], 2u32)?;
+//! new_buffer.set(&["child", "child", "node"], 3u32)?;
+//! new_buffer.set(&["child", "child", "child", "node"], 4u32)?;
+//! 
+//! assert_eq!(Some(1u32), new_buffer.get(&["node"])?);
+//! assert_eq!(Some(2u32), new_buffer.get(&["child", "node"])?);
+//! assert_eq!(Some(3u32), new_buffer.get(&["child", "child", "node"])?);
+//! assert_eq!(Some(4u32), new_buffer.get(&["child", "child", "child", "node"])?);
+//!
+//! # Ok::<(), NP_Error>(()) 
+//! ```
+//! 
+//! 
 //! 
 
 use crate::{idl::{JS_AST, JS_Schema}, memory::NP_Memory, schema::{NP_Parsed_Schema, NP_Portal_Data, NP_Value_Kind}};

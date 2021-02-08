@@ -324,7 +324,7 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
     /// use no_proto::NP_Size_Data;
     /// 
     /// // a list where each item is a map where each key has a value containing a list of strings
-    /// let factory: NP_Factory = NP_Factory::new(r#"list({of: map({value: list({of: string()})})})"#)?;
+    /// let factory: NP_Factory = NP_Factory::new(r#"list({of: map({ value: list({ of: string() })})})"#)?;
     /// 
     /// let mut new_buffer = factory.new_buffer(None);
     /// // third item in the top level list -> key "alpha" of map at 3rd element -> 9th element of list at "alpha" key
@@ -704,9 +704,7 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
     /// use no_proto::NP_Factory;
     /// use no_proto::NP_Size_Data;
     /// 
-    /// let factory: NP_Factory = NP_Factory::new_json(r#"{
-    ///    "type": "string"
-    /// }"#)?;
+    /// let factory: NP_Factory = NP_Factory::new("string()")?;
     /// 
     /// let mut new_buffer = factory.new_buffer(None);
     /// // set initial value
@@ -723,10 +721,7 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
     /// use no_proto::NP_Factory;
     /// use no_proto::NP_Size_Data;
     /// 
-    /// let factory: NP_Factory = NP_Factory::new_json(r#"{
-    ///    "type": "list",
-    ///     "of": {"type": "string"}
-    /// }"#)?;
+    /// let factory: NP_Factory = NP_Factory::new("list({ of: string() })")?;
     /// 
     /// let mut new_buffer = factory.new_buffer(None);
     /// // set value at 9th index
@@ -743,13 +738,12 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
     /// use no_proto::NP_Factory;
     /// use no_proto::NP_Size_Data;
     /// 
-    /// let factory: NP_Factory = NP_Factory::new_json(r#"{
-    ///    "type": "struct",
-    ///    "fields": [
-    ///         ["age", {"type": "u8"}],
-    ///         ["name", {"type": "string"}]
-    ///     ]
-    /// }"#)?;
+    /// let factory: NP_Factory = NP_Factory::new(r#"
+    ///     struct({fields: {
+    ///         age: u8(),
+    ///         name: string()
+    ///     }})
+    /// "#)?;
     /// 
     /// let mut new_buffer = factory.new_buffer(None);
     /// // get length of value at root (Table)
@@ -764,10 +758,7 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
     /// use no_proto::NP_Factory;
     /// use no_proto::NP_Size_Data;
     /// 
-    /// let factory: NP_Factory = NP_Factory::new_json(r#"{
-    ///    "type": "map",
-    ///    "value": {"type": "string"}
-    /// }"#)?;
+    /// let factory: NP_Factory = NP_Factory::new("map({value: string() })")?;
     /// 
     /// let mut new_buffer = factory.new_buffer(None);
     /// // set values
@@ -785,13 +776,7 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
     /// use no_proto::NP_Factory;
     /// use no_proto::NP_Size_Data;
     /// 
-    /// let factory: NP_Factory = NP_Factory::new_json(r#"{
-    ///    "type": "tuple",
-    ///    "values": [
-    ///         {"type": "string"}, 
-    ///         {"type": "string"}
-    ///     ]
-    /// }"#)?;
+    /// let factory: NP_Factory = NP_Factory::new("tuple({values: [string(), string()]})")?;
     /// 
     /// let mut new_buffer = factory.new_buffer(None);
     /// // get length of value at root (Tuple)
@@ -901,10 +886,7 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
     /// use no_proto::NP_Factory;
     /// use no_proto::NP_Size_Data;
     /// 
-    /// let factory: NP_Factory = NP_Factory::new_json(r#"{
-    ///    "type": "list",
-    ///     "of": {"type": "string"}
-    /// }"#)?;
+    /// let factory: NP_Factory = NP_Factory::new("list({ of: string() })")?;
     /// 
     /// let mut new_buffer = factory.new_buffer(None);
     /// // set index 0
@@ -941,14 +923,7 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
     /// use no_proto::NP_Factory;
     /// use no_proto::schema::NP_TypeKeys;
     /// 
-    /// let factory: NP_Factory = NP_Factory::new_json(r#"{
-    ///    "type": "tuple",
-    ///    "values": [
-    ///         {"type": "geo8"},
-    ///         {"type": "dec", "exp": 2},
-    ///         {"type": "string"}
-    ///     ]
-    /// }"#)?;
+    /// let factory: NP_Factory = NP_Factory::new("tuple({values: [ geo8(), dec({exp: 2}), string() ]})")?;
     /// 
     /// let mut new_buffer = factory.new_buffer(None);
     /// 
@@ -985,13 +960,12 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
     /// use no_proto::pointer::geo::NP_Geo;
     /// 
     /// // a list where each item is a map where each key has a value containing a list of strings
-    /// let factory: NP_Factory = NP_Factory::new_json(r#"{
-    ///    "type": "tuple",
-    ///    "values": [
-    ///         {"type": "geo8"},
-    ///         {"type": "dec", "exp": 2}
-    ///     ]
-    /// }"#)?;
+    /// let factory: NP_Factory = NP_Factory::new(r#"
+    ///     tuple({values: [
+    ///         geo8(),
+    ///         dec({exp: 2})
+    ///     ]})
+    /// "#)?;
     /// 
     /// let mut new_buffer = factory.new_buffer(None);
     /// // Get an empty NP_Geo type that has the correct resolution for the schema
@@ -1038,12 +1012,7 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
     /// use no_proto::NP_Size_Data;
     /// 
     /// // a list where each item is a map where each key has a value containing a list of strings
-    /// let factory: NP_Factory = NP_Factory::new_json(r#"{
-    ///    "type": "list",
-    ///    "of": {"type": "map", "value": {
-    ///         "type": "list", "of": {"type": "string"}
-    ///     }}
-    /// }"#)?;
+    /// let factory: NP_Factory = NP_Factory::new(r#"list({of: map({ value: list({of: string() }) })})"#)?;
     /// 
     /// let mut new_buffer = factory.new_buffer(None);
     /// // third item in the top level list -> key "alpha" of map at 3rd element -> 9th element of list at "alpha" key
@@ -1108,9 +1077,7 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
     /// use no_proto::NP_Factory;
     /// use no_proto::NP_Size_Data;
     /// 
-    /// let factory: NP_Factory = NP_Factory::new_json(r#"{
-    ///    "type": "string"
-    /// }"#)?;
+    /// let factory: NP_Factory = NP_Factory::new("string()")?;
     /// 
     /// let mut new_buffer = factory.new_buffer(None);
     /// // set initial value
@@ -1179,9 +1146,7 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
     /// use no_proto::NP_Factory;
     /// use no_proto::NP_Size_Data;
     /// 
-    /// let factory: NP_Factory = NP_Factory::new_json(r#"{
-    ///    "type": "string"
-    /// }"#)?;
+    /// let factory: NP_Factory = NP_Factory::new("string()")?;
     /// 
     /// let mut new_buffer = factory.new_buffer(None);
     /// // set initial value
@@ -1299,9 +1264,7 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
     /// use no_proto::NP_Factory;
     /// use no_proto::NP_Size_Data;
     /// 
-    /// let factory: NP_Factory = NP_Factory::new_json(r#"{
-    ///    "type": "string"
-    /// }"#)?;
+    /// let factory: NP_Factory = NP_Factory::new("string()")?;
     /// 
     /// let mut new_buffer = factory.new_buffer(None);
     /// new_buffer.set(&[], "hello")?;
