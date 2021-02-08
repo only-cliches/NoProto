@@ -14,18 +14,18 @@ use alloc::borrow::ToOwned;
 #[doc(hidden)]
 #[allow(missing_docs)]
 pub struct NP_Map_Bytes {
-    head: [u8; 2]
+    head: [u8; 4]
 }
 
 #[allow(missing_docs)]
 impl NP_Map_Bytes {
     #[inline(always)]
-    pub fn set_head(&mut self, head: u16) {
+    pub fn set_head(&mut self, head: u32) {
         self.head = head.to_be_bytes();
     }
     #[inline(always)]
-    pub fn get_head(&self) -> u16 {
-        u16::from_be_bytes(self.head)
+    pub fn get_head(&self) -> u32 {
+        u32::from_be_bytes(self.head)
     }
 }
 
@@ -128,7 +128,7 @@ impl<'map> NP_Map<'map> {
     #[inline(always)]
     pub fn step_iter<M: NP_Memory>(&mut self, memory: &'map M) -> Option<(&'map str, NP_Cursor)> {
 
-        if self.count > 260 {
+        if self.count > u16::MAX as usize {
             return None;
         }
         
@@ -177,21 +177,21 @@ impl<'map> NP_Map<'map> {
 
         let map_value = || { map_cursor.get_value(memory) };
 
-        let new_cursor_addr = memory.malloc_borrow(&[0u8; 6])?;
+        let new_cursor_addr = memory.malloc_borrow(&[0u8; 12])?;
         let new_cursor = NP_Cursor::new(new_cursor_addr, value_of, map_cursor.schema_addr);
 
         // set key
         let key_item_addr = memory.malloc_borrow(&[key.len() as u8])?;
         memory.malloc_borrow(key.as_bytes())?;
-        new_cursor.get_value_mut(memory).set_key_addr(key_item_addr as u16);
+        new_cursor.get_value_mut(memory).set_key_addr(key_item_addr as u32);
 
         let head = map_value().get_addr_value() as usize;
 
         // Set head of map to new cursor
-        map_cursor.get_value_mut(memory).set_addr_value(new_cursor_addr as u16);
+        map_cursor.get_value_mut(memory).set_addr_value(new_cursor_addr as u32);
 
         if head != 0 { // set new cursors NEXT to old HEAD
-            new_cursor.get_value_mut(memory).set_next_addr(head as u16);
+            new_cursor.get_value_mut(memory).set_next_addr(head as u32);
         }
 
         Ok(new_cursor)
@@ -426,10 +426,10 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     buffer.set(&["name"], "hello, world")?;
     assert_eq!(buffer.get::<&str>(&["name"])?, Some("hello, world"));
     assert_eq!(buffer.calc_bytes()?.after_compaction, buffer.calc_bytes()?.current_buffer);
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 29usize);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 39usize);
     buffer.del(&[])?;
     buffer.compact(None)?;
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 6usize);
 
     // values are preserved through compaction
     let mut buffer = factory.new_buffer(None);
@@ -437,11 +437,11 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     buffer.set(&["name2"], "hello, world2")?;
     assert_eq!(buffer.get::<&str>(&["name"])?, Some("hello, world"));
     assert_eq!(buffer.get::<&str>(&["name2"])?, Some("hello, world2"));
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 56usize);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 74usize);
     buffer.compact(None)?;
     assert_eq!(buffer.get::<&str>(&["name"])?, Some("hello, world"));
     assert_eq!(buffer.get::<&str>(&["name2"])?, Some("hello, world2"));
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 56usize);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 74usize);
 
     buffer.set_with_json(&[], r#"{"value": {"foo": "bar", "foo2": "bar2"}}"#)?;
     assert_eq!(buffer.get::<&str>(&["foo"])?, Some("bar"));

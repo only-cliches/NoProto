@@ -173,7 +173,7 @@ impl<'value> NP_Value<'value> for NP_Bytes {
         schema_data.push(NP_TypeKeys::Bytes as u8);
 
         let mut has_fixed_size = false;
-        let mut size = 0u16;
+        let mut size = 0u32;
 
         let mut default: Option<Vec<u8>> = Option::None;
 
@@ -185,7 +185,7 @@ impl<'value> NP_Value<'value> for NP_Bytes {
                             "size" => {
                                 match value {
                                     JS_AST::number { addr } => {
-                                        match idl.get_str(addr).trim().parse::<u16>() {
+                                        match idl.get_str(addr).trim().parse::<u32>() {
                                             Ok(x) => {
                                                 size = x;
                                                 has_fixed_size = true;
@@ -231,7 +231,7 @@ impl<'value> NP_Value<'value> for NP_Bytes {
         if has_fixed_size {
             schema_data.extend_from_slice(&size.to_be_bytes());
         } else {
-            schema_data.extend_from_slice(&0u16.to_be_bytes());
+            schema_data.extend_from_slice(&0u32.to_be_bytes());
         }
 
         if let Some(x) = &default {
@@ -342,10 +342,10 @@ impl<'value> NP_Value<'value> for NP_Bytes {
         }
 
         // dynamic size
-        let bytes_size: usize = u16::from_be_bytes(*memory.get_2_bytes(value_addr).unwrap_or(&[0; 2])) as usize;
+        let bytes_size: usize = u32::from_be_bytes(*memory.get_4_bytes(value_addr).unwrap_or(&[0; 4])) as usize;
 
         // return total size of this string plus length
-        return Ok(bytes_size + 2);
+        return Ok(bytes_size + 4);
         
     }
 
@@ -362,26 +362,26 @@ impl<'value> NP_Value<'value> for NP_Bytes {
                 if x < 1 {
                     return Err(NP_Error::new("Fixed size for bytes must be larger than 1!"));
                 }
-                if x > u16::MAX.into() {
-                    return Err(NP_Error::new("Fixed size for bytes cannot be larger than 2^16!"));
+                if x > u32::MAX.into() {
+                    return Err(NP_Error::new("Fixed size for bytes cannot be larger than 2^32!"));
                 }
-                schema_data.extend((x as u16).to_be_bytes().to_vec());
-                x as u16
+                schema_data.extend((x as u32).to_be_bytes().to_vec());
+                x as u32
             },
             NP_JSON::Float(x) => {
                 has_fixed_size = true;
                 if x < 1.0 {
                     return Err(NP_Error::new("Fixed size for bytes must be larger than 1!"));
                 }
-                if x > u16::MAX.into() {
-                    return Err(NP_Error::new("Fixed size for bytes cannot be larger than 2^16!"));
+                if x > u32::MAX.into() {
+                    return Err(NP_Error::new("Fixed size for bytes cannot be larger than 2^32!"));
                 }
 
-                schema_data.extend((x as u16).to_be_bytes().to_vec());
-                x as u16
+                schema_data.extend((x as u32).to_be_bytes().to_vec());
+                x as u32
             },
             _ => {
-                schema_data.extend(0u16.to_be_bytes().to_vec());
+                schema_data.extend(0u32.to_be_bytes().to_vec());
                 0
             }
         };
@@ -423,15 +423,17 @@ impl<'value> NP_Value<'value> for NP_Bytes {
 
     fn from_bytes_to_schema(mut schema: Vec<NP_Parsed_Schema>, address: usize, bytes: &[u8]) -> (bool, Vec<NP_Parsed_Schema>) {
         // fixed size
-        let fixed_size = u16::from_be_bytes([
+        let fixed_size = u32::from_be_bytes([
             bytes[address + 1],
-            bytes[address + 2]
+            bytes[address + 2],
+            bytes[address + 3],
+            bytes[address + 4]
         ]);
 
         // default value size
         let default_size = u16::from_be_bytes([
-            bytes[address + 3],
-            bytes[address + 4]
+            bytes[address + 5],
+            bytes[address + 6]
         ]) as usize;
 
         if default_size == 0 {
@@ -446,7 +448,7 @@ impl<'value> NP_Value<'value> for NP_Bytes {
                 data: Arc::new(Box::into_raw(Box::new(NP_Bytes_Data { size: fixed_size, default: None })) as *const u8)
             });
         } else {
-            let default_bytes = &bytes[(address + 5)..(address + 5 + (default_size - 1))];
+            let default_bytes = &bytes[(address + 7)..(address + 7 + (default_size - 1))];
 
             schema.push(NP_Parsed_Schema {
                 val: if fixed_size > 0 {
@@ -542,7 +544,7 @@ impl<'value> NP_Value<'value> for NP_Borrow_Bytes<'value> {
                 }
     
                 let new_addr = memory.malloc(empty_bytes)? as usize;
-                cursor.get_value_mut(memory).set_addr_value(new_addr as u16);
+                cursor.get_value_mut(memory).set_addr_value(new_addr as u32);
             }
 
             let addr = c_value().get_addr_value() as usize;
@@ -566,8 +568,8 @@ impl<'value> NP_Value<'value> for NP_Borrow_Bytes<'value> {
         let addr_value = c_value().get_addr_value() as usize;
     
         let prev_size: usize = if addr_value != 0 {
-            let size_bytes: &[u8; 2] = memory.get_2_bytes(addr_value).unwrap_or(&[0; 2]);
-            u16::from_be_bytes(*size_bytes) as usize
+            let size_bytes: &[u8; 4] = memory.get_4_bytes(addr_value).unwrap_or(&[0; 4]);
+            u32::from_be_bytes(*size_bytes) as usize
         } else {
             0 as usize
         };
@@ -576,7 +578,7 @@ impl<'value> NP_Value<'value> for NP_Borrow_Bytes<'value> {
             // previous string is larger than this one, use existing memory
     
             // update string length in buffer
-            if str_size > core::u16::MAX as usize {
+            if str_size > core::u32::MAX as usize {
                 return Err(NP_Error::new("String too large!"));
             }
             let size_bytes = (str_size as u16).to_be_bytes();
@@ -585,7 +587,7 @@ impl<'value> NP_Value<'value> for NP_Borrow_Bytes<'value> {
                 write_bytes[(addr_value + x)] = size_bytes[x];
             }
     
-            let offset = 2;
+            let offset = 4;
     
             // set bytes
             for x in 0..bytes.len() {
@@ -598,14 +600,14 @@ impl<'value> NP_Value<'value> for NP_Borrow_Bytes<'value> {
     
             // first bytes are string length
             let new_addr = {
-                if str_size > core::u16::MAX as usize {
-                    return Err(NP_Error::new("String too large!"));
+                if str_size > core::u32::MAX as usize {
+                    return Err(NP_Error::new("Bytes too large!"));
                 }
-                let size_bytes = (str_size as u16).to_be_bytes();
+                let size_bytes = (str_size as u32).to_be_bytes();
                 memory.malloc_borrow(&size_bytes)?
             };
     
-            cursor.get_value_mut(memory).set_addr_value(new_addr as u16);
+            cursor.get_value_mut(memory).set_addr_value(new_addr as u32);
     
             memory.malloc_borrow(bytes)?;
     
@@ -637,10 +639,10 @@ impl<'value> NP_Value<'value> for NP_Borrow_Bytes<'value> {
             // dynamic size
             // get size of bytes
 
-            let bytes_size: usize = u16::from_be_bytes(*memory.get_2_bytes(value_addr).unwrap_or(&[0; 2])) as usize;
+            let bytes_size: usize = u32::from_be_bytes(*memory.get_4_bytes(value_addr).unwrap_or(&[0; 4])) as usize;
 
             // get bytes
-            let bytes = &memory.read_bytes()[(value_addr + 2)..(value_addr + 2 + bytes_size)];
+            let bytes = &memory.read_bytes()[(value_addr + 4)..(value_addr + 4 + bytes_size)];
 
             return Ok(Some(bytes));
         }
@@ -743,7 +745,7 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     assert_eq!(buffer.get::<&[u8]>(&[])?, None);
 
     buffer.compact(None)?;
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 6usize);
 
     Ok(())
 }

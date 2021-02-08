@@ -181,7 +181,7 @@ impl<'value> NP_Value<'value> for NP_Enum {
         } else { // new value
 
             addr_value = memory.malloc_borrow(&[bytes])?;
-            cursor.get_value_mut(memory).set_addr_value(addr_value as u16);
+            cursor.get_value_mut(memory).set_addr_value(addr_value as u32);
 
             return Ok(cursor);
         }     
@@ -581,7 +581,7 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     assert_eq!(buffer.get::<NP_Enum>(&[])?, None);
 
     buffer.compact(None)?;
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 6usize);
 
     Ok(())
 }

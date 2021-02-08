@@ -161,13 +161,13 @@
 //! 
 //! | Schema Type                            | Rust Type                                                                | Zero Copy Type   |Bytewise Sorting  | Bytes (Size)    | Limits / Notes                                                           |
 //! |----------------------------------------|--------------------------------------------------------------------------|------------------|------------------|-----------------|--------------------------------------------------------------------------|
-//! | [`struct`](#struct)                    | [`NP_Struct`](../collection/table/struct.NP_Struct.html)                 | -                |𐄂                 | 2 bytes - ~64Kb | Set of vtables with up to 255 named fields.                             |
-//! | [`list`](#list)                        | [`NP_List`](../collection/list/struct.NP_List.html)                      | -                |𐄂                 | 4 bytes - ~64Kb | Linked list with integer indexed values and  up to 255 items.            |
-//! | [`map`](#map)                          | [`NP_Map`](../collection/map/struct.NP_Map.html)                         | -                |𐄂                 | 2 bytes - ~64Kb | Linked list with `&str` keys, up to 255 items.                           |
-//! | [`tuple`](#tuple)                      | [`NP_Tuple`](../collection/tuple/struct.NP_Tuple.html)                   | -                |✓ *               | 2 bytes - ~64Kb | Static sized collection of specific values.  Up to 255 values.           |
-//! | [`any`](#any)                          | [`NP_Any`](../pointer/any/struct.NP_Any.html)                            | -                |𐄂                 | 2 bytes - ~64Kb | Generic type.                                                            |
-//! | [`string`](#string)                    | [`String`](https://doc.rust-lang.org/std/string/struct.String.html)      | &str             |✓ **              | 2 bytes - ~64Kb | Utf-8 formatted string.                                                  |
-//! | [`bytes`](#bytes)                      | [`Vec<u8>`](https://doc.rust-lang.org/std/vec/struct.Vec.html)           | &[u8]            |✓ **              | 2 bytes - ~64Kb | Arbitrary bytes.                                                         |
+//! | [`struct`](#struct)                    | [`NP_Struct`](../collection/table/struct.NP_Struct.html)                 | -                |𐄂                 | 4 bytes - ~4GB  | Set of vtables with up to 255 named fields.                             |
+//! | [`list`](#list)                        | [`NP_List`](../collection/list/struct.NP_List.html)                      | -                |𐄂                 | 8 bytes - ~4GB  | Linked list with integer indexed values and  up to 255 items.            |
+//! | [`map`](#map)                          | [`NP_Map`](../collection/map/struct.NP_Map.html)                         | -                |𐄂                 | 4 bytes - ~4GB  | Linked list with `&str` keys, up to 255 items.                           |
+//! | [`tuple`](#tuple)                      | [`NP_Tuple`](../collection/tuple/struct.NP_Tuple.html)                   | -                |✓ *               | 4 bytes - ~4GB  | Static sized collection of specific values.  Up to 255 values.           |
+//! | [`any`](#any)                          | [`NP_Any`](../pointer/any/struct.NP_Any.html)                            | -                |𐄂                 | 2 bytes - ~4GB  | Generic type.                                                            |
+//! | [`string`](#string)                    | [`String`](https://doc.rust-lang.org/std/string/struct.String.html)      | &str             |✓ **              | 2 bytes - ~4GB  | Utf-8 formatted string.                                                  |
+//! | [`bytes`](#bytes)                      | [`Vec<u8>`](https://doc.rust-lang.org/std/vec/struct.Vec.html)           | &[u8]            |✓ **              | 2 bytes - ~4GB  | Arbitrary bytes.                                                         |
 //! | [`int8`](#int8-int16-int32-int64)      | [`i8`](https://doc.rust-lang.org/std/primitive.i8.html)                  | -                |✓                 | 1 byte          | -127 to 127                                                              |
 //! | [`int16`](#int8-int16-int32-int64)     | [`i16`](https://doc.rust-lang.org/std/primitive.i16.html)                | -                |✓                 | 2 bytes         | -32,768 to 32,768                                                        |
 //! | [`int32`](#int8-int16-int32-int64)     | [`i32`](https://doc.rust-lang.org/std/primitive.i32.html)                | -                |✓                 | 4 bytes         | -2,147,483,648 to 2,147,483,648                                          |
@@ -1059,7 +1059,7 @@ pub struct NP_Bool_Data {
 #[derive(Debug, Clone)]
 pub struct NP_String_Data {
     pub default: Option<String>,
-    pub size: u16,
+    pub size: u32,
     pub case: String_Case,
     pub empty: Vec<u8>
 }
@@ -1069,7 +1069,7 @@ pub struct NP_String_Data {
 #[derive(Debug, Clone)]
 pub struct NP_Bytes_Data {
     pub default: Option<Vec<u8>>,
-    pub size: u16
+    pub size: u32
 }
 
 #[allow(missing_docs)]

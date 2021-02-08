@@ -98,7 +98,7 @@ impl NP_Memory_Owned {
 
         Self {
             root,
-            max_size: u16::MAX as usize,
+            max_size: u32::MAX as usize,
             bytes: UnsafeCell::new(bytes),
             schema: schema
         }
@@ -114,11 +114,11 @@ impl NP_Memory_Owned {
         let mut new_bytes = Vec::with_capacity(use_size);
 
         // is_packed, size, root pointer
-        new_bytes.extend(&[0u8; 4]);
+        new_bytes.extend(&[0u8; 6]);
 
         Self {
             root,
-            max_size: u16::MAX as usize,
+            max_size: u32::MAX as usize,
             bytes: UnsafeCell::new(new_bytes),
             schema: schema
         }
@@ -136,11 +136,11 @@ impl<'memory> NP_Mem_New for NP_Memory_Owned {
         let mut new_bytes = Vec::with_capacity(use_size);
 
         // is_packed, size, root pointer
-        new_bytes.extend(&[0u8; 4]);
+        new_bytes.extend(&[0u8; 6]);
 
         Ok(Self {
             root: self.get_root(),
-            max_size: u16::MAX as usize,
+            max_size: u32::MAX as usize,
             bytes: UnsafeCell::new(new_bytes),
             schema: self.schema
         })
@@ -150,7 +150,7 @@ impl<'memory> NP_Mem_New for NP_Memory_Owned {
 impl<'memory> NP_Memory for NP_Memory_Owned {
 
     fn set_max_length(&mut self, len: usize) {
-        self.max_size = usize::min(u16::MAX as usize, len);
+        self.max_size = usize::min(u32::MAX as usize, len);
     }
 
     #[inline(always)]
@@ -363,7 +363,7 @@ impl<'memory> NP_Memory_Ref<'memory> {
 
         Self {
             root,
-            max_size: u16::MAX as usize,
+            max_size: u32::MAX as usize,
             bytes: bytes,
             schema: schema
         }
@@ -373,7 +373,7 @@ impl<'memory> NP_Memory_Ref<'memory> {
 impl<'memory> NP_Memory for NP_Memory_Ref<'memory> {
 
     fn set_max_length(&mut self, len: usize) {
-        self.max_size = usize::min(u16::MAX as usize, len);
+        self.max_size = usize::min(u32::MAX as usize, len);
     }
 
     #[inline(always)]
@@ -582,11 +582,11 @@ impl<'memory> NP_Mem_New for NP_Memory_Ref_Mut<'memory> {
         let mut new_bytes = Vec::with_capacity(use_size);
 
         // is_packed, size, root pointer
-        new_bytes.extend(&[0u8; 4]);
+        new_bytes.extend(&[0u8; 6]);
 
         Ok(Self {
             root: self.get_root(),
-            max_size: u16::MAX as usize,
+            max_size: u32::MAX as usize,
             bytes: UnsafeCell::new(Bytes_Ref::Owned { b: new_bytes }),
             kind: UnsafeCell::new(NP_Memory_Kind::Owned),
             schema: SchemaVec::Owned(self.get_schemas().clone())
@@ -602,8 +602,8 @@ impl<'memory> NP_Memory_Ref_Mut<'memory> {
 
         Self {
             root,
-            kind: UnsafeCell::new(NP_Memory_Kind::RefMut { len: 4 }),
-            max_size: u16::MAX as usize,
+            kind: UnsafeCell::new(NP_Memory_Kind::RefMut { len: 6 }),
+            max_size: u32::MAX as usize,
             bytes: UnsafeCell::new(Bytes_Ref::Value { b: bytes }),
             schema: SchemaVec::Borrowed(schema)
         }
@@ -614,7 +614,7 @@ impl<'memory> NP_Memory_Ref_Mut<'memory> {
         Self {
             root,
             kind: UnsafeCell::new(NP_Memory_Kind::RefMut { len }),
-            max_size: u16::MAX as usize,
+            max_size: u32::MAX as usize,
             bytes: UnsafeCell::new(Bytes_Ref::Value { b: bytes }),
             schema: SchemaVec::Borrowed(schema)
         }
@@ -630,10 +630,10 @@ impl<'memory> NP_Memory for NP_Memory_Ref_Mut<'memory> {
                 // 1. address space size (maximum limit, period)
                 // 2. The size of the ref mut buffer (also a hard limit)
                 // 3. The requested max length from the user
-                self.max_size = usize::min(u16::MAX as usize, usize::min(self.read_bytes().len(), len));
+                self.max_size = usize::min(u32::MAX as usize, usize::min(self.read_bytes().len(), len));
             },
             NP_Memory_Kind::Owned => {
-                self.max_size = usize::min(u16::MAX as usize, len);
+                self.max_size = usize::min(u32::MAX as usize, len);
             },
             _ => { } // unreachable
         }

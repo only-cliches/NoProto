@@ -44,12 +44,12 @@ use self::{date::NP_Date, geo::NP_Geo, option::NP_Enum, portal::NP_Portal, ulid:
 #[derive(Debug, Copy, Clone)]
 #[repr(C)]
 pub struct NP_Pointer_Scalar {
-    pub addr_value: [u8; 2]
+    pub addr_value: [u8; 4]
 }
 
 impl Default for NP_Pointer_Scalar {
     fn default() -> Self {
-        Self { addr_value: [0; 2] }
+        Self { addr_value: [0; 4] }
     }
 }
 
@@ -57,32 +57,32 @@ impl Default for NP_Pointer_Scalar {
 #[derive(Debug)]
 #[repr(C)]
 pub struct NP_Pointer_List_Item {
-    pub addr_value: [u8; 2],
-    pub next_value: [u8; 2],
-    pub index: u8
+    pub addr_value: [u8; 4],
+    pub next_value: [u8; 4],
+    pub index: [u8; 2]
 }
 
 #[doc(hidden)]
 #[derive(Debug)]
 #[repr(C)]
 pub struct NP_Pointer_Map_Item {
-    pub addr_value: [u8; 2],
-    pub next_value: [u8; 2],
-    pub key_addr: [u8; 2]
+    pub addr_value: [u8; 4],
+    pub next_value: [u8; 4],
+    pub key_addr: [u8; 4]
 }
 
 #[doc(hidden)]
 #[allow(missing_docs, unused_variables)]
 pub trait NP_Pointer_Bytes {
     fn get_type(&self) -> &str                                     { "" }
-    fn get_addr_value(&self) -> u16                                { 0 }
-    fn set_addr_value(&mut self, addr: u16)                        {   }
-    fn get_next_addr(&self) -> u16                                 { 0 }
-    fn set_next_addr(&mut self, addr: u16)                         {   }
-    fn set_index(&mut self, index: u8)                             {   }
-    fn get_index(&self) -> u8                                      { 0 }
-    fn set_key_addr(&mut self, hash: u16)                          {   }
-    fn get_key_addr(&self) -> u16                                  { 0 }
+    fn get_addr_value(&self) -> u32                                { 0 }
+    fn set_addr_value(&mut self, addr: u32)                        {   }
+    fn get_next_addr(&self) -> u32                                 { 0 }
+    fn set_next_addr(&mut self, addr: u32)                         {   }
+    fn set_index(&mut self, index: u16)                            {   }
+    fn get_index(&self) -> u16                                     { 0 }
+    fn set_key_addr(&mut self, hash: u32)                          {   }
+    fn get_key_addr(&self) -> u32                                  { 0 }
     fn reset(&mut self)                                            {   }
     fn get_size(&self) -> usize                                    { 0 }
     fn get_key<'key>(&self, memory: &'key dyn NP_Memory) -> &'key str  { "" }
@@ -92,51 +92,51 @@ pub trait NP_Pointer_Bytes {
 impl NP_Pointer_Bytes for NP_Pointer_Scalar {
     fn get_type(&self) -> &str { "Scalar" }
     #[inline(always)]
-    fn get_addr_value(&self) -> u16 { u16::from_be_bytes(self.addr_value) }
+    fn get_addr_value(&self) -> u32 { u32::from_be_bytes(self.addr_value) }
     #[inline(always)]
-    fn set_addr_value(&mut self, addr: u16) { self.addr_value = addr.to_be_bytes() }
+    fn set_addr_value(&mut self, addr: u32) { self.addr_value = addr.to_be_bytes() }
     #[inline(always)]
-    fn reset(&mut self) { self.addr_value = [0; 2]; }
+    fn reset(&mut self) { self.addr_value = [0; 4]; }
     #[inline(always)]
-    fn get_size(&self) -> usize { 2 }
+    fn get_size(&self) -> usize { 4 }
 }
 impl NP_Pointer_Bytes for NP_Pointer_List_Item {
     fn get_type(&self) -> &str { "List Item" }
     #[inline(always)]
-    fn get_addr_value(&self) -> u16 { u16::from_be_bytes(self.addr_value) }
+    fn get_addr_value(&self) -> u32 { u32::from_be_bytes(self.addr_value) }
     #[inline(always)]
-    fn set_addr_value(&mut self, addr: u16) { self.addr_value = addr.to_be_bytes() }
+    fn set_addr_value(&mut self, addr: u32) { self.addr_value = addr.to_be_bytes() }
     #[inline(always)]
-    fn get_next_addr(&self) -> u16 { u16::from_be_bytes(self.next_value) }
+    fn get_next_addr(&self) -> u32 { u32::from_be_bytes(self.next_value) }
     #[inline(always)]
-    fn set_next_addr(&mut self, addr: u16) { self.next_value = addr.to_be_bytes() }
+    fn set_next_addr(&mut self, addr: u32) { self.next_value = addr.to_be_bytes() }
     #[inline(always)]
-    fn set_index(&mut self, index: u8)  { self.index = index }
+    fn set_index(&mut self, index: u16)  { self.index = index.to_be_bytes() }
     #[inline(always)]
-    fn get_index(&self) -> u8  { self.index }
+    fn get_index(&self) -> u16  { u16::from_be_bytes(self.index) }
     #[inline(always)]
-    fn reset(&mut self) { self.addr_value = [0; 2]; self.next_value = [0; 2]; self.index = 0; }
+    fn reset(&mut self) { self.addr_value = [0; 4]; self.next_value = [0; 4]; self.index = [0; 2]; }
     #[inline(always)]
-    fn get_size(&self) -> usize { 5 }
+    fn get_size(&self) -> usize { 10 }
 }
 impl NP_Pointer_Bytes for NP_Pointer_Map_Item {
     fn get_type(&self) -> &str { "Map Item" }
     #[inline(always)]
-    fn get_addr_value(&self) -> u16 { u16::from_be_bytes(self.addr_value) }
+    fn get_addr_value(&self) -> u32 { u32::from_be_bytes(self.addr_value) }
     #[inline(always)]
-    fn set_addr_value(&mut self, addr: u16) { self.addr_value = addr.to_be_bytes() }
+    fn set_addr_value(&mut self, addr: u32) { self.addr_value = addr.to_be_bytes() }
     #[inline(always)]
-    fn get_next_addr(&self) -> u16 { u16::from_be_bytes(self.next_value) }
+    fn get_next_addr(&self) -> u32 { u32::from_be_bytes(self.next_value) }
     #[inline(always)]
-    fn set_next_addr(&mut self, addr: u16) { self.next_value = addr.to_be_bytes() }
+    fn set_next_addr(&mut self, addr: u32) { self.next_value = addr.to_be_bytes() }
     #[inline(always)]
-    fn set_key_addr(&mut self, addr: u16)  { self.key_addr = addr.to_be_bytes(); }
+    fn set_key_addr(&mut self, addr: u32)  { self.key_addr = addr.to_be_bytes(); }
     #[inline(always)]
-    fn get_key_addr(&self) -> u16  { u16::from_be_bytes(self.key_addr) }
+    fn get_key_addr(&self) -> u32  { u32::from_be_bytes(self.key_addr) }
     #[inline(always)]
-    fn reset(&mut self) { self.addr_value = [0; 2]; self.next_value = [0; 2]; self.key_addr = [0;2 ]; }
+    fn reset(&mut self) { self.addr_value = [0; 4]; self.next_value = [0; 4]; self.key_addr = [0; 4]; }
     #[inline(always)]
-    fn get_size(&self) -> usize { 6 }
+    fn get_size(&self) -> usize { 12 }
     #[inline(always)]
     fn get_key<'key>(&self, memory: &'key dyn NP_Memory) -> &'key str {
         let key_addr = self.get_key_addr() as usize;
@@ -169,7 +169,7 @@ impl NP_Pointer_Bytes for NP_Pointer_Map_Item {
 #[allow(missing_docs)]
 pub struct NP_Vtable {
     pub values: [NP_Pointer_Scalar; 4],
-    next: [u8; 2]
+    next: [u8; 4]
 }
 
 
@@ -177,15 +177,17 @@ pub struct NP_Vtable {
 impl NP_Vtable {
 
     #[inline(always)]
-    pub fn get_next(&self) -> u16 {
-        u16::from_be_bytes(unsafe { *(&self.next as *const [u8] as *const [u8; 2]) }) 
+    pub fn get_next(&self) -> u32 {
+        u32::from_be_bytes(unsafe { *(&self.next as *const [u8] as *const [u8; 4]) }) 
     }
 
     #[inline(always)]
-    pub fn set_next(&mut self, value: u16) {
+    pub fn set_next(&mut self, value: u32) {
         let bytes = value.to_be_bytes();
         self.next[0] = bytes[0];
         self.next[1] = bytes[1];
+        self.next[2] = bytes[2];
+        self.next[3] = bytes[3];
     }
 }
 
@@ -208,7 +210,7 @@ pub struct NP_Cursor {
     /// the parent schema address (so we know if we're in a collection type)
     pub parent_schema_addr: NP_Schema_Addr,
     /// used by tuple type to store scalar pointer bytes
-    pub value_bytes: Option<[u8; 2]>,
+    pub value_bytes: Option<[u8; 4]>,
     /// if parent is tuple
     pub parent_type: NP_Cursor_Parent
 }

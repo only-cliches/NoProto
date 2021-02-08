@@ -65,7 +65,7 @@ impl NP_Union {
                     if make_path { // need to make a new value
                         // 1 byte for union value, 2 bytes for pointer
                         let new_addr = memory.malloc_borrow(&[0u8; 3])?;
-                        union_value.set_addr_value(new_addr as u16);
+                        union_value.set_addr_value(new_addr as u32);
                     } else { // found nothing
                         return Ok(None)
                     }

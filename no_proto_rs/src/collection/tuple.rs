@@ -57,7 +57,7 @@ impl NP_Tuple {
         cursor.parent_type = NP_Cursor_Parent::Tuple;
 
         if data.values[index].fixed {
-            cursor.value_bytes = Some((item_address as u16).to_be_bytes()); 
+            cursor.value_bytes = Some((item_address as u32).to_be_bytes()); 
         }
 
         if memory.read_bytes()[item_address - 1] == 0 && make_path == false {
@@ -74,7 +74,7 @@ impl NP_Tuple {
 
         let new_addr = memory.malloc_borrow(empty)?;
         
-        tuple_cursor.get_value_mut(memory).set_addr_value(new_addr as u16);
+        tuple_cursor.get_value_mut(memory).set_addr_value(new_addr as u32);
 
         Ok(tuple_cursor)
     }
@@ -412,7 +412,7 @@ impl<'value> NP_Value<'value> for NP_Tuple {
                     match schema[schema_len].val {
                         NP_Value_Kind::Pointer => {
                             tuple_values.push(NP_Tuple_Field { schema: schema_len, offset: data_offset, size: 0, fixed: false });
-                            data_offset += 2;
+                            data_offset += 4;
                         },
                         NP_Value_Kind::Fixed(x) => {
                             tuple_values.push(NP_Tuple_Field { schema: schema_len, offset: data_offset, size: x as usize, fixed: true });
@@ -564,10 +564,10 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     buffer.set(&["0"], "hello")?;
     assert_eq!(buffer.get::<&str>(&["0"])?, Some("hello"));
     assert_eq!(buffer.calc_bytes()?.after_compaction, buffer.calc_bytes()?.current_buffer);
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 33usize);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 39usize);
     buffer.del(&[])?;
     buffer.compact(None)?;
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 6usize);
 
     buffer.set_with_json(&[], r#"{"value": ["bar", "1ED3C129-2943-4CCE-8904-53C0487FF18E", 50]}"#)?;
     assert_eq!(buffer.get::<&str>(&["0"])?, Some("bar"));
@@ -583,12 +583,12 @@ fn sorting_tuples_works() -> Result<(), NP_Error> {
     let factory = crate::NP_Factory::new_json(schema)?;
     let mut buffer = factory.new_buffer(None);
     buffer.set_min(&[])?;
-    assert_eq!(buffer.read_bytes(), &[0, 0, 0, 4, 1, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0]);
+    assert_eq!(buffer.read_bytes(), &[0, 0, 0, 0, 0, 6, 1, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0]);
     buffer.set(&["0"], "hello")?;
     let uuid = crate::pointer::uuid::NP_UUID::generate(22);
     buffer.set(&["1"], &uuid)?;
     buffer.set(&["2"], 20u8)?;
-    assert_eq!(buffer.read_bytes(), &[0, 0, 0, 4, 1, 104, 101, 108, 108, 111, 32, 32, 32, 32, 32, 1, 76, 230, 170, 176, 120, 208, 69, 186, 109, 122, 100, 179, 210, 224, 68, 195, 1, 20]);
+    assert_eq!(buffer.read_bytes(), &[0, 0, 0, 0, 0, 6, 1, 104, 101, 108, 108, 111, 32, 32, 32, 32, 32, 1, 76, 230, 170, 176, 120, 208, 69, 186, 109, 122, 100, 179, 210, 224, 68, 195, 1, 20]);
 
     Ok(())
 }

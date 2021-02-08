@@ -1286,7 +1286,7 @@ fn rpc_test() -> Result<(), NP_Error> {
     }"#)?;
 
     // checks that compiled byte specs work
-    assert_eq!(rpc_factory.compile_spec().len(), 128); // JSON schema above is 467 bytes without whitespace
+    assert_eq!(rpc_factory.compile_spec().len(), 132); // JSON schema above is 467 bytes without whitespace
     let rpc_factory = NP_RPC_Factory::new_bytes(&rpc_factory.compile_spec())?;
 
     assert_eq!(rpc_factory.get_name(), "test api");
@@ -1299,7 +1299,7 @@ fn rpc_test() -> Result<(), NP_Error> {
     let get_count: NP_RPC_Request = rpc_factory.new_request("get_count")?;
     // close request
     let count_req_bytes: Vec<u8> = get_count.rpc_close();
-    assert_eq!(count_req_bytes.len(), 11);
+    assert_eq!(count_req_bytes.len(), 13);
 
     // === SEND count_req_bytes to SERVER ===
 
@@ -1315,7 +1315,7 @@ fn rpc_test() -> Result<(), NP_Error> {
     count_response.kind = NP_ResponseKinds::Ok;
     // close response
     let respond_bytes = count_response.rpc_close()?;
-    assert_eq!(respond_bytes.len(), 16);
+    assert_eq!(respond_bytes.len(), 18);
 
     // === SEND respond_bytes to CLIENT ====
 

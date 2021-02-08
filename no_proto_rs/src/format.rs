@@ -9,13 +9,13 @@
 //! 
 //! Pointers contain one or more addresses depending on the pointer type.  The addresses will point to data or other pointers.
 //! 
-//! There is only one address size, u16.  Addresses are always stored in big endian format and addresses are always zero based from the beginning of the buffer.  In other words, address `23` always means 23 bytes from the beginning of the buffer.
+//! There is only one address size, u32.  Addresses are always stored in big endian format and addresses are always zero based from the beginning of the buffer.  In other words, address `23` always means 23 bytes from the beginning of the buffer.
 //! 
-//! | Pointer Kind | u16 size (bytes) |
+//! | Pointer Kind | u32 size (bytes) |
 //! |--------------|------------------|
-//! | Standard     | 2                | 
-//! | Map Item     | 6                | 
-//! | List Item    | 5                |
+//! | Standard     | 4                | 
+//! | Map Item     | 12               | 
+//! | List Item    | 10               |
 //!  
 //! 
 //! The first byte of every buffer is a flag to show if the buffer is packed with it's schema or not.  Packed buffers start with a "1", non packed buffers start with a "0".
@@ -24,11 +24,11 @@
 //! 
 //! Most of the time these bytes will point to the data immediately following them, but it's possible to clear the root object causing these bytes to be zero, or to update the root data which would cause this address to update to something else.
 //! 
-//! For example, here is a buffer with u16 address size that contains the string `hello`, it's schema is just `{type: "string"}`.
+//! For example, here is a buffer with u32 address size that contains the string `hello`, it's schema is just `{type: "string"}`.
 //! 
 //! ```text
-//! [0,0,       0, 4,          0, 5, 104, 101, 108, 108, 111]
-//! [   root pointer, string length,   h,   e,   l,   l,   o]
+//! [0,0,   0, 0, 0, 6,    0, 0, 0, 5, 104, 101, 108, 108, 111]
+//! [     root pointer, string length,   h,   e,   l,   l,   o]
 //! ```
 //! 
 //! It should be noted that a schema is *required* to parse a buffer, otherwise you don't know the difference between pointers, data and what data types beyond the root.
@@ -36,14 +36,14 @@
 //! Let's look at the different pointer types you will encounter in a buffer.
 //! 
 //! ### Standard Pointer
-//! This is used for any scalar or collection data types.  The standard pointer is just a single u16.
+//! This is used for any scalar or collection data types.  The standard pointer is just a single u32.
 //! 
 //! ### Map Item Pointer
 //! 
 //! Used by items in a map object.  Contains the following:
 //! ```text
 //! | address of data | next map item pointer address | address of bytes for this key |
-//! |        u16      |               u16             |            u16                |
+//! |        u32      |               u32             |            u32                |
 //! ```
 //! 
 //! Map collections represent a linked list of these pointers.  There should only be map item pointers for items in the map that have data.
@@ -58,7 +58,7 @@
 //! Used by items in a list object.  Contains the following:
 //! ```text
 //! | address of data | next list item pointer address | item index |
-//! |      u16        |             u16                |    u8      |
+//! |      u32        |             u32                |    u16     |
 //! ```
 //! 
 //! Unlike tables and maps, the order of the list items point to eachother should be kept so that the index is the correct sequence.
@@ -81,9 +81,9 @@
 //! 
 //! ### Struct (Collection)
 //! 
-//! The struct data type stores one or more vtables for field values.  Each vtable is 10 bytes and contains:
-//! - 4 address (u16) pointers for the field values
-//! - a trailing address(u16) of the next vtable (should be zero if no more vtables)
+//! The struct data type stores one or more vtables for field values.  Each vtable is 20 bytes and contains:
+//! - 4 address (u32) pointers for the field values
+//! - a trailing address(u32) of the next vtable (should be zero if no more vtables)
 //! 
 //! Each vtable can address up to 4 fields, so if there are 30 fields in a schema there may be as many as 8 vtables in the buffer: `30 / 4 = 7.5`
 //! 
@@ -104,17 +104,17 @@
 //! let mut new_buffer = factory.new_buffer(None);
 //! new_buffer.set(&["age"], 20u8)?;
 //!
-//! assert_eq!(vec![0, 0, 0, 4, 0, 14, 0, 0, 0, 0, 0, 0, 0, 0, 20], new_buffer.finish().bytes());
+//! assert_eq!(vec![0, 0, 0, 0, 0, 6, 0, 0, 0, 26, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 20], new_buffer.finish().bytes());
 //! 
-//! // [0,0,  0, 4, 0, 14, 0, 0, 0, 0, 0, 0, 0, 0,    20]
-//! // [  root ptr,                        vtable,  data]
+//! // [0, 0, 0, 0, 0, 6, 0, 0, 0, 26, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,    20]
+//! // [        root ptr,                                                      vtable,  data]
 //!
 //! # Ok::<(), NP_Error>(()) 
 //! ```
 //! 
 //! ### List (Collection)
 //! 
-//! The list type stores two addresses (u16), one to the first `ListItem` pointer (head) and one to the last `ListItem` pointer (tail).
+//! The list type stores two addresses (u32), one to the first `ListItem` pointer (head) and one to the last `ListItem` pointer (tail).
 //! 
 //! If there is only one list item pointer in the list, the head and tail addresses should be identical.
 //! 
@@ -129,17 +129,17 @@
 //!
 //! let mut new_buffer = factory.new_buffer(None);
 //! new_buffer.set(&["4"], 20u8)?;
-//! assert_eq!(vec![0, 0, 0, 4, 0, 8, 0, 8, 0, 13, 0, 0, 4, 20], new_buffer.finish().bytes());
+//! assert_eq!(vec![0, 0, 0, 0, 0, 6, 0, 0, 0, 14, 0, 0, 0, 14, 0, 0, 0, 24, 0, 0, 0, 0, 0, 4, 20], new_buffer.finish().bytes());
 //! 
-//! // [0,0,   0, 4,  0, 8, 0, 8,   0, 13, 0, 0, 4,    20]
-//! // [   root ptr,  head, tail,    list item ptr,  data]
+//! // [0,0,   0, 0, 0, 6,  0, 0, 0, 14, 0, 0, 0, 14, 0, 0, 0, 24, 0, 0, 0, 0, 0, 4,    20]
+//! // [         root ptr,         head,        tail,                 list item ptr,  data]
 //!
 //! # Ok::<(), NP_Error>(()) 
 //! ```
 //! 
 //! ### Map (Collection)
 //! 
-//! The map type stores a single address (u16) to the first `MapItem` pointer.
+//! The map type stores a single address (u32) to the first `MapItem` pointer.
 //! 
 //! ```
 //! use no_proto::error::NP_Error;
@@ -152,10 +152,10 @@
 //!
 //! let mut new_buffer = factory.new_buffer(None);
 //! new_buffer.set(&["age"], 20u8)?;
-//! assert_eq!(vec![0, 0, 0, 4, 0, 14, 0, 0, 0, 10, 3, 97, 103, 101, 20], new_buffer.finish().bytes());
+//! assert_eq!(vec![0, 0, 0, 0, 0, 6, 0, 0, 0, 22, 0, 0, 0, 0, 0, 0, 0, 18, 3, 97, 103, 101, 20], new_buffer.finish().bytes());
 //! 
-//! // [0,0,  0, 4,   0, 14, 0, 0, 0,10,  3, 97, 103, 101,     20]
-//! // [  root ptr,        map item ptr,      a,   g,   e,   data]
+//! // [0,0,  0, 0, 0, 6,   0, 0, 0, 22, 0, 0, 0, 0, 0, 0, 0, 18,  3, 97, 103, 101,     20]
+//! // [        root ptr,                           map item ptr,      a,   g,   e,   data]
 //!
 //! # Ok::<(), NP_Error>(()) 
 //! ```
@@ -186,10 +186,10 @@
 //! let mut new_buffer = factory.new_buffer(None);
 //! new_buffer.set(&["0"], 20u8)?;
 //! new_buffer.set(&["1"], "hello")?;
-//! assert_eq!(vec![0, 0, 0, 4, 1, 20, 1, 0, 14, 0, 0, 0, 0, 0, 0, 5, 104, 101, 108, 108, 111], new_buffer.finish().bytes());
+//! assert_eq!(vec![0, 0, 0, 0, 0, 6, 1, 20, 1, 0, 0, 0, 18, 0, 0, 0, 0, 0, 0, 0, 0, 5, 104, 101, 108, 108, 111], new_buffer.finish().bytes());
 //! 
-//! // [0, 0, 0, 4,   1, 20,   1, 0, 14, 0, 0, 0, 0, 0, 0, 5, 104, 101, 108, 108, 111]
-//! // [  root ptr,      u8,    str ptr,           u32,         h,   e,   l,   l,   o]
+//! // [0, 0, 0, 0, 0, 6,   1, 20, 1, 0, 0, 0, 18, 0, 0, 0, 0, 0, 0, 0, 0, 5, 104, 101, 108, 108, 111]
+//! // [        root ptr,      u8,        str ptr,           u32,               h,   e,   l,   l,   o]
 //!
 //! # Ok::<(), NP_Error>(()) 
 //! ```
@@ -214,10 +214,10 @@
 //!
 //! let mut new_buffer = factory.new_buffer(None);
 //! new_buffer.set(&[], -2023830i32)?;
-//! assert_eq!(vec![0, 0, 0, 4, 127, 225, 30, 106], new_buffer.finish().bytes());
+//! assert_eq!(vec![0, 0, 0, 0, 0, 6, 127, 225, 30, 106], new_buffer.finish().bytes());
 //! 
-//! // [0,0,   0, 4, 127, 225, 30, 106]
-//! // [   root ptr,              data]
+//! // [0,0,   0, 0, 0, 6, 127, 225, 30, 106]
+//! // [         root ptr,              data]
 //!
 //! # Ok::<(), NP_Error>(()) 
 //! ```
@@ -226,7 +226,7 @@
 //! 
 //! Unsigned integers should be converted to big endian format, then saved to the buffer.
 //! 
-//! The size of the integer should determine how many bytes are used.  For example, u8 is 1 byte, u16 is 2 bytes, etc.
+//! The size of the integer should determine how many bytes are used.  For example, u8 is 1 byte, u32 is 2 bytes, etc.
 //! 
 //! ```
 //! use no_proto::error::NP_Error;
@@ -238,10 +238,10 @@
 //!
 //! let mut new_buffer = factory.new_buffer(None);
 //! new_buffer.set(&[], 28378u32)?;
-//! assert_eq!(vec![0, 0, 0, 4, 0, 0, 110, 218], new_buffer.finish().bytes());
+//! assert_eq!(vec![0, 0, 0, 0, 0, 6, 0, 0, 110, 218], new_buffer.finish().bytes());
 //! 
-//! // [0,0,  0, 4, 0, 0, 110, 218]
-//! // [  root ptr,           data]
+//! // [0,0,  0, 0, 0, 6, 0, 0, 110, 218]
+//! // [        root ptr,           data]
 //!
 //! # Ok::<(), NP_Error>(()) 
 //! ```
@@ -262,10 +262,10 @@
 //!
 //! let mut new_buffer = factory.new_buffer(None);
 //! new_buffer.set(&[], 2.389988f32)?;
-//! assert_eq!(vec![0, 0, 0, 4, 64, 24, 245, 144], new_buffer.finish().bytes());
+//! assert_eq!(vec![0, 0, 0, 0, 0, 6, 64, 24, 245, 144], new_buffer.finish().bytes());
 //! 
-//! // [0,0,  0, 4, 64, 24, 245, 144]
-//! // [  root ptr,             data]
+//! // [0,0,  0, 0, 0, 6, 64, 24, 245, 144]
+//! // [        root ptr,             data]
 //!
 //! # Ok::<(), NP_Error>(()) 
 //! ```
@@ -288,10 +288,10 @@
 //!
 //! let mut new_buffer = factory.new_buffer(None);
 //! new_buffer.set(&[], NP_Enum::new("red"))?;
-//! assert_eq!(vec![0, 0, 0, 4, 2], new_buffer.finish().bytes());
+//! assert_eq!(vec![0, 0, 0, 0, 0, 6, 2], new_buffer.finish().bytes());
 //! 
-//! // [0,0,  0, 4,      2]
-//! // [  root ptr,   data]
+//! // [0,0,  0, 0, 0, 6,      2]
+//! // [        root ptr,   data]
 //!
 //! # Ok::<(), NP_Error>(()) 
 //! ```
@@ -310,10 +310,10 @@
 //!
 //! let mut new_buffer = factory.new_buffer(None);
 //! new_buffer.set(&[], true)?;
-//! assert_eq!(vec![0, 0, 0, 4, 1], new_buffer.finish().bytes());
+//! assert_eq!(vec![0, 0, 0, 0, 0, 6, 1], new_buffer.finish().bytes());
 //! 
-//! // [0,0,  0, 4,      1]
-//! // [  root ptr,   data]
+//! // [0,0,  0, 0, 0, 6,      1]
+//! // [        root ptr,   data]
 //!
 //! # Ok::<(), NP_Error>(()) 
 //! ```
@@ -340,10 +340,10 @@
 //!
 //! let mut new_buffer = factory.new_buffer(None);
 //! new_buffer.set(&[], NP_Dec::new(200, 0))?;
-//! assert_eq!(vec![0, 0, 0, 4, 128, 0, 0, 0, 0, 0, 78, 32], new_buffer.finish().bytes());
+//! assert_eq!(vec![0, 0, 0, 0, 0, 6, 128, 0, 0, 0, 0, 0, 78, 32], new_buffer.finish().bytes());
 //! 
-//! // [0,0,   0, 4, 128, 0, 0, 0, 0, 0, 78, 32]
-//! // [   root ptr,                       data]
+//! // [0,0,   0, 0, 0, 6, 128, 0, 0, 0, 0, 0, 78, 32]
+//! // [         root ptr,                       data]
 //!
 //! # Ok::<(), NP_Error>(()) 
 //! ```
@@ -390,10 +390,10 @@
 //!
 //! let mut new_buffer = factory.new_buffer(None);
 //! new_buffer.set(&[], NP_Geo::new(8, 41.303921, -81.901693))?;
-//! assert_eq!(vec![0, 0, 0, 4, 152, 158, 122, 106, 79, 46, 203, 30], new_buffer.finish().bytes());
+//! assert_eq!(vec![0, 0, 0, 0, 0, 6, 152, 158, 122, 106, 79, 46, 203, 30], new_buffer.finish().bytes());
 //! 
-//! // [0,0,   0, 4, 152, 158, 122, 106, 79, 46, 203, 30]
-//! // [   root ptr,           latitude,       longitude]
+//! // [0,0,   0, 0, 0, 6, 152, 158, 122, 106, 79, 46, 203, 30]
+//! // [         root ptr,           latitude,       longitude]
 //!
 //! # Ok::<(), NP_Error>(()) 
 //! ```
@@ -416,10 +416,10 @@
 //! let mut new_buffer = factory.new_buffer(None);
 //! let uuid = NP_UUID::generate(32);
 //! new_buffer.set(&[], &uuid)?;
-//! assert_eq!(vec![0, 0, 0, 4, 202, 230, 170, 176, 127, 103, 66, 13, 89, 65, 221, 4, 153, 160, 117, 252], new_buffer.finish().bytes());
+//! assert_eq!(vec![0, 0, 0, 0, 0, 6, 202, 230, 170, 176, 127, 103, 66, 13, 89, 65, 221, 4, 153, 160, 117, 252], new_buffer.finish().bytes());
 //! 
-//! // [0,0,   0, 4, 202, 230, 170, 176, 127, 103, 66, 13, 89, 65, 221, 4, 153, 160, 117, 252]
-//! // [   root ptr,                              UUID                                       ]
+//! // [0,0,   0, 0, 0, 6, 202, 230, 170, 176, 127, 103, 66, 13, 89, 65, 221, 4, 153, 160, 117, 252]
+//! // [         root ptr,                              UUID                                       ]
 //!
 //! # Ok::<(), NP_Error>(()) 
 //! ```
@@ -435,7 +435,7 @@
 //! [22, 0, 0]
 //! ```
 //! 
-//! If there is no fixed `size` in the schema, store a size (u16) followed by the actual data.
+//! If there is no fixed `size` in the schema, store a size (u32) followed by the actual data.
 //! 
 //! If it's a string, the data should be utf-8 encoded when it's saved into the buffer and utf-8 decoded when it's retrieved.
 //! 
@@ -449,10 +449,10 @@
 //!
 //! let mut new_buffer = factory.new_buffer(None);
 //! new_buffer.set(&[], "hello, world!")?;
-//! assert_eq!(vec![0, 0, 0, 4, 0, 13, 104, 101, 108, 108, 111, 44, 32, 119, 111, 114, 108, 100, 33], new_buffer.finish().bytes());
+//! assert_eq!(vec![0, 0, 0, 0, 0, 6, 0, 0, 0, 13, 104, 101, 108, 108, 111, 44, 32, 119, 111, 114, 108, 100, 33], new_buffer.finish().bytes());
 //! 
-//! // [0,0,   0, 4,   0, 13, 104, 101, 108, 108, 111, 44, 32, 119, 111, 114, 108, 100, 33]
-//! // [   root ptr,  length,   h,   e,   l,   l,   o,  ,,   ,   w,   o,   r,   l,   d,  !]
+//! // [0,0,   0, 0, 0, 6,   0, 0, 0, 13, 104, 101, 108, 108, 111, 44, 32, 119, 111, 114, 108, 100, 33]
+//! // [         root ptr,        length,   h,   e,   l,   l,   o,  ,,   ,   w,   o,   r,   l,   d,  !]
 //!
 //! # Ok::<(), NP_Error>(()) 
 //! ```
@@ -471,10 +471,10 @@
 //!
 //! let mut new_buffer = factory.new_buffer(None);
 //! new_buffer.set(&[], NP_Date::new(1598490738507))?;
-//! assert_eq!(vec![0, 0, 0, 4, 0, 0, 1, 116, 45, 120, 255, 75], new_buffer.finish().bytes());
+//! assert_eq!(vec![0, 0, 0, 0, 0, 6, 0, 0, 1, 116, 45, 120, 255, 75], new_buffer.finish().bytes());
 //! 
-//! // [0,0,   0, 4, 0, 0, 1, 116, 45, 120, 255, 75]
-//! // [   root ptr,           timestamp           ]
+//! // [0,0,   0, 0, 0, 6, 0, 0, 1, 116, 45, 120, 255, 75]
+//! // [         root ptr,           timestamp           ]
 //!
 //! # Ok::<(), NP_Error>(()) 
 //! ```
@@ -704,9 +704,9 @@
 //! 
 //! ### bytes, string (Scalar)
 //! 
-//! The second and third bytes are a u16 of the fixed size.  If there is no fixed size, these two bytes are zero.
+//! The second and third bytes are a u32 of the fixed size.  If there is no fixed size, these two bytes are zero.
 //! 
-//! Thhe length of the default value follows as a u16, if there is no default value the u16 is zero.  If there is a default value, it follows the length bytes.
+//! Thhe length of the default value follows as a u32, if there is no default value the u32 is zero.  If there is a default value, it follows the length bytes.
 //! 
 //! ```
 //! use no_proto::error::NP_Error;
@@ -716,20 +716,20 @@
 //!    "type": "string"
 //! }"#)?;
 //!
-//! assert_eq!(&[2, 0, 0, 0, 0, 0], factory.export_schema_bytes());
+//! assert_eq!(&[2, 0, 0, 0, 0, 0, 0, 0], factory.export_schema_bytes());
 //! 
-//! // [        2,                   0,             0, 0,                 0, 0]
-//! // [data type, uppercase/lowercase, fixed size (u16),  default size (u16) ]
+//! // [        2,                   0,       0, 0, 0, 0,                 0, 0]
+//! // [data type, uppercase/lowercase, fixed size (u32),  default size (u16) ]
 //!
 //! let factory: NP_Factory = NP_Factory::new_json(r#"{
 //!    "type": "string",
 //!    "size": 20
 //! }"#)?;
 //!
-//! assert_eq!(&[2, 0, 0, 20, 0, 0], factory.export_schema_bytes());
+//! assert_eq!(&[2, 0, 0, 0, 0, 20, 0, 0], factory.export_schema_bytes());
 //! 
-//! // [        2,                   0,            0, 20,                 0, 0]
-//! // [data type, uppercase/lowercase, fixed size (u16),  default size (u16) ]
+//! // [        2,                   0,      0, 0, 0, 20,                 0, 0]
+//! // [data type, uppercase/lowercase, fixed size (u32),  default size (u16) ]
 //! 
 //! let factory: NP_Factory = NP_Factory::new_json(r#"{
 //!    "type": "string",
@@ -737,10 +737,10 @@
 //!    "default": "hello"
 //! }"#)?;
 //!
-//! assert_eq!(&[2, 0, 0, 20, 0, 6, 104, 101, 108, 108, 111], factory.export_schema_bytes());
+//! assert_eq!(&[2, 0, 0, 0, 0, 20, 0, 6, 104, 101, 108, 108, 111], factory.export_schema_bytes());
 //! 
-//! // [        2,                   0,             0, 20,                0, 6, 104, 101, 108, 108, 111]
-//! // [data type, uppercase/lowercase,  fixed size (u16),  default size (u16),   h,   e,   l,   l,   o]
+//! // [        2,                   0,       0, 0, 0, 20,                0, 6, 104, 101, 108, 108, 111]
+//! // [data type, uppercase/lowercase,  fixed size (u32),  default size (u16),   h,   e,   l,   l,   o]
 //!
 //! # Ok::<(), NP_Error>(()) 
 //! ```
@@ -797,10 +797,10 @@
 //! }"#)?;
 //!
 //!
-//! assert_eq!(&[21, 2, 3, 97, 103, 101, 0, 2, 8, 0, 4, 110, 97, 109, 101, 0, 6, 2, 0, 0, 0, 0, 0], factory.export_schema_bytes());
+//! assert_eq!(&[21, 2, 3, 97, 103, 101, 0, 2, 8, 0, 4, 110, 97, 109, 101, 0, 8, 2, 0, 0, 0, 0, 0, 0, 0], factory.export_schema_bytes());
 //! 
-//! // [       21,            2, 3, 97, 103, 101,                     0, 2,           8, 0, 4, 110, 97, 109, 101,                      0, 6,   2, 0, 0, 0, 0, 0]
-//! // [data type,  # of fields,     a,   g,   e,  field schema size (u16),   field schema,      n,  a,   m,   e,   field schema size (u16),     field schema  ]
+//! // [21, 2, 3, 97, 103, 101, 0, 2, 8, 0, 4, 110, 97, 109, 101, 0, 8, 2, 0, 0, 0, 0, 0, 0, 0]
+//! // [data type,  # of fields,     a,   g,   e,  field schema size (u32),   field schema,      n,  a,   m,   e,   field schema size (u32),     field schema  ]
 //!
 //! # Ok::<(), NP_Error>(()) 
 //! ```
@@ -857,10 +857,10 @@
 //!    ]
 //! }"#)?;
 //!
-//! assert_eq!(&[24, 0, 2, 0, 2, 8, 0, 0, 6, 2, 0, 0, 0, 0, 0], factory.export_schema_bytes());
+//! assert_eq!(&[24, 0, 2, 0, 2, 8, 0, 0, 8, 2, 0, 0, 0, 0, 0, 0, 0], factory.export_schema_bytes());
 //! 
-//! // [       24,      0,           2,               0, 2,   8, 0,              0, 6,  2, 0, 0, 0, 0, 0]
-//! // [data type, sorted, length (u8),  schema size (u16), schema, schema size (u16),      schema      ]
+//! // [       24,       0,          2,               0, 2,    8, 0,              0, 8,  2, 0, 0, 0, 0, 0, 0, 0]
+//! // [data type, sorted, length (u8),  schema size (u16),  schema, schema size (u16),         schema         ]
 //!
 //! # Ok::<(), NP_Error>(()) 
 //! ```

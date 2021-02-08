@@ -77,7 +77,7 @@ impl<'table> NP_Struct<'table> {
                     }
                 }
 
-                let item_address = vtable_address + (v_table_idx * 2);
+                let item_address = vtable_address + (v_table_idx * 4);
 
                 Ok(Some(NP_Cursor::new(item_address, data.fields[x].schema, table_cursor.schema_addr)))
             },
@@ -91,7 +91,7 @@ impl<'table> NP_Struct<'table> {
 
         let first_vtable_addr = memory.malloc_borrow(&[0u8; VTABLE_BYTES])?;
         
-        table_cursor.get_value_mut(memory).set_addr_value(first_vtable_addr as u16);
+        table_cursor.get_value_mut(memory).set_addr_value(first_vtable_addr as u32);
 
         Ok(table_cursor)
     }
@@ -101,7 +101,7 @@ impl<'table> NP_Struct<'table> {
 
         let vtable_addr = memory.malloc_borrow(&[0u8; VTABLE_BYTES])?;
         
-        prev_vtable.set_next(vtable_addr as u16);
+        prev_vtable.set_next(vtable_addr as u32);
 
         Ok(vtable_addr)
     }
@@ -168,7 +168,7 @@ impl<'table> NP_Struct<'table> {
         self.index += 1;
 
         if self.v_table_addr != 0 {
-            let item_address = self.v_table_addr + (v_table_idx * 2);
+            let item_address = self.v_table_addr + (v_table_idx * 4);
             Some((this_index, data.fields[this_index].col.as_str(), Some(NP_Cursor::new(item_address, data.fields[this_index].schema, self.table.schema_addr))))
         } else {
             Some((this_index, data.fields[this_index].col.as_str(), None))
@@ -323,7 +323,7 @@ impl<'value> NP_Value<'value> for NP_Struct<'value> {
         let mut nex_vtable = c_value().get_addr_value() as usize;
         let mut loop_max = 65usize;
         while nex_vtable > 0 && loop_max > 0 {
-            acc_size += 10;
+            acc_size += 20;
             let vtable = Self::get_vtable(nex_vtable, memory);
             nex_vtable = vtable.get_next() as usize;
             loop_max -= 1;
@@ -334,9 +334,9 @@ impl<'value> NP_Value<'value> for NP_Struct<'value> {
         while let Some((_index, _key, item)) = struc.step_iter(memory) {
             if let Some(real) = item {
                 let add_size = NP_Cursor::calc_size(depth + 1, &real, memory)?;
-                if add_size > 2 {
+                if add_size > 4 {
                     // scalar cursor is part of vtable
-                    acc_size += add_size - 2;             
+                    acc_size += add_size - 4;             
                 }
             }         
         }
@@ -377,7 +377,7 @@ impl<'value> NP_Value<'value> for NP_Struct<'value> {
                     last_vtable_idx += 1;
                 }
 
-                let item_addr = last_real_vtable + (v_table_idx * 2);
+                let item_addr = last_real_vtable + (v_table_idx * 4);
                 NP_Cursor::compact(depth + 1, real.clone(), from_memory, NP_Cursor::new(item_addr, col_schemas[idx].schema, to_cursor.schema_addr), to_memory)?;
             }         
         }
@@ -632,19 +632,19 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     buffer.set(&["name"], "hello")?;
     assert_eq!(buffer.get::<&str>(&["name"])?, Some("hello"));
     assert_eq!(buffer.calc_bytes()?.after_compaction, buffer.calc_bytes()?.current_buffer);
-    assert_eq!(buffer.calc_bytes()?.after_compaction, 21usize);
+    assert_eq!(buffer.calc_bytes()?.after_compaction, 35usize);
     buffer.del(&[])?;
     buffer.compact(None)?;
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 6usize);
 
     // good values are preserved through compaction
     let mut buffer = factory.new_buffer(None);
     buffer.set(&crate::np_path!("name"), "hello")?;
     assert_eq!(buffer.get::<&str>(&["name"])?, Some("hello"));
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 21usize);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 35usize);
     buffer.compact(None)?;
     assert_eq!(buffer.get::<&str>(&["name"])?, Some("hello"));
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 21usize);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 35usize);
 
     // println!("{:?}", buffer.read_bytes());
     // let packed = factory.pack_buffer(buffer);

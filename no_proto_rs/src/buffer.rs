@@ -28,7 +28,7 @@ pub const LIST_MAX_SIZE: usize = core::u16::MAX as usize;
 #[doc(hidden)]
 pub const VTABLE_SIZE: usize = 4;
 #[doc(hidden)]
-pub const VTABLE_BYTES: usize = 10;
+pub const VTABLE_BYTES: usize = 20;
 
 
 /// Buffers contain the bytes of each object and allow you to perform reads, updates, deletes and compaction.
@@ -153,7 +153,7 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
     /// new_buffer.set(&[], "hello")?;
     /// // close buffer and get bytes
     /// let bytes: Vec<u8> = new_buffer.finish().bytes();
-    /// assert_eq!([0, 0, 0, 4, 0, 5, 104, 101, 108, 108, 111].to_vec(), bytes);
+    /// assert_eq!([0, 0, 0, 0, 0, 6, 0, 0, 0, 5, 104, 101, 108, 108, 111].to_vec(), bytes);
     /// 
     /// # Ok::<(), NP_Error>(()) 
     /// ```
@@ -850,8 +850,8 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
                 if size > 0 {
                     Ok(Some(size as usize))
                 } else {
-                    let length_bytes = self.memory.get_2_bytes(addr_value as usize).unwrap_or(&[0u8; 2]);
-                    Ok(Some(u16::from_be_bytes(*length_bytes) as usize))
+                    let length_bytes = self.memory.get_4_bytes(addr_value as usize).unwrap_or(&[0u8; 4]);
+                    Ok(Some(u32::from_be_bytes(*length_bytes) as usize))
                 }
                
             },
@@ -864,8 +864,8 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
                 if size > 0 {
                     Ok(Some(size as usize))
                 } else {
-                    let length_bytes = self.memory.get_2_bytes(addr_value as usize).unwrap_or(&[0u8; 2]);
-                    Ok(Some(u16::from_be_bytes(*length_bytes) as usize))
+                    let length_bytes = self.memory.get_4_bytes(addr_value as usize).unwrap_or(&[0u8; 4]);
+                    Ok(Some(u32::from_be_bytes(*length_bytes) as usize))
                 }
     
             },
@@ -1082,19 +1082,19 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
     /// let mut new_buffer = factory.new_buffer(None);
     /// // set initial value
     /// new_buffer.set(&[], "hello")?;
-    /// // using 9 bytes
+    /// // using 15 bytes
     /// assert_eq!(NP_Size_Data {
-    ///     current_buffer: 11,
-    ///     after_compaction: 11,
+    ///     current_buffer: 15,
+    ///     after_compaction: 15,
     ///     wasted_bytes: 0
     /// }, new_buffer.calc_bytes()?);
     /// // update the value
     /// new_buffer.set(&[], "hello, world")?;
-    /// // now using 25 bytes, with 7 bytes of wasted space
+    /// // now using 31 bytes, with 9 bytes of wasted space
     /// assert_eq!(NP_Size_Data {
-    ///     current_buffer: 25,
-    ///     after_compaction: 18,
-    ///     wasted_bytes: 7
+    ///     current_buffer: 31,
+    ///     after_compaction: 22,
+    ///     wasted_bytes: 9
     /// }, new_buffer.calc_bytes()?);
     /// // compact to save space
     /// new_buffer.maybe_compact(None, |compact_data| {
@@ -1107,8 +1107,8 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
     /// })?;
     /// // back down to 18 bytes with no wasted bytes
     /// assert_eq!(NP_Size_Data {
-    ///     current_buffer: 18,
-    ///     after_compaction: 18,
+    ///     current_buffer: 22,
+    ///     after_compaction: 22,
     ///     wasted_bytes: 0
     /// }, new_buffer.calc_bytes()?);
     /// 
@@ -1151,26 +1151,26 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
     /// let mut new_buffer = factory.new_buffer(None);
     /// // set initial value
     /// new_buffer.set(&[], "hello")?;
-    /// // using 11 bytes
+    /// // using 15 bytes
     /// assert_eq!(NP_Size_Data {
-    ///     current_buffer: 11,
-    ///     after_compaction: 11,
+    ///     current_buffer: 15,
+    ///     after_compaction: 15,
     ///     wasted_bytes: 0
     /// }, new_buffer.calc_bytes()?);
     /// // update the value
     /// new_buffer.set(&[], "hello, world")?;
-    /// // now using 25 bytes, with 7 bytes of wasted bytes
+    /// // now using 31 bytes, with 9 bytes of wasted space
     /// assert_eq!(NP_Size_Data {
-    ///     current_buffer: 25,
-    ///     after_compaction: 18,
-    ///     wasted_bytes: 7
+    ///     current_buffer: 31,
+    ///     after_compaction: 22,
+    ///     wasted_bytes: 9
     /// }, new_buffer.calc_bytes()?);
     /// // compact to save space
     /// new_buffer.compact(None)?;
     /// // back down to 18 bytes with no wasted bytes
     /// assert_eq!(NP_Size_Data {
-    ///     current_buffer: 18,
-    ///     after_compaction: 18,
+    ///     current_buffer: 22,
+    ///     after_compaction: 22,
     ///     wasted_bytes: 0
     /// }, new_buffer.calc_bytes()?);
     /// 
@@ -1269,8 +1269,8 @@ impl<M: NP_Memory + Clone + NP_Mem_New> NP_Buffer<M> {
     /// let mut new_buffer = factory.new_buffer(None);
     /// new_buffer.set(&[], "hello")?;
     /// assert_eq!(NP_Size_Data {
-    ///     current_buffer: 11,
-    ///     after_compaction: 11,
+    ///     current_buffer: 15,
+    ///     after_compaction: 15,
     ///     wasted_bytes: 0
     /// }, new_buffer.calc_bytes()?);
     /// 

@@ -119,7 +119,7 @@
 //! | Format           | Zero-Copy | Size Limit | Mutable | Schemas  | Byte-wise Sorting |
 //! |------------------|-----------|------------|---------|----------|-------------------|
 //! | **Runtime Libs** |           |            |         |          |                   | 
-//! | *NoProto*        | ✓         | ~64KB      | ✓       | ✓        | ✓                 |
+//! | *NoProto*        | ✓         | ~4GB       | ✓       | ✓        | ✓                 |
 //! | Apache Avro      | ✗         | 2^63 Bytes | ✗       | ✓        | ✓                 |
 //! | JSON             | ✗         | Unlimited  | ✓       | ✗        | ✗                 |
 //! | BSON             | ✗         | ~16MB      | ✓       | ✗        | ✗                 |
@@ -275,6 +275,9 @@
 //! 8. Stable<br/>
 //! NoProto will never cause a panic in your application.  It has *zero* panics or unwraps, meaning there is no code path that could lead to a panic.  Fallback behavior is to provide a sane default path or bubble an error up to the caller.
 //! 
+//! 9. CPU Independent<br/>
+//! All numbers and pointers in NoProto buffers are always stored in big endian, so you can safely create buffers on any CPU architecture and know that they will work with any other CPU architecture.
+//! 
 //! 
 //! ### When to use Flatbuffers / Bincode / CapN Proto
 //! If you can safely compile all your data types into your application, all the buffers/data is trusted, and you don't intend to mutate buffers after they're created, Bincode/Flatbuffers/CapNProto is a better choice for you.
@@ -283,12 +286,13 @@
 //! If your data changes so often that schemas don't really make sense or the format you use must be self describing, JSON/BSON/MessagePack is a better choice.   Although I'd argue that if you *can* make schemas work you should.  Once you can use a format with schemas you save a ton of space in the resulting buffers and performance far better.
 //! 
 //! ## Limitations
-//! - Collections (Map, Tuple, List & Struct) cannot have more than 255 items.  You can nest to get more capacity, for example a list of lists can have up to 255 * 255 items.
+//! - Structs and Tuples cannot have more than 255 items.
+//! - Lists and Maps cannot have more than 2^16 (~64k) items.
 //! - You cannot nest more than 255 levels deep.
 //! - Struct field names cannot be longer than 255 UTF8 bytes.
 //! - Enum/Option types are limited to 255 options and each option cannot be more than 255 UTF8 Bytes.
 //! - Map keys cannot be larger than 255 UTF8 bytes.
-//! - Buffers cannot be larger than 2^16 bytes or ~64KB.
+//! - Buffers cannot be larger than 2^32 bytes or ~4GB.
 //! 
 //! ## Unsafe
 //! This library makes use of `unsafe` to get better performance.  Generally speaking, it's not possible to have a high performance serialization library without `unsafe`.  It is only used where performance improvements are significant and additional checks are performed so that the worst case for any `unsafe` block is it leads to junk data in a buffer.

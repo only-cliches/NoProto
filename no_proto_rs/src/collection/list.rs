@@ -13,27 +13,27 @@ use alloc::string::ToString;
 #[doc(hidden)]
 #[allow(missing_docs)]
 pub struct NP_List_Bytes {
-    head: [u8; 2],
-    tail: [u8; 2]
+    head: [u8; 4],
+    tail: [u8; 4]
 }
 
 #[allow(missing_docs)]
 impl NP_List_Bytes {
     #[inline(always)]
-    pub fn set_head(&mut self, head: u16) {
+    pub fn set_head(&mut self, head: u32) {
         self.head = head.to_be_bytes();
     }
     #[inline(always)]
-    pub fn get_head(&self) -> u16 {
-        u16::from_be_bytes(self.head)
+    pub fn get_head(&self) -> u32 {
+        u32::from_be_bytes(self.head)
     }
     #[inline(always)]
-    pub fn set_tail(&mut self, tail: u16) {
+    pub fn set_tail(&mut self, tail: u32) {
         self.tail = tail.to_be_bytes();
     }
     #[inline(always)]
-    pub fn get_tail(&self) -> u16 {
-        u16::from_be_bytes(self.tail)
+    pub fn get_tail(&self) -> u32 {
+        u32::from_be_bytes(self.tail)
     }
 }
 
@@ -93,12 +93,12 @@ impl NP_List {
 
         // empty list
         if list_data().get_head() == 0 {
-            let new_cursor_addr = memory.malloc_borrow(&[0u8; 5])?; // malloc list item
+            let new_cursor_addr = memory.malloc_borrow(&[0u8; 10])?; // malloc list item
             let new_cursor = NP_Cursor::new(new_cursor_addr, schema_of, list_cursor.schema_addr);
             let new_cursor_value = new_cursor.get_value_mut(memory);
-            new_cursor_value.set_index(index as u8);
-            list_data().set_head(new_cursor_addr as u16);
-            list_data().set_tail(new_cursor_addr as u16);
+            new_cursor_value.set_index(index as u16);
+            list_data().set_head(new_cursor_addr as u32);
+            list_data().set_tail(new_cursor_addr as u32);
             return Ok(Some((index, Some(new_cursor))))
         }
 
@@ -108,12 +108,12 @@ impl NP_List {
         let head_index = head.get_value(memory).get_index() as usize;
 
         if head_index > index { // index is in front of head, replace head
-            let new_cursor_addr = memory.malloc_borrow(&[0u8; 5])?; // malloc list item
+            let new_cursor_addr = memory.malloc_borrow(&[0u8; 10])?; // malloc list item
             let new_cursor = NP_Cursor::new(new_cursor_addr, schema_of, list_cursor.schema_addr);
             let new_cursor_value = new_cursor.get_value_mut(memory);
-            new_cursor_value.set_index(index as u8);
-            new_cursor_value.set_next_addr(head.buff_addr as u16);
-            list_data().set_head(new_cursor_addr as u16);
+            new_cursor_value.set_index(index as u16);
+            new_cursor_value.set_next_addr(head.buff_addr as u32);
+            list_data().set_head(new_cursor_addr as u32);
             return Ok(Some((index, Some(new_cursor))))
         } else if head_index == index { // index is equal to head
             return Ok(Some((index, Some(head))))
@@ -126,12 +126,12 @@ impl NP_List {
         let tail_index = tail_value().get_index() as usize;
 
         if tail_index < index { // index is behind tail
-            let new_cursor_addr = memory.malloc_borrow(&[0u8; 5])?; // malloc list item
+            let new_cursor_addr = memory.malloc_borrow(&[0u8; 10])?; // malloc list item
             let new_cursor = NP_Cursor::new(new_cursor_addr, schema_of, list_cursor.schema_addr);
             let new_cursor_value = new_cursor.get_value_mut(memory);
-            new_cursor_value.set_index(index as u8);
-            tail_value().set_next_addr(new_cursor_addr as u16);
-            list_data().set_tail(new_cursor_addr as u16);
+            new_cursor_value.set_index(index as u16);
+            tail_value().set_next_addr(new_cursor_addr as u32);
+            list_data().set_tail(new_cursor_addr as u32);
             return Ok(Some((index, Some(new_cursor))))
         } else if tail_index == index { // index is equal to head
             return Ok(Some((index, Some(tail))))
@@ -160,10 +160,10 @@ impl NP_List {
 
         let list_data = || { Self::get_list(self.list.get_value(memory).get_addr_value() as usize, memory) };
 
-        let new_cursor_addr = memory.malloc_borrow(&[0u8; 5])?; // malloc list item
+        let new_cursor_addr = memory.malloc_borrow(&[0u8; 10])?; // malloc list item
         let new_cursor = NP_Cursor::new(new_cursor_addr, self.schema_of, self.list.schema_addr);
         let new_cursor_value = || { new_cursor.get_value_mut(memory) };
-        new_cursor_value().set_index(self.index as u8 - 1);
+        new_cursor_value().set_index(self.index as u16 - 1);
 
 
         if let Some(current) = self.current {
@@ -171,12 +171,12 @@ impl NP_List {
             // set NEXT of CURRENT cursor to the new cursor
             let curr_cursor = NP_Cursor::new(current.buff_addr, self.schema_of, self.list.schema_addr);
             let prev_cursor_value = curr_cursor.get_value_mut(memory);
-            prev_cursor_value.set_next_addr(new_cursor_addr as u16);
+            prev_cursor_value.set_next_addr(new_cursor_addr as u32);
 
             if let Some(next) = self.next {
-                new_cursor_value().set_next_addr(next.buff_addr as u16);
+                new_cursor_value().set_next_addr(next.buff_addr as u32);
             } else { // replace tail
-                list_data().set_tail(new_cursor_addr as u16);
+                list_data().set_tail(new_cursor_addr as u32);
             }
 
             Ok(new_cursor)
@@ -187,9 +187,9 @@ impl NP_List {
 
     #[inline(always)]
     pub fn make_list<'make, M: NP_Memory>(list_cursor: &NP_Cursor, memory: &'make M) -> Result<(), NP_Error> {
-        let list_addr = memory.malloc_borrow(&[0u8; 4])?; // head & tail
+        let list_addr = memory.malloc_borrow(&[0u8; 8])?; // head & tail
         let value = list_cursor.get_value_mut(memory);
-        value.set_addr_value(list_addr as u16);
+        value.set_addr_value(list_addr as u32);
         Ok(())
     }
 
@@ -256,7 +256,7 @@ impl NP_List {
     #[inline(always)]
     pub fn step_iter<M: NP_Memory>(&mut self, memory: &M) -> Option<(usize, Option<NP_Cursor>)> {
 
-        if self.count > 255 {
+        if self.count > u16::MAX as usize {
             return None;
         }
 
@@ -324,7 +324,7 @@ impl NP_List {
 
         let mut new_index: usize = index.unwrap_or(0);
 
-        let new_item_addr = memory.malloc_borrow(&[0u8; 5])?; // list item
+        let new_item_addr = memory.malloc_borrow(&[0u8; 10])?; // list item
 
         let list_data = || {Self::get_list(list_value().get_addr_value() as usize, memory)};
 
@@ -333,26 +333,26 @@ impl NP_List {
         
 
         if list_data().get_head() == 0 { // empty list
-            list_data().set_head(new_item_addr as u16);
-            list_data().set_tail(new_item_addr as u16);
-            if new_index > 255 {
-                return Err(NP_Error::new("Index cannot be greater than 255!"))
+            list_data().set_head(new_item_addr as u32);
+            list_data().set_tail(new_item_addr as u32);
+            if new_index > u16::MAX as usize {
+                return Err(NP_Error::new("Index cannot be greater than 2^16!"))
             }
-            new_cursor_value().set_index(new_index as u8)
+            new_cursor_value().set_index(new_index as u16)
         } else { // list has items
             let old_tail = NP_Cursor::new(list_data().get_tail() as usize, data.child, list_cursor.schema_addr);
             let old_tail_value = || {old_tail.get_value_mut(memory)};
-            old_tail_value().set_next_addr(new_item_addr as u16);
+            old_tail_value().set_next_addr(new_item_addr as u32);
             new_index = if let Some(idx) = index {
                 idx as usize
             } else {
                 (old_tail_value().get_index() + 1) as usize
             };
-            if new_index > 255 {
-                return Err(NP_Error::new("Index cannot be greater than 255!"))
+            if new_index > u16::MAX as usize {
+                return Err(NP_Error::new("Index cannot be greater than 2^16!"))
             }
-            new_cursor_value().set_index(new_index as u8);
-            list_data().set_tail(new_item_addr as u16);
+            new_cursor_value().set_index(new_index as u16);
+            list_data().set_tail(new_item_addr as u32);
         }
 
 
@@ -438,7 +438,7 @@ impl<'value> NP_Value<'value> for NP_List {
         }
 
         // head + tail
-        let base_size = 4usize;
+        let base_size = 8usize;
 
         let mut acc_size = 0usize;
 
@@ -605,10 +605,10 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     buffer.set(&["10"], "hello, world")?;
     assert_eq!(buffer.get::<&str>(&["10"])?, Some("hello, world"));
     assert_eq!(buffer.calc_bytes()?.after_compaction, buffer.calc_bytes()?.current_buffer);
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 27usize);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 40usize);
     buffer.del(&[])?;
     buffer.compact(None)?;
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 6usize);
 
     // values preserved through compaction
     let mut buffer = factory.new_buffer(None);
@@ -617,12 +617,12 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
     assert_eq!(buffer.get::<&str>(&["10"])?, Some("hello, world"));
     assert_eq!(buffer.get::<&str>(&["12"])?, Some("hello, world2"));
     assert_eq!(buffer.calc_bytes()?.after_compaction, buffer.calc_bytes()?.current_buffer);
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 47usize);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 67usize);
     buffer.compact(None)?;
     assert_eq!(buffer.get::<&str>(&["10"])?, Some("hello, world"));
     assert_eq!(buffer.get::<&str>(&["12"])?, Some("hello, world2"));
     assert_eq!(buffer.calc_bytes()?.after_compaction, buffer.calc_bytes()?.current_buffer);
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 47usize);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 67usize);
 
     buffer.set_with_json(&[], r#"{"value": ["light", "this", "candle"]}"#)?;
     assert_eq!(buffer.get::<&str>(&["0"])?, Some("light"));

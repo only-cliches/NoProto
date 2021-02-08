@@ -341,7 +341,7 @@ impl<'value> NP_Value<'value> for &NP_ULID {
         } else { // new value
 
             value_address = memory.malloc_borrow(&value.value)?;
-            cursor.get_value_mut(memory).set_addr_value(value_address as u16);
+            cursor.get_value_mut(memory).set_addr_value(value_address as u32);
         }                    
         
         Ok(cursor)
@@ -427,7 +427,7 @@ fn set_clear_value_and_compaction_works() -> Result<(), NP_Error> {
 
 
     buffer.compact(None)?;
-    assert_eq!(buffer.calc_bytes()?.current_buffer, 4usize);
+    assert_eq!(buffer.calc_bytes()?.current_buffer, 6usize);
 
     Ok(())
 }
