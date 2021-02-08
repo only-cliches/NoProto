@@ -115,7 +115,7 @@ NoProto takes the performance advantages of compiled formats and implements them
 | Format           | Zero-Copy | Size Limit | Mutable | Schemas  | Byte-wise Sorting |
 |------------------|-----------|------------|---------|----------|-------------------|
 | **Runtime Libs** |           |            |         |          |                   | 
-| *NoProto*        | ✓         | ~64KB      | ✓       | ✓        | ✓                 |
+| *NoProto*        | ✓         | ~4GB       | ✓       | ✓        | ✓                 |
 | Apache Avro      | ✗         | 2^63 Bytes | ✗       | ✓        | ✓                 |
 | JSON             | ✗         | Unlimited  | ✓       | ✗        | ✗                 |
 | BSON             | ✗         | ~16MB      | ✓       | ✗        | ✗                 |
@@ -206,34 +206,34 @@ The format and data used in the benchmarks were taken from the `flatbuffers` ben
 |------------------------------------------------------------|---------|------------|----------|----------|--------------|-------------|
 | **Runtime Libs**                                           |         |            |          |          |              |             |
 | *NoProto*                                                  |         |            |          |          |              |             |
-|        [no_proto](https://crates.io/crates/no_proto)       |    1258 |       1901 |    55556 |    12821 |          209 |         167 |
+|        [no_proto](https://crates.io/crates/no_proto)       |    1393 |       1883 |    55556 |     9524 |          308 |         198 |
 | Apache Avro                                                |         |            |          |          |              |             |
-|         [avro-rs](https://crates.io/crates/avro-rs)        |     155 |         56 |       57 |       41 |          702 |         339 |
+|         [avro-rs](https://crates.io/crates/avro-rs)        |     156 |         57 |       56 |       40 |          702 |         337 |
 | FlexBuffers                                                |         |            |          |          |              |             |
-|     [flexbuffers](https://crates.io/crates/flexbuffers)    |     455 |        955 |    24390 |      297 |          490 |         309 |
+|     [flexbuffers](https://crates.io/crates/flexbuffers)    |     444 |        962 |    24390 |      294 |          490 |         309 |
 | JSON                                                       |         |            |          |          |              |             |
-|            [json](https://crates.io/crates/json)           |     616 |        497 |      619 |      456 |          439 |         184 |
-|      [serde_json](https://crates.io/crates/serde_json)     |     929 |        640 |      650 |      405 |          446 |         198 |
+|            [json](https://crates.io/crates/json)           |     609 |        481 |      607 |      439 |          439 |         184 |
+|      [serde_json](https://crates.io/crates/serde_json)     |     938 |        646 |      644 |      403 |          446 |         198 |
 | BSON                                                       |         |            |          |          |              |             |
-|            [bson](https://crates.io/crates/bson)           |     129 |        116 |      124 |       90 |          414 |         216 |
-|         [rawbson](https://crates.io/crates/rawbson)        |     129 |       1134 |    17857 |       90 |          414 |         216 |
+|            [bson](https://crates.io/crates/bson)           |     129 |        116 |      123 |       90 |          414 |         216 |
+|         [rawbson](https://crates.io/crates/rawbson)        |     130 |       1117 |    17857 |       89 |          414 |         216 |
 | MessagePack                                                |         |            |          |          |              |             |
-|             [rmp](https://crates.io/crates/rmp)            |     661 |        657 |      879 |      213 |          311 |         193 |
-|  [messagepack-rs](https://crates.io/crates/messagepack-rs) |     149 |        263 |      283 |      135 |          296 |         187 |
+|             [rmp](https://crates.io/crates/rmp)            |     661 |        623 |      832 |      202 |          311 |         193 |
+|  [messagepack-rs](https://crates.io/crates/messagepack-rs) |     152 |        266 |      284 |      138 |          296 |         187 |
 | **Compiled Libs**                                          |         |            |          |          |              |             |
 | Flatbuffers                                                |         |            |          |          |              |             |
-|     [flatbuffers](https://crates.io/crates/flatbuffers)    |    3086 |      16393 |   250000 |     2551 |          264 |         181 |
+|     [flatbuffers](https://crates.io/crates/flatbuffers)    |    3165 |      16393 |   250000 |     2532 |          264 |         181 |
 | Bincode                                                    |         |            |          |          |              |             |
-|         [bincode](https://crates.io/crates/bincode)        |    6849 |       9524 |    10204 |     4310 |          163 |         129 |
+|         [bincode](https://crates.io/crates/bincode)        |    6757 |       9259 |    10000 |     4115 |          163 |         129 |
 | Postcard                                                   |         |            |          |          |              |             |
-|        [postcard](https://crates.io/crates/postcard)       |    2841 |       7634 |     7937 |     2273 |          128 |         119 |
+|        [postcard](https://crates.io/crates/postcard)       |    3067 |       7519 |     7937 |     2469 |          128 |         119 |
 | Protocol Buffers                                           |         |            |          |          |              |             |
-|        [protobuf](https://crates.io/crates/protobuf)       |     956 |       1269 |     1252 |      533 |          154 |         141 |
-|           [prost](https://crates.io/crates/prost)          |    1570 |       2096 |     2151 |     1079 |          154 |         142 |
+|        [protobuf](https://crates.io/crates/protobuf)       |     953 |       1305 |     1312 |      529 |          154 |         141 |
+|           [prost](https://crates.io/crates/prost)          |    1464 |       2020 |     2232 |     1040 |          154 |         142 |
 | Abomonation                                                |         |            |          |          |              |             |
-|     [abomonation](https://crates.io/crates/abomonation)    |    2347 |     125000 |   500000 |     2041 |          261 |         163 |
+|     [abomonation](https://crates.io/crates/abomonation)    |    2342 |     125000 |   500000 |     2183 |          261 |         160 |
 | Rkyv                                                       |         |            |          |          |              |             |
-|            [rkyv](https://crates.io/crates/rkyv)           |    1684 |      37037 |   200000 |     1560 |          180 |         152 |
+|            [rkyv](https://crates.io/crates/rkyv)           |    1605 |      37037 |   200000 |     1531 |          180 |         154 |
 
 - **Encode**: Transfer a collection of fields of test data into a serialized `Vec<u8>`.
 - **Decode All**: Deserialize the test object from the `Vec<u8>` into all fields.
@@ -271,6 +271,9 @@ If you need a serialization format with low memory usage that works in `no_std` 
 8. Stable<br/>
 NoProto will never cause a panic in your application.  It has *zero* panics or unwraps, meaning there is no code path that could lead to a panic.  Fallback behavior is to provide a sane default path or bubble an error up to the caller.
 
+9. CPU Independent<br/>
+All numbers and pointers in NoProto buffers are always stored in big endian, so you can safely create buffers on any CPU architecture and know that they will work with any other CPU architecture.
+
 
 ### When to use Flatbuffers / Bincode / CapN Proto
 If you can safely compile all your data types into your application, all the buffers/data is trusted, and you don't intend to mutate buffers after they're created, Bincode/Flatbuffers/CapNProto is a better choice for you.
@@ -279,12 +282,13 @@ If you can safely compile all your data types into your application, all the buf
 If your data changes so often that schemas don't really make sense or the format you use must be self describing, JSON/BSON/MessagePack is a better choice.   Although I'd argue that if you *can* make schemas work you should.  Once you can use a format with schemas you save a ton of space in the resulting buffers and performance far better.
 
 ## Limitations
-- Collections (Map, Tuple, List & Struct) cannot have more than 255 items.  You can nest to get more capacity, for example a list of lists can have up to 255 * 255 items.
+- Structs and Tuples cannot have more than 255 items.
+- Lists and Maps cannot have more than 2^16 (~64k) items.
 - You cannot nest more than 255 levels deep.
 - Struct field names cannot be longer than 255 UTF8 bytes.
 - Enum/Option types are limited to 255 options and each option cannot be more than 255 UTF8 Bytes.
 - Map keys cannot be larger than 255 UTF8 bytes.
-- Buffers cannot be larger than 2^16 bytes or ~64KB.
+- Buffers cannot be larger than 2^32 bytes or ~4GB.
 
 ## Unsafe
 This library makes use of `unsafe` to get better performance.  Generally speaking, it's not possible to have a high performance serialization library without `unsafe`.  It is only used where performance improvements are significant and additional checks are performed so that the worst case for any `unsafe` block is it leads to junk data in a buffer.

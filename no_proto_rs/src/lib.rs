@@ -210,34 +210,34 @@
 //! |------------------------------------------------------------|---------|------------|----------|----------|--------------|-------------|
 //! | **Runtime Libs**                                           |         |            |          |          |              |             |
 //! | *NoProto*                                                  |         |            |          |          |              |             |
-//! |        [no_proto](https://crates.io/crates/no_proto)       |    1258 |       1901 |    55556 |    12821 |          209 |         167 |
+//! |        [no_proto](https://crates.io/crates/no_proto)       |    1393 |       1883 |    55556 |     9524 |          308 |         198 |
 //! | Apache Avro                                                |         |            |          |          |              |             |
-//! |         [avro-rs](https://crates.io/crates/avro-rs)        |     155 |         56 |       57 |       41 |          702 |         339 |
+//! |         [avro-rs](https://crates.io/crates/avro-rs)        |     156 |         57 |       56 |       40 |          702 |         337 |
 //! | FlexBuffers                                                |         |            |          |          |              |             |
-//! |     [flexbuffers](https://crates.io/crates/flexbuffers)    |     455 |        955 |    24390 |      297 |          490 |         309 |
+//! |     [flexbuffers](https://crates.io/crates/flexbuffers)    |     444 |        962 |    24390 |      294 |          490 |         309 |
 //! | JSON                                                       |         |            |          |          |              |             |
-//! |            [json](https://crates.io/crates/json)           |     616 |        497 |      619 |      456 |          439 |         184 |
-//! |      [serde_json](https://crates.io/crates/serde_json)     |     929 |        640 |      650 |      405 |          446 |         198 |
+//! |            [json](https://crates.io/crates/json)           |     609 |        481 |      607 |      439 |          439 |         184 |
+//! |      [serde_json](https://crates.io/crates/serde_json)     |     938 |        646 |      644 |      403 |          446 |         198 |
 //! | BSON                                                       |         |            |          |          |              |             |
-//! |            [bson](https://crates.io/crates/bson)           |     129 |        116 |      124 |       90 |          414 |         216 |
-//! |         [rawbson](https://crates.io/crates/rawbson)        |     129 |       1134 |    17857 |       90 |          414 |         216 |
+//! |            [bson](https://crates.io/crates/bson)           |     129 |        116 |      123 |       90 |          414 |         216 |
+//! |         [rawbson](https://crates.io/crates/rawbson)        |     130 |       1117 |    17857 |       89 |          414 |         216 |
 //! | MessagePack                                                |         |            |          |          |              |             |
-//! |             [rmp](https://crates.io/crates/rmp)            |     661 |        657 |      879 |      213 |          311 |         193 |
-//! |  [messagepack-rs](https://crates.io/crates/messagepack-rs) |     149 |        263 |      283 |      135 |          296 |         187 |
+//! |             [rmp](https://crates.io/crates/rmp)            |     661 |        623 |      832 |      202 |          311 |         193 |
+//! |  [messagepack-rs](https://crates.io/crates/messagepack-rs) |     152 |        266 |      284 |      138 |          296 |         187 |
 //! | **Compiled Libs**                                          |         |            |          |          |              |             |
 //! | Flatbuffers                                                |         |            |          |          |              |             |
-//! |     [flatbuffers](https://crates.io/crates/flatbuffers)    |    3086 |      16393 |   250000 |     2551 |          264 |         181 |
+//! |     [flatbuffers](https://crates.io/crates/flatbuffers)    |    3165 |      16393 |   250000 |     2532 |          264 |         181 |
 //! | Bincode                                                    |         |            |          |          |              |             |
-//! |         [bincode](https://crates.io/crates/bincode)        |    6849 |       9524 |    10204 |     4310 |          163 |         129 |
+//! |         [bincode](https://crates.io/crates/bincode)        |    6757 |       9259 |    10000 |     4115 |          163 |         129 |
 //! | Postcard                                                   |         |            |          |          |              |             |
-//! |        [postcard](https://crates.io/crates/postcard)       |    2841 |       7634 |     7937 |     2273 |          128 |         119 |
+//! |        [postcard](https://crates.io/crates/postcard)       |    3067 |       7519 |     7937 |     2469 |          128 |         119 |
 //! | Protocol Buffers                                           |         |            |          |          |              |             |
-//! |        [protobuf](https://crates.io/crates/protobuf)       |     956 |       1269 |     1252 |      533 |          154 |         141 |
-//! |           [prost](https://crates.io/crates/prost)          |    1570 |       2096 |     2151 |     1079 |          154 |         142 |
+//! |        [protobuf](https://crates.io/crates/protobuf)       |     953 |       1305 |     1312 |      529 |          154 |         141 |
+//! |           [prost](https://crates.io/crates/prost)          |    1464 |       2020 |     2232 |     1040 |          154 |         142 |
 //! | Abomonation                                                |         |            |          |          |              |             |
-//! |     [abomonation](https://crates.io/crates/abomonation)    |    2347 |     125000 |   500000 |     2041 |          261 |         163 |
+//! |     [abomonation](https://crates.io/crates/abomonation)    |    2342 |     125000 |   500000 |     2183 |          261 |         160 |
 //! | Rkyv                                                       |         |            |          |          |              |             |
-//! |            [rkyv](https://crates.io/crates/rkyv)           |    1684 |      37037 |   200000 |     1560 |          180 |         152 |
+//! |            [rkyv](https://crates.io/crates/rkyv)           |    1605 |      37037 |   200000 |     1531 |          180 |         154 |
 //! 
 //! - **Encode**: Transfer a collection of fields of test data into a serialized `Vec<u8>`.
 //! - **Decode All**: Deserialize the test object from the `Vec<u8>` into all fields.

@@ -1,4 +1,4 @@
-# 0.9.4
+# 0.9.4 February 8th, 2021
 - Minor performance improvements.
 - Switched to 32 bit addresses instead of 16 bit.  This is a breaking change, buffers created with previous versions will not open with this version.
 

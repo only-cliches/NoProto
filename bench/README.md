@@ -29,6 +29,101 @@ It's challenging to provide a level playing field for every library and implemen
 
 # Benchmarks Histry
 
+## Feb 8, 2021
+### 0.9.4
+M1 Macbook Air with 8GB RAM (Native)
+```
+========= SIZE BENCHMARK =========
+NoProto:     size: 308b, zlib: 198b
+Flatbuffers: size: 264b, zlib: 181b
+Bincode:     size: 163b, zlib: 129b
+Postcard:    size: 128b, zlib: 119b
+Protobuf:    size: 154b, zlib: 141b
+MessagePack: size: 311b, zlib: 193b
+JSON:        size: 439b, zlib: 184b
+BSON:        size: 414b, zlib: 216b
+Prost:       size: 154b, zlib: 142b
+Avro:        size: 702b, zlib: 337b
+Flexbuffers: size: 490b, zlib: 309b
+Abomonation: size: 261b, zlib: 160b
+Rkyv:        size: 180b, zlib: 154b
+Raw BSON:    size: 414b, zlib: 216b
+MessagePack: size: 296b, zlib: 187b
+Serde JSON:  size: 446b, zlib: 198b
+
+======== ENCODE BENCHMARK ========
+NoProto:          1393 ops/ms 1.00
+Flatbuffers:      3165 ops/ms 2.27
+Bincode:          6757 ops/ms 4.84
+Postcard:         3067 ops/ms 2.20
+Protobuf:          953 ops/ms 0.68
+MessagePack:       661 ops/ms 0.47
+JSON:              609 ops/ms 0.44
+BSON:              129 ops/ms 0.09
+Prost:            1464 ops/ms 1.05
+Avro:              156 ops/ms 0.11
+Flexbuffers:       444 ops/ms 0.32
+Abomonation:      2342 ops/ms 1.68
+Rkyv:             1605 ops/ms 1.15
+Raw BSON:          130 ops/ms 0.09
+MessagePack:       152 ops/ms 0.11
+Serde JSON:        938 ops/ms 0.67
+
+======== DECODE BENCHMARK ========
+NoProto:          1883 ops/ms 1.00
+Flatbuffers:     16393 ops/ms 8.57
+Bincode:          9259 ops/ms 4.90
+Postcard:         7519 ops/ms 3.99
+Protobuf:         1305 ops/ms 0.69
+MessagePack:       623 ops/ms 0.33
+JSON:              481 ops/ms 0.26
+BSON:              116 ops/ms 0.06
+Prost:            2020 ops/ms 1.07
+Avro:               57 ops/ms 0.03
+Flexbuffers:       962 ops/ms 0.51
+Abomonation:    125000 ops/ms 61.66
+Rkyv:            37037 ops/ms 19.16
+Raw BSON:         1117 ops/ms 0.59
+MessagePack:       266 ops/ms 0.14
+Serde JSON:        646 ops/ms 0.34
+
+====== DECODE ONE BENCHMARK ======
+NoProto:         55556 ops/ms 1.00
+Flatbuffers:    250000 ops/ms 3.88
+Bincode:         10000 ops/ms 0.18
+Postcard:         7937 ops/ms 0.14
+Protobuf:         1312 ops/ms 0.02
+MessagePack:       832 ops/ms 0.02
+JSON:              607 ops/ms 0.01
+BSON:              123 ops/ms 0.00
+Prost:            2232 ops/ms 0.04
+Avro:               56 ops/ms 0.00
+Flexbuffers:     24390 ops/ms 0.44
+Abomonation:    500000 ops/ms 7.54
+Rkyv:           200000 ops/ms 3.36
+Raw BSON:        17857 ops/ms 0.32
+MessagePack:       284 ops/ms 0.01
+Serde JSON:        644 ops/ms 0.01
+
+====== UPDATE ONE BENCHMARK ======
+NoProto:          9524 ops/ms 1.00
+Flatbuffers:      2532 ops/ms 0.27
+Bincode:          4115 ops/ms 0.43
+Postcard:         2469 ops/ms 0.26
+Protobuf:          529 ops/ms 0.06
+MessagePack:       202 ops/ms 0.02
+JSON:              439 ops/ms 0.05
+BSON:               90 ops/ms 0.01
+Prost:            1040 ops/ms 0.11
+Avro:               40 ops/ms 0.00
+Flexbuffers:       294 ops/ms 0.03
+Abomonation:      2183 ops/ms 0.23
+Rkyv:             1531 ops/ms 0.16
+Raw BSON:           89 ops/ms 0.01
+MessagePack:       138 ops/ms 0.01
+Serde JSON:        403 ops/ms 0.04
+```
+
 ## Feb 7, 2021
 ### 0.9.3
 M1 Macbook Air with 8GB RAM (Native)
