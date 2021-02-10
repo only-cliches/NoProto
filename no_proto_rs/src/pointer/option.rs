@@ -207,7 +207,7 @@ impl<'value> NP_Value<'value> for NP_Enum {
         for (idx, choice) in data.choices.iter().enumerate() {
             result.push_str("\"");
             if let NP_Enum::Some(stri) = choice {
-                result.push_str(stri);
+                result.push_str(stri.as_str());
             }
             result.push_str("\"");
             if idx < last_choice {

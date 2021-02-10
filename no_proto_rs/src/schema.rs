@@ -963,8 +963,11 @@ pub struct NP_Parsed_Schema {
     pub val: NP_Value_Kind, 
     pub sortable: bool, 
     pub i: NP_TypeKeys, 
-    pub data: Arc<*const u8>
+    pub data: Arc<*const u8> // *const NP_XXX_Data
 }
+
+unsafe impl Sync for NP_Parsed_Schema {}
+unsafe impl Send for NP_Parsed_Schema {}
 
 impl Default for NP_Parsed_Schema {
     fn default() -> Self {

@@ -1,7 +1,10 @@
+# 0.9.5 February 10th, 2021
+- Added `Send` and `Sync` to NP_Schema so NP_Factory would be safe to send across threads.
+- Added test to make sure NP_Factory is always safe to send across threads in the future.
+
 # 0.9.4 February 8th, 2021
 - Minor performance improvements.
 - Switched to 32 bit addresses instead of 16 bit.  This is a breaking change, buffers created with previous versions will not open with this version.
-
 
 # 0.9.3 February 7th, 2021
 - Tuple types are now packed much tighter but cannot be mutated in schema.  But no longer need `close_sortable` and `open_sortable` methods.
