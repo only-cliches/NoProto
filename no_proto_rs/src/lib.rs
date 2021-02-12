@@ -744,8 +744,11 @@ impl DerefMut for NP_Packed_Buffer {
 #[test]
 fn threading_works() {
     let fact = NP_Factory::new("string()").unwrap();
+    let buffer = fact.new_buffer(None);
     std::thread::spawn(move || {
         let f = fact.export_schema_bytes();
-        println!("{:?}", f);
-    });
+        let b = buffer;
+        assert_eq!(6, b.calc_bytes().unwrap().current_buffer);
+        assert_eq!(8, f.len());
+    }).join().unwrap()
 }

@@ -1,3 +1,6 @@
+# 0.9.51 February 10th, 2021
+- Added `Send` to NP_Buffer Memory types.
+
 # 0.9.5 February 10th, 2021
 - Added `Send` and `Sync` to NP_Schema so NP_Factory would be safe to send across threads.
 - Added test to make sure NP_Factory is always safe to send across threads in the future.
