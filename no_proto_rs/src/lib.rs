@@ -467,20 +467,15 @@ macro_rules! np_path {
 /// [Go to NP_Buffer docs](./buffer/struct.NP_Buffer.html)
 /// 
 #[derive(Debug)]
-pub struct NP_Factory<'fact> {
+pub struct NP_Factory {
     /// schema data used by this factory
     pub schema: NP_Schema,
-    schema_bytes: NP_Schema_Bytes<'fact>
+    schema_bytes: Vec<u8>
 }
 
-/// The schema bytes container
-#[derive(Debug, Clone)]
-pub enum NP_Schema_Bytes<'bytes> {
-    /// Borrwed schema
-    Borrwed(&'bytes [u8]),
-    /// Owned bytes
-    Owned(Vec<u8>)
-}
+unsafe impl Send for NP_Factory {}
+unsafe impl Sync for NP_Factory {}
+
 
 /// When calling `maybe_compact` on a buffer, this struct is provided to help make a choice on wether to compact or not.
 #[derive(Debug, Eq, PartialEq)]
@@ -493,7 +488,7 @@ pub struct NP_Size_Data {
     pub wasted_bytes: usize
 }
 
-impl<'fact> NP_Factory<'fact> {
+impl NP_Factory {
 
     /// Generate a new factory from an ES6 schema
     /// 
@@ -507,7 +502,7 @@ impl<'fact> NP_Factory<'fact> {
         schema = NP_Schema::resolve_portals(schema)?;
 
         Ok(Self {
-            schema_bytes: NP_Schema_Bytes::Owned(schema_bytes),
+            schema_bytes: schema_bytes,
             schema:  NP_Schema {
                 is_sortable: is_sortable,
                 parsed: schema
@@ -528,7 +523,7 @@ impl<'fact> NP_Factory<'fact> {
         schema = NP_Schema::resolve_portals(schema)?;
 
         Ok(Self {
-            schema_bytes: NP_Schema_Bytes::Owned(schema_bytes),
+            schema_bytes: schema_bytes,
             schema:  NP_Schema {
                 is_sortable: is_sortable,
                 parsed: schema
@@ -540,31 +535,14 @@ impl<'fact> NP_Factory<'fact> {
     /// Create a new factory from a compiled schema byte array.
     /// The byte schemas are at least an order of magnitude faster to parse than JSON schemas.
     /// 
-    pub fn new_bytes(schema_bytes: &'fact [u8]) -> Result<Self, NP_Error> {
+    pub fn new_bytes(schema_bytes: &[u8]) -> Result<Self, NP_Error> {
         
         let (is_sortable, mut schema) = NP_Schema::from_bytes(Vec::new(), 0, schema_bytes);
 
         schema = NP_Schema::resolve_portals(schema)?;
 
         Ok(Self {
-            schema_bytes: NP_Schema_Bytes::Borrwed(schema_bytes),
-            schema:  NP_Schema { 
-                is_sortable: is_sortable,
-                parsed: schema
-            }
-        })
-    }
-
-    /// Generate factory from *const [u8], probably not safe to use generally speaking
-    #[doc(hidden)]
-    pub unsafe fn new_bytes_ptr(schema_bytes: *const [u8]) -> Result<Self, NP_Error> {
-        
-        let (is_sortable, mut schema) = NP_Schema::from_bytes(Vec::new(), 0, &*schema_bytes );
-
-        schema = NP_Schema::resolve_portals(schema)?;
-
-        Ok(Self {
-            schema_bytes: NP_Schema_Bytes::Borrwed(&*schema_bytes),
+            schema_bytes: Vec::from(schema_bytes),
             schema:  NP_Schema { 
                 is_sortable: is_sortable,
                 parsed: schema
@@ -575,10 +553,7 @@ impl<'fact> NP_Factory<'fact> {
     /// Get a copy of the compiled schema byte array
     /// 
     pub fn export_schema_bytes(&self) -> &[u8] {
-        match &self.schema_bytes {
-            NP_Schema_Bytes::Owned(x) => x,
-            NP_Schema_Bytes::Borrwed(x) => *x
-        }
+        &self.schema_bytes[..]
     }
 
     /// Exports this factorie's schema to ES6 IDL.  This works regardless of wether the factory was created with `NP_Factory::new` or `NP_Factory::new_bytes`.

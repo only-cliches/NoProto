@@ -293,7 +293,7 @@
 //! 
 
 use alloc::str::from_utf8_unchecked;
-use crate::{NP_Schema_Bytes, hashmap::{SEED, murmurhash3_x86_32}, memory::NP_Memory_Owned};
+use crate::{hashmap::{SEED, murmurhash3_x86_32}, memory::NP_Memory_Owned};
 
 use crate::{hashmap::NP_HashMap, pointer::uuid::NP_UUID, utils::opt_err};
 use crate::NP_Factory;
@@ -337,7 +337,7 @@ struct NP_Str_Addr {
 /// 
 #[derive(Debug)]
 #[doc(hidden)]
-enum NP_RPC_Spec<'spec> {
+enum NP_RPC_Spec {
     /// RPC Function
     RPC { 
         /// Full path (module_path::name)
@@ -354,7 +354,7 @@ enum NP_RPC_Spec<'spec> {
     /// RPC Message
     MSG { 
         /// Factory for this message
-        factory: NP_Factory<'spec>
+        factory: NP_Factory
     }
 }
 
@@ -369,7 +369,7 @@ pub struct NP_RPC_Factory<'fact> {
     spec: NP_RPC_Specification<'fact>,
     method_hash: NP_HashMap,
     /// blank buffer
-    empty: NP_Factory<'fact>
+    empty: NP_Factory
 }
 
 #[derive(Debug)]
@@ -401,7 +401,7 @@ impl<'spec> NP_RCP_Spec<'spec> {
 #[doc(hidden)]
 pub struct NP_RPC_Specification<'spec> {
     /// Specification for this factory
-    specs: Vec<NP_RPC_Spec<'spec>>,
+    specs: Vec<NP_RPC_Spec>,
     bytes: NP_RCP_Spec<'spec>,
     /// Message HashMap
     spec_msg_hash: NP_HashMap,
@@ -582,7 +582,7 @@ impl<'fact> NP_RPC_Factory<'fact> {
                             let schema = NP_Schema::from_json(Vec::new(), &Box::new(jspec.clone()))?;
                             let factory = NP_Factory {
                                 schema: NP_Schema { is_sortable: schema.0, parsed: schema.2 },
-                                schema_bytes: NP_Schema_Bytes::Owned(schema.1)
+                                schema_bytes: schema.1
                             };
                             let full_name = format!("{}::{}", module, msg_name);
 
@@ -819,10 +819,8 @@ impl<'fact> NP_RPC_Factory<'fact> {
         while offset < end_of_messages {
             let schema_len = read_u16(bytes_rpc_spec, offset);
             offset += 2;
-            // we're bypassing rust's lifetime system here and creating a self referential struct
-            // it's safe because everything is immutable plus spec.specs and spec.bytes have the same lifetime
             spec.specs.push(NP_RPC_Spec::MSG { 
-                factory: unsafe { NP_Factory::new_bytes_ptr(&spec.bytes.read()[offset..(offset + schema_len)] as *const [u8])? }
+                factory: unsafe { NP_Factory::new_bytes(&spec.bytes.read()[offset..(offset + schema_len)])? }
             });
             offset += schema_len;
         }

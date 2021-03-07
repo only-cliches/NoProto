@@ -43,6 +43,8 @@ pub struct NP_Buffer<M: NP_Memory + Clone + NP_Mem_New> {
     cursor: NP_Cursor
 }
 
+// unsafe impl Send for NP_Buffer {}
+
 impl<M: NP_Memory + Clone + NP_Mem_New> Clone for NP_Buffer<M> {
     fn clone(&self) -> Self {
         let new_mem = self.memory.clone();
