@@ -339,6 +339,8 @@ pub struct NP_Memory_Ref<'memory> {
     pub schema: &'memory Vec<NP_Parsed_Schema>
 }
 
+unsafe impl Send for NP_Memory_Ref<'_> {}
+
 impl<'memory> Clone for NP_Memory_Ref<'memory> {
     fn clone(&self) -> Self {
         Self {
@@ -561,6 +563,8 @@ pub struct NP_Memory_Ref_Mut<'memory> {
     pub root: usize,
     pub schema: SchemaVec<'memory>
 }
+
+unsafe impl Send for NP_Memory_Ref_Mut<'_> {}
 
 impl<'memory> Clone for NP_Memory_Ref_Mut<'memory> {
     fn clone(&self) -> Self {
