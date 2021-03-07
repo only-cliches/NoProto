@@ -79,6 +79,8 @@ pub struct NP_Memory_Owned {
     pub max_size: usize
 }
 
+unsafe impl Send for NP_Memory_Owned {}
+
 impl Clone for NP_Memory_Owned {
     fn clone(&self) -> Self {
         Self {
