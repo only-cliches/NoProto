@@ -197,7 +197,7 @@ impl<'value> NP_Value<'value> for NP_Portal {
         None
     }
 
-    fn to_json<M: NP_Memory>(depth:usize, cursor: &NP_Cursor, memory: &'value M) -> NP_JSON {
+    fn to_json(depth:usize, cursor: &NP_Cursor, memory: &'value NP_Memory) -> NP_JSON {
         let data = unsafe { &*(*memory.get_schema(cursor.schema_addr).data as *const NP_Portal_Data) };
 
         let mut next = cursor.clone();
@@ -206,7 +206,7 @@ impl<'value> NP_Value<'value> for NP_Portal {
         NP_Cursor::json_encode(depth + 1, &next, memory)
     }
 
-    fn set_from_json<'set, M: NP_Memory>(depth: usize, apply_null: bool, cursor: NP_Cursor, memory: &'set M, value: &Box<NP_JSON>) -> Result<(), NP_Error> where Self: 'set + Sized {
+    fn set_from_json<'set>(depth: usize, apply_null: bool, cursor: NP_Cursor, memory: &'set NP_Memory, value: &Box<NP_JSON>) -> Result<(), NP_Error> where Self: 'set + Sized {
         
         let data = unsafe { &*(*memory.get_schema(cursor.schema_addr).data as *const NP_Portal_Data) };
 
@@ -217,7 +217,7 @@ impl<'value> NP_Value<'value> for NP_Portal {
        
     }
 
-    fn get_size<M: NP_Memory>(depth:usize, cursor: &'value NP_Cursor, memory: &'value M) -> Result<usize, NP_Error> {
+    fn get_size(depth:usize, cursor: &'value NP_Cursor, memory: &'value NP_Memory) -> Result<usize, NP_Error> {
         let data = unsafe { &*(*memory.get_schema(cursor.schema_addr).data as *const NP_Portal_Data) };
         let mut next = cursor.clone();
         next.schema_addr = data.schema;
@@ -226,7 +226,7 @@ impl<'value> NP_Value<'value> for NP_Portal {
          
     }
 
-    fn do_compact<M: NP_Memory, M2: NP_Memory>(depth:usize, mut from_cursor: NP_Cursor, from_memory: &'value M, mut to_cursor: NP_Cursor, to_memory: &'value M2) -> Result<NP_Cursor, NP_Error> where Self: 'value + Sized {
+    fn do_compact(depth:usize, mut from_cursor: NP_Cursor, from_memory: &'value NP_Memory, mut to_cursor: NP_Cursor, to_memory: &'value NP_Memory) -> Result<NP_Cursor, NP_Error> where Self: 'value + Sized {
         
         let data = unsafe { &*(*from_memory.get_schema(from_cursor.schema_addr).data as *const NP_Portal_Data) };
 

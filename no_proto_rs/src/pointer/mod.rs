@@ -85,8 +85,8 @@ pub trait NP_Pointer_Bytes {
     fn get_key_addr(&self) -> u32                                  { 0 }
     fn reset(&mut self)                                            {   }
     fn get_size(&self) -> usize                                    { 0 }
-    fn get_key<'key>(&self, memory: &'key dyn NP_Memory) -> &'key str  { "" }
-    fn get_key_size<'key>(&self, memory: &'key dyn NP_Memory) -> usize { 0  }
+    fn get_key<'key>(&self, memory: &'key NP_Memory) -> &'key str  { "" }
+    fn get_key_size<'key>(&self, memory: &'key NP_Memory) -> usize { 0  }
 }
 
 impl NP_Pointer_Bytes for NP_Pointer_Scalar {
@@ -138,7 +138,7 @@ impl NP_Pointer_Bytes for NP_Pointer_Map_Item {
     #[inline(always)]
     fn get_size(&self) -> usize { 12 }
     #[inline(always)]
-    fn get_key<'key>(&self, memory: &'key dyn NP_Memory) -> &'key str {
+    fn get_key<'key>(&self, memory: &'key NP_Memory) -> &'key str {
         let key_addr = self.get_key_addr() as usize;
         if key_addr == 0 {
             return "";
@@ -149,7 +149,7 @@ impl NP_Pointer_Bytes for NP_Pointer_Map_Item {
         }
     }
     #[inline(always)]
-    fn get_key_size<'key>(&self, memory: &'key dyn NP_Memory) -> usize {
+    fn get_key_size<'key>(&self, memory: &'key NP_Memory) -> usize {
         let key_addr = self.get_key_addr() as usize;
         if key_addr == 0 {
             return 0;
@@ -230,11 +230,11 @@ impl<'cursor> NP_Cursor {
     
     /// Get the value bytes of this cursor
     #[inline(always)]
-    pub fn get_value<X: NP_Memory>(&self, memory: &X) -> &'cursor dyn NP_Pointer_Bytes {
-        let ptr = memory.write_bytes().as_mut_ptr();
+    pub fn get_value(&self, memory: &NP_Memory) -> &'cursor dyn NP_Pointer_Bytes {
+        let ptr = memory.read_bytes().as_ptr();
         // if requesting root pointer or address is higher than buffer length
-        if self.buff_addr == memory.get_root() || self.buff_addr > memory.read_bytes().len() {
-            unsafe { & *(ptr.add(memory.get_root()) as *const NP_Pointer_Scalar) }
+        if self.buff_addr == memory.root || self.buff_addr > memory.read_bytes().len() {
+            unsafe { & *(ptr.add(memory.root) as *const NP_Pointer_Scalar) }
         } else {
             match memory.get_schema(self.parent_schema_addr).i {
                 NP_TypeKeys::List   => {
@@ -258,11 +258,11 @@ impl<'cursor> NP_Cursor {
 
         /// Get the value bytes of this cursor
         #[inline(always)]
-        pub fn get_value_mut<X: NP_Memory>(&self, memory: &X) -> &'cursor mut dyn NP_Pointer_Bytes {
+        pub fn get_value_mut(&self, memory: &NP_Memory) -> &'cursor mut dyn NP_Pointer_Bytes {
             let ptr = memory.write_bytes().as_mut_ptr();
             // if requesting root pointer or address is higher than buffer length
-            if self.buff_addr == memory.get_root() || self.buff_addr > memory.read_bytes().len() {
-                unsafe { &mut *(ptr.add(memory.get_root()) as *mut NP_Pointer_Scalar) }
+            if self.buff_addr == memory.root || self.buff_addr > memory.read_bytes().len() {
+                unsafe { &mut *(ptr.add(memory.root) as *mut NP_Pointer_Scalar) }
             } else {
                 match memory.get_schema(self.parent_schema_addr).i {
                     NP_TypeKeys::List   => {
@@ -287,7 +287,7 @@ impl<'cursor> NP_Cursor {
     /// Given a starting cursor, select into the buffer at a new location
     /// 
     #[inline(always)]
-    pub fn select<M: NP_Memory>(memory: &M, cursor: NP_Cursor, make_path: bool, schema_query: bool, path: &[&str]) -> Result<Option<NP_Cursor>, NP_Error> {
+    pub fn select(memory: &NP_Memory, cursor: NP_Cursor, make_path: bool, schema_query: bool, path: &[&str]) -> Result<Option<NP_Cursor>, NP_Error> {
 
         let mut loop_cursor = cursor;
     
@@ -381,7 +381,7 @@ impl<'cursor> NP_Cursor {
     }
 
     /// Set the max value at this cursor
-    pub fn set_max<M: NP_Memory>(cursor: NP_Cursor, memory: &M) -> Result<bool, NP_Error> {
+    pub fn set_max(cursor: NP_Cursor, memory: &NP_Memory) -> Result<bool, NP_Error> {
 
         if cursor.parent_type == NP_Cursor_Parent::Tuple {
             memory.write_bytes()[cursor.buff_addr - 1] = 1;
@@ -444,7 +444,7 @@ impl<'cursor> NP_Cursor {
     }
 
     /// Set the min value at this cursor
-    pub fn set_min<M: NP_Memory>(cursor: NP_Cursor, memory: &M) -> Result<bool, NP_Error> {
+    pub fn set_min(cursor: NP_Cursor, memory: &NP_Memory) -> Result<bool, NP_Error> {
 
         if cursor.parent_type == NP_Cursor_Parent::Tuple {
             memory.write_bytes()[cursor.buff_addr - 1] = 1;
@@ -509,7 +509,7 @@ impl<'cursor> NP_Cursor {
     /// Exports this pointer and all it's descendants into a JSON object.
     /// This will create a copy of the underlying data and return default values where there isn't data.
     /// 
-    pub fn json_encode<M: NP_Memory>(depth: usize, cursor: &NP_Cursor, memory: &M) -> NP_JSON {
+    pub fn json_encode(depth: usize, cursor: &NP_Cursor, memory: &NP_Memory) -> NP_JSON {
 
         if depth > 255 { return NP_JSON::Null }
 
@@ -547,7 +547,7 @@ impl<'cursor> NP_Cursor {
 
     /// Compact from old cursor and memory into new cursor and memory
     /// 
-    pub fn compact<M: NP_Memory, M2: NP_Memory>(depth: usize, from_cursor: NP_Cursor, from_memory: &M, to_cursor: NP_Cursor, to_memory: &M2) -> Result<NP_Cursor, NP_Error> {
+    pub fn compact(depth: usize, from_cursor: NP_Cursor, from_memory: &NP_Memory, to_cursor: NP_Cursor, to_memory: &NP_Memory) -> Result<NP_Cursor, NP_Error> {
 
         if depth > 255 { return Err(NP_Error::RecursionLimit)}
 
@@ -585,7 +585,7 @@ impl<'cursor> NP_Cursor {
 
     /// Set default for this value.  Not related to the schema default, this is the default value for this data type
     /// 
-    pub fn set_schema_default<M: NP_Memory>(cursor: NP_Cursor, memory: &M) -> Result<(), NP_Error> {
+    pub fn set_schema_default(cursor: NP_Cursor, memory: &NP_Memory) -> Result<(), NP_Error> {
 
         let schema = memory.get_schema(cursor.schema_addr);
 
@@ -623,7 +623,7 @@ impl<'cursor> NP_Cursor {
     }
 
     /// Set a JSON value into the buffer
-    pub fn set_from_json<M: NP_Memory>(depth: usize, apply_null: bool, cursor: NP_Cursor, memory: &M, json: &Box<NP_JSON>) -> Result<(), NP_Error> {
+    pub fn set_from_json(depth: usize, apply_null: bool, cursor: NP_Cursor, memory: &NP_Memory, json: &Box<NP_JSON>) -> Result<(), NP_Error> {
 
 
         if depth > 255 { return Err(NP_Error::RecursionLimit) }
@@ -673,7 +673,7 @@ impl<'cursor> NP_Cursor {
     /// 
     /// Returns `true` if something was deleted, `false` otherwise.
     /// 
-    pub fn delete<M: NP_Memory>(cursor: NP_Cursor, memory: &M) -> Result<bool, NP_Error> {
+    pub fn delete(cursor: NP_Cursor, memory: &NP_Memory) -> Result<bool, NP_Error> {
         
         if cursor.buff_addr == 0 {
             return Ok(false)
@@ -691,7 +691,7 @@ impl<'cursor> NP_Cursor {
 
     /// Calculate the number of bytes used by this pointer and it's descendants.
     /// 
-    pub fn calc_size<M: NP_Memory>(depth: usize, cursor: &NP_Cursor, memory: &M) -> Result<usize, NP_Error> {
+    pub fn calc_size(depth: usize, cursor: &NP_Cursor, memory: &NP_Memory) -> Result<usize, NP_Error> {
 
         if depth > 255 { return Err(NP_Error::new("Depth error!")) }
         
@@ -750,10 +750,10 @@ pub trait NP_Scalar<'scalar> {
     fn schema_default(_schema: &'scalar NP_Parsed_Schema) -> Option<Self> where Self: Sized;
 
     /// Get the max value for this data type
-    fn np_max_value<M: NP_Memory>(_cursor: &NP_Cursor, _memory: &M) -> Option<Self> where Self: Sized;
+    fn np_max_value(_cursor: &NP_Cursor, _memory: &NP_Memory) -> Option<Self> where Self: Sized;
 
     /// Get the min value for this data type
-    fn np_min_value<M: NP_Memory>(_cursor: &NP_Cursor, _memory: &M) -> Option<Self> where Self: Sized;
+    fn np_min_value(_cursor: &NP_Cursor, _memory: &NP_Memory) -> Option<Self> where Self: Sized;
 
 }
 
@@ -792,18 +792,18 @@ pub trait NP_Value<'value> {
 
     /// Set the value of this scalar into the buffer
     /// 
-    fn set_value<'set, M: NP_Memory>(_cursor: NP_Cursor, _memory: &'set M, _value: Self) -> Result<NP_Cursor, NP_Error> where Self: 'set + Sized {
+    fn set_value<'set>(_cursor: NP_Cursor, _memory: &'set NP_Memory, _value: Self) -> Result<NP_Cursor, NP_Error> where Self: 'set + Sized {
         let message = "This type doesn't support set_value!".to_owned();
         Err(NP_Error::new(message.as_str()))
     }
 
     /// Set value from JSON
     /// 
-    fn set_from_json<'set, M: NP_Memory>(depth: usize, apply_null: bool, cursor: NP_Cursor, memory: &'set M, value: &Box<NP_JSON>) -> Result<(), NP_Error> where Self: 'set + Sized;
+    fn set_from_json<'set>(depth: usize, apply_null: bool, cursor: NP_Cursor, memory: &'set NP_Memory, value: &Box<NP_JSON>) -> Result<(), NP_Error> where Self: 'set + Sized;
 
     /// Pull the data from the buffer and convert into type
     /// 
-    fn into_value<M: NP_Memory>(_cursor: &NP_Cursor, _memory: &'value M) -> Result<Option<Self>, NP_Error> where Self: Sized {
+    fn into_value(_cursor: &NP_Cursor, _memory: &'value NP_Memory) -> Result<Option<Self>, NP_Error> where Self: Sized {
         let message = "This type doesn't support into!".to_owned();
         Err(NP_Error::new(message.as_str()))
     }
@@ -814,15 +814,15 @@ pub trait NP_Value<'value> {
 
     /// Convert this type into a JSON value (recursive for collections)
     /// 
-    fn to_json<M: NP_Memory>(depth: usize, cursor: &NP_Cursor, memory: &'value M) -> NP_JSON;
+    fn to_json(depth: usize, cursor: &NP_Cursor, memory: &'value NP_Memory) -> NP_JSON;
 
     /// Calculate the size of this pointer and it's children (recursive for collections)
     /// 
-    fn get_size<M: NP_Memory>(depth: usize, cursor: &'value NP_Cursor, memory: &'value M) -> Result<usize, NP_Error>;
+    fn get_size(depth: usize, cursor: &'value NP_Cursor, memory: &'value NP_Memory) -> Result<usize, NP_Error>;
     
     /// Handle copying from old pointer/buffer to new pointer/buffer (recursive for collections)
     /// 
-    fn do_compact<M: NP_Memory, M2: NP_Memory>(_depth: usize, from_cursor: NP_Cursor, from_memory: &'value M, to_cursor: NP_Cursor, to_memory: &'value M2) -> Result<NP_Cursor, NP_Error> where Self: 'value + Sized {
+    fn do_compact(_depth: usize, from_cursor: NP_Cursor, from_memory: &'value NP_Memory, to_cursor: NP_Cursor, to_memory: &'value NP_Memory) -> Result<NP_Cursor, NP_Error> where Self: 'value + Sized {
 
         match Self::into_value(&from_cursor, from_memory)? {
             Some(x) => {

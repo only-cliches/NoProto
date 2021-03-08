@@ -53,7 +53,7 @@ impl<'value> super::NP_Scalar<'value> for NP_Bytes {
          
     }
 
-    fn np_max_value<M: NP_Memory>(cursor: &NP_Cursor, memory: &M) -> Option<Self> {
+    fn np_max_value(cursor: &NP_Cursor, memory: &NP_Memory) -> Option<Self> {
         let data = unsafe { &*(*memory.get_schema(cursor.schema_addr).data as *const NP_Bytes_Data) };
 
         let size = data.size;
@@ -71,7 +71,7 @@ impl<'value> super::NP_Scalar<'value> for NP_Bytes {
         }
     }
 
-    fn np_min_value<M: NP_Memory>(cursor: &NP_Cursor, memory: &M) -> Option<Self> {
+    fn np_min_value(cursor: &NP_Cursor, memory: &NP_Memory) -> Option<Self> {
         let data = unsafe { &*(*memory.get_schema(cursor.schema_addr).data as *const NP_Bytes_Data) };
 
         let size = data.size;
@@ -133,7 +133,7 @@ impl<'value> NP_Value<'value> for NP_Bytes {
     }
 
  
-    fn set_value<'set, M: NP_Memory>(cursor: NP_Cursor, memory: &'set M, value: Self) -> Result<NP_Cursor, NP_Error> where Self: 'set + Sized {
+    fn set_value<'set>(cursor: NP_Cursor, memory: &'set NP_Memory, value: Self) -> Result<NP_Cursor, NP_Error> where Self: 'set + Sized {
         NP_Borrow_Bytes::set_value(cursor, memory, &value)
     }
 
@@ -255,7 +255,7 @@ impl<'value> NP_Value<'value> for NP_Bytes {
         return Ok((has_fixed_size, schema_data, schema));
     }
     
-    fn set_from_json<'set, M: NP_Memory>(_depth: usize, _apply_null: bool, cursor: NP_Cursor, memory: &'set M, value: &Box<NP_JSON>) -> Result<(), NP_Error> where Self: 'set + Sized {
+    fn set_from_json<'set>(_depth: usize, _apply_null: bool, cursor: NP_Cursor, memory: &'set NP_Memory, value: &Box<NP_JSON>) -> Result<(), NP_Error> where Self: 'set + Sized {
         match &**value {
             NP_JSON::Array(bytes) => {
                 let mut target: Vec<u8> = Vec::new();
@@ -282,14 +282,14 @@ impl<'value> NP_Value<'value> for NP_Bytes {
         Ok(())
     }
 
-    fn into_value<M: NP_Memory>(cursor: &NP_Cursor, memory: &'value M) -> Result<Option<Self>, NP_Error> where Self: Sized {
+    fn into_value(cursor: &NP_Cursor, memory: &'value NP_Memory) -> Result<Option<Self>, NP_Error> where Self: Sized {
         match NP_Borrow_Bytes::into_value(cursor, memory)? {
             Some(bytes) => Ok(Some(bytes.to_vec())),
             None => Ok(None)
         }
     }
 
-    fn to_json<M: NP_Memory>(_depth:usize, cursor: &NP_Cursor, memory: &'value M) -> NP_JSON {
+    fn to_json(_depth:usize, cursor: &NP_Cursor, memory: &'value NP_Memory) -> NP_JSON {
 
 
         match Self::into_value(cursor, memory) {
@@ -324,7 +324,7 @@ impl<'value> NP_Value<'value> for NP_Bytes {
             }
         }
     }
-    fn get_size<M: NP_Memory>(_depth:usize, cursor: &NP_Cursor, memory: &M) -> Result<usize, NP_Error> {
+    fn get_size(_depth:usize, cursor: &NP_Cursor, memory: &NP_Memory) -> Result<usize, NP_Error> {
 
         let c_value = || { cursor.get_value(memory) };
         let value_addr = c_value().get_addr_value() as usize;
@@ -472,11 +472,11 @@ impl<'value> super::NP_Scalar<'value> for &[u8] {
         None
     }
 
-    fn np_max_value<M: NP_Memory>(_cursor: &NP_Cursor, _memory: &M) -> Option<Self> {
+    fn np_max_value(_cursor: &NP_Cursor, _memory: &NP_Memory) -> Option<Self> {
         None
     }
 
-    fn np_min_value<M: NP_Memory>(_cursor: &NP_Cursor, _memory: &M) -> Option<Self> {
+    fn np_min_value(_cursor: &NP_Cursor, _memory: &NP_Memory) -> Option<Self> {
         None
     }
 }
@@ -492,7 +492,7 @@ impl<'value> NP_Value<'value> for NP_Borrow_Bytes<'value> {
         NP_Bytes::schema_to_json(schema, address)
     }
 
-    fn set_from_json<'set, M: NP_Memory>(_depth: usize, _apply_null: bool, _cursor: NP_Cursor, _memory: &'set M, _value: &Box<NP_JSON>) -> Result<(), NP_Error> where Self: 'set + Sized {
+    fn set_from_json<'set>(_depth: usize, _apply_null: bool, _cursor: NP_Cursor, _memory: &'set NP_Memory, _value: &Box<NP_JSON>) -> Result<(), NP_Error> where Self: 'set + Sized {
         Ok(())
     }
 
@@ -518,7 +518,7 @@ impl<'value> NP_Value<'value> for NP_Borrow_Bytes<'value> {
     }
 
  
-    fn set_value<'set, M: NP_Memory>(cursor: NP_Cursor, memory: &'set M, value: Self) -> Result<NP_Cursor, NP_Error> where Self: 'set + Sized {
+    fn set_value<'set>(cursor: NP_Cursor, memory: &'set NP_Memory, value: Self) -> Result<NP_Cursor, NP_Error> where Self: 'set + Sized {
 
         let c_value = || { cursor.get_value(memory) };
     
@@ -616,7 +616,7 @@ impl<'value> NP_Value<'value> for NP_Borrow_Bytes<'value> {
     }
     
 
-    fn into_value<M: NP_Memory>(cursor: &NP_Cursor, memory: &'value M) -> Result<Option<Self>, NP_Error> where Self: Sized {
+    fn into_value(cursor: &NP_Cursor, memory: &'value NP_Memory) -> Result<Option<Self>, NP_Error> where Self: Sized {
 
         let c_value = || { cursor.get_value(memory) };
 
@@ -649,11 +649,11 @@ impl<'value> NP_Value<'value> for NP_Borrow_Bytes<'value> {
          
     }
 
-    fn to_json<M: NP_Memory>(depth:usize, cursor: &NP_Cursor, memory: &'value M) -> NP_JSON {
+    fn to_json(depth:usize, cursor: &NP_Cursor, memory: &'value NP_Memory) -> NP_JSON {
         NP_Bytes::to_json(depth, cursor, memory)
     }
 
-    fn get_size<M: NP_Memory>(depth:usize, cursor: &NP_Cursor, memory: &M) -> Result<usize, NP_Error> {
+    fn get_size(depth:usize, cursor: &NP_Cursor, memory: &NP_Memory) -> Result<usize, NP_Error> {
         NP_Bytes::get_size(depth, cursor, memory)
     }
 

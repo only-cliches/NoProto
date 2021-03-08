@@ -47,12 +47,12 @@ impl<'value> super::NP_Scalar<'value> for NP_Enum {
         Some(Self::default())
     }
 
-    fn np_max_value<M: NP_Memory>(cursor: &NP_Cursor, memory: &M) -> Option<Self> {
+    fn np_max_value(cursor: &NP_Cursor, memory: &NP_Memory) -> Option<Self> {
         let data = unsafe { &*(*memory.get_schema(cursor.schema_addr).data as *const NP_Enum_Data) };
         Some(data.choices[data.choices.len() - 1].clone())
     }
 
-    fn np_min_value<M: NP_Memory>(cursor: &NP_Cursor, memory: &M) -> Option<Self> {
+    fn np_min_value(cursor: &NP_Cursor, memory: &NP_Memory) -> Option<Self> {
         let data = unsafe { &*(*memory.get_schema(cursor.schema_addr).data as *const NP_Enum_Data) };
         Some(data.choices[0].clone())
     }
@@ -133,7 +133,7 @@ impl<'value> NP_Value<'value> for NP_Enum {
         Ok(NP_JSON::Dictionary(schema_json))
     }
 
-    fn set_from_json<'set, M: NP_Memory>(_depth: usize, _apply_null: bool, cursor: NP_Cursor, memory: &'set M, value: &Box<NP_JSON>) -> Result<(), NP_Error> where Self: 'set + Sized {
+    fn set_from_json<'set>(_depth: usize, _apply_null: bool, cursor: NP_Cursor, memory: &'set NP_Memory, value: &Box<NP_JSON>) -> Result<(), NP_Error> where Self: 'set + Sized {
         match &**value {
             NP_JSON::String(x) => {
                 Self::set_value(cursor, memory, Self::new(x.clone()))?;
@@ -144,7 +144,7 @@ impl<'value> NP_Value<'value> for NP_Enum {
         Ok(())
     }
 
-    fn set_value<'set, M: NP_Memory>(cursor: NP_Cursor, memory: &'set M, value: Self) -> Result<NP_Cursor, NP_Error> where Self: 'set + Sized {
+    fn set_value<'set>(cursor: NP_Cursor, memory: &'set NP_Memory, value: Self) -> Result<NP_Cursor, NP_Error> where Self: 'set + Sized {
 
         let c_value = || { cursor.get_value(memory) };
 
@@ -311,7 +311,7 @@ impl<'value> NP_Value<'value> for NP_Enum {
         return Ok((true, schema_data, schema));
     }
 
-    fn into_value<M: NP_Memory>(cursor: &NP_Cursor, memory: &'value M) -> Result<Option<Self>, NP_Error> where Self: Sized {
+    fn into_value(cursor: &NP_Cursor, memory: &'value NP_Memory) -> Result<Option<Self>, NP_Error> where Self: Sized {
 
         let c_value = || { cursor.get_value(memory) };
 
@@ -352,7 +352,7 @@ impl<'value> NP_Value<'value> for NP_Enum {
            
     }
 
-    fn to_json<M: NP_Memory>(_depth:usize, cursor: &NP_Cursor, memory: &'value M) -> NP_JSON {
+    fn to_json(_depth:usize, cursor: &NP_Cursor, memory: &'value NP_Memory) -> NP_JSON {
 
         match Self::into_value(cursor, memory) {
             Ok(x) => {
@@ -402,7 +402,7 @@ impl<'value> NP_Value<'value> for NP_Enum {
         }
     }
 
-    fn get_size<M: NP_Memory>(_depth:usize, cursor: &NP_Cursor, memory: &M) -> Result<usize, NP_Error> {
+    fn get_size(_depth:usize, cursor: &NP_Cursor, memory: &NP_Memory) -> Result<usize, NP_Error> {
         let c_value = || { cursor.get_value(memory) };
 
         let value_address = c_value().get_addr_value() as usize;

@@ -12,6 +12,8 @@ pub enum NP_Error {
     MemoryReadOnly,
     /// Use this instead of unreachable! which causes panic
     Unreachable,
+    /// Not Enough Space
+    MemoryOutOfSpace,
     /// Too many recursive calls
     RecursionLimit,
     /// Custom error message

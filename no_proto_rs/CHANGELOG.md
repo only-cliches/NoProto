@@ -1,3 +1,7 @@
+# 0.9.6
+- Removed lifetimes from NP_Factory and NP_Buffer.
+- NP_Buffer is no longer generic over memory type.  This has a performance cost but makes the API easier to use.
+
 # 0.9.51 February 10th, 2021
 - Added `Send` to NP_Buffer Memory types.
 

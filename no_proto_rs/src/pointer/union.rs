@@ -33,11 +33,11 @@ impl<'value> NP_Scalar<'value> for NP_Union {
         None
     }
 
-    fn np_max_value<M: NP_Memory>(_cursor: &NP_Cursor, _memory: &M) -> Option<Self> {
+    fn np_max_value(_cursor: &NP_Cursor, _memory: &NP_Memory) -> Option<Self> {
         None
     }
 
-    fn np_min_value<M: NP_Memory>(_cursor: &NP_Cursor, _memory: &M) -> Option<Self> {
+    fn np_min_value(_cursor: &NP_Cursor, _memory: &NP_Memory) -> Option<Self> {
         None
     }
 }
@@ -46,7 +46,7 @@ impl<'value> NP_Scalar<'value> for NP_Union {
 impl NP_Union {
 
     /// Select into a union type
-    pub fn select<M: NP_Memory>(mut cursor: NP_Cursor, types: &Vec<(u8, String, usize)>,  key: &str, make_path: bool, schema_query: bool, memory: &M) -> Result<Option<NP_Cursor>, NP_Error> {
+    pub fn select(mut cursor: NP_Cursor, types: &Vec<(u8, String, usize)>,  key: &str, make_path: bool, schema_query: bool, memory: &NP_Memory) -> Result<Option<NP_Cursor>, NP_Error> {
         match types.iter().position(|val| { val.1 == key }) {
             Some(x) => {
 
@@ -278,7 +278,7 @@ impl<'value> NP_Value<'value> for NP_Union {
         todo!()
     }
 
-    fn set_from_json<'set, M: NP_Memory>(_depth: usize, _apply_null: bool, _cursor: NP_Cursor, _memory: &'set M, _value: &Box<NP_JSON>) -> Result<(), NP_Error> where Self: 'set + Sized {
+    fn set_from_json<'set>(_depth: usize, _apply_null: bool, _cursor: NP_Cursor, _memory: &'set NP_Memory, _value: &Box<NP_JSON>) -> Result<(), NP_Error> where Self: 'set + Sized {
         todo!()
     }
 
@@ -288,13 +288,13 @@ impl<'value> NP_Value<'value> for NP_Union {
 
     /// Pull the data from the buffer and convert into type
     /// 
-    fn into_value<M: NP_Memory>(_cursor: &NP_Cursor, _memory: &'value M) -> Result<Option<Self>, NP_Error> where Self: Sized {
+    fn into_value(_cursor: &NP_Cursor, _memory: &'value NP_Memory) -> Result<Option<Self>, NP_Error> where Self: Sized {
         // let message = "This type doesn't support into!".to_owned();
         // Err(NP_Error::new(message.as_str()))
         todo!()
     }
 
-    fn to_json<M: NP_Memory>(_depth:usize, _cursor: &NP_Cursor, _memory: &'value M) -> NP_JSON {
+    fn to_json(_depth:usize, _cursor: &NP_Cursor, _memory: &'value NP_Memory) -> NP_JSON {
         // match memory.get_schema(cursor.schema_addr) {
         //     NP_TypeKeys::Portal { schema, parent_schema, .. } => {
         //         let mut next = cursor.clone();
@@ -307,7 +307,7 @@ impl<'value> NP_Value<'value> for NP_Union {
         todo!()
     }
 
-    fn get_size<M: NP_Memory>(_depth:usize, _cursor: &'value NP_Cursor, _memory: &'value M) -> Result<usize, NP_Error> {
+    fn get_size(_depth:usize, _cursor: &'value NP_Cursor, _memory: &'value NP_Memory) -> Result<usize, NP_Error> {
         // match memory.get_schema(cursor.schema_addr) {
         //     NP_TypeKeys::Portal { schema, parent_schema, .. } => {
         //         let mut next = cursor.clone();
@@ -320,7 +320,7 @@ impl<'value> NP_Value<'value> for NP_Union {
         todo!()
     }
 
-    fn do_compact<M: NP_Memory, M2: NP_Memory>(_depth:usize, mut _from_cursor: NP_Cursor, _from_memory: &'value M, mut _to_cursor: NP_Cursor, _to_memory: &'value M2) -> Result<NP_Cursor, NP_Error> where Self: 'value + Sized {
+    fn do_compact<, M2: NP_Memory>(_depth:usize, mut _from_cursor: NP_Cursor, _from_memory: &'value NP_Memory, mut _to_cursor: NP_Cursor, _to_memory: &'value NP_Memory2) -> Result<NP_Cursor, NP_Error> where Self: 'value + Sized {
         // match from_memory.get_schema(from_cursor.schema_addr) {
         //     NP_TypeKeys::Portal { schema, parent_schema, .. } => {
         //         from_cursor.schema_addr = *schema;

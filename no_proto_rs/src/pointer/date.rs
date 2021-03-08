@@ -49,11 +49,11 @@ impl<'value> super::NP_Scalar<'value> for NP_Date {
         Some(Self::default())
     }
 
-    fn np_max_value<M: NP_Memory>(_cursor: &NP_Cursor, _memory: &M) -> Option<Self> {
+    fn np_max_value(_cursor: &NP_Cursor, _memory: &NP_Memory) -> Option<Self> {
         Some(NP_Date { value: u64::MAX })
     }
 
-    fn np_min_value<M: NP_Memory>(_cursor: &NP_Cursor, _memory: &M) -> Option<Self> {
+    fn np_min_value(_cursor: &NP_Cursor, _memory: &NP_Memory) -> Option<Self> {
         Some(NP_Date { value: u64::MIN })
     }
     
@@ -109,7 +109,7 @@ impl<'value> NP_Value<'value> for NP_Date {
          
     }
 
-    fn set_from_json<'set, M: NP_Memory>(_depth: usize, _apply_null: bool, cursor: NP_Cursor, memory: &'set M, value: &Box<NP_JSON>) -> Result<(), NP_Error> where Self: 'set + Sized {
+    fn set_from_json<'set>(_depth: usize, _apply_null: bool, cursor: NP_Cursor, memory: &'set NP_Memory, value: &Box<NP_JSON>) -> Result<(), NP_Error> where Self: 'set + Sized {
         let value = match &**value {
             NP_JSON::Integer(x) => *x as u64,
             NP_JSON::Float(x) => *x as u64,
@@ -121,7 +121,7 @@ impl<'value> NP_Value<'value> for NP_Date {
         Ok(())
     }
 
-    fn set_value<'set, M: NP_Memory>(cursor: NP_Cursor, memory: &'set M, value: Self) -> Result<NP_Cursor, NP_Error> where Self: 'set + Sized {
+    fn set_value<'set>(cursor: NP_Cursor, memory: &'set NP_Memory, value: Self) -> Result<NP_Cursor, NP_Error> where Self: 'set + Sized {
 
         let c_value = || { cursor.get_value(memory) };
 
@@ -147,7 +147,7 @@ impl<'value> NP_Value<'value> for NP_Date {
         Ok(cursor)
     }
 
-    fn into_value<M: NP_Memory>(cursor: &NP_Cursor, memory: &'value M) -> Result<Option<Self>, NP_Error> where Self: Sized {
+    fn into_value(cursor: &NP_Cursor, memory: &'value NP_Memory) -> Result<Option<Self>, NP_Error> where Self: Sized {
 
         let c_value = || { cursor.get_value(memory) };
 
@@ -166,7 +166,7 @@ impl<'value> NP_Value<'value> for NP_Date {
         })
     }
 
-    fn to_json<M: NP_Memory>(_depth:usize, cursor: &NP_Cursor, memory: &'value M) -> NP_JSON {
+    fn to_json(_depth:usize, cursor: &NP_Cursor, memory: &'value NP_Memory) -> NP_JSON {
 
         match Self::into_value(cursor, memory) {
             Ok(x) => {
@@ -191,7 +191,7 @@ impl<'value> NP_Value<'value> for NP_Date {
         }
     }
 
-    fn get_size<M: NP_Memory>(_depth:usize, cursor: &NP_Cursor, memory: &M) -> Result<usize, NP_Error> {
+    fn get_size(_depth:usize, cursor: &NP_Cursor, memory: &NP_Memory) -> Result<usize, NP_Error> {
 
         let c_value = || { cursor.get_value(memory) };
 

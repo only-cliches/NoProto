@@ -28,7 +28,7 @@ pub struct NP_Struct<'table> {
 impl<'table> NP_Struct<'table> {
     
     #[inline(always)]
-    pub fn select<M: NP_Memory>(mut table_cursor: NP_Cursor, schema: &NP_Parsed_Schema,  key: &str, make_path: bool, schema_query: bool, memory: &M) -> Result<Option<NP_Cursor>, NP_Error> {   
+    pub fn select(mut table_cursor: NP_Cursor, schema: &NP_Parsed_Schema,  key: &str, make_path: bool, schema_query: bool, memory: &NP_Memory) -> Result<Option<NP_Cursor>, NP_Error> {   
         
         let data = unsafe { &*(*schema.data as *const NP_Struct_Data) };
 
@@ -87,7 +87,7 @@ impl<'table> NP_Struct<'table> {
     }
 
     #[inline(always)]
-    pub fn make_first_vtable<'make, M: NP_Memory>(table_cursor: NP_Cursor, memory: &'make M) -> Result<NP_Cursor, NP_Error> {
+    pub fn make_first_vtable<'make>(table_cursor: NP_Cursor, memory: &'make NP_Memory) -> Result<NP_Cursor, NP_Error> {
 
         let first_vtable_addr = memory.malloc_borrow(&[0u8; VTABLE_BYTES])?;
         
@@ -97,7 +97,7 @@ impl<'table> NP_Struct<'table> {
     }
 
     #[inline(always)]
-    pub fn make_next_vtable<'make, M: NP_Memory>(prev_vtable: &'make mut NP_Vtable, memory: &'make M) -> Result<usize, NP_Error> {
+    pub fn make_next_vtable<'make>(prev_vtable: &'make mut NP_Vtable, memory: &'make NP_Memory) -> Result<usize, NP_Error> {
 
         let vtable_addr = memory.malloc_borrow(&[0u8; VTABLE_BYTES])?;
         
@@ -107,7 +107,7 @@ impl<'table> NP_Struct<'table> {
     }
 
     #[inline(always)]
-    pub fn new_iter<M: NP_Memory>(cursor: &NP_Cursor, memory: &'table M) -> Self {
+    pub fn new_iter(cursor: &NP_Cursor, memory: &'table NP_Memory) -> Self {
 
         let table_value = cursor.get_value(memory);
 
@@ -127,7 +127,7 @@ impl<'table> NP_Struct<'table> {
     }
 
     #[inline(always)]
-    pub fn get_vtable<'vtable, M: NP_Memory>(v_table_addr: usize, memory: &'vtable M) -> &'vtable mut NP_Vtable {
+    pub fn get_vtable<'vtable>(v_table_addr: usize, memory: &'vtable NP_Memory) -> &'vtable mut NP_Vtable {
         if v_table_addr > memory.read_bytes().len() { // attack
             unsafe { &mut *(memory.write_bytes().as_ptr() as *mut NP_Vtable) }
         } else { // normal operation
@@ -136,7 +136,7 @@ impl<'table> NP_Struct<'table> {
     }
 
     #[inline(always)]
-    pub fn step_iter<M: NP_Memory>(&mut self, memory: &'table M) -> Option<(usize, &'table str, Option<NP_Cursor>)> {
+    pub fn step_iter(&mut self, memory: &'table NP_Memory) -> Option<(usize, &'table str, Option<NP_Cursor>)> {
 
         let data = unsafe { &*(*memory.get_schema(self.table.schema_addr).data as *const NP_Struct_Data) };
 
@@ -179,7 +179,7 @@ impl<'table> NP_Struct<'table> {
 
 impl<'value> NP_Value<'value> for NP_Struct<'value> {
 
-    fn to_json<M: NP_Memory>(depth:usize, cursor: &NP_Cursor, memory: &'value M) -> NP_JSON {
+    fn to_json(depth:usize, cursor: &NP_Cursor, memory: &'value NP_Memory) -> NP_JSON {
         let c_value = || { cursor.get_value(memory) };
 
         if c_value().get_addr_value() == 0 { return NP_JSON::Null };
@@ -202,7 +202,7 @@ impl<'value> NP_Value<'value> for NP_Struct<'value> {
     fn type_idx() -> (&'value str, NP_TypeKeys) { ("struct", NP_TypeKeys::Struct) }
     fn self_type_idx(&self) -> (&'value str, NP_TypeKeys) { ("struct", NP_TypeKeys::Struct) }
 
-    fn set_from_json<'set, M: NP_Memory>(depth: usize, apply_null: bool, cursor: NP_Cursor, memory: &'set M, value: &Box<NP_JSON>) -> Result<(), NP_Error> where Self: 'set + Sized {
+    fn set_from_json<'set>(depth: usize, apply_null: bool, cursor: NP_Cursor, memory: &'set NP_Memory, value: &Box<NP_JSON>) -> Result<(), NP_Error> where Self: 'set + Sized {
         
         let data = unsafe { &*(*memory.get_schema(cursor.schema_addr).data as *const NP_Struct_Data) };
 
@@ -310,7 +310,7 @@ impl<'value> NP_Value<'value> for NP_Struct<'value> {
         Ok(NP_JSON::Dictionary(schema_json))
     }
  
-    fn get_size<M: NP_Memory>(depth:usize, cursor: &NP_Cursor, memory: &'value M) -> Result<usize, NP_Error> {
+    fn get_size(depth:usize, cursor: &NP_Cursor, memory: &'value NP_Memory) -> Result<usize, NP_Error> {
 
         let c_value = || { cursor.get_value(memory) };
 
@@ -346,7 +346,7 @@ impl<'value> NP_Value<'value> for NP_Struct<'value> {
 
 
 
-    fn do_compact<M: NP_Memory, M2: NP_Memory>(depth:usize, from_cursor: NP_Cursor, from_memory: &'value M, mut to_cursor: NP_Cursor, to_memory: &'value M2) -> Result<NP_Cursor, NP_Error> where Self: 'value + Sized {
+    fn do_compact(depth:usize, from_cursor: NP_Cursor, from_memory: &'value NP_Memory, mut to_cursor: NP_Cursor, to_memory: &'value NP_Memory) -> Result<NP_Cursor, NP_Error> where Self: 'value + Sized {
 
         let from_value = from_cursor.get_value(from_memory);
 

@@ -94,12 +94,12 @@ impl<'value> super::NP_Scalar<'value> for NP_Dec {
         Some(NP_Dec { exp: data.exp, num: 0})
     }
 
-    fn np_max_value<M: NP_Memory>(cursor: &NP_Cursor, memory: &M) -> Option<Self> {
+    fn np_max_value(cursor: &NP_Cursor, memory: &NP_Memory) -> Option<Self> {
         let data = unsafe { &*(*memory.get_schema(cursor.schema_addr).data as *const NP_Dec_Data) };
         Some(NP_Dec::new(i64::MAX, data.exp))
     }
 
-    fn np_min_value<M: NP_Memory>(cursor: &NP_Cursor, memory: &M) -> Option<Self> {
+    fn np_min_value(cursor: &NP_Cursor, memory: &NP_Memory) -> Option<Self> {
         let data = unsafe { &*(*memory.get_schema(cursor.schema_addr).data as *const NP_Dec_Data) };
         Some(NP_Dec::new(i64::MIN, data.exp))
     }
@@ -715,7 +715,7 @@ impl<'value> NP_Value<'value> for NP_Dec {
           
     }
 
-    fn set_from_json<'set, M: NP_Memory>(_depth: usize, _apply_null: bool, cursor: NP_Cursor, memory: &'set M, value: &Box<NP_JSON>) -> Result<(), NP_Error> where Self: 'set + Sized {
+    fn set_from_json<'set>(_depth: usize, _apply_null: bool, cursor: NP_Cursor, memory: &'set NP_Memory, value: &Box<NP_JSON>) -> Result<(), NP_Error> where Self: 'set + Sized {
         match &**value {
             NP_JSON::Dictionary(map) => {
                 if let Some(NP_JSON::Dictionary(parts)) = map.get("parts") {
@@ -738,7 +738,7 @@ impl<'value> NP_Value<'value> for NP_Dec {
         Ok(())
     }
 
-    fn set_value<'set, M: NP_Memory>(cursor: NP_Cursor, memory: &'set M, value: Self) -> Result<NP_Cursor, NP_Error> where Self: 'set + Sized {
+    fn set_value<'set>(cursor: NP_Cursor, memory: &'set NP_Memory, value: Self) -> Result<NP_Cursor, NP_Error> where Self: 'set + Sized {
 
         let c_value = || { cursor.get_value(memory) };
 
@@ -781,7 +781,7 @@ impl<'value> NP_Value<'value> for NP_Dec {
         Ok(cursor)
     }
 
-    fn into_value<M: NP_Memory>(cursor: &NP_Cursor, memory: &'value M) -> Result<Option<Self>, NP_Error> where Self: Sized {
+    fn into_value(cursor: &NP_Cursor, memory: &'value NP_Memory) -> Result<Option<Self>, NP_Error> where Self: Sized {
 
         let c_value = || { cursor.get_value(memory) };
 
@@ -806,7 +806,7 @@ impl<'value> NP_Value<'value> for NP_Dec {
         })
     }
 
-    fn to_json<M: NP_Memory>(_depth:usize, cursor: &NP_Cursor, memory: &'value M) -> NP_JSON {
+    fn to_json(_depth:usize, cursor: &NP_Cursor, memory: &'value NP_Memory) -> NP_JSON {
 
         let data = unsafe { &*(*memory.get_schema(cursor.schema_addr).data as *const NP_Dec_Data) };
 
@@ -853,7 +853,7 @@ impl<'value> NP_Value<'value> for NP_Dec {
         }
     }
 
-    fn get_size<M: NP_Memory>(_depth:usize, cursor: &NP_Cursor, memory: &M) -> Result<usize, NP_Error> {
+    fn get_size(_depth:usize, cursor: &NP_Cursor, memory: &NP_Memory) -> Result<usize, NP_Error> {
         
         let c_value = || { cursor.get_value(memory) };
 

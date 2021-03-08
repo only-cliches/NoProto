@@ -34,11 +34,11 @@ impl<'value> super::NP_Scalar<'value> for bool {
     fn schema_default(_schema: &NP_Parsed_Schema) -> Option<Self> where Self: Sized {
         Some(Self::default())
     }
-    fn np_max_value<M: NP_Memory>(_cursor: &NP_Cursor, _memory: &M) -> Option<Self> {
+    fn np_max_value(_cursor: &NP_Cursor, _memory: &NP_Memory) -> Option<Self> {
         Some(true)
     }
 
-    fn np_min_value<M: NP_Memory>(_cursor: &NP_Cursor, _memory: &M) -> Option<Self> {
+    fn np_min_value(_cursor: &NP_Cursor, _memory: &NP_Memory) -> Option<Self> {
         Some(false)
     }
 }
@@ -71,7 +71,7 @@ impl<'value> NP_Value<'value> for bool {
         data.default
     }
 
-    fn set_from_json<'set, M: NP_Memory>(_depth: usize, _apply_null: bool, cursor: NP_Cursor, memory: &'set M, value: &Box<NP_JSON>) -> Result<(), NP_Error> where Self: 'set + Sized {
+    fn set_from_json<'set>(_depth: usize, _apply_null: bool, cursor: NP_Cursor, memory: &'set NP_Memory, value: &Box<NP_JSON>) -> Result<(), NP_Error> where Self: 'set + Sized {
         match **value {
             NP_JSON::True => {
                 Self::set_value(cursor, memory, true)?;
@@ -85,7 +85,7 @@ impl<'value> NP_Value<'value> for bool {
         Ok(())
     }
 
-    fn set_value<'set, M: NP_Memory>(cursor: NP_Cursor, memory: &'set M, value: Self) -> Result<NP_Cursor, NP_Error> where Self: 'set + Sized {
+    fn set_value<'set>(cursor: NP_Cursor, memory: &'set NP_Memory, value: Self) -> Result<NP_Cursor, NP_Error> where Self: 'set + Sized {
 
         let c_value = || { cursor.get_value(memory) };
         let mut value_address = c_value().get_addr_value();  
@@ -118,7 +118,7 @@ impl<'value> NP_Value<'value> for bool {
         
     }
 
-    fn into_value<M: NP_Memory>(cursor: &NP_Cursor, memory: &'value M) -> Result<Option<Self>, NP_Error> where Self: Sized {
+    fn into_value(cursor: &NP_Cursor, memory: &'value NP_Memory) -> Result<Option<Self>, NP_Error> where Self: Sized {
 
         let c_value = || { cursor.get_value(memory) };
 
@@ -137,7 +137,7 @@ impl<'value> NP_Value<'value> for bool {
         })
     }
 
-    fn to_json<M: NP_Memory>(_depth:usize, cursor: &NP_Cursor, memory: &'value M) -> NP_JSON {
+    fn to_json(_depth:usize, cursor: &NP_Cursor, memory: &'value NP_Memory) -> NP_JSON {
 
         match Self::into_value(cursor, memory) {
             Ok(x) => {
@@ -172,7 +172,7 @@ impl<'value> NP_Value<'value> for bool {
         }
     }
 
-    fn get_size<M: NP_Memory>(_depth:usize, cursor: &NP_Cursor, memory: &M) -> Result<usize, NP_Error> {
+    fn get_size(_depth:usize, cursor: &NP_Cursor, memory: &NP_Memory) -> Result<usize, NP_Error> {
         let c_value = || { cursor.get_value(memory) };
         if c_value().get_addr_value() == 0 {
             Ok(0) 

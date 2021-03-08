@@ -54,12 +54,12 @@ impl<'value> super::NP_Scalar<'value> for NP_Geo_Bytes{
         NP_Geo { size: data.size, lat: 0.0, lng: 0.0}.get_bytes()
     }
 
-    fn np_max_value<M: NP_Memory>(cursor: &NP_Cursor, memory: &M) -> Option<Self> {
+    fn np_max_value(cursor: &NP_Cursor, memory: &NP_Memory) -> Option<Self> {
         let data = unsafe { &*(*memory.get_schema(cursor.schema_addr).data as *const NP_Geo_Data) };
         NP_Geo { size: data.size, lat: 90f64, lng: 180f64}.get_bytes()
     }
 
-    fn np_min_value<M: NP_Memory>(cursor: &NP_Cursor, memory: &M) -> Option<Self> {
+    fn np_min_value(cursor: &NP_Cursor, memory: &NP_Memory) -> Option<Self> {
         let data = unsafe { &*(*memory.get_schema(cursor.schema_addr).data as *const NP_Geo_Data) };
         NP_Geo { size: data.size, lat: -90f64, lng: -180f64}.get_bytes()
     }
@@ -136,7 +136,7 @@ impl Default for NP_Geo_Bytes {
 
 impl<'value> NP_Value<'value> for NP_Geo_Bytes {
 
-    fn set_from_json<'set, M: NP_Memory>(_depth: usize, _apply_null: bool, _cursor: NP_Cursor, _memory: &'set M, _value: &Box<NP_JSON>) -> Result<(), NP_Error> where Self: 'set + Sized {
+    fn set_from_json<'set>(_depth: usize, _apply_null: bool, _cursor: NP_Cursor, _memory: &'set NP_Memory, _value: &Box<NP_JSON>) -> Result<(), NP_Error> where Self: 'set + Sized {
         Ok(())
     }
     
@@ -156,13 +156,13 @@ impl<'value> NP_Value<'value> for NP_Geo_Bytes {
 
     fn schema_to_json(schema: &Vec<NP_Parsed_Schema>, address: usize)-> Result<NP_JSON, NP_Error> { NP_Geo::schema_to_json(schema, address)}
 
-    fn set_value<'set, M: NP_Memory>(_cursor: NP_Cursor, _memory: &'set M, _value: Self) -> Result<NP_Cursor, NP_Error> where Self: 'set + Sized {
+    fn set_value<'set>(_cursor: NP_Cursor, _memory: &'set NP_Memory, _value: Self) -> Result<NP_Cursor, NP_Error> where Self: 'set + Sized {
         Err(NP_Error::new("Can't set value with NP_Geo_Bytes, use NP_Geo instead!"))
     }
-    fn to_json<M: NP_Memory>(depth:usize, cursor: &NP_Cursor, memory: &'value M) -> NP_JSON {
+    fn to_json(depth:usize, cursor: &NP_Cursor, memory: &'value NP_Memory) -> NP_JSON {
         NP_Geo::to_json(depth, cursor, memory)
     }
-    fn get_size<M: NP_Memory>(_depth:usize, cursor: &NP_Cursor, memory: &M) -> Result<usize, NP_Error> {
+    fn get_size(_depth:usize, cursor: &NP_Cursor, memory: &NP_Memory) -> Result<usize, NP_Error> {
 
         let c_value = || { cursor.get_value(memory) };
 
@@ -174,7 +174,7 @@ impl<'value> NP_Value<'value> for NP_Geo_Bytes {
         }
     }
 
-    fn into_value<M: NP_Memory>(cursor: &NP_Cursor, memory: &'value M) -> Result<Option<Self>, NP_Error> where Self: Sized {
+    fn into_value(cursor: &NP_Cursor, memory: &'value NP_Memory) -> Result<Option<Self>, NP_Error> where Self: Sized {
 
         let c_value = || { cursor.get_value(memory) };
 
@@ -245,12 +245,12 @@ impl<'value> super::NP_Scalar<'value> for NP_Geo {
         Some(NP_Geo { size: data.size, lat: 0.0, lng: 0.0})
     }
 
-    fn np_max_value<M: NP_Memory>(cursor: &NP_Cursor, memory: &M) -> Option<Self> {
+    fn np_max_value(cursor: &NP_Cursor, memory: &NP_Memory) -> Option<Self> {
         let data = unsafe { &*(*memory.get_schema(cursor.schema_addr).data as *const NP_Geo_Data) };
         Some(NP_Geo { size: data.size, lat: 90f64, lng: 180f64})
     }
 
-    fn np_min_value<M: NP_Memory>(cursor: &NP_Cursor, memory: &M) -> Option<Self> {
+    fn np_min_value(cursor: &NP_Cursor, memory: &NP_Memory) -> Option<Self> {
         let data = unsafe { &*(*memory.get_schema(cursor.schema_addr).data as *const NP_Geo_Data) };
         Some(NP_Geo { size: data.size, lat: -90f64, lng: -180f64})
     }
@@ -401,7 +401,7 @@ impl<'value> NP_Value<'value> for NP_Geo {
          
     }
 
-    fn set_from_json<'set, M: NP_Memory>(_depth: usize, _apply_null: bool, cursor: NP_Cursor, memory: &'set M, value: &Box<NP_JSON>) -> Result<(), NP_Error> where Self: 'set + Sized {
+    fn set_from_json<'set>(_depth: usize, _apply_null: bool, cursor: NP_Cursor, memory: &'set NP_Memory, value: &Box<NP_JSON>) -> Result<(), NP_Error> where Self: 'set + Sized {
         
         let data = unsafe { &*(*memory.get_schema(cursor.schema_addr).data as *const NP_Geo_Data) };
 
@@ -458,7 +458,7 @@ impl<'value> NP_Value<'value> for NP_Geo {
          
     }
 
-    fn set_value<'set, M: NP_Memory>(cursor: NP_Cursor, memory: &'set M, value: Self) -> Result<NP_Cursor, NP_Error> where Self: 'set + Sized {
+    fn set_value<'set>(cursor: NP_Cursor, memory: &'set NP_Memory, value: Self) -> Result<NP_Cursor, NP_Error> where Self: 'set + Sized {
 
         let c_value = || {cursor.get_value(memory)};
 
@@ -585,7 +585,7 @@ impl<'value> NP_Value<'value> for NP_Geo {
         Ok(cursor)
     }
 
-    fn into_value<M: NP_Memory>(cursor: &NP_Cursor, memory: &'value M) -> Result<Option<Self>, NP_Error> where Self: Sized {
+    fn into_value(cursor: &NP_Cursor, memory: &'value NP_Memory) -> Result<Option<Self>, NP_Error> where Self: Sized {
 
         let c_value = || { cursor.get_value(memory) };
 
@@ -652,7 +652,7 @@ impl<'value> NP_Value<'value> for NP_Geo {
         }))
     }
 
-    fn to_json<M: NP_Memory>(_depth:usize, cursor: &NP_Cursor, memory: &'value M) -> NP_JSON {
+    fn to_json(_depth:usize, cursor: &NP_Cursor, memory: &'value NP_Memory) -> NP_JSON {
 
         match Self::into_value(cursor, memory) {
             Ok(x) => {
@@ -806,7 +806,7 @@ impl<'value> NP_Value<'value> for NP_Geo {
         Ok((false, schema_data, schema))
     }
 
-    fn get_size<M: NP_Memory>(_depth:usize, cursor: &NP_Cursor, memory: &M) -> Result<usize, NP_Error> {
+    fn get_size(_depth:usize, cursor: &NP_Cursor, memory: &NP_Memory) -> Result<usize, NP_Error> {
 
         let c_value = || { cursor.get_value(memory) };
 

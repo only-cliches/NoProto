@@ -293,7 +293,7 @@
 //! 
 
 use alloc::str::from_utf8_unchecked;
-use crate::{hashmap::{SEED, murmurhash3_x86_32}, memory::NP_Memory_Owned};
+use crate::{hashmap::{SEED, murmurhash3_x86_32}};
 
 use crate::{hashmap::NP_HashMap, pointer::uuid::NP_UUID, utils::opt_err};
 use crate::NP_Factory;
@@ -820,7 +820,7 @@ impl<'fact> NP_RPC_Factory<'fact> {
             let schema_len = read_u16(bytes_rpc_spec, offset);
             offset += 2;
             spec.specs.push(NP_RPC_Spec::MSG { 
-                factory: unsafe { NP_Factory::new_bytes(&spec.bytes.read()[offset..(offset + schema_len)])? }
+                factory: NP_Factory::new_bytes(&spec.bytes.read()[offset..(offset + schema_len)])?
             });
             offset += schema_len;
         }
@@ -1127,8 +1127,8 @@ pub struct NP_RPC_Request<'request> {
     /// the name of the rpc function
     rpc: NP_Str_Addr,
     /// the request data
-    pub data: NP_Buffer<NP_Memory_Owned>,
-    empty: NP_Buffer<NP_Memory_Owned>
+    pub data: NP_Buffer,
+    empty: NP_Buffer
 }
 
 impl<'request> NP_RPC_Request<'request> {
@@ -1207,9 +1207,9 @@ pub struct NP_RPC_Response<'response> {
     rpc: NP_Str_Addr,
     spec: &'response NP_RPC_Specification<'response> ,
     /// the data of this response
-    pub data: NP_Buffer<NP_Memory_Owned>,
+    pub data: NP_Buffer,
     /// if this is an error, the error data
-    pub error: NP_Buffer<NP_Memory_Owned>
+    pub error: NP_Buffer
 }
 
 

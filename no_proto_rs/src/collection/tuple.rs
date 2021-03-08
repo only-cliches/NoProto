@@ -24,8 +24,8 @@ pub struct NP_Tuple {
 impl NP_Tuple {
 
     #[inline(always)]
-    pub fn select<M: NP_Memory>(mut tuple_cursor: NP_Cursor, schema: &NP_Parsed_Schema, index: usize, make_path: bool, schema_query: bool, memory: &M) -> Result<Option<NP_Cursor>, NP_Error> {
-    // pub fn select<M: NP_Memory>(mut tuple_cursor: NP_Cursor, empty: &Vec<u8>, values: &Vec<NP_Tuple_Field>, index: usize, make_path: bool, schema_query: bool, memory: &M) -> Result<Option<NP_Cursor>, NP_Error> {
+    pub fn select(mut tuple_cursor: NP_Cursor, schema: &NP_Parsed_Schema, index: usize, make_path: bool, schema_query: bool, memory: &NP_Memory) -> Result<Option<NP_Cursor>, NP_Error> {
+    // pub fn select(mut tuple_cursor: NP_Cursor, empty: &Vec<u8>, values: &Vec<NP_Tuple_Field>, index: usize, make_path: bool, schema_query: bool, memory: &NP_Memory) -> Result<Option<NP_Cursor>, NP_Error> {
 
         let data = unsafe { &*(*schema.data as *const NP_Tuple_Data) };
 
@@ -70,7 +70,7 @@ impl NP_Tuple {
     }
 
     #[inline(always)]
-    pub fn alloc_tuple<'make, M: NP_Memory>(tuple_cursor: NP_Cursor, empty: &Vec<u8>, memory: &'make M) -> Result<NP_Cursor, NP_Error> {
+    pub fn alloc_tuple<'make>(tuple_cursor: NP_Cursor, empty: &Vec<u8>, memory: &'make NP_Memory) -> Result<NP_Cursor, NP_Error> {
 
         let new_addr = memory.malloc_borrow(empty)?;
         
@@ -79,7 +79,7 @@ impl NP_Tuple {
         Ok(tuple_cursor)
     }
 
-    pub fn new_iter<M: NP_Memory>(cursor: &NP_Cursor, _memory: &M) -> Self {
+    pub fn new_iter(cursor: &NP_Cursor, _memory: &NP_Memory) -> Self {
 
         Self {
             table: cursor.clone(),
@@ -87,7 +87,7 @@ impl NP_Tuple {
         }
     }
 
-    pub fn step_iter<M: NP_Memory>(&mut self, memory: &M, show_empty: bool) -> Option<(usize, Option<NP_Cursor>)> {
+    pub fn step_iter(&mut self, memory: &NP_Memory, show_empty: bool) -> Option<(usize, Option<NP_Cursor>)> {
 
         let data = unsafe { &*(*memory.get_schema(self.table.schema_addr).data as *const NP_Tuple_Data) };
 
@@ -122,7 +122,7 @@ impl NP_Tuple {
 
 impl<'value> NP_Value<'value> for NP_Tuple {
 
-    fn to_json<M: NP_Memory>(depth:usize, cursor: &NP_Cursor, memory: &'value M) -> NP_JSON {
+    fn to_json(depth:usize, cursor: &NP_Cursor, memory: &'value NP_Memory) -> NP_JSON {
         let c_value = || { cursor.get_value(memory) };
 
         if c_value().get_addr_value() == 0 { return NP_JSON::Null };
@@ -165,7 +165,7 @@ impl<'value> NP_Value<'value> for NP_Tuple {
         Ok(NP_JSON::Dictionary(schema_json))
     }
 
-    fn set_from_json<'set, M: NP_Memory>(depth: usize, apply_null: bool, cursor: NP_Cursor, memory: &'set M, value: &Box<NP_JSON>) -> Result<(), NP_Error> where Self: 'set + Sized {
+    fn set_from_json<'set>(depth: usize, apply_null: bool, cursor: NP_Cursor, memory: &'set NP_Memory, value: &Box<NP_JSON>) -> Result<(), NP_Error> where Self: 'set + Sized {
         
         match &**value {
             NP_JSON::Array(list) => {
@@ -186,7 +186,7 @@ impl<'value> NP_Value<'value> for NP_Tuple {
         Ok(())
     }
 
-    fn get_size<M: NP_Memory>(depth:usize, cursor: &NP_Cursor, memory: &'value M) -> Result<usize, NP_Error> {
+    fn get_size(depth:usize, cursor: &NP_Cursor, memory: &'value NP_Memory) -> Result<usize, NP_Error> {
 
         let c_value = || { cursor.get_value(memory) };
 
@@ -216,7 +216,7 @@ impl<'value> NP_Value<'value> for NP_Tuple {
        
     }
 
-    fn do_compact<M: NP_Memory, M2: NP_Memory>(depth:usize, from_cursor: NP_Cursor, from_memory: &'value M, mut to_cursor: NP_Cursor, to_memory: &'value M2) -> Result<NP_Cursor, NP_Error> where Self: 'value + Sized {
+    fn do_compact(depth:usize, from_cursor: NP_Cursor, from_memory: &'value NP_Memory, mut to_cursor: NP_Cursor, to_memory: &'value NP_Memory) -> Result<NP_Cursor, NP_Error> where Self: 'value + Sized {
 
         let from_value = from_cursor.get_value(from_memory);
 

@@ -356,7 +356,6 @@ use buffer::{NP_Buffer, DEFAULT_ROOT_PTR_ADDR};
 use alloc::vec::Vec;
 use alloc::string::String;
 use idl::JS_Schema;
-use memory::{NP_Memory_Ref, NP_Memory_Ref_Mut, NP_Memory_Owned};
 use schema::NP_Parsed_Schema;
 
 /// Generate a path from a string.  The path must use dot notation between the path segments.
@@ -570,8 +569,8 @@ impl NP_Factory {
 
     /// Open existing Vec<u8> as buffer for this factory.  
     /// 
-    pub fn open_buffer(&self, bytes: Vec<u8>) -> NP_Buffer<NP_Memory_Owned> {
-        NP_Buffer::_new(NP_Memory_Owned::existing(bytes, &self.schema.parsed, DEFAULT_ROOT_PTR_ADDR))
+    pub fn open_buffer(&self, bytes: Vec<u8>) -> NP_Buffer {
+        NP_Buffer::_new(NP_Memory::existing_owned(bytes, &self.schema.parsed, DEFAULT_ROOT_PTR_ADDR))
     }
 
     /// Open existing buffer as ready only ref, can much faster if you don't need to mutate anything.
@@ -580,8 +579,8 @@ impl NP_Factory {
     /// 
     /// Also, read only buffers are `Sync` and `Send` so good for multithreaded environments.
     /// 
-    pub fn open_buffer_ref<'buffer>(&'buffer self, bytes: &'buffer [u8]) -> NP_Buffer<NP_Memory_Ref<'buffer>> {
-        NP_Buffer::_new(NP_Memory_Ref::existing(bytes, &self.schema.parsed, DEFAULT_ROOT_PTR_ADDR))
+    pub fn open_buffer_ref<'buffer>(&'buffer self, bytes: &'buffer [u8]) -> NP_Buffer {
+        NP_Buffer::_new(NP_Memory::existing_ref(bytes, &self.schema.parsed, DEFAULT_ROOT_PTR_ADDR))
     }
 
     /// Open existing buffer as mutable ref, can be much faster to skip copying.  The `data_len` property is how many bytes the data in the buffer is using up.
@@ -593,8 +592,8 @@ impl NP_Factory {
     /// If the `&mut [u8]` type has the same length as `data_len`, mutations that require additional bytes will fail. `&mut [u8].len() - data_len` is how many bytes the buffer has for new allocations.
     /// 
     /// 
-    pub fn open_buffer_ref_mut<'buffer>(&'buffer self, bytes: &'buffer mut [u8], data_len: usize) -> NP_Buffer<NP_Memory_Ref_Mut> {
-        NP_Buffer::_new(NP_Memory_Ref_Mut::existing(bytes, data_len, &self.schema.parsed, DEFAULT_ROOT_PTR_ADDR))
+    pub fn open_buffer_ref_mut<'buffer>(&'buffer self, bytes: &'buffer mut [u8], data_len: usize) -> NP_Buffer {
+        NP_Buffer::_new(NP_Memory::existing_ref_mut(bytes, data_len, &self.schema.parsed, DEFAULT_ROOT_PTR_ADDR))
     }
 
     /// Generate a new empty buffer from this factory.
@@ -602,16 +601,16 @@ impl NP_Factory {
     /// The first opional argument, capacity, can be used to set the space of the underlying Vec<u8> when it's created.  If you know you're going to be putting lots of data into the buffer, it's a good idea to set this to a large number comparable to the amount of data you're putting in.  The default is 1,024 bytes.
     /// 
     /// 
-    pub fn new_buffer<'buffer>(&'buffer self, capacity: Option<usize>) -> NP_Buffer<NP_Memory_Owned> {
-        NP_Buffer::_new(NP_Memory_Owned::new(capacity, &self.schema.parsed, DEFAULT_ROOT_PTR_ADDR))
+    pub fn new_buffer<'buffer>(&'buffer self, capacity: Option<usize>) -> NP_Buffer {
+        NP_Buffer::_new(NP_Memory::new(capacity, &self.schema.parsed, DEFAULT_ROOT_PTR_ADDR))
     }
 
     /// Generate a new empty buffer from this factory.
     /// 
     /// Make sure the mutable slice is large enough to fit all the data you plan on putting into it.
     /// 
-    pub fn new_buffer_ref_mut<'buffer>(&'buffer self, bytes: &'buffer mut [u8]) -> NP_Buffer<NP_Memory_Ref_Mut> {
-        NP_Buffer::_new(NP_Memory_Ref_Mut::new(bytes, &self.schema.parsed, DEFAULT_ROOT_PTR_ADDR))
+    pub fn new_buffer_ref_mut<'buffer>(&'buffer self, bytes: &'buffer mut [u8]) -> NP_Buffer {
+        NP_Buffer::_new(NP_Memory::new_ref_mut(bytes, &self.schema.parsed, DEFAULT_ROOT_PTR_ADDR))
     }
 
     /// Convert a regular buffer into a packed buffer. A "packed" buffer contains the schema and the buffer data together.
@@ -620,9 +619,9 @@ impl NP_Factory {
     /// 
     /// The schema is stored in a very compact, binary format.  A JSON version of the schema can be generated from the binary version at any time.
     /// 
-    pub fn pack_buffer(&self, buffer: NP_Buffer<NP_Memory_Owned>) -> NP_Packed_Buffer {
+    pub fn pack_buffer(&self, buffer: NP_Buffer) -> NP_Packed_Buffer {
         NP_Packed_Buffer {
-            buffer: NP_Buffer::_new(NP_Memory_Owned::existing(buffer.finish().bytes(), &self.schema.parsed as *const Vec<NP_Parsed_Schema>, DEFAULT_ROOT_PTR_ADDR)),
+            buffer: NP_Buffer::_new(NP_Memory::existing_owned(buffer.finish().bytes(), &self.schema.parsed as *const Vec<NP_Parsed_Schema>, DEFAULT_ROOT_PTR_ADDR)),
             schema_bytes: self.export_schema_bytes().to_vec(),
             schema: self.schema.clone()
         }
@@ -631,7 +630,7 @@ impl NP_Factory {
 
 /// Packed Buffer Container
 pub struct NP_Packed_Buffer {
-    buffer: NP_Buffer<NP_Memory_Owned>,
+    buffer: NP_Buffer,
     schema_bytes: Vec<u8>,
     /// Schema data for this packed buffer
     pub schema: NP_Schema
@@ -656,7 +655,7 @@ impl NP_Packed_Buffer {
         let buffer_bytes = &buffer[(3 + schema_len)..];
 
         Ok(Self {
-            buffer: NP_Buffer::_new(NP_Memory_Owned::existing(buffer_bytes.to_vec(), &schema as *const Vec<NP_Parsed_Schema>, DEFAULT_ROOT_PTR_ADDR)),
+            buffer: NP_Buffer::_new(NP_Memory::existing_owned(buffer_bytes.to_vec(), &schema as *const Vec<NP_Parsed_Schema>, DEFAULT_ROOT_PTR_ADDR)),
             schema_bytes: schema_bytes.to_vec(),
             schema: NP_Schema {
                 is_sortable: is_sortable,
@@ -680,7 +679,7 @@ impl NP_Packed_Buffer {
     }
 
     /// Convert this packed buffer into a regular buffer
-    pub fn into_buffer(self) -> NP_Buffer<NP_Memory_Owned> {
+    pub fn into_buffer(self) -> NP_Buffer {
         self.buffer
     }
 
@@ -703,7 +702,7 @@ impl NP_Packed_Buffer {
 }
 
 impl Deref for NP_Packed_Buffer {
-    type Target = NP_Buffer<NP_Memory_Owned>;
+    type Target = NP_Buffer;
 
     fn deref(&self) -> &Self::Target {
         &self.buffer
