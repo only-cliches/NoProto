@@ -1,4 +1,4 @@
-# 0.9.6
+# 0.9.6 March 9th, 2021
 - Removed lifetimes from NP_Factory and NP_Buffer.
 - NP_Buffer is no longer generic over memory type.  This has a performance cost but makes the API easier to use.
 
