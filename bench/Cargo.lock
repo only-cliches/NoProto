@@ -491,7 +491,7 @@ dependencies = [
 
 [[package]]
 name = "no_proto"
-version = "0.9.6"
+version = "0.9.60"
 
 [[package]]
 name = "num-bigint"
