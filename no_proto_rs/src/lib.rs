@@ -475,7 +475,6 @@ pub struct NP_Factory {
 unsafe impl Send for NP_Factory {}
 unsafe impl Sync for NP_Factory {}
 
-
 /// When calling `maybe_compact` on a buffer, this struct is provided to help make a choice on wether to compact or not.
 #[derive(Debug, Eq, PartialEq)]
 pub struct NP_Size_Data {

@@ -75,7 +75,7 @@ impl NoProtoBench {
     }
 
     #[inline(always)]
-    fn get_factory<'get>() -> Result<NP_Factory<'get>, NP_Error> {
+    fn get_factory() -> Result<NP_Factory, NP_Error> {
         
 //         NP_Factory::new_bytes(&SCHEMA)
         NP_Factory::new(r#"
