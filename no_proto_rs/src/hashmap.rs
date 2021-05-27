@@ -5,14 +5,14 @@ use crate::error::NP_Error;
 
 pub static SEED: u32 = 2181155409;
 
-#[derive(Debug)]
-pub struct NP_HashMap {
-    data: Vec<Vec<(String, usize)>>
+#[derive(Debug, Clone)]
+pub struct NP_HashMap<V> {
+    data: Vec<Vec<(String, V)>>
 }
 
 const HASH_SIZE: usize = 2048;
 
-impl NP_HashMap {
+impl<V> NP_HashMap<V> {
 
     pub fn empty() -> Self {
         Self { data: Vec::with_capacity(1) }
@@ -24,7 +24,7 @@ impl NP_HashMap {
         Self { data: vector }
     }
 
-    pub fn insert(&mut self, key: &str, value: usize) -> Result<(), NP_Error> {
+    pub fn insert(&mut self, key: &str, value: V) -> Result<(), NP_Error> {
 
         let hash = murmurhash3_x86_32(key.as_bytes(), SEED);
     
@@ -45,7 +45,7 @@ impl NP_HashMap {
         Ok(())
     }
 
-    pub fn get(&self, key: &str) -> Option<&usize> {
+    pub fn get(&self, key: &str) -> Option<&V> {
         let hash = murmurhash3_x86_32(key.as_bytes(), SEED);
         let bucket = hash as usize % HASH_SIZE;
 
@@ -55,7 +55,7 @@ impl NP_HashMap {
                 if len == 0 {
                     return None;
                 }
-                if len == 1 {
+                if len == 1 && &x[0].0 == key {
                     return Some(&x[0].1);
                 }
                 for (k, v) in x.iter() {

@@ -1,38 +1,57 @@
 # WIP IDL ideas...
 
-import "../file"
+spec {
+    id: "My Schema",
+    author: "Scoot Loot",
+    version: 1.2
+}
 
-module user
+import "../file"
 
 # comment
 
-
-struct user (id: 0) {
-    name: string (default: "Billy"),
-    age: u32,
-    email: string,
-    position: struct {
-        x: u32,
-        y: u32
-    }
+struct self::position<X> () {
+    x: u32,
+    y: X
 }
 
-list userList (id: 1) { string }
+struct user () {
+    name: string (dflt: "Billy"),
+    age: u32 (dflt: 20),
+    email: Option<string (dflt: "")>,
+    position: self::position<u32>
+}
 
-union myUnion (id: 10) {
+impl user () {
+    fn get_user() -> Result<self, String>
+}
+
+list self::user_list () { string }
+
+union self::union () {
     opt1: string
     opt2: string2
 }
 
-enum myEnum (id: 11) { red, orange, yellow }
+enum myEnum () { red, orange, yellow }
 
-string namedString (id: 2, size: 20, default: "hello")
+enum Option<X> (dflt: None) {
+    None
+    Some(X)
+}
+
+enum Result<X, Y> (id: 12, dflt: Unset) {
+    Unset
+    Ok(X),
+    Err(Y),
+    Something { value: u32, another: u32 }
+}
+
+string namedString (id: 2, size: 20, default: 'hello')
 
 tuple someTuple (id: 3, sorted: true) { string, string, string }
 
-rpc get_user (id: 4) { (user) -> result { string, string } }
 
-end
 
 
 

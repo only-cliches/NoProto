@@ -811,7 +811,7 @@
 //! [Go to NP_Factory docs](../struct.NP_Factory.html)
 //! 
 
-use crate::idl::{JS_AST, JS_Schema};
+use crate::{hashmap::NP_HashMap, idl::{JS_AST, JS_Schema}};
 use crate::{np_path, pointer::{NP_Cursor}};
 use alloc::{string::String, sync::Arc};
 use core::{fmt::Debug};
@@ -956,13 +956,29 @@ pub struct NP_Tuple_Field {
 #[doc(hidden)]
 pub static NULL: fn() -> *const u8 = || { 0x0 as *const u8 };
 
+
+#[allow(missing_docs)]
+#[doc(hidden)]
+#[derive(Debug, Clone)]
+pub enum NP_Schema_Property {
+    TRUE,
+    FALSE,
+    NUMBER { source: String },
+    STRING { source: String },
+    TOKEN { source: String },
+    LIST { items: Vec<NP_Schema_Property> },
+    MAP { items: NP_HashMap<NP_Schema_Property> }
+}
+
 #[allow(missing_docs)]
 #[doc(hidden)]
 #[derive(Debug, Clone)]
 pub struct NP_Parsed_Schema {
     pub val: NP_Value_Kind, 
-    pub sortable: bool, 
     pub i: NP_TypeKeys, 
+    pub sortable: bool,
+    pub generics: Vec<u8>,
+    pub all_props: NP_HashMap<NP_Schema_Property>,
     pub data: Arc<*const u8> // *const NP_XXX_Data
 }
 
@@ -975,7 +991,9 @@ impl Default for NP_Parsed_Schema {
             val: NP_Value_Kind::Pointer,
             i: NP_TypeKeys::None,
             sortable: false,
+            generics: Vec::new(),
             data: Arc::new(NULL()),
+            all_props: NP_HashMap::new()
         }
     }
 }
@@ -1360,44 +1378,45 @@ impl NP_Schema {
     }
 
     /// Scan the schema for portals and resolve their locations
-    pub fn resolve_portals(parsed: Vec<NP_Parsed_Schema>) -> Result<Vec<NP_Parsed_Schema>, NP_Error> {
+    // pub fn resolve_portals(parsed: Vec<NP_Parsed_Schema>) -> Result<Vec<NP_Parsed_Schema>, NP_Error> {
 
-        let temp_memory = NP_Memory::new(None, &parsed, DEFAULT_ROOT_PTR_ADDR);
+    //     let temp_memory = NP_Memory::new(None, &parsed, DEFAULT_ROOT_PTR_ADDR);
 
-        let mut completed: Vec<NP_Parsed_Schema> = Vec::with_capacity(parsed.len());
+    //     let mut completed: Vec<NP_Parsed_Schema> = Vec::with_capacity(parsed.len());
 
-        for schema in parsed.iter() {
-            if schema.i == NP_TypeKeys::Portal {
+    //     for schema in parsed.iter() {
+    //         if schema.i == NP_TypeKeys::Portal {
 
-                let portal_data = unsafe { &*(*schema.data as *const NP_Portal_Data) };
+    //             let portal_data = unsafe { &*(*schema.data as *const NP_Portal_Data) };
              
-                let root_cursor = NP_Cursor::new(temp_memory.root, 0, 0);
-                let path = &portal_data.path;
-                let str_path = np_path!(path);
-                match NP_Cursor::select(&temp_memory, root_cursor, false, true, &str_path)? {
-                    Some(next) => {
+    //             let root_cursor = NP_Cursor::new(temp_memory.root, 0, 0);
+    //             let path = &portal_data.path;
+    //             let str_path = np_path!(path);
+    //             match NP_Cursor::select(&temp_memory, root_cursor, false, true, &str_path)? {
+    //                 Some(next) => {
 
-                        completed.push(NP_Parsed_Schema {
-                            val: NP_Value_Kind::Pointer,
-                            i: NP_TypeKeys::Portal,
-                            sortable: false,
-                            data: Arc::new(Box::into_raw(Box::new(NP_Portal_Data {
-                                path: path.clone(),
-                                schema: next.schema_addr,
-                                parent_schema: next.parent_schema_addr
-                            })) as *const u8)
-                        });
-                    },
-                    None => return Err(NP_Error::new("Portal 'to' property failed to resolve!"))
-                }
+    //                     completed.push(NP_Parsed_Schema {
+    //                         val: NP_Value_Kind::Pointer,
+    //                         i: NP_TypeKeys::Portal,
+    //                         sortable: false,
+    //                         all_props: NP_HashMap::new(),
+    //                         data: Arc::new(Box::into_raw(Box::new(NP_Portal_Data {
+    //                             path: path.clone(),
+    //                             schema: next.schema_addr,
+    //                             parent_schema: next.parent_schema_addr
+    //                         })) as *const u8)
+    //                     });
+    //                 },
+    //                 None => return Err(NP_Error::new("Portal 'to' property failed to resolve!"))
+    //             }
             
-            } else {
-                completed.push(schema.clone());
-            }
-        }
+    //         } else {
+    //             completed.push(schema.clone());
+    //         }
+    //     }
 
-        Ok(completed)
-    }
+    //     Ok(completed)
+    // }
 
     /// Generate a schema from a parsed IDL
     pub fn from_idl(parsed: Vec<NP_Parsed_Schema>, idl: &JS_Schema, ast: &JS_AST) -> Result<(bool, Vec<u8>, Vec<NP_Parsed_Schema>), NP_Error> {

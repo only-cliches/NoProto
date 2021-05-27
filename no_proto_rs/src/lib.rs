@@ -334,9 +334,7 @@ pub mod error;
 pub mod json_flex;
 pub mod format;
 pub mod memory;
-#[cfg(feature = "np_rpc")]
-pub mod rpc;
-#[cfg(feature = "np_rpc")]
+pub mod new_idl;
 #[allow(missing_docs)]
 #[doc(hidden)]
 pub mod hashmap;
@@ -497,7 +495,7 @@ impl NP_Factory {
 
         let (is_sortable, schema_bytes, mut schema) = NP_Schema::from_idl(Vec::new(), &idl, &idl.ast)?;
         
-        schema = NP_Schema::resolve_portals(schema)?;
+        // schema = NP_Schema::resolve_portals(schema)?;
 
         Ok(Self {
             schema_bytes: schema_bytes,
@@ -518,7 +516,7 @@ impl NP_Factory {
 
         let (is_sortable, schema_bytes, mut schema) = NP_Schema::from_json(Vec::new(), &parsed_value)?;
 
-        schema = NP_Schema::resolve_portals(schema)?;
+        // schema = NP_Schema::resolve_portals(schema)?;
 
         Ok(Self {
             schema_bytes: schema_bytes,
@@ -537,7 +535,7 @@ impl NP_Factory {
         
         let (is_sortable, mut schema) = NP_Schema::from_bytes(Vec::new(), 0, schema_bytes);
 
-        schema = NP_Schema::resolve_portals(schema)?;
+        // schema = NP_Schema::resolve_portals(schema)?;
 
         Ok(Self {
             schema_bytes: Vec::from(schema_bytes),
@@ -649,7 +647,7 @@ impl NP_Packed_Buffer {
 
         let (is_sortable, mut schema) = NP_Schema::from_bytes(Vec::new(), 0, schema_bytes);
 
-        schema = NP_Schema::resolve_portals(schema)?;
+        // schema = NP_Schema::resolve_portals(schema)?;
 
         let buffer_bytes = &buffer[(3 + schema_len)..];
 
