@@ -11,15 +11,25 @@ import "../file"
 # comment
 
 struct self::position<X> () {
-    x: u32,
+    x: X,
     y: X
 }
 
-struct user () {
-    name: string (dflt: "Billy"),
-    age: u32 (dflt: 20),
-    email: Option<string (dflt: "")>,
-    position: self::position<u32>
+struct user {
+    name: string (default: "Billy"),
+    age: u32,
+    email: Option<String>,
+    other_user: struct {
+        name: String,
+        email: String
+    },
+    position: self::position<u32>,
+    posts: list { post }
+}
+
+struct post {
+    title: string,
+    content: string
 }
 
 impl user () {

@@ -353,7 +353,6 @@ use crate::error::NP_Error;
 use buffer::{NP_Buffer, DEFAULT_ROOT_PTR_ADDR};
 use alloc::vec::Vec;
 use alloc::string::String;
-use idl::JS_Schema;
 use schema::NP_Parsed_Schema;
 
 /// Generate a path from a string.  The path must use dot notation between the path segments.
@@ -505,28 +504,6 @@ impl NP_Factory {
             }
         }) 
     }
-    
-    /// Generate a new factory from the given JSON schema.
-    /// 
-    /// This operation will fail if the schema provided is invalid or if the schema is not valid JSON.  If it fails you should get a useful error message letting you know what the problem is.
-    /// 
-    pub fn new_json<S>(json_schema: S) -> Result<Self, NP_Error> where S: Into<String> {
-
-        let parsed_value = json_decode(json_schema.into())?;
-
-        let (is_sortable, schema_bytes, mut schema) = NP_Schema::from_json(Vec::new(), &parsed_value)?;
-
-        // schema = NP_Schema::resolve_portals(schema)?;
-
-        Ok(Self {
-            schema_bytes: schema_bytes,
-            schema:  NP_Schema {
-                is_sortable: is_sortable,
-                parsed: schema
-            }
-        })      
-        
-    }
 
     /// Create a new factory from a compiled schema byte array.
     /// The byte schemas are at least an order of magnitude faster to parse than JSON schemas.
@@ -556,12 +533,6 @@ impl NP_Factory {
     /// 
     pub fn export_schema_idl(&self) -> Result<String, NP_Error> {
         self.schema.to_idl()
-    }
-
-    /// Exports this factorie's schema to JSON.  This works regardless of wether the factory was created with `NP_Factory::new` or `NP_Factory::new_bytes`.
-    /// 
-    pub fn export_schema_json(&self) -> Result<NP_JSON, NP_Error> {
-        self.schema.to_json()
     }
 
     /// Open existing Vec<u8> as buffer for this factory.  
@@ -610,107 +581,107 @@ impl NP_Factory {
         NP_Buffer::_new(NP_Memory::new_ref_mut(bytes, &self.schema.parsed, DEFAULT_ROOT_PTR_ADDR))
     }
 
-    /// Convert a regular buffer into a packed buffer. A "packed" buffer contains the schema and the buffer data together.
-    /// 
-    /// You can optionally store buffers with their schema attached so you don't have to track the schema seperatly.
-    /// 
-    /// The schema is stored in a very compact, binary format.  A JSON version of the schema can be generated from the binary version at any time.
-    /// 
-    pub fn pack_buffer(&self, buffer: NP_Buffer) -> NP_Packed_Buffer {
-        NP_Packed_Buffer {
-            buffer: NP_Buffer::_new(NP_Memory::existing_owned(buffer.finish().bytes(), &self.schema.parsed as *const Vec<NP_Parsed_Schema>, DEFAULT_ROOT_PTR_ADDR)),
-            schema_bytes: self.export_schema_bytes().to_vec(),
-            schema: self.schema.clone()
-        }
-    }
+    // /// Convert a regular buffer into a packed buffer. A "packed" buffer contains the schema and the buffer data together.
+    // /// 
+    // /// You can optionally store buffers with their schema attached so you don't have to track the schema seperatly.
+    // /// 
+    // /// The schema is stored in a very compact, binary format.  A JSON version of the schema can be generated from the binary version at any time.
+    // /// 
+    // pub fn pack_buffer(&self, buffer: NP_Buffer) -> NP_Packed_Buffer {
+    //     NP_Packed_Buffer {
+    //         buffer: NP_Buffer::_new(NP_Memory::existing_owned(buffer.finish().bytes(), &self.schema.parsed as *const Vec<NP_Parsed_Schema>, DEFAULT_ROOT_PTR_ADDR)),
+    //         schema_bytes: self.export_schema_bytes().to_vec(),
+    //         schema: self.schema.clone()
+    //     }
+    // }
 }
 
-/// Packed Buffer Container
-pub struct NP_Packed_Buffer {
-    buffer: NP_Buffer,
-    schema_bytes: Vec<u8>,
-    /// Schema data for this packed buffer
-    pub schema: NP_Schema
-}
+// /// Packed Buffer Container
+// pub struct NP_Packed_Buffer {
+//     buffer: NP_Buffer,
+//     schema_bytes: Vec<u8>,
+//     /// Schema data for this packed buffer
+//     pub schema: NP_Schema
+// }
 
-impl NP_Packed_Buffer {
+// impl NP_Packed_Buffer {
 
-    /// Open a packed buffer
-    pub fn open(buffer: Vec<u8>) -> Result<Self, NP_Error> {
-        if buffer[0] != 1 {
-            return Err(NP_Error::new("Trying to use NP_Packed_Buffer::open on non packed buffer!"))
-        }
+//     /// Open a packed buffer
+//     pub fn open(buffer: Vec<u8>) -> Result<Self, NP_Error> {
+//         if buffer[0] != 1 {
+//             return Err(NP_Error::new("Trying to use NP_Packed_Buffer::open on non packed buffer!"))
+//         }
 
-        let schema_len = u16::from_be_bytes(unsafe { *((&buffer[1..3]) as *const [u8] as *const [u8; 2]) }) as usize;
+//         let schema_len = u16::from_be_bytes(unsafe { *((&buffer[1..3]) as *const [u8] as *const [u8; 2]) }) as usize;
 
-        let schema_bytes = &buffer[3..(3 + schema_len)];
+//         let schema_bytes = &buffer[3..(3 + schema_len)];
 
-        let (is_sortable, mut schema) = NP_Schema::from_bytes(Vec::new(), 0, schema_bytes);
+//         let (is_sortable, mut schema) = NP_Schema::from_bytes(Vec::new(), 0, schema_bytes);
 
-        // schema = NP_Schema::resolve_portals(schema)?;
+//         // schema = NP_Schema::resolve_portals(schema)?;
 
-        let buffer_bytes = &buffer[(3 + schema_len)..];
+//         let buffer_bytes = &buffer[(3 + schema_len)..];
 
-        Ok(Self {
-            buffer: NP_Buffer::_new(NP_Memory::existing_owned(buffer_bytes.to_vec(), &schema as *const Vec<NP_Parsed_Schema>, DEFAULT_ROOT_PTR_ADDR)),
-            schema_bytes: schema_bytes.to_vec(),
-            schema: NP_Schema {
-                is_sortable: is_sortable,
-                parsed: schema
-            }
-        })
-    }
+//         Ok(Self {
+//             buffer: NP_Buffer::_new(NP_Memory::existing_owned(buffer_bytes.to_vec(), &schema as *const Vec<NP_Parsed_Schema>, DEFAULT_ROOT_PTR_ADDR)),
+//             schema_bytes: schema_bytes.to_vec(),
+//             schema: NP_Schema {
+//                 is_sortable: is_sortable,
+//                 parsed: schema
+//             }
+//         })
+//     }
 
-    /// Close this buffer and pack it
-    pub fn close_packed(self) -> Vec<u8> {
-        let mut new_buffer: Vec<u8> = Vec::new();
-        new_buffer.push(1); // indicate this is a packed buffer
-        let schema = self.export_schema_bytes();
-        // schema size
-        new_buffer.extend_from_slice(&(schema.len() as u16).to_be_bytes());
-        // schema data
-        new_buffer.extend_from_slice(self.export_schema_bytes());
-        // buffer data
-        new_buffer.extend(self.buffer.finish().bytes());
-        new_buffer
-    }
+//     /// Close this buffer and pack it
+//     pub fn close_packed(self) -> Vec<u8> {
+//         let mut new_buffer: Vec<u8> = Vec::new();
+//         new_buffer.push(1); // indicate this is a packed buffer
+//         let schema = self.export_schema_bytes();
+//         // schema size
+//         new_buffer.extend_from_slice(&(schema.len() as u16).to_be_bytes());
+//         // schema data
+//         new_buffer.extend_from_slice(self.export_schema_bytes());
+//         // buffer data
+//         new_buffer.extend(self.buffer.finish().bytes());
+//         new_buffer
+//     }
 
-    /// Convert this packed buffer into a regular buffer
-    pub fn into_buffer(self) -> NP_Buffer {
-        self.buffer
-    }
+//     /// Convert this packed buffer into a regular buffer
+//     pub fn into_buffer(self) -> NP_Buffer {
+//         self.buffer
+//     }
 
-    /// Get the schema bytes for this packed buffer
-    pub fn export_schema_bytes(&self) -> &[u8] {
-        &self.schema_bytes[..]
-    }
+//     /// Get the schema bytes for this packed buffer
+//     pub fn export_schema_bytes(&self) -> &[u8] {
+//         &self.schema_bytes[..]
+//     }
 
-    /// Exports this schema to ES6 IDL.  This works regardless of how the initial buffer schema was created.
-    /// 
-    pub fn export_schema_idl(&self) -> Result<String, NP_Error> {
-        self.schema.to_idl()
-    }
+//     /// Exports this schema to ES6 IDL.  This works regardless of how the initial buffer schema was created.
+//     /// 
+//     pub fn export_schema_idl(&self) -> Result<String, NP_Error> {
+//         self.schema.to_idl()
+//     }
 
-    /// Exports this schema to JSON.  This works regardless of how the initial buffer schema was created.
-    /// 
-    pub fn export_schema_json(&self) -> Result<NP_JSON, NP_Error> {
-        self.schema.to_json()
-    }
-}
+//     /// Exports this schema to JSON.  This works regardless of how the initial buffer schema was created.
+//     /// 
+//     pub fn export_schema_json(&self) -> Result<NP_JSON, NP_Error> {
+//         self.schema.to_json()
+//     }
+// }
 
-impl Deref for NP_Packed_Buffer {
-    type Target = NP_Buffer;
+// impl Deref for NP_Packed_Buffer {
+//     type Target = NP_Buffer;
 
-    fn deref(&self) -> &Self::Target {
-        &self.buffer
-    }
-}
+//     fn deref(&self) -> &Self::Target {
+//         &self.buffer
+//     }
+// }
 
-impl DerefMut for NP_Packed_Buffer {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.buffer
-    }
-}
+// impl DerefMut for NP_Packed_Buffer {
+//     fn deref_mut(&mut self) -> &mut Self::Target {
+//         &mut self.buffer
+//     }
+// }
 
 #[test]
 fn threading_works() {

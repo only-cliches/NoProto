@@ -7,10 +7,10 @@ pub static SEED: u32 = 2181155409;
 
 #[derive(Debug, Clone)]
 pub struct NP_HashMap<V> {
-    data: Vec<Vec<(String, V)>>
+    data: Vec<Vec<(u32, V)>>
 }
 
-const HASH_SIZE: usize = 2048;
+const HASH_SIZE: usize = 4096;
 
 impl<V> NP_HashMap<V> {
 
@@ -20,7 +20,7 @@ impl<V> NP_HashMap<V> {
 
     pub fn new() -> Self {
         let mut vector = Vec::with_capacity(HASH_SIZE);
-        vector.extend((0..HASH_SIZE).map(|_| Vec::new()));
+        vector.extend((0..HASH_SIZE).map(|_| Vec::with_capacity(4)));
         Self { data: vector }
     }
 
@@ -31,15 +31,15 @@ impl<V> NP_HashMap<V> {
         let bucket = hash as usize % HASH_SIZE;
 
         if self.data[bucket].len() == 0 {
-            self.data[bucket].push((String::from(key), value));
+            self.data[bucket].push((hash, value));
         } else {
             for (k, v) in self.data[bucket].iter_mut() {
-                if k == key {
+                if *k == hash {
                     *v = value;
                     return Ok(())
                 }
             }
-            self.data[bucket].push((String::from(key), value));
+            self.data[bucket].push((hash, value));
         }
 
         Ok(())
@@ -55,11 +55,15 @@ impl<V> NP_HashMap<V> {
                 if len == 0 {
                     return None;
                 }
-                if len == 1 && &x[0].0 == key {
-                    return Some(&x[0].1);
+                if len == 1 {
+                    if x[0].0 == hash {
+                        return Some(&x[0].1);
+                    } else {
+                        return None;
+                    }
                 }
                 for (k, v) in x.iter() {
-                    if k == key {
+                    if *k == hash {
                         return Some(v)
                     }
                 }
@@ -74,7 +78,7 @@ impl<V> NP_HashMap<V> {
         let bucket = hash as usize % HASH_SIZE;
         match self.data.get_mut(bucket) {
             Some(bucket) => {
-                bucket.retain(|(k, _v)| *k != key);
+                bucket.retain(|(k, _v)| *k != hash);
             },
             _ => { }
         }

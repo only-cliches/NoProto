@@ -92,45 +92,59 @@ impl AST {
 
             match cursor.state {
                 ast_cursor_state::searching => {
-                    
-                    if *curr_char >= 65 && *curr_char <= 122 { // A - Z, a - z
-                        cursor.start = cursor.end;
-                        cursor.state = ast_cursor_state::token;
-                    } else if *curr_char >= 48 && *curr_char <= 57 { // 0 - 9
-                        cursor.start = cursor.end;
-                        cursor.state = ast_cursor_state::number;
-                    } else if *curr_char == 123 { // {
-                        cursor.start = cursor.end + 1;
-                        cursor.state = ast_cursor_state::curly { open_idx: cursor.end };
-                        cursor.level += 1;
-                    } else if *curr_char == 40 { // (
-                        cursor.start = cursor.end + 1;
-                        cursor.state = ast_cursor_state::parans { open_idx: cursor.end };
-                        cursor.level += 1;
-                    } else if *curr_char == 39 { // '
-                        cursor.start = cursor.end + 1;
-                        cursor.state = ast_cursor_state::single_quote { open_idx: cursor.end };
-                    } else if *curr_char == 34 { // "
-                        cursor.start = cursor.end + 1;
-                        cursor.state = ast_cursor_state::double_quote { open_idx: cursor.end };
-                    } else if *curr_char == 58 { // :
-                        result.push(AST::colon);
-                    } else if *curr_char == 44 { // ,
-                        result.push(AST::comma);
-                    } else if *curr_char == 45 { // -
-                        if cursor.end + 1 < ast.end && chars[cursor.end + 1] == 62 { // >
-                            result.push(AST::arrow);
-                            cursor.end +=1;
+
+                    match *curr_char {
+                        65..=122 => { // A - Z, a - z
+                            cursor.start = cursor.end;
+                            cursor.state = ast_cursor_state::token;
+                        },
+                        48..=57 => {  // 0 - 9
+                            cursor.start = cursor.end;
+                            cursor.state = ast_cursor_state::number;
                         }
-                    } else if *curr_char == 60 { // <
-                        cursor.start = cursor.end + 1;
-                        cursor.state = ast_cursor_state::arrows { open_idx: cursor.end };
-                    } else if *curr_char == 91 { // [
-                        cursor.start = cursor.end + 1;
-                        cursor.state = ast_cursor_state::brackets { open_idx: cursor.end };
-                    } else if *curr_char == 10 || *curr_char == 13 { // new line
-                        
+                        123 => { // {
+                            cursor.start = cursor.end + 1;
+                            cursor.state = ast_cursor_state::curly { open_idx: cursor.end };
+                            cursor.level += 1;
+                        }
+                        48 => { // (
+                            cursor.start = cursor.end + 1;
+                            cursor.state = ast_cursor_state::parans { open_idx: cursor.end };
+                            cursor.level += 1;
+                        },
+                        39 => { // '
+                            cursor.start = cursor.end + 1;
+                            cursor.state = ast_cursor_state::single_quote { open_idx: cursor.end };
+                        }
+                        34 => { // "
+                            cursor.start = cursor.end + 1;
+                            cursor.state = ast_cursor_state::double_quote { open_idx: cursor.end };
+                        }
+                        58 => {  // :
+                            result.push(AST::colon);
+                        }
+                        44 => { // ,
+                            result.push(AST::comma);
+                        }
+                        45 => { // -
+                            if cursor.end + 1 < ast.end && chars[cursor.end + 1] == 62 { // >
+                                result.push(AST::arrow);
+                                cursor.end +=1;
+                            }
+                        }
+                        60 => { // <
+                            cursor.start = cursor.end + 1;
+                            cursor.state = ast_cursor_state::arrows { open_idx: cursor.end };
+                        }
+                        91 => { // [
+                            cursor.start = cursor.end + 1;
+                            cursor.state = ast_cursor_state::brackets { open_idx: cursor.end };
+                        }
+                        10 | 13 => { // new line
+
+                        }
                     }
+                    
                 }
                 ast_cursor_state::number => {
                     if (*curr_char >= 48 && *curr_char <= 57) || *curr_char == 46 || *curr_char == 95 || *curr_char == 94 || *curr_char == 101 {
