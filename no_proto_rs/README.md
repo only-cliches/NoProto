@@ -27,10 +27,11 @@
 
 **Fast**<br/>
 - Zero copy deserialization
-- Most updates are append only
-- Deserialization is incrimental
+- Most updates are append-only
+- Deserialization is incremental
 
 **Powerful**<br/>
+- Supports generic data types including `Result<X, Y>` and `Option<X>`
 - Native byte-wise sorting
 - Supports recursive data types
 - Supports most common native data types

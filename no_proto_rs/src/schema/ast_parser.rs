@@ -217,12 +217,12 @@ impl AST {
                     
                 }
                 ast_cursor_state::number => {
-                    if (*curr_char >= '0' && *curr_char <= '9') || *curr_char == '.' || *curr_char == '_' || *curr_char == '^' || *curr_char == 'e' || *curr_char == ',' || *curr_char == '-' {
-                        // valid number chars (0 - 9 || . || _ || ^ || e || , || -)
+                    if (*curr_char >= '0' && *curr_char <= '9') || *curr_char == '.' || *curr_char == '_' || *curr_char == '^' || *curr_char == 'e' || *curr_char == '-' {
+                        // valid number chars (0 - 9 || . || _ || ^ || e || -)
                     } else {
-                        result.push(AST::number { addr: AST_STR { start: cursor.start, end: cursor.end - 1 }});
+                        result.push(AST::number { addr: AST_STR { start: cursor.start, end: cursor.end }});
                         cursor.state = ast_cursor_state::searching;
-                        cursor.end -= 2;
+                        cursor.end -= 1;
                     }
                 }
                 ast_cursor_state::xml { .. } => {
@@ -326,7 +326,7 @@ impl AST {
                     }
                 }
             }
-        
+
 
             cursor.end += 1;
         }
@@ -393,55 +393,55 @@ impl AST {
     }
 }
 
-#[test]
-fn test() {
-    // println!("HELLO {:?}", );
-
-    let schema = String::from(r##"
-
-
-
-        info [
-            title: "My Protocol",
-            author: "Scott Lott",
-            version: 1.0,
-            id: "481cfd47-5b6f-422c-9e0c-9d561e6c94d1"
-        ]
-
-        enum Result<X,Y> [id: 0, default: "Unset"] {
-            Unset,
-            Ok(X),
-            Error(Y)
-        }
-
-        struct user [id: 1] {
-            id: ulid,
-            name: string,
-            email: string,
-            something: [u32; 12]
-        }
-
-
-        # comment here
-        impl user {
-            get(id: u32) -> self,
-            update(self) -> Result<(), Error>
-        }
-        # comment here
-        // comment here
-        enum cursor_state<X> [id: 3] {
-            option1(arg1, X),
-            option2 { key: value }
-        }
-    "##);
-
-    
-    match AST::parse(&schema.clone()) {
-        Ok(ast) => {
-            println!("{:#?}", ast);
-        },
-        Err(e) => {
-            println!("{:?}", e);
-        }
-    }
-}
+// #[test]
+// fn test() {
+//     // println!("HELLO {:?}", );
+//
+//     let schema = String::from(r##"
+//
+//
+//
+//         info [
+//             title: "My Protocol",
+//             author: "Scott Lott",
+//             version: 1.0,
+//             id: "481cfd47-5b6f-422c-9e0c-9d561e6c94d1"
+//         ]
+//
+//         enum Result<X,Y> [id: 0, default: "Unset"] {
+//             Unset,
+//             Ok(X),
+//             Error(Y)
+//         }
+//
+//         struct user [id: 1] {
+//             id: ulid,
+//             name: string,
+//             email: string,
+//             something: [u32; 12]
+//         }
+//
+//
+//         # comment here
+//         impl user {
+//             get(id: u32) -> self,
+//             update(self) -> Result<(), Error>
+//         }
+//         # comment here
+//         // comment here
+//         enum cursor_state<X> [id: 3] {
+//             option1(arg1, X),
+//             option2 { key: value }
+//         }
+//     "##);
+//
+//
+//     match AST::parse(&schema.clone()) {
+//         Ok(ast) => {
+//             println!("{:#?}", ast);
+//         },
+//         Err(e) => {
+//             println!("{:?}", e);
+//         }
+//     }
+// }

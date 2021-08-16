@@ -2,29 +2,69 @@ use alloc::string::String;
 use alloc::vec::Vec;
 
 use crate::error::NP_Error;
+use core::fmt::{Debug, Formatter};
 
 pub static SEED: u32 = 2181155409;
 
-#[derive(Debug, Clone)]
-pub struct NP_HashMap<V> {
-    data: Vec<Vec<(u32, V)>>
+#[derive(Clone)]
+pub struct NP_HashMap<V: Debug + PartialEq> {
+    data: Vec<Vec<(u32, V)>>,
+    keys: Vec<(u32, String)>
+}
+
+impl<V: Debug + PartialEq> Default for NP_HashMap<V> {
+    fn default() -> Self {
+        NP_HashMap::new()
+    }
+}
+
+impl<V: Debug + PartialEq> PartialEq for NP_HashMap<V> {
+    fn eq(&self, other: &Self) -> bool {
+
+        if self.iter_keys().count() != other.iter_keys().count() {
+            return false;
+        }
+
+        for key in self.iter_keys() {
+            if self.get(key) != other.get(key) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+}
+
+impl<T: Debug + PartialEq> Debug for NP_HashMap<T> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+
+        f.write_str("NP_HashMap:: ")?;
+        for (key, value) in self.iter() {
+            f.write_str(key.as_str())?;
+            f.write_str(": ")?;
+            value.fmt(f)?;
+            f.write_str("; ")?;
+        }
+
+        Ok(())
+    }
 }
 
 const HASH_SIZE: usize = 4096;
 
-impl<V> NP_HashMap<V> {
+impl<V: Debug + PartialEq> NP_HashMap<V> {
 
     pub fn empty() -> Self {
-        Self { data: Vec::with_capacity(1) }
+        Self { data: Vec::with_capacity(1), keys: Vec::new() }
     }
 
     pub fn new() -> Self {
         let mut vector = Vec::with_capacity(HASH_SIZE);
         vector.extend((0..HASH_SIZE).map(|_| Vec::with_capacity(4)));
-        Self { data: vector }
+        Self { data: vector, keys: Vec::new() }
     }
 
-    pub fn insert(&mut self, key: &str, value: V) -> Result<(), NP_Error> {
+    pub fn set(&mut self, key: &str, value: V) -> Result<(), NP_Error> {
 
         let hash = murmurhash3_x86_32(key.as_bytes(), SEED);
     
@@ -32,21 +72,24 @@ impl<V> NP_HashMap<V> {
 
         if self.data[bucket].len() == 0 {
             self.data[bucket].push((hash, value));
+            self.keys.push((hash, String::from(key)));
         } else {
+            // replace existing value
             for (k, v) in self.data[bucket].iter_mut() {
                 if *k == hash {
                     *v = value;
                     return Ok(())
                 }
             }
+            // add new value
             self.data[bucket].push((hash, value));
+            self.keys.push((hash, String::from(key)));
         }
 
         Ok(())
     }
 
-    pub fn get(&self, key: &str) -> Option<&V> {
-        let hash = murmurhash3_x86_32(key.as_bytes(), SEED);
+    fn get_by_hash(&self, hash: u32) -> Option<&V> {
         let bucket = hash as usize % HASH_SIZE;
 
         match self.data.get(bucket) {
@@ -56,10 +99,10 @@ impl<V> NP_HashMap<V> {
                     return None;
                 }
                 if len == 1 {
-                    if x[0].0 == hash {
-                        return Some(&x[0].1);
+                    return if x[0].0 == hash {
+                        Some(&x[0].1)
                     } else {
-                        return None;
+                        None
                     }
                 }
                 for (k, v) in x.iter() {
@@ -73,9 +116,15 @@ impl<V> NP_HashMap<V> {
         }
     }
 
+    pub fn get(&self, key: &str) -> Option<&V> {
+        let hash = murmurhash3_x86_32(key.as_bytes(), SEED);
+        self.get_by_hash(hash)
+    }
+
     pub fn delete(&mut self, key: &str) {
         let hash = murmurhash3_x86_32(key.as_bytes(), SEED);
         let bucket = hash as usize % HASH_SIZE;
+        self.keys.retain(|(h, _key)| hash != *h);
         match self.data.get_mut(bucket) {
             Some(bucket) => {
                 bucket.retain(|(k, _v)| *k != hash);
@@ -83,7 +132,88 @@ impl<V> NP_HashMap<V> {
             _ => { }
         }
     }
+
+    pub fn iter(&self) -> NP_HashMap_Iterator<V> {
+        NP_HashMap_Iterator { hashmap: self, index: 0, length: self.keys.len() }
+    }
+
+    pub fn iter_keys(&self) -> NP_HashMap_Iterator_Keys<V> {
+        NP_HashMap_Iterator_Keys { hashmap: self, index: 0, length: self.keys.len() }
+    }
+
+    pub fn keys(&self) -> &Vec<(u32, String)> {
+        &self.keys
+    }
+
 }
+
+
+pub struct NP_HashMap_Iterator_Keys<'iter, V: Debug + PartialEq> {
+    hashmap: &'iter NP_HashMap<V>,
+    length: usize,
+    index: usize
+}
+
+impl<'iter, V: Debug + PartialEq> Iterator for NP_HashMap_Iterator_Keys<'iter, V> {
+    type Item = &'iter String;
+
+    fn next(&mut self) -> Option<Self::Item> {
+
+        if self.index >= self.length {
+            return None
+        }
+
+        let key = &self.hashmap.keys[self.index];
+
+        self.index += 1;
+
+        Some(&key.1)
+    }
+}
+
+pub struct NP_HashMap_Iterator<'iter, V: Debug + PartialEq> {
+    hashmap: &'iter NP_HashMap<V>,
+    length: usize,
+    index: usize
+}
+
+impl<'iter, V: Debug + PartialEq> Iterator for NP_HashMap_Iterator<'iter, V> {
+    type Item = (&'iter String, &'iter V);
+
+    fn next(&mut self) -> Option<Self::Item> {
+
+        if self.index >= self.length {
+            return None
+        }
+
+        let key = &self.hashmap.keys[self.index];
+
+        if let Some(value) = self.hashmap.get_by_hash(key.0) {
+            self.index += 1;
+            return Some((&key.1, value))
+        }
+
+        None
+    }
+}
+
+
+
+// #[test]
+// fn hash_map_test() {
+//     let mut hash: NP_HashMap<u32> = NP_HashMap::new();
+//
+//     hash.set("hello", 32);
+//     hash.set("world", 52);
+//     hash.set("another", 22);
+//
+//     // println!("{:?}", hash.get("world"));
+//
+//     for (key, value) in hash.iter() {
+//         println!("{} {:?}", key, value);
+//     }
+//
+// }
 
 // https://github.com/mhallin/murmurhash3-rs
 // 

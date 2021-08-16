@@ -1,0 +1,21 @@
+[package]
+name = "no_proto"
+license = "MIT"
+version = "0.9.60"
+description = "Flexible, Fast & Compact Serialization with RPC"
+homepage = "https://github.com/only-cliches/NoProto"
+repository = "https://github.com/only-cliches/NoProto"
+documentation="https://docs.rs/crate/no_proto/"
+authors = ["Scott Lott <me@scottlott.com>"]
+readme = "README.md"
+edition = "2018"
+exclude = []
+categories = ["data-structures", "embedded", "encoding", "no-std", "database"]
+keywords = ["protocol-buffers", "grpc", "avro", "database", "json"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[features]
+np_rpc = []
+default = ["np_rpc"]
+
