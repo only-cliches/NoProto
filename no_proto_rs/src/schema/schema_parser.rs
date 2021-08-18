@@ -75,7 +75,7 @@ impl NP_Schema {
             if ast[parse_idx] == AST::newline || ast[parse_idx] == AST::semicolon {
                 parse_idx += 1;
             } else {
-                parse_idx = Self::parse_single_type(input.as_ref(), &ast, parse_idx, 0, &top_generics, &mut type_idx, &mut parse_schema)?;
+                parse_idx = Self::parse_single_type(input.as_ref(), &ast, parse_idx, 0, 0, &top_generics, &mut type_idx, &mut parse_schema)?;
                 parse_idx += 1;
             }
         }
@@ -188,6 +188,9 @@ impl NP_Schema {
                             generics.push(addr.clone())
                         },
                         AST::comma => {
+
+                        },
+                        AST::newline => {
 
                         }
                         _ => {
@@ -383,20 +386,20 @@ impl NP_Schema {
             "string"   => Some(NP_Schema_Type::String { size: POINTER_SIZE, default: Default::default(), casing: NP_String_Casing::None, max_len: None }),
             "char"     => Some(NP_Schema_Type::Char  { size: 1, default: char::from(0) }  ),
             "i8"       => Some(NP_Schema_Type::Int8 { size: 1, default: 0, min: None, max: None }   ),
-            "i16"      => Some(NP_Schema_Type::Int16 { size: 2, default: 0, min: None, max: None }   ),
+            "i16"      => Some(NP_Schema_Type::Int16 { size: 2, default: 0, min: None, max: None }  ),
             "i32"      => Some(NP_Schema_Type::Int32 { size: 4, default: 0, min: None, max: None }  ),
             "i64"      => Some(NP_Schema_Type::Int64 { size: 8, default: 0, min: None, max: None }  ),
             "u8"       => Some(NP_Schema_Type::Uint8 { size: 1, default: 0, min: None, max: None }  ),
             "u16"      => Some(NP_Schema_Type::Uint16 { size: 2, default: 0, min: None, max: None } ),
             "u32"      => Some(NP_Schema_Type::Uint32 { size: 4, default: 0, min: None, max: None } ),
             "u64"      => Some(NP_Schema_Type::Uint64 { size: 8, default: 0, min: None, max: None } ),
-            "f32"      => Some(NP_Schema_Type::f32 { size: 4, default: 0.0, min: None, max: None }    ),
-            "f64"      => Some(NP_Schema_Type::f64 { size: 8, default: 0.0, min: None, max: None }    ),
+            "f32"      => Some(NP_Schema_Type::f32 { size: 4, default: 0.0, min: None, max: None }  ),
+            "f64"      => Some(NP_Schema_Type::f64 { size: 8, default: 0.0, min: None, max: None }  ),
             "dec32"    => Some(NP_Schema_Type::Dec32 { size: 4, default: 0, exp: 0, min: None, max: None }  ),
             "dec64"    => Some(NP_Schema_Type::Dec64 { size: 8, default: 0, exp: 0, min: None, max: None }  ),
-            "bool"     => Some(NP_Schema_Type::Boolean { size: 1, default: false }),
-            "geo32"    => Some(NP_Schema_Type::Geo32 { size: 4, default: (0,0) }  ),
-            "geo64"    => Some(NP_Schema_Type::Geo64 { size: 8, default: (0,0) }  ),
+            "bool"     => Some(NP_Schema_Type::Boolean { size: 1, default: false } ),
+            "geo32"    => Some(NP_Schema_Type::Geo32 { size: 4, default: (0,0) }   ),
+            "geo64"    => Some(NP_Schema_Type::Geo64 { size: 8, default: (0,0) }   ),
             "geo128"   => Some(NP_Schema_Type::Geo128 { size: 16, default: (0,0) } ),
             "uuid"     => Some(NP_Schema_Type::Uuid { size: 16 }  ),
             "ulid"     => Some(NP_Schema_Type::Ulid { size: 16 }  ),
@@ -405,11 +408,12 @@ impl NP_Schema {
             "struct"   => Some(NP_Schema_Type::Struct { size: Default::default(), children: Default::default() } ),
             "Map"      => Some(NP_Schema_Type::Map { size: POINTER_SIZE } ),
             "Vec"      => Some(NP_Schema_Type::Vec { size: POINTER_SIZE, max_len: None } ),
-            "Result"   => Some(NP_Schema_Type::Result { size: 1 + POINTER_SIZE }),
+            "Result"   => Some(NP_Schema_Type::Result { size: 1 + POINTER_SIZE } ),
             "Option"   => Some(NP_Schema_Type::Option { size: 1 + POINTER_SIZE } ),
+            "Box"      => Some(NP_Schema_Type::Box { size: POINTER_SIZE } ),
             "impl"     => Some(NP_Schema_Type::Impl { children: Default::default() } ),
-            "self"     => Some(NP_Schema_Type::Fn_Self),
-            "Self"     => Some(NP_Schema_Type::Fn_Self),
+            "self"     => Some(NP_Schema_Type::Fn_Self { idx: 0 }),
+            "Self"     => Some(NP_Schema_Type::Fn_Self { idx: 0 }),
             "tuple"    => Some(NP_Schema_Type::Tuple { size: POINTER_SIZE, children: Default::default() }  ),
             _ => {
 
@@ -432,7 +436,7 @@ impl NP_Schema {
         }
     }
 
-    fn parse_single_type(source: &str, ast: &Vec<AST>, index: usize, depth: u16, generics: &Option<(usize, Vec<AST_STR>)>, type_idx: &mut NP_HashMap<NP_Schema_Index>, parsed_schema: &mut Vec<NP_Parsed_Schema>) -> Result<usize, NP_Error> {
+    fn parse_single_type(source: &str, ast: &Vec<AST>, index: usize, depth: u16, parent_idx: usize, generics: &Option<(usize, Vec<AST_STR>)>, type_idx: &mut NP_HashMap<NP_Schema_Index>, parsed_schema: &mut Vec<NP_Parsed_Schema>) -> Result<usize, NP_Error> {
 
         if depth > 255 {
             return Err(NP_Error::RecursionLimit)
@@ -501,10 +505,9 @@ impl NP_Schema {
                         if addr.read(source) != "impl" { // ignore impl generics
                             let mut i:usize = 0;
                             while i < items.len() {
-                                if items[i] != AST::comma {
+                                if items[i] != AST::comma && items[i] != AST::newline {
                                     child_generics.push(parsed_schema.len());
-                                    i = Self::parse_single_type(&source, items, i, depth + 1, &generics, type_idx, parsed_schema)?;
-
+                                    i = Self::parse_single_type(&source, items, i, depth + 1, parent_idx, &generics, type_idx, parsed_schema)?;
                                 }
                                 i += 1;
                             }
@@ -846,9 +849,9 @@ impl NP_Schema {
                                 children.set(key_ast.read(source), Some(schema_loc))?;
 
                                 if depth == 0 {
-                                    parse_idx = Self::parse_single_type(source, children_ast, parse_idx, depth + 1, &result_schema.self_generics, type_idx, parsed_schema)?;
+                                    parse_idx = Self::parse_single_type(source, children_ast, parse_idx, depth + 1, schema_len, &result_schema.self_generics, type_idx, parsed_schema)?;
                                 } else {
-                                    parse_idx = Self::parse_single_type(source, children_ast, parse_idx, depth + 1, &generics, type_idx, parsed_schema)?;
+                                    parse_idx = Self::parse_single_type(source, children_ast, parse_idx, depth + 1, parent_idx, &generics, type_idx, parsed_schema)?;
                                 }
 
                                 parse_state = ChildItemParseState::Comma;
@@ -952,9 +955,9 @@ impl NP_Schema {
                                 let schema_loc = parsed_schema.len();
                                 children.set(key_ast.read(source), schema_loc)?;
                                 if depth == 0 {
-                                    parse_idx = Self::parse_single_type(source, children_ast, parse_idx, depth + 1, &result_schema.self_generics, type_idx, parsed_schema)?;
+                                    parse_idx = Self::parse_single_type(source, children_ast, parse_idx, depth + 1, schema_len, &result_schema.self_generics, type_idx, parsed_schema)?;
                                 } else {
-                                    parse_idx = Self::parse_single_type(source, children_ast, parse_idx, depth + 1, &generics, type_idx, parsed_schema)?;
+                                    parse_idx = Self::parse_single_type(source, children_ast, parse_idx, depth + 1, parent_idx, &generics, type_idx, parsed_schema)?;
                                 }
 
                                 parsed_schema[schema_loc].offset = running_size as usize;
@@ -1013,7 +1016,10 @@ impl NP_Schema {
             },
             NP_Schema_Type::Result { .. } => { /* nothing to do */ },
             NP_Schema_Type::Option  { .. } => { /* nothing to do */ },
-            NP_Schema_Type::Fn_Self => { /* nothing to do */ },
+            NP_Schema_Type::Box     { .. } => { /* nothing to do */ },
+            NP_Schema_Type::Fn_Self { idx } => {
+                *idx = parent_idx;
+            },
             NP_Schema_Type::Array { len, size  } => {
 
                 let running_size: u32;
@@ -1022,9 +1028,9 @@ impl NP_Schema {
                     let mut parse_idx: usize = 0;
                     let child_type = parsed_schema.len();
                     if depth == 0 {
-                        parse_idx = Self::parse_single_type(source, children, parse_idx, depth + 1, &result_schema.self_generics, type_idx, parsed_schema)?;
+                        parse_idx = Self::parse_single_type(source, children, parse_idx, depth + 1, schema_len, &result_schema.self_generics, type_idx, parsed_schema)?;
                     } else {
-                        parse_idx = Self::parse_single_type(source, children, parse_idx, depth + 1, &generics, type_idx, parsed_schema)?;
+                        parse_idx = Self::parse_single_type(source, children, parse_idx, depth + 1, parent_idx, &generics, type_idx, parsed_schema)?;
                     }
                     parse_idx +=1;
 
@@ -1078,9 +1084,9 @@ impl NP_Schema {
                                 let schema_loc = parsed_schema.len();
                                 children.push(schema_loc);
                                 if depth == 0 {
-                                    parse_idx = Self::parse_single_type(source, children_ast, parse_idx, depth + 1, &result_schema.self_generics, type_idx, parsed_schema)?;
+                                    parse_idx = Self::parse_single_type(source, children_ast, parse_idx, depth + 1, schema_len, &result_schema.self_generics, type_idx, parsed_schema)?;
                                 } else {
-                                    parse_idx = Self::parse_single_type(source, children_ast, parse_idx, depth + 1, &generics, type_idx, parsed_schema)?;
+                                    parse_idx = Self::parse_single_type(source, children_ast, parse_idx, depth + 1, parent_idx,&generics, type_idx, parsed_schema)?;
                                 }
 
                                 parsed_schema[schema_loc].offset = running_size as usize;
@@ -1153,9 +1159,9 @@ impl NP_Schema {
                             ChildItemParseState::Value => {
                                 children.set(key_ast.read(source), parsed_schema.len())?;
                                 if depth == 0 {
-                                    parse_idx = Self::parse_single_type(source, children_ast, parse_idx, depth + 1, &result_schema.self_generics, type_idx, parsed_schema)?;
+                                    parse_idx = Self::parse_single_type(source, children_ast, parse_idx, depth + 1, schema_len,&result_schema.self_generics, type_idx, parsed_schema)?;
                                 } else {
-                                    parse_idx = Self::parse_single_type(source, children_ast, parse_idx, depth + 1, &generics, type_idx, parsed_schema)?;
+                                    parse_idx = Self::parse_single_type(source, children_ast, parse_idx, depth + 1, parent_idx, &generics, type_idx, parsed_schema)?;
                                 }
 
                                 parse_state = ChildItemParseState::Comma;
@@ -1223,11 +1229,12 @@ impl NP_Schema {
                                         parse_idx += 1;
                                     },
                                     AST::comma => { // anonymous param
-                                        args.push((None, parsed_schema.len()));
+                                        // args.push((None, parsed_schema.len()));
+                                        args.set("self", parsed_schema.len())?;
                                         if depth == 0 {
-                                            parse_idx = Self::parse_single_type(source, children_ast, parse_idx - 1, depth + 1, &result_schema.self_generics, type_idx, parsed_schema)?;
+                                            parse_idx = Self::parse_single_type(source, children_ast, parse_idx - 1, depth + 1, schema_len, &result_schema.self_generics, type_idx, parsed_schema)?;
                                         } else {
-                                            parse_idx = Self::parse_single_type(source, children_ast, parse_idx - 1, depth + 1, &generics, type_idx, parsed_schema)?;
+                                            parse_idx = Self::parse_single_type(source, children_ast, parse_idx - 1, depth + 1, parent_idx, &generics, type_idx, parsed_schema)?;
                                         }
 
                                         parse_state = ChildItemParseState::Comma;
@@ -1239,11 +1246,12 @@ impl NP_Schema {
                                 }
                             }
                             ChildItemParseState::Value => {
-                                args.push((Some(String::from(key_ast.read(source))), parsed_schema.len()));
+                                args.set(key_ast.read(source), parsed_schema.len())?;
+                                // args.push((Some(String::from(key_ast.read(source))), parsed_schema.len()));
                                 if depth == 0 {
-                                    parse_idx = Self::parse_single_type(source, children_ast, parse_idx, depth + 1, &result_schema.self_generics, type_idx, parsed_schema)?;
+                                    parse_idx = Self::parse_single_type(source, children_ast, parse_idx, depth + 1, schema_len, &result_schema.self_generics, type_idx, parsed_schema)?;
                                 } else {
-                                    parse_idx = Self::parse_single_type(source, children_ast, parse_idx, depth + 1, &generics, type_idx, parsed_schema)?;
+                                    parse_idx = Self::parse_single_type(source, children_ast, parse_idx, depth + 1, parent_idx, &generics, type_idx, parsed_schema)?;
                                 }
 
                                 parse_state = ChildItemParseState::Comma;
@@ -1283,11 +1291,12 @@ impl NP_Schema {
 
                     // last item in args was anonymous arg
                     if let ChildItemParseState::Colon = parse_state {
-                        args.push((None, parsed_schema.len()));
+                        args.set("self", parsed_schema.len())?;
+                        // args.push((None, parsed_schema.len()));
                         if depth == 0 {
-                            Self::parse_single_type(source, children_ast, parse_idx - 1, depth + 1, &result_schema.self_generics, type_idx, parsed_schema)?;
+                            Self::parse_single_type(source, children_ast, parse_idx - 1, depth + 1, schema_len, &result_schema.self_generics, type_idx, parsed_schema)?;
                         } else {
-                            Self::parse_single_type(source, children_ast, parse_idx - 1, depth + 1, &generics, type_idx, parsed_schema)?;
+                            Self::parse_single_type(source, children_ast, parse_idx - 1, depth + 1, parent_idx, &generics, type_idx, parsed_schema)?;
                         }
 
                     }
@@ -1307,9 +1316,9 @@ impl NP_Schema {
                 *returns = parsed_schema.len();
 
                 if depth == 0 {
-                    use_index = Self::parse_single_type(source, ast, use_index, depth + 1, &result_schema.self_generics, type_idx, parsed_schema)?;
+                    use_index = Self::parse_single_type(source, ast, use_index, depth + 1, schema_len, &result_schema.self_generics, type_idx, parsed_schema)?;
                 } else {
-                    use_index = Self::parse_single_type(source, ast, use_index, depth + 1, &generics, type_idx, parsed_schema)?;
+                    use_index = Self::parse_single_type(source, ast, use_index, depth + 1, parent_idx, &generics, type_idx, parsed_schema)?;
                 }
 
                 use_index += 1;

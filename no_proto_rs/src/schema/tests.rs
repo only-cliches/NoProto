@@ -8,6 +8,19 @@ mod schema_tests {
     use crate::schema::{NP_Schema, NP_Schema_Index, POINTER_SIZE, NP_Schema_Type, NP_String_Casing};
     use crate::schema::ast_parser::{AST_STR, AST};
     use alloc::prelude::v1::{Vec, String};
+    use crate::hashmap::NP_HashMap;
+
+    #[test]
+    fn empty_parse_1() -> Result<(), NP_Error> {
+
+        let schema = r##""##;
+
+        let parsed = NP_Schema::parse(schema)?;
+
+        assert_eq!(parsed.schemas.len(), 0);
+
+        Ok(())
+    }
 
     #[test]
     fn any_parse_1() -> Result<(), NP_Error> {
@@ -1256,13 +1269,15 @@ mod schema_tests {
     fn generic_test_1() -> Result<(), NP_Error> {
 
         let schema = r##"
-            struct myType<X, Y> [
-                id: 2
-            ] {
+            struct myType<X, Y> [ id: 2 ] {
                 username: X,
                 email: Y,
                 password: string
-            }; myType<u32, i64> anotherType [ id: 3 ] ;  myType<Vec<u32>, i64> crazyType [ id: 4 ]
+            }
+
+            myType<u32, i64> anotherType [ id: 3 ]
+
+            myType<Vec<u32>, i64> crazyType [ id: 4 ]
         "##;
 
         let parsed = NP_Schema::parse(schema)?;
@@ -1315,6 +1330,80 @@ mod schema_tests {
 
         assert_eq!(parsed.schemas[9].data_type, NP_Schema_Type::Uint32 { size: 4, default: Default::default(), max: None, min: None });
         assert_eq!(parsed.schemas[10].data_type, NP_Schema_Type::Int64 { size: 8, default: Default::default(), max: None, min: None });
+
+        Ok(())
+    }
+
+    #[test]
+    fn impl_test_1() -> Result<(), NP_Error> {
+
+        let schema = r##"
+            struct myType [ id: 2 ] {
+                username: string,
+                email: string
+            }
+
+            impl myType {
+                get(id: uuid) -> Option<self>,
+                set(self) -> Result<(), string>
+            }
+        "##;
+
+        let parsed = NP_Schema::parse(schema)?;
+
+        assert_eq!(parsed.schemas.len(), 13);
+        assert_eq!(parsed.name_index.get("myType"), Some(&NP_Schema_Index { data: 0, methods: Some(3) }));
+        assert_eq!(parsed.id_index.get(2), Some(&NP_Schema_Index { data: 0, methods: Some(3) }));
+        assert_eq!(parsed.schemas[0].arguments.query("id", schema), Some(NP_Args::NUMBER("2")));
+
+        if let NP_Schema_Type::Struct { size, children } = &parsed.schemas[0].data_type {
+            assert_eq!(*size, 8);
+            assert_eq!(children.iter_keys().collect::<Vec<&String>>(), vec!["username", "email"]);
+            for (key, value) in children.iter() {
+                match key.as_str() {
+                    "username" => assert_eq!(*value, 1),
+                    "email" => assert_eq!(*value, 2),
+                    _ => assert!(false)
+                }
+            }
+        } else {
+            assert!(false);
+        }
+
+        assert_eq!(parsed.schemas[0].id, Some(2));
+        assert_eq!(parsed.schemas[0].name.unwrap().read(schema), "myType");
+
+
+        assert_eq!(parsed.schemas[1].data_type, NP_Schema_Type::String { size: 4, default: Default::default(), casing: Default::default(), max_len: None });
+        assert_eq!(parsed.schemas[2].data_type, NP_Schema_Type::String { size: 4, default: Default::default(), casing: Default::default(), max_len: None });
+
+        let mut impl_hash: NP_HashMap<usize> = NP_HashMap::new();
+        impl_hash.set("get", 4)?;
+        impl_hash.set("set", 8)?;
+        assert_eq!(parsed.schemas[3].data_type, NP_Schema_Type::Impl { children: impl_hash });
+
+        if let NP_Schema_Type::Method { args, returns } = &parsed.schemas[4].data_type {
+            assert_eq!(args.get("id"), Some(&5));
+            assert_eq!(returns, &6);
+        }
+
+        assert_eq!(parsed.schemas[5].data_type, NP_Schema_Type::Uuid { size: 16 });
+        assert_eq!(parsed.schemas[6].data_type, NP_Schema_Type::Option { size: 5 });
+        assert_eq!(parsed.schemas[6].use_generics, Some(vec![7]));
+        assert_eq!(parsed.schemas[7].data_type, NP_Schema_Type::Fn_Self { idx: 3 });
+
+        if let NP_Schema_Type::Method { args, returns } = &parsed.schemas[8].data_type {
+            assert_eq!(args.get("self"), Some(&9));
+            assert_eq!(returns, &10);
+        }
+
+        assert_eq!(parsed.schemas[9].data_type, NP_Schema_Type::Fn_Self { idx: 3 });
+
+        assert_eq!(parsed.schemas[10].data_type, NP_Schema_Type::Result { size: 5 });
+        assert_eq!(parsed.schemas[10].use_generics, Some(vec![11, 12]));
+
+        assert_eq!(parsed.schemas[11].data_type, NP_Schema_Type::Tuple { size: 0, children: vec![] });
+        assert_eq!(parsed.schemas[12].data_type, NP_Schema_Type::String { size: 4, default: Default::default(), casing: Default::default(), max_len: None });
 
         Ok(())
     }

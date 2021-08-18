@@ -3,6 +3,8 @@
 use crate::{error::NP_Error};
 use core::cell::UnsafeCell;
 use alloc::vec::Vec;
+use crate::schema::{NP_Schema, NP_Parsed_Schema};
+use alloc::sync::Arc;
 
 #[doc(hidden)]
 #[derive(PartialEq, Debug)]
@@ -13,13 +15,12 @@ pub enum NP_Memory_Kind {
 }
 
 
-
 #[doc(hidden)]
 #[derive(Debug)]
 pub struct NP_Memory {
     bytes: UnsafeCell<NP_Memory_Kind>,
     pub root: usize,
-    pub schema: *const Vec<NP_Parsed_Schema>,
+    pub schema: Arc<NP_Schema>,
     pub max_size: usize,
     pub is_mutable: bool,
 }
@@ -42,7 +43,7 @@ impl Clone for NP_Memory {
 impl NP_Memory {
 
     #[inline(always)]
-    pub fn existing_owned(bytes: Vec<u8>, schema: *const Vec<NP_Parsed_Schema>, root: usize) -> Self {
+    pub fn existing_owned(bytes: Vec<u8>, schema: Arc<NP_Schema>, root: usize) -> Self {
 
         Self {
             root,
@@ -54,7 +55,7 @@ impl NP_Memory {
     }
 
     #[inline(always)]
-    pub fn existing_ref(bytes: *const [u8], schema: *const Vec<NP_Parsed_Schema>, root: usize) -> Self {
+    pub fn existing_ref(bytes: *const [u8], schema: Arc<NP_Schema>, root: usize) -> Self {
 
         Self {
             root,
@@ -66,7 +67,7 @@ impl NP_Memory {
     }
 
     #[inline(always)]
-    pub fn existing_ref_mut(bytes: *mut [u8], len: usize, schema: *const Vec<NP_Parsed_Schema>, root: usize) -> Self {
+    pub fn existing_ref_mut(bytes: *mut [u8], len: usize, schema: Arc<NP_Schema>, root: usize) -> Self {
 
         Self {
             root,
@@ -78,7 +79,7 @@ impl NP_Memory {
     }
 
     #[inline(always)]
-    pub fn new(capacity: Option<usize>, schema: *const Vec<NP_Parsed_Schema>, root: usize) -> Self {
+    pub fn new(capacity: Option<usize>, schema: Arc<NP_Schema>, root: usize) -> Self {
         let use_size = match capacity {
             Some(x) => x,
             None => 1024
@@ -86,8 +87,8 @@ impl NP_Memory {
 
         let mut new_bytes = Vec::with_capacity(use_size);
 
-        // is_packed, size, root pointer
-        new_bytes.extend(&[0u8; 6]);
+        // root pointer
+        // new_bytes.extend(&[0u8; 4]);
 
         Self {
             root,
@@ -99,12 +100,12 @@ impl NP_Memory {
     }
 
     #[inline(always)]
-    pub fn new_ref_mut(bytes: *mut [u8], schema: *const Vec<NP_Parsed_Schema>, root: usize) -> Self {
+    pub fn new_ref_mut(bytes: *mut [u8], schema: Arc<NP_Schema>, root: usize) -> Self {
 
         Self {
             root,
             max_size: u32::MAX as usize,
-            bytes: UnsafeCell::new(NP_Memory_Kind::RefMut { vec: bytes, len: 6 }),
+            bytes: UnsafeCell::new(NP_Memory_Kind::RefMut { vec: bytes, len: 0 }),
             schema: schema,
             is_mutable: true
         }
@@ -118,14 +119,14 @@ impl NP_Memory {
 
         let mut new_bytes = Vec::with_capacity(use_size);
 
-        // is_packed, size, root pointer
-        new_bytes.extend(&[0u8; 6]);
+        // root pointer
+        // new_bytes.extend(&[0u8; 4]);
 
         Ok(Self {
             root: self.root,
             max_size: u32::MAX as usize,
             bytes: UnsafeCell::new(NP_Memory_Kind::Owned { vec: new_bytes }),
-            schema: self.schema,
+            schema: self.schema.clone(),
             is_mutable: true
         })
     }
@@ -189,14 +190,14 @@ impl NP_Memory {
     }
 
     #[inline(always)]
-    pub fn get_schemas(&self) -> &Vec<NP_Parsed_Schema> {
-        unsafe { &*self.schema }
+    pub fn get_schema(&self) -> &NP_Schema {
+        &*self.schema
     }
 
-    #[inline(always)]
-    pub fn get_schema(&self, idx: usize) -> &NP_Parsed_Schema {
-        &(unsafe { &*self.schema })[idx]
-    }
+    // #[inline(always)]
+    // pub fn get_schema(&self, idx: usize) -> &NP_Parsed_Schema {
+    //     &(unsafe { *(*self.schema).schemas })[idx]
+    // }
 
     #[inline(always)]
     pub fn malloc_borrow(&self, bytes: &[u8])  -> Result<usize, NP_Error> {

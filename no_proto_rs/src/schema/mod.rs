@@ -8,11 +8,12 @@ use crate::error::NP_Error;
 use crate::hashmap::NP_HashMap;
 use crate::schema::ast_parser::{AST_STR, AST};
 use crate::schema::schema_args::NP_Schema_Args;
+use core::ops::Deref;
 
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq)]
-enum NP_String_Casing {
+pub enum NP_String_Casing {
     None,
     Uppercase,
     Lowercase
@@ -27,7 +28,7 @@ impl Default for NP_String_Casing {
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq)]
-enum NP_Schema_Type {
+pub enum NP_Schema_Type {
     None       ,
     Any        { size: u32 },
     Info       ,
@@ -61,10 +62,11 @@ enum NP_Schema_Type {
     Array      { size: u32, len: usize },
     Tuple      { size: u32, children: Vec<usize> },
     Impl       { children: NP_HashMap<usize> },
-    Fn_Self    ,
-    Method     { args: Vec<(Option<String>, usize)>, returns: usize },
+    Fn_Self    { idx: usize },
+    Method     { args: NP_HashMap<usize>, returns: usize },
     Generic    { size: u32, parent_scham_addr: usize, generic_idx: usize },
-    Custom     { size: u32, type_idx: usize }
+    Custom     { size: u32, type_idx: usize },
+    Box        { size: u32 }
 }
 
 #[allow(dead_code)]
@@ -107,10 +109,11 @@ impl NP_Schema_Type {
             NP_Schema_Type::Array { size, .. }     => (30, "Array", *size),
             NP_Schema_Type::Tuple { size, .. }     => (31, "tuple", *size),
             NP_Schema_Type::Impl { .. }      => (32, "impl", 0),
-            NP_Schema_Type::Fn_Self          => (33, "self", 0),
+            NP_Schema_Type::Fn_Self  { .. }   => (33, "self", 0),
             NP_Schema_Type::Method {  .. }    => (34, "method", 0),
             NP_Schema_Type::Generic { size, .. }   => (35, "generic", *size),
             NP_Schema_Type::Custom { size, .. }    => (36, "custom", *size),
+            NP_Schema_Type::Box { size }           => (36, "custom", *size),
         }
     }
 
@@ -125,21 +128,21 @@ impl Default for NP_Schema_Type {
 
 #[derive(Default, Debug, Clone)]
 pub struct NP_Schema {
-    source: Vec<u8>,
-    schemas: Vec<NP_Parsed_Schema>,
-    name_index: NP_HashMap<NP_Schema_Index>,
-    id_index: Vec<NP_Schema_Index>
+    pub source: Vec<u8>,
+    pub schemas: Vec<NP_Parsed_Schema>,
+    pub name_index: NP_HashMap<NP_Schema_Index>,
+    pub id_index: Vec<NP_Schema_Index>
 }
 
 #[derive(Debug, Clone)]
-struct NP_Parsed_Schema {
-    id: Option<u16>,
-    offset: usize,
-    name: Option<AST_STR>,
-    data_type: NP_Schema_Type,
-    use_generics: Option<Vec<usize>>,
-    self_generics: Option<(usize, Vec<AST_STR>)>,
-    arguments: NP_Schema_Args
+pub struct NP_Parsed_Schema {
+    pub id: Option<u16>,
+    pub offset: usize,
+    pub name: Option<AST_STR>,
+    pub data_type: NP_Schema_Type,
+    pub use_generics: Option<Vec<usize>>,
+    pub self_generics: Option<(usize, Vec<AST_STR>)>,
+    pub arguments: NP_Schema_Args
 }
 
 impl Default for NP_Parsed_Schema {
@@ -157,9 +160,9 @@ impl Default for NP_Parsed_Schema {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-struct NP_Schema_Index {
-    data: usize,
-    methods: Option<usize>
+pub struct NP_Schema_Index {
+    pub data: usize,
+    pub methods: Option<usize>
 }
 
 impl Default for NP_Schema_Index {

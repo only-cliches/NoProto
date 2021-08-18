@@ -16,6 +16,7 @@ pub enum NP_Error {
     MemoryOutOfSpace,
     /// Too many recursive calls
     RecursionLimit,
+    OutOfBounds,
     /// Custom error message
     Custom { 
         /// Error message
