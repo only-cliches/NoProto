@@ -5,10 +5,10 @@ mod schema_tests {
 
     use crate::schema::schema_args::NP_Args;
     use crate::error::NP_Error;
-    use crate::schema::{NP_Schema, NP_Schema_Index, POINTER_SIZE, NP_Schema_Type, NP_String_Casing};
+    use crate::schema::{NP_Schema, NP_Schema_Index, POINTER_SIZE, NP_Schema_Type, NP_String_Casing, NP_Parsed_Generics};
     use crate::schema::ast_parser::{AST_STR, AST};
     use alloc::prelude::v1::{Vec, String};
-    use crate::hashmap::NP_HashMap;
+    use crate::map::NP_HashMap;
 
     #[test]
     fn empty_parse_1() -> Result<(), NP_Error> {
@@ -16,6 +16,7 @@ mod schema_tests {
         let schema = r##""##;
 
         let parsed = NP_Schema::parse(schema)?;
+        // assert_eq!(NP_Schema::from_bytes(&parsed.to_bytes()?)?, parsed);
 
         assert_eq!(parsed.schemas.len(), 0);
 
@@ -30,11 +31,12 @@ mod schema_tests {
         "##;
 
         let parsed = NP_Schema::parse(schema)?;
+        // assert_eq!(NP_Schema::from_bytes(&parsed.to_bytes()?)?, parsed);
 
         assert_eq!(parsed.schemas.len(), 1);
         assert_eq!(parsed.name_index.get("myType"), Some(&NP_Schema_Index { data: 0, methods: None }));
         assert_eq!(parsed.id_index.get(0), Some(&NP_Schema_Index { data: 0, methods: None }));
-        assert_eq!(parsed.schemas[0].data_type, NP_Schema_Type::Any { size: POINTER_SIZE + 1 });
+        assert_eq!(parsed.schemas[0].data_type, NP_Schema_Type::Any);
         assert_eq!(parsed.schemas[0].arguments.query("id", schema), Some(NP_Args::NUMBER("0")));
         assert_eq!(parsed.schemas[0].arguments.query("other", schema), Some(NP_Args::STRING("hello")));
         assert_eq!(parsed.schemas[0].id, Some(0));
@@ -70,6 +72,7 @@ mod schema_tests {
         "##;
 
         let parsed = NP_Schema::parse(schema)?;
+        // assert_eq!(NP_Schema::from_bytes(&parsed.to_bytes()?)?, parsed);
 
         assert_eq!(parsed.schemas.len(), 1);
         assert_eq!(parsed.name_index.get("__info"), Some(&NP_Schema_Index { data: 0, methods: None }));
@@ -106,11 +109,12 @@ mod schema_tests {
         "##;
 
         let parsed = NP_Schema::parse(schema)?;
+        // assert_eq!(NP_Schema::from_bytes(&parsed.to_bytes()?)?, parsed);
 
         assert_eq!(parsed.schemas.len(), 1);
         assert_eq!(parsed.name_index.get("myType"), Some(&NP_Schema_Index { data: 0, methods: None }));
         assert_eq!(parsed.id_index.get(0), Some(&NP_Schema_Index { data: 0, methods: None }));
-        assert_eq!(parsed.schemas[0].data_type, NP_Schema_Type::String { default: AST_STR { start: 0, end: 0 }, casing: NP_String_Casing::None, max_len: None, size: POINTER_SIZE });
+        assert_eq!(parsed.schemas[0].data_type, NP_Schema_Type::String { default: AST_STR { start: 0, end: 0 }, casing: NP_String_Casing::None, max_len: None });
         assert_eq!(parsed.schemas[0].arguments.query("id", schema), Some(NP_Args::NUMBER("0")));
         assert_eq!(parsed.schemas[0].id, Some(0));
         assert_eq!(parsed.schemas[0].name.unwrap().read(schema), "myType");
@@ -126,11 +130,12 @@ mod schema_tests {
         "##;
 
         let parsed = NP_Schema::parse(schema)?;
+        // assert_eq!(NP_Schema::from_bytes(&parsed.to_bytes()?)?, parsed);
 
         assert_eq!(parsed.schemas.len(), 1);
         assert_eq!(parsed.name_index.get("myType"), Some(&NP_Schema_Index { data: 0, methods: None }));
         assert_eq!(parsed.id_index.get(0), Some(&NP_Schema_Index { data: 0, methods: None }));
-        assert_eq!(parsed.schemas[0].data_type, NP_Schema_Type::String { default: AST_STR { start: 45, end: 50 }, casing: NP_String_Casing::Uppercase, max_len: Some(20), size: POINTER_SIZE });
+        assert_eq!(parsed.schemas[0].data_type, NP_Schema_Type::String { default: AST_STR { start: 45, end: 50 }, casing: NP_String_Casing::Uppercase, max_len: Some(20) });
         if let NP_Schema_Type::String { default, .. } = parsed.schemas[0].data_type {
             assert_eq!(default.read(schema), "hello");
         } else {
@@ -152,11 +157,12 @@ mod schema_tests {
         "##;
 
         let parsed = NP_Schema::parse(schema)?;
+        // assert_eq!(NP_Schema::from_bytes(&parsed.to_bytes()?)?, parsed);
 
         assert_eq!(parsed.schemas.len(), 1);
         assert_eq!(parsed.name_index.get("myType"), Some(&NP_Schema_Index { data: 0, methods: None }));
         assert_eq!(parsed.id_index.get(0), Some(&NP_Schema_Index { data: 0, methods: None }));
-        assert_eq!(parsed.schemas[0].data_type, NP_Schema_Type::String { default: AST_STR { start: 45, end: 50 }, casing: NP_String_Casing::Lowercase, max_len: Some(50), size: POINTER_SIZE });
+        assert_eq!(parsed.schemas[0].data_type, NP_Schema_Type::String { default: AST_STR { start: 45, end: 50 }, casing: NP_String_Casing::Lowercase, max_len: Some(50) });
         if let NP_Schema_Type::String { default, .. } = parsed.schemas[0].data_type {
             assert_eq!(default.read(schema), "hello");
         } else {
@@ -178,11 +184,12 @@ mod schema_tests {
         "##;
 
         let parsed = NP_Schema::parse(schema)?;
+        // assert_eq!(NP_Schema::from_bytes(&parsed.to_bytes()?)?, parsed);
 
         assert_eq!(parsed.schemas.len(), 1);
         assert_eq!(parsed.name_index.get("myType"), Some(&NP_Schema_Index { data: 0, methods: None }));
         assert_eq!(parsed.id_index.get(0), Some(&NP_Schema_Index { data: 0, methods: None }));
-        assert_eq!(parsed.schemas[0].data_type, NP_Schema_Type::Char { default: 'j', size: 1 });
+        assert_eq!(parsed.schemas[0].data_type, NP_Schema_Type::Char { default: 'j' });
         assert_eq!(parsed.schemas[0].arguments.query("id", schema), Some(NP_Args::NUMBER("0")));
         assert_eq!(parsed.schemas[0].arguments.query("default", schema), Some(NP_Args::STRING("j")));
         assert_eq!(parsed.schemas[0].id, Some(0));
@@ -199,11 +206,12 @@ mod schema_tests {
         "##;
 
         let parsed = NP_Schema::parse(schema)?;
+        // assert_eq!(NP_Schema::from_bytes(&parsed.to_bytes()?)?, parsed);
 
         assert_eq!(parsed.schemas.len(), 1);
         assert_eq!(parsed.name_index.get("myType"), Some(&NP_Schema_Index { data: 0, methods: None }));
         assert_eq!(parsed.id_index.get(2), Some(&NP_Schema_Index { data: 0, methods: None }));
-        assert_eq!(parsed.schemas[0].data_type, NP_Schema_Type::Int8 { default: 20, size: 1, max: Some(10), min: Some(-50) });
+        assert_eq!(parsed.schemas[0].data_type, NP_Schema_Type::Int8 { default: 20, max: Some(10), min: Some(-50) });
         assert_eq!(parsed.schemas[0].arguments.query("id", schema), Some(NP_Args::NUMBER("2")));
         assert_eq!(parsed.schemas[0].arguments.query("default", schema), Some(NP_Args::NUMBER("20")));
         assert_eq!(parsed.schemas[0].arguments.query("max", schema), Some(NP_Args::NUMBER("10")));
@@ -222,11 +230,12 @@ mod schema_tests {
         "##;
 
         let parsed = NP_Schema::parse(schema)?;
+        // assert_eq!(NP_Schema::from_bytes(&parsed.to_bytes()?)?, parsed);
 
         assert_eq!(parsed.schemas.len(), 1);
         assert_eq!(parsed.name_index.get("myType"), Some(&NP_Schema_Index { data: 0, methods: None }));
         assert_eq!(parsed.id_index.get(2), Some(&NP_Schema_Index { data: 0, methods: None }));
-        assert_eq!(parsed.schemas[0].data_type, NP_Schema_Type::Int16 { default: 20, size: 2, max: Some(10), min: Some(-50) });
+        assert_eq!(parsed.schemas[0].data_type, NP_Schema_Type::Int16 { default: 20, max: Some(10), min: Some(-50) });
         assert_eq!(parsed.schemas[0].arguments.query("id", schema), Some(NP_Args::NUMBER("2")));
         assert_eq!(parsed.schemas[0].arguments.query("default", schema), Some(NP_Args::NUMBER("20")));
         assert_eq!(parsed.schemas[0].arguments.query("max", schema), Some(NP_Args::NUMBER("10")));
@@ -245,11 +254,12 @@ mod schema_tests {
         "##;
 
         let parsed = NP_Schema::parse(schema)?;
+        // assert_eq!(NP_Schema::from_bytes(&parsed.to_bytes()?)?, parsed);
 
         assert_eq!(parsed.schemas.len(), 1);
         assert_eq!(parsed.name_index.get("myType"), Some(&NP_Schema_Index { data: 0, methods: None }));
         assert_eq!(parsed.id_index.get(2), Some(&NP_Schema_Index { data: 0, methods: None }));
-        assert_eq!(parsed.schemas[0].data_type, NP_Schema_Type::Int32 { default: 20, size: 4, max: Some(10), min: Some(-50) });
+        assert_eq!(parsed.schemas[0].data_type, NP_Schema_Type::Int32 { default: 20, max: Some(10), min: Some(-50) });
         assert_eq!(parsed.schemas[0].arguments.query("id", schema), Some(NP_Args::NUMBER("2")));
         assert_eq!(parsed.schemas[0].arguments.query("default", schema), Some(NP_Args::NUMBER("20")));
         assert_eq!(parsed.schemas[0].arguments.query("max", schema), Some(NP_Args::NUMBER("10")));
@@ -268,11 +278,12 @@ mod schema_tests {
         "##;
 
         let parsed = NP_Schema::parse(schema)?;
+        // assert_eq!(NP_Schema::from_bytes(&parsed.to_bytes()?)?, parsed);
 
         assert_eq!(parsed.schemas.len(), 1);
         assert_eq!(parsed.name_index.get("myType"), Some(&NP_Schema_Index { data: 0, methods: None }));
         assert_eq!(parsed.id_index.get(2), Some(&NP_Schema_Index { data: 0, methods: None }));
-        assert_eq!(parsed.schemas[0].data_type, NP_Schema_Type::Int64 { default: 20, size: 8, max: Some(10), min: Some(-50) });
+        assert_eq!(parsed.schemas[0].data_type, NP_Schema_Type::Int64 { default: 20, max: Some(10), min: Some(-50) });
         assert_eq!(parsed.schemas[0].arguments.query("id", schema), Some(NP_Args::NUMBER("2")));
         assert_eq!(parsed.schemas[0].arguments.query("default", schema), Some(NP_Args::NUMBER("20")));
         assert_eq!(parsed.schemas[0].arguments.query("max", schema), Some(NP_Args::NUMBER("10")));
@@ -291,11 +302,12 @@ mod schema_tests {
         "##;
 
         let parsed = NP_Schema::parse(schema)?;
+        // assert_eq!(NP_Schema::from_bytes(&parsed.to_bytes()?)?, parsed);
 
         assert_eq!(parsed.schemas.len(), 1);
         assert_eq!(parsed.name_index.get("myType"), Some(&NP_Schema_Index { data: 0, methods: None }));
         assert_eq!(parsed.id_index.get(2), Some(&NP_Schema_Index { data: 0, methods: None }));
-        assert_eq!(parsed.schemas[0].data_type, NP_Schema_Type::Uint8 { default: 20, size: 1, max: Some(100), min: Some(5) });
+        assert_eq!(parsed.schemas[0].data_type, NP_Schema_Type::Uint8 { default: 20, max: Some(100), min: Some(5) });
         assert_eq!(parsed.schemas[0].arguments.query("id", schema), Some(NP_Args::NUMBER("2")));
         assert_eq!(parsed.schemas[0].arguments.query("default", schema), Some(NP_Args::NUMBER("20")));
         assert_eq!(parsed.schemas[0].arguments.query("max", schema), Some(NP_Args::NUMBER("100")));
@@ -314,11 +326,12 @@ mod schema_tests {
         "##;
 
         let parsed = NP_Schema::parse(schema)?;
+        // assert_eq!(NP_Schema::from_bytes(&parsed.to_bytes()?)?, parsed);
 
         assert_eq!(parsed.schemas.len(), 1);
         assert_eq!(parsed.name_index.get("myType"), Some(&NP_Schema_Index { data: 0, methods: None }));
         assert_eq!(parsed.id_index.get(2), Some(&NP_Schema_Index { data: 0, methods: None }));
-        assert_eq!(parsed.schemas[0].data_type, NP_Schema_Type::Uint16 { default: 20, size: 2, max: Some(100), min: Some(5) });
+        assert_eq!(parsed.schemas[0].data_type, NP_Schema_Type::Uint16 { default: 20, max: Some(100), min: Some(5) });
         assert_eq!(parsed.schemas[0].arguments.query("id", schema), Some(NP_Args::NUMBER("2")));
         assert_eq!(parsed.schemas[0].arguments.query("default", schema), Some(NP_Args::NUMBER("20")));
         assert_eq!(parsed.schemas[0].arguments.query("max", schema), Some(NP_Args::NUMBER("100")));
@@ -337,11 +350,12 @@ mod schema_tests {
         "##;
 
         let parsed = NP_Schema::parse(schema)?;
+        // assert_eq!(NP_Schema::from_bytes(&parsed.to_bytes()?)?, parsed);
 
         assert_eq!(parsed.schemas.len(), 1);
         assert_eq!(parsed.name_index.get("myType"), Some(&NP_Schema_Index { data: 0, methods: None }));
         assert_eq!(parsed.id_index.get(2), Some(&NP_Schema_Index { data: 0, methods: None }));
-        assert_eq!(parsed.schemas[0].data_type, NP_Schema_Type::Uint32 { default: 20, size: 4, max: Some(100), min: Some(5) });
+        assert_eq!(parsed.schemas[0].data_type, NP_Schema_Type::Uint32 { default: 20, max: Some(100), min: Some(5) });
         assert_eq!(parsed.schemas[0].arguments.query("id", schema), Some(NP_Args::NUMBER("2")));
         assert_eq!(parsed.schemas[0].arguments.query("default", schema), Some(NP_Args::NUMBER("20")));
         assert_eq!(parsed.schemas[0].arguments.query("max", schema), Some(NP_Args::NUMBER("100")));
@@ -360,11 +374,12 @@ mod schema_tests {
         "##;
 
         let parsed = NP_Schema::parse(schema)?;
+        // assert_eq!(NP_Schema::from_bytes(&parsed.to_bytes()?)?, parsed);
 
         assert_eq!(parsed.schemas.len(), 1);
         assert_eq!(parsed.name_index.get("myType"), Some(&NP_Schema_Index { data: 0, methods: None }));
         assert_eq!(parsed.id_index.get(2), Some(&NP_Schema_Index { data: 0, methods: None }));
-        assert_eq!(parsed.schemas[0].data_type, NP_Schema_Type::Uint64 { default: 20, size: 8, max: Some(100), min: Some(5) });
+        assert_eq!(parsed.schemas[0].data_type, NP_Schema_Type::Uint64 { default: 20, max: Some(100), min: Some(5) });
         assert_eq!(parsed.schemas[0].arguments.query("id", schema), Some(NP_Args::NUMBER("2")));
         assert_eq!(parsed.schemas[0].arguments.query("default", schema), Some(NP_Args::NUMBER("20")));
         assert_eq!(parsed.schemas[0].arguments.query("max", schema), Some(NP_Args::NUMBER("100")));
@@ -383,11 +398,12 @@ mod schema_tests {
         "##;
 
         let parsed = NP_Schema::parse(schema)?;
+        // assert_eq!(NP_Schema::from_bytes(&parsed.to_bytes()?)?, parsed);
 
         assert_eq!(parsed.schemas.len(), 1);
         assert_eq!(parsed.name_index.get("myType"), Some(&NP_Schema_Index { data: 0, methods: None }));
         assert_eq!(parsed.id_index.get(2), Some(&NP_Schema_Index { data: 0, methods: None }));
-        assert_eq!(parsed.schemas[0].data_type, NP_Schema_Type::f32 { default: 20.0, size: 4, max: Some(100.2), min: Some(5.1) });
+        assert_eq!(parsed.schemas[0].data_type, NP_Schema_Type::f32 { default: 20.0, max: Some(100.2), min: Some(5.1) });
         assert_eq!(parsed.schemas[0].arguments.query("id", schema), Some(NP_Args::NUMBER("2")));
         assert_eq!(parsed.schemas[0].arguments.query("default", schema), Some(NP_Args::NUMBER("20")));
         assert_eq!(parsed.schemas[0].arguments.query("max", schema), Some(NP_Args::NUMBER("100.2")));
@@ -406,11 +422,12 @@ mod schema_tests {
         "##;
 
         let parsed = NP_Schema::parse(schema)?;
+        // assert_eq!(NP_Schema::from_bytes(&parsed.to_bytes()?)?, parsed);
 
         assert_eq!(parsed.schemas.len(), 1);
         assert_eq!(parsed.name_index.get("myType"), Some(&NP_Schema_Index { data: 0, methods: None }));
         assert_eq!(parsed.id_index.get(2), Some(&NP_Schema_Index { data: 0, methods: None }));
-        assert_eq!(parsed.schemas[0].data_type, NP_Schema_Type::f64 { default: 20.0, size: 8, max: Some(100.2), min: Some(5.5) });
+        assert_eq!(parsed.schemas[0].data_type, NP_Schema_Type::f64 { default: 20.0, max: Some(100.2), min: Some(5.5) });
         assert_eq!(parsed.schemas[0].arguments.query("id", schema), Some(NP_Args::NUMBER("2")));
         assert_eq!(parsed.schemas[0].arguments.query("default", schema), Some(NP_Args::NUMBER("20")));
         assert_eq!(parsed.schemas[0].arguments.query("max", schema), Some(NP_Args::NUMBER("100.2")));
@@ -429,11 +446,12 @@ mod schema_tests {
         "##;
 
         let parsed = NP_Schema::parse(schema)?;
+        // assert_eq!(NP_Schema::from_bytes(&parsed.to_bytes()?)?, parsed);
 
         assert_eq!(parsed.schemas.len(), 1);
         assert_eq!(parsed.name_index.get("myType"), Some(&NP_Schema_Index { data: 0, methods: None }));
         assert_eq!(parsed.id_index.get(2), Some(&NP_Schema_Index { data: 0, methods: None }));
-        assert_eq!(parsed.schemas[0].data_type, NP_Schema_Type::Dec32 { default: 2500, size: 4, exp: 2, max: Some(10000), min: Some(500) });
+        assert_eq!(parsed.schemas[0].data_type, NP_Schema_Type::Dec32 { default: 2500, exp: 2, max: Some(10000), min: Some(500) });
         assert_eq!(parsed.schemas[0].arguments.query("id", schema), Some(NP_Args::NUMBER("2")));
         assert_eq!(parsed.schemas[0].arguments.query("default", schema), Some(NP_Args::NUMBER("25")));
         assert_eq!(parsed.schemas[0].arguments.query("max", schema), Some(NP_Args::NUMBER("100")));
@@ -453,11 +471,12 @@ mod schema_tests {
         "##;
 
         let parsed = NP_Schema::parse(schema)?;
+        // assert_eq!(NP_Schema::from_bytes(&parsed.to_bytes()?)?, parsed);
 
         assert_eq!(parsed.schemas.len(), 1);
         assert_eq!(parsed.name_index.get("myType"), Some(&NP_Schema_Index { data: 0, methods: None }));
         assert_eq!(parsed.id_index.get(2), Some(&NP_Schema_Index { data: 0, methods: None }));
-        assert_eq!(parsed.schemas[0].data_type, NP_Schema_Type::Dec64 { default: 203920, size: 8, exp: -2, max: Some(12938), min: Some(52) });
+        assert_eq!(parsed.schemas[0].data_type, NP_Schema_Type::Dec64 { default: 203920, exp: -2, max: Some(12938), min: Some(52) });
         assert_eq!(parsed.schemas[0].arguments.query("id", schema), Some(NP_Args::NUMBER("2")));
         assert_eq!(parsed.schemas[0].arguments.query("default", schema), Some(NP_Args::NUMBER("20392039")));
         assert_eq!(parsed.schemas[0].arguments.query("max", schema), Some(NP_Args::NUMBER("1293838")));
@@ -477,11 +496,12 @@ mod schema_tests {
         "##;
 
         let parsed = NP_Schema::parse(schema)?;
+        // assert_eq!(NP_Schema::from_bytes(&parsed.to_bytes()?)?, parsed);
 
         assert_eq!(parsed.schemas.len(), 1);
         assert_eq!(parsed.name_index.get("myType"), Some(&NP_Schema_Index { data: 0, methods: None }));
         assert_eq!(parsed.id_index.get(2), Some(&NP_Schema_Index { data: 0, methods: None }));
-        assert_eq!(parsed.schemas[0].data_type, NP_Schema_Type::Boolean { default:false, size: 1 });
+        assert_eq!(parsed.schemas[0].data_type, NP_Schema_Type::Boolean { default:false });
         assert_eq!(parsed.schemas[0].arguments.query("id", schema), Some(NP_Args::NUMBER("2")));
         assert_eq!(parsed.schemas[0].arguments.query("default", schema), Some(NP_Args::FALSE));
         assert_eq!(parsed.schemas[0].id, Some(2));
@@ -498,11 +518,12 @@ mod schema_tests {
         "##;
 
         let parsed = NP_Schema::parse(schema)?;
+        // assert_eq!(NP_Schema::from_bytes(&parsed.to_bytes()?)?, parsed);
 
         assert_eq!(parsed.schemas.len(), 1);
         assert_eq!(parsed.name_index.get("myType"), Some(&NP_Schema_Index { data: 0, methods: None }));
         assert_eq!(parsed.id_index.get(2), Some(&NP_Schema_Index { data: 0, methods: None }));
-        assert_eq!(parsed.schemas[0].data_type, NP_Schema_Type::Geo32 { default:(20029, 5920), size: 4 });
+        assert_eq!(parsed.schemas[0].data_type, NP_Schema_Type::Geo32 { default:(20029, 5920) });
         assert_eq!(parsed.schemas[0].arguments.query("id", schema), Some(NP_Args::NUMBER("2")));
         assert_eq!(parsed.schemas[0].arguments.query("default.lat", schema), Some(NP_Args::NUMBER("200.29")));
         assert_eq!(parsed.schemas[0].arguments.query("default.lng", schema), Some(NP_Args::NUMBER("59.20")));
@@ -520,11 +541,12 @@ mod schema_tests {
         "##;
 
         let parsed = NP_Schema::parse(schema)?;
+        // assert_eq!(NP_Schema::from_bytes(&parsed.to_bytes()?)?, parsed);
 
         assert_eq!(parsed.schemas.len(), 1);
         assert_eq!(parsed.name_index.get("myType"), Some(&NP_Schema_Index { data: 0, methods: None }));
         assert_eq!(parsed.id_index.get(2), Some(&NP_Schema_Index { data: 0, methods: None }));
-        assert_eq!(parsed.schemas[0].data_type, NP_Schema_Type::Geo64 { default:(2002900000, 592000000), size: 8 });
+        assert_eq!(parsed.schemas[0].data_type, NP_Schema_Type::Geo64 { default:(2002900000, 592000000) });
         assert_eq!(parsed.schemas[0].arguments.query("id", schema), Some(NP_Args::NUMBER("2")));
         assert_eq!(parsed.schemas[0].arguments.query("default.lat", schema), Some(NP_Args::NUMBER("200.29")));
         assert_eq!(parsed.schemas[0].arguments.query("default.lng", schema), Some(NP_Args::NUMBER("59.20")));
@@ -542,11 +564,12 @@ mod schema_tests {
         "##;
 
         let parsed = NP_Schema::parse(schema)?;
+        // assert_eq!(NP_Schema::from_bytes(&parsed.to_bytes()?)?, parsed);
 
         assert_eq!(parsed.schemas.len(), 1);
         assert_eq!(parsed.name_index.get("myType"), Some(&NP_Schema_Index { data: 0, methods: None }));
         assert_eq!(parsed.id_index.get(2), Some(&NP_Schema_Index { data: 0, methods: None }));
-        assert_eq!(parsed.schemas[0].data_type, NP_Schema_Type::Geo128 { default: (200290000000, 59200000000), size: 16 });
+        assert_eq!(parsed.schemas[0].data_type, NP_Schema_Type::Geo128 { default: (200290000000, 59200000000) });
         assert_eq!(parsed.schemas[0].arguments.query("id", schema), Some(NP_Args::NUMBER("2")));
         assert_eq!(parsed.schemas[0].arguments.query("default.lat", schema), Some(NP_Args::NUMBER("200.29")));
         assert_eq!(parsed.schemas[0].arguments.query("default.lng", schema), Some(NP_Args::NUMBER("59.20")));
@@ -564,11 +587,12 @@ mod schema_tests {
         "##;
 
         let parsed = NP_Schema::parse(schema)?;
+        // assert_eq!(NP_Schema::from_bytes(&parsed.to_bytes()?)?, parsed);
 
         assert_eq!(parsed.schemas.len(), 1);
         assert_eq!(parsed.name_index.get("myType"), Some(&NP_Schema_Index { data: 0, methods: None }));
         assert_eq!(parsed.id_index.get(2), Some(&NP_Schema_Index { data: 0, methods: None }));
-        assert_eq!(parsed.schemas[0].data_type, NP_Schema_Type::Uuid { size: 16 });
+        assert_eq!(parsed.schemas[0].data_type, NP_Schema_Type::Uuid);
         assert_eq!(parsed.schemas[0].arguments.query("id", schema), Some(NP_Args::NUMBER("2")));
         assert_eq!(parsed.schemas[0].id, Some(2));
         assert_eq!(parsed.schemas[0].name.unwrap().read(schema), "myType");
@@ -584,11 +608,12 @@ mod schema_tests {
         "##;
 
         let parsed = NP_Schema::parse(schema)?;
+        // assert_eq!(NP_Schema::from_bytes(&parsed.to_bytes()?)?, parsed);
 
         assert_eq!(parsed.schemas.len(), 1);
         assert_eq!(parsed.name_index.get("myType"), Some(&NP_Schema_Index { data: 0, methods: None }));
         assert_eq!(parsed.id_index.get(2), Some(&NP_Schema_Index { data: 0, methods: None }));
-        assert_eq!(parsed.schemas[0].data_type, NP_Schema_Type::Ulid { size: 16 });
+        assert_eq!(parsed.schemas[0].data_type, NP_Schema_Type::Ulid);
         assert_eq!(parsed.schemas[0].arguments.query("id", schema), Some(NP_Args::NUMBER("2")));
         assert_eq!(parsed.schemas[0].id, Some(2));
         assert_eq!(parsed.schemas[0].name.unwrap().read(schema), "myType");
@@ -604,16 +629,17 @@ mod schema_tests {
         "##;
 
         let parsed = NP_Schema::parse(schema)?;
+        // assert_eq!(NP_Schema::from_bytes(&parsed.to_bytes()?)?, parsed);
 
         assert_eq!(parsed.schemas.len(), 2);
         assert_eq!(parsed.name_index.get("myType"), Some(&NP_Schema_Index { data: 0, methods: None }));
         assert_eq!(parsed.id_index.get(2), Some(&NP_Schema_Index { data: 0, methods: None }));
-        assert_eq!(parsed.schemas[0].data_type, NP_Schema_Type::Map { size: 4 });
+        assert_eq!(parsed.schemas[0].data_type, NP_Schema_Type::Map);
         assert_eq!(parsed.schemas[0].arguments.query("id", schema), Some(NP_Args::NUMBER("2")));
         assert_eq!(parsed.schemas[0].id, Some(2));
         assert_eq!(parsed.schemas[0].name.unwrap().read(schema), "myType");
-        assert_eq!(parsed.schemas[0].use_generics, Some(vec![1]));
-        assert_eq!(parsed.schemas[1].data_type, NP_Schema_Type::String { size: 4, default: Default::default(), casing: Default::default(), max_len: None });
+        assert_eq!(parsed.schemas[0].generics, NP_Parsed_Generics::Types(vec![1]));
+        assert_eq!(parsed.schemas[1].data_type, NP_Schema_Type::String { default: Default::default(), casing: Default::default(), max_len: None });
         assert_eq!(parsed.schemas[1].name, None);
 
 
@@ -628,17 +654,18 @@ mod schema_tests {
         "##;
 
         let parsed = NP_Schema::parse(schema)?;
+        // assert_eq!(NP_Schema::from_bytes(&parsed.to_bytes()?)?, parsed);
 
         assert_eq!(parsed.schemas.len(), 2);
         assert_eq!(parsed.name_index.get("myType"), Some(&NP_Schema_Index { data: 0, methods: None }));
         assert_eq!(parsed.id_index.get(2), Some(&NP_Schema_Index { data: 0, methods: None }));
-        assert_eq!(parsed.schemas[0].data_type, NP_Schema_Type::Vec { size: 4, max_len: Some(20) });
+        assert_eq!(parsed.schemas[0].data_type, NP_Schema_Type::Vec { max_len: Some(20) });
         assert_eq!(parsed.schemas[0].arguments.query("id", schema), Some(NP_Args::NUMBER("2")));
         assert_eq!(parsed.schemas[0].arguments.query("max_len", schema), Some(NP_Args::NUMBER("20")));
         assert_eq!(parsed.schemas[0].id, Some(2));
         assert_eq!(parsed.schemas[0].name.unwrap().read(schema), "myType");
-        assert_eq!(parsed.schemas[0].use_generics, Some(vec![1]));
-        assert_eq!(parsed.schemas[1].data_type, NP_Schema_Type::String { size: 4, default: Default::default(), casing: Default::default(), max_len: None });
+        assert_eq!(parsed.schemas[0].generics, NP_Parsed_Generics::Types(vec![1]));
+        assert_eq!(parsed.schemas[1].data_type, NP_Schema_Type::String { default: Default::default(), casing: Default::default(), max_len: None });
         assert_eq!(parsed.schemas[1].name, None);
 
 
@@ -653,18 +680,19 @@ mod schema_tests {
         "##;
 
         let parsed = NP_Schema::parse(schema)?;
+        // assert_eq!(NP_Schema::from_bytes(&parsed.to_bytes()?)?, parsed);
 
         assert_eq!(parsed.schemas.len(), 3);
         assert_eq!(parsed.name_index.get("myType"), Some(&NP_Schema_Index { data: 0, methods: None }));
         assert_eq!(parsed.id_index.get(2), Some(&NP_Schema_Index { data: 0, methods: None }));
-        assert_eq!(parsed.schemas[0].data_type, NP_Schema_Type::Result { size: 5 });
+        assert_eq!(parsed.schemas[0].data_type, NP_Schema_Type::Result);
         assert_eq!(parsed.schemas[0].arguments.query("id", schema), Some(NP_Args::NUMBER("2")));
         assert_eq!(parsed.schemas[0].id, Some(2));
         assert_eq!(parsed.schemas[0].name.unwrap().read(schema), "myType");
-        assert_eq!(parsed.schemas[0].use_generics, Some(vec![1, 2]));
-        assert_eq!(parsed.schemas[1].data_type, NP_Schema_Type::Uint32 { size: 4, default: Default::default(), max: None, min: None });
+        assert_eq!(parsed.schemas[0].generics, NP_Parsed_Generics::Types(vec![1, 2]));
+        assert_eq!(parsed.schemas[1].data_type, NP_Schema_Type::Uint32 { default: Default::default(), max: None, min: None });
         assert_eq!(parsed.schemas[1].name, None);
-        assert_eq!(parsed.schemas[2].data_type, NP_Schema_Type::String { size: 4, default: Default::default(), casing: Default::default(), max_len: None });
+        assert_eq!(parsed.schemas[2].data_type, NP_Schema_Type::String { default: Default::default(), casing: Default::default(), max_len: None });
         assert_eq!(parsed.schemas[2].name, None);
 
 
@@ -679,16 +707,17 @@ mod schema_tests {
         "##;
 
         let parsed = NP_Schema::parse(schema)?;
+        // assert_eq!(NP_Schema::from_bytes(&parsed.to_bytes()?)?, parsed);
 
         assert_eq!(parsed.schemas.len(), 2);
         assert_eq!(parsed.name_index.get("myType"), Some(&NP_Schema_Index { data: 0, methods: None }));
         assert_eq!(parsed.id_index.get(2), Some(&NP_Schema_Index { data: 0, methods: None }));
-        assert_eq!(parsed.schemas[0].data_type, NP_Schema_Type::Option { size: 5 });
+        assert_eq!(parsed.schemas[0].data_type, NP_Schema_Type::Option);
         assert_eq!(parsed.schemas[0].arguments.query("id", schema), Some(NP_Args::NUMBER("2")));
         assert_eq!(parsed.schemas[0].id, Some(2));
         assert_eq!(parsed.schemas[0].name.unwrap().read(schema), "myType");
-        assert_eq!(parsed.schemas[0].use_generics, Some(vec![1]));
-        assert_eq!(parsed.schemas[1].data_type, NP_Schema_Type::String { size: 4, default: Default::default(), casing: Default::default(), max_len: None });
+        assert_eq!(parsed.schemas[0].generics, NP_Parsed_Generics::Types(vec![1]));
+        assert_eq!(parsed.schemas[1].data_type, NP_Schema_Type::String { default: Default::default(), casing: Default::default(), max_len: None });
         assert_eq!(parsed.schemas[1].name, None);
 
 
@@ -703,16 +732,17 @@ mod schema_tests {
         "##;
 
         let parsed = NP_Schema::parse(schema)?;
+        // assert_eq!(NP_Schema::from_bytes(&parsed.to_bytes()?)?, parsed);
 
         assert_eq!(parsed.schemas.len(), 2);
         assert_eq!(parsed.name_index.get("myType"), Some(&NP_Schema_Index { data: 0, methods: None }));
         assert_eq!(parsed.id_index.get(2), Some(&NP_Schema_Index { data: 0, methods: None }));
-        assert_eq!(parsed.schemas[0].data_type, NP_Schema_Type::Array { size: 89 * 4, len: 89 });
+        assert_eq!(parsed.schemas[0].data_type, NP_Schema_Type::Array { len: 89 });
         assert_eq!(parsed.schemas[0].arguments.query("id", schema), Some(NP_Args::NUMBER("2")));
         assert_eq!(parsed.schemas[0].id, Some(2));
         assert_eq!(parsed.schemas[0].name.unwrap().read(schema), "myType");
-        assert_eq!(parsed.schemas[0].use_generics, Some(vec![1]));
-        assert_eq!(parsed.schemas[1].data_type, NP_Schema_Type::String { size: 4, default: Default::default(), casing: Default::default(), max_len: None });
+        assert_eq!(parsed.schemas[0].generics, NP_Parsed_Generics::Types(vec![1]));
+        assert_eq!(parsed.schemas[1].data_type, NP_Schema_Type::String { default: Default::default(), casing: Default::default(), max_len: None });
         assert_eq!(parsed.schemas[1].name, None);
 
 
@@ -727,19 +757,20 @@ mod schema_tests {
         "##;
 
         let parsed = NP_Schema::parse(schema)?;
+        // assert_eq!(NP_Schema::from_bytes(&parsed.to_bytes()?)?, parsed);
 
         assert_eq!(parsed.schemas.len(), 3);
         assert_eq!(parsed.name_index.get("myType"), Some(&NP_Schema_Index { data: 0, methods: None }));
         assert_eq!(parsed.id_index.get(2), Some(&NP_Schema_Index { data: 0, methods: None }));
-        assert_eq!(parsed.schemas[0].data_type, NP_Schema_Type::Result { size: 5 });
+        assert_eq!(parsed.schemas[0].data_type, NP_Schema_Type::Result);
         assert_eq!(parsed.schemas[0].arguments.query("id", schema), Some(NP_Args::NUMBER("2")));
         assert_eq!(parsed.schemas[0].id, Some(2));
         assert_eq!(parsed.schemas[0].name.unwrap().read(schema), "myType");
-        assert_eq!(parsed.schemas[0].use_generics, Some(vec![1, 2]));
-        assert_eq!(parsed.schemas[1].data_type, NP_Schema_Type::Uint32 { size: 4, default: Default::default(), max: None, min: None });
+        assert_eq!(parsed.schemas[0].generics, NP_Parsed_Generics::Types(vec![1, 2]));
+        assert_eq!(parsed.schemas[1].data_type, NP_Schema_Type::Uint32 { default: Default::default(), max: None, min: None });
         assert_eq!(parsed.schemas[1].name, None);
         assert_eq!(parsed.schemas[1].arguments.query("opt", schema), Some(NP_Args::TRUE));
-        assert_eq!(parsed.schemas[2].data_type, NP_Schema_Type::String { size: 4, default: Default::default(), casing: Default::default(), max_len: Some(20) });
+        assert_eq!(parsed.schemas[2].data_type, NP_Schema_Type::String { default: Default::default(), casing: Default::default(), max_len: Some(20) });
         assert_eq!(parsed.schemas[2].name, None);
         assert_eq!(parsed.schemas[2].arguments.query("max_len", schema), Some(NP_Args::NUMBER("20")));
 
@@ -755,19 +786,20 @@ mod schema_tests {
         "##;
 
         let parsed = NP_Schema::parse(schema)?;
+        // assert_eq!(NP_Schema::from_bytes(&parsed.to_bytes()?)?, parsed);
 
         assert_eq!(parsed.schemas.len(), 3);
         assert_eq!(parsed.name_index.get("myType"), Some(&NP_Schema_Index { data: 0, methods: None }));
         assert_eq!(parsed.id_index.get(2), Some(&NP_Schema_Index { data: 0, methods: None }));
-        assert_eq!(parsed.schemas[0].data_type, NP_Schema_Type::Result { size: 5 });
+        assert_eq!(parsed.schemas[0].data_type, NP_Schema_Type::Result);
         assert_eq!(parsed.schemas[0].arguments.query("id", schema), Some(NP_Args::NUMBER("2")));
         assert_eq!(parsed.schemas[0].id, Some(2));
         assert_eq!(parsed.schemas[0].name.unwrap().read(schema), "myType");
-        assert_eq!(parsed.schemas[0].use_generics, Some(vec![1, 2]));
-        assert_eq!(parsed.schemas[1].data_type, NP_Schema_Type::Uint32 { size: 4, default: Default::default(), max: None, min: None });
+        assert_eq!(parsed.schemas[0].generics, NP_Parsed_Generics::Types(vec![1, 2]));
+        assert_eq!(parsed.schemas[1].data_type, NP_Schema_Type::Uint32 { default: Default::default(), max: None, min: None });
         assert_eq!(parsed.schemas[1].arguments.query("opt", schema), Some(NP_Args::TRUE));
         assert_eq!(parsed.schemas[1].name.unwrap().read(schema), "customName");
-        assert_eq!(parsed.schemas[2].data_type, NP_Schema_Type::String { size: 4, default: Default::default(), casing: Default::default(), max_len: Some(20) });
+        assert_eq!(parsed.schemas[2].data_type, NP_Schema_Type::String { default: Default::default(), casing: Default::default(), max_len: Some(20) });
         assert_eq!(parsed.schemas[2].name.unwrap().read(schema), "anotherName");
         assert_eq!(parsed.schemas[2].arguments.query("max_len", schema), Some(NP_Args::NUMBER("20")));
 
@@ -783,18 +815,19 @@ mod schema_tests {
         "##;
 
         let parsed = NP_Schema::parse(schema)?;
+        // assert_eq!(NP_Schema::from_bytes(&parsed.to_bytes()?)?, parsed);
 
         assert_eq!(parsed.schemas.len(), 3);
         assert_eq!(parsed.name_index.get("myType"), Some(&NP_Schema_Index { data: 0, methods: None }));
         assert_eq!(parsed.id_index.get(2), Some(&NP_Schema_Index { data: 0, methods: None }));
-        assert_eq!(parsed.schemas[0].data_type, NP_Schema_Type::Result { size: 5 });
+        assert_eq!(parsed.schemas[0].data_type, NP_Schema_Type::Result);
         assert_eq!(parsed.schemas[0].arguments.query("id", schema), Some(NP_Args::NUMBER("2")));
         assert_eq!(parsed.schemas[0].id, Some(2));
         assert_eq!(parsed.schemas[0].name.unwrap().read(schema), "myType");
-        assert_eq!(parsed.schemas[0].use_generics, Some(vec![1, 2]));
-        assert_eq!(parsed.schemas[1].data_type, NP_Schema_Type::Uint32 { size: 4, default: Default::default(), max: None, min: None });
+        assert_eq!(parsed.schemas[0].generics, NP_Parsed_Generics::Types(vec![1, 2]));
+        assert_eq!(parsed.schemas[1].data_type, NP_Schema_Type::Uint32 { default: Default::default(), max: None, min: None });
         assert_eq!(parsed.schemas[1].name.unwrap().read(schema), "customName");
-        assert_eq!(parsed.schemas[2].data_type, NP_Schema_Type::String { size: 4, default: Default::default(), casing: Default::default(), max_len: None });
+        assert_eq!(parsed.schemas[2].data_type, NP_Schema_Type::String { default: Default::default(), casing: Default::default(), max_len: None });
         assert_eq!(parsed.schemas[2].name.unwrap().read(schema), "anotherName");
 
 
@@ -812,14 +845,14 @@ mod schema_tests {
         "##;
 
         let parsed = NP_Schema::parse(schema)?;
+        // assert_eq!(NP_Schema::from_bytes(&parsed.to_bytes()?)?, parsed);
 
         assert_eq!(parsed.schemas.len(), 3);
         assert_eq!(parsed.name_index.get("myType"), Some(&NP_Schema_Index { data: 0, methods: None }));
         assert_eq!(parsed.id_index.get(2), Some(&NP_Schema_Index { data: 0, methods: None }));
         assert_eq!(parsed.schemas[0].arguments.query("id", schema), Some(NP_Args::NUMBER("2")));
 
-        if let NP_Schema_Type::Struct { size, children } = &parsed.schemas[0].data_type {
-            assert_eq!(*size, 8);
+        if let NP_Schema_Type::Struct { children } = &parsed.schemas[0].data_type {
             assert_eq!(children.iter_keys().collect::<Vec<&String>>(), vec!["username", "email"]);
             for (key, value) in children.iter() {
                 match key.as_str() {
@@ -836,8 +869,8 @@ mod schema_tests {
         assert_eq!(parsed.schemas[0].name.unwrap().read(schema), "myType");
 
 
-        assert_eq!(parsed.schemas[1].data_type, NP_Schema_Type::String { size: 4, default: Default::default(), casing: Default::default(), max_len: None });
-        assert_eq!(parsed.schemas[2].data_type, NP_Schema_Type::String { size: 4, default: Default::default(), casing: Default::default(), max_len: None });
+        assert_eq!(parsed.schemas[1].data_type, NP_Schema_Type::String { default: Default::default(), casing: Default::default(), max_len: None });
+        assert_eq!(parsed.schemas[2].data_type, NP_Schema_Type::String { default: Default::default(), casing: Default::default(), max_len: None });
 
 
         Ok(())
@@ -854,14 +887,14 @@ mod schema_tests {
         "##;
 
         let parsed = NP_Schema::parse(schema)?;
+        // assert_eq!(NP_Schema::from_bytes(&parsed.to_bytes()?)?, parsed);
 
         assert_eq!(parsed.schemas.len(), 3);
         assert_eq!(parsed.name_index.get("myType"), Some(&NP_Schema_Index { data: 0, methods: None }));
         assert_eq!(parsed.id_index.get(2), Some(&NP_Schema_Index { data: 0, methods: None }));
         assert_eq!(parsed.schemas[0].arguments.query("id", schema), Some(NP_Args::NUMBER("2")));
 
-        if let NP_Schema_Type::Struct { size, children } = &parsed.schemas[0].data_type {
-            assert_eq!(*size, 8);
+        if let NP_Schema_Type::Struct { children } = &parsed.schemas[0].data_type {
             assert_eq!(children.iter_keys().collect::<Vec<&String>>(), vec!["username", "email"]);
             for (key, value) in children.iter() {
                 match key.as_str() {
@@ -878,8 +911,8 @@ mod schema_tests {
         assert_eq!(parsed.schemas[0].name.unwrap().read(schema), "myType");
 
 
-        assert_eq!(parsed.schemas[1].data_type, NP_Schema_Type::String { size: 4, default: Default::default(), casing: NP_String_Casing::Uppercase, max_len: Some(20) });
-        assert_eq!(parsed.schemas[2].data_type, NP_Schema_Type::String { size: 4, default: Default::default(), casing: Default::default(), max_len: Some(50) });
+        assert_eq!(parsed.schemas[1].data_type, NP_Schema_Type::String { default: Default::default(), casing: NP_String_Casing::Uppercase, max_len: Some(20) });
+        assert_eq!(parsed.schemas[2].data_type, NP_Schema_Type::String { default: Default::default(), casing: Default::default(), max_len: Some(50) });
         assert_eq!(parsed.schemas[2].name.unwrap().read(schema), "namedType");
 
         Ok(())
@@ -896,23 +929,16 @@ mod schema_tests {
         "##;
 
         let parsed = NP_Schema::parse(schema)?;
+        // assert_eq!(NP_Schema::from_bytes(&parsed.to_bytes()?)?, parsed);
 
         assert_eq!(parsed.schemas.len(), 1);
         assert_eq!(parsed.name_index.get("myType"), Some(&NP_Schema_Index { data: 0, methods: None }));
         assert_eq!(parsed.id_index.get(2), Some(&NP_Schema_Index { data: 0, methods: None }));
         assert_eq!(parsed.schemas[0].arguments.query("id", schema), Some(NP_Args::NUMBER("2")));
 
-        if let NP_Schema_Type::Enum { size, children, default } = &parsed.schemas[0].data_type {
-            assert_eq!(*size, 5);
-            assert_eq!(*default, 0);
-            assert_eq!(children.iter_keys().collect::<Vec<&String>>(), vec!["username", "email"]);
-            for (key, value) in children.iter() {
-                match key.as_str() {
-                    "username" => assert_eq!(*value, None),
-                    "email" => assert_eq!(*value, None),
-                    _ => assert!(false)
-                }
-            }
+        if let NP_Schema_Type::Simple_Enum { children, default } = &parsed.schemas[0].data_type {
+            assert_eq!(*default, Some(0));
+            assert_eq!(children, &vec!["username", "email"]);
         } else {
             assert!(false);
         }
@@ -934,15 +960,15 @@ mod schema_tests {
         "##;
 
         let parsed = NP_Schema::parse(schema)?;
+        // assert_eq!(NP_Schema::from_bytes(&parsed.to_bytes()?)?, parsed);
 
         assert_eq!(parsed.schemas.len(), 3);
         assert_eq!(parsed.name_index.get("myType"), Some(&NP_Schema_Index { data: 0, methods: None }));
         assert_eq!(parsed.id_index.get(2), Some(&NP_Schema_Index { data: 0, methods: None }));
         assert_eq!(parsed.schemas[0].arguments.query("id", schema), Some(NP_Args::NUMBER("2")));
 
-        if let NP_Schema_Type::Enum { size, children, default } = &parsed.schemas[0].data_type {
-            assert_eq!(*size, 5);
-            assert_eq!(*default, 1);
+        if let NP_Schema_Type::Enum { children, default } = &parsed.schemas[0].data_type {
+            assert_eq!(*default, Some(1));
             assert_eq!(children.iter_keys().collect::<Vec<&String>>(), vec!["username", "email"]);
             for (key, value) in children.iter() {
                 match key.as_str() {
@@ -958,8 +984,7 @@ mod schema_tests {
         assert_eq!(parsed.schemas[0].id, Some(2));
         assert_eq!(parsed.schemas[0].name.unwrap().read(schema), "myType");
 
-        if let NP_Schema_Type::Struct { size, children } = &parsed.schemas[1].data_type {
-            assert_eq!(*size, 4);
+        if let NP_Schema_Type::Struct {  children } = &parsed.schemas[1].data_type {
             assert_eq!(children.iter_keys().collect::<Vec<&String>>(), vec!["data"]);
             for (key, value) in children.iter() {
                 match key.as_str() {
@@ -971,8 +996,7 @@ mod schema_tests {
             assert!(false);
         }
 
-        assert_eq!(parsed.schemas[2].data_type, NP_Schema_Type::String { size: 4, default: Default::default(), casing: Default::default(), max_len: None });
-
+        assert_eq!(parsed.schemas[2].data_type, NP_Schema_Type::String { default: Default::default(), casing: Default::default(), max_len: None });
 
         Ok(())
     }
@@ -988,15 +1012,15 @@ mod schema_tests {
         "##;
 
         let parsed = NP_Schema::parse(schema)?;
+        // assert_eq!(NP_Schema::from_bytes(&parsed.to_bytes()?)?, parsed);
 
         assert_eq!(parsed.schemas.len(), 3);
         assert_eq!(parsed.name_index.get("myType"), Some(&NP_Schema_Index { data: 0, methods: None }));
         assert_eq!(parsed.id_index.get(2), Some(&NP_Schema_Index { data: 0, methods: None }));
         assert_eq!(parsed.schemas[0].arguments.query("id", schema), Some(NP_Args::NUMBER("2")));
 
-        if let NP_Schema_Type::Enum { size, children, default } = &parsed.schemas[0].data_type {
-            assert_eq!(*size, 5);
-            assert_eq!(*default, 1);
+        if let NP_Schema_Type::Enum { children, default } = &parsed.schemas[0].data_type {
+            assert_eq!(*default, Some(1));
             assert_eq!(children.iter_keys().collect::<Vec<&String>>(), vec!["username", "email"]);
             for (key, value) in children.iter() {
                 match key.as_str() {
@@ -1012,8 +1036,7 @@ mod schema_tests {
         assert_eq!(parsed.schemas[0].id, Some(2));
         assert_eq!(parsed.schemas[0].name.unwrap().read(schema), "myType");
 
-        if let NP_Schema_Type::Tuple { size, children } = &parsed.schemas[1].data_type {
-            assert_eq!(*size, 4);
+        if let NP_Schema_Type::Tuple { children } = &parsed.schemas[1].data_type {
             assert_eq!(children.len(), 1);
             for (key, value) in children.iter().enumerate() {
                 match key {
@@ -1025,7 +1048,40 @@ mod schema_tests {
             assert!(false);
         }
 
-        assert_eq!(parsed.schemas[2].data_type, NP_Schema_Type::String { size: 4, default: Default::default(), casing: Default::default(), max_len: None });
+        assert_eq!(parsed.schemas[2].data_type, NP_Schema_Type::String { default: Default::default(), casing: Default::default(), max_len: None });
+
+
+        Ok(())
+    }
+
+
+    #[test]
+    fn enum_test_4() -> Result<(), NP_Error> {
+
+        let schema = r##"
+            enum myType [ id: 2 ] {
+                username,
+                email
+            }
+        "##;
+
+        let parsed = NP_Schema::parse(schema)?;
+        // assert_eq!(NP_Schema::from_bytes(&parsed.to_bytes()?)?, parsed);
+
+        assert_eq!(parsed.schemas.len(), 1);
+        assert_eq!(parsed.name_index.get("myType"), Some(&NP_Schema_Index { data: 0, methods: None }));
+        assert_eq!(parsed.id_index.get(2), Some(&NP_Schema_Index { data: 0, methods: None }));
+        assert_eq!(parsed.schemas[0].arguments.query("id", schema), Some(NP_Args::NUMBER("2")));
+
+        if let NP_Schema_Type::Simple_Enum {children, default } = &parsed.schemas[0].data_type {
+            assert_eq!(*default, None);
+            assert_eq!(children, &vec!["username", "email"]);
+        } else {
+            assert!(false);
+        }
+
+        assert_eq!(parsed.schemas[0].id, Some(2));
+        assert_eq!(parsed.schemas[0].name.unwrap().read(schema), "myType");
 
 
         Ok(())
@@ -1039,14 +1095,14 @@ mod schema_tests {
         "##;
 
         let parsed = NP_Schema::parse(schema)?;
+        // assert_eq!(NP_Schema::from_bytes(&parsed.to_bytes()?)?, parsed);
 
         assert_eq!(parsed.schemas.len(), 3);
         assert_eq!(parsed.name_index.get("myType"), Some(&NP_Schema_Index { data: 0, methods: None }));
         assert_eq!(parsed.id_index.get(2), Some(&NP_Schema_Index { data: 0, methods: None }));
         assert_eq!(parsed.schemas[0].arguments.query("id", schema), Some(NP_Args::NUMBER("2")));
 
-        if let NP_Schema_Type::Tuple { size, children } = &parsed.schemas[0].data_type {
-            assert_eq!(*size, 8);
+        if let NP_Schema_Type::Tuple { children } = &parsed.schemas[0].data_type {
             assert_eq!(children.len(), 2);
             for (key, value) in children.iter().enumerate() {
                 match key {
@@ -1062,8 +1118,8 @@ mod schema_tests {
         assert_eq!(parsed.schemas[0].id, Some(2));
         assert_eq!(parsed.schemas[0].name.unwrap().read(schema), "myType");
 
-        assert_eq!(parsed.schemas[1].data_type, NP_Schema_Type::String { size: 4, default: Default::default(), casing: Default::default(), max_len: None });
-        assert_eq!(parsed.schemas[2].data_type, NP_Schema_Type::Uint32 { size: 4, default: Default::default(), max: None, min: None });
+        assert_eq!(parsed.schemas[1].data_type, NP_Schema_Type::String { default: Default::default(), casing: Default::default(), max_len: None });
+        assert_eq!(parsed.schemas[2].data_type, NP_Schema_Type::Uint32 { default: Default::default(), max: None, min: None });
 
         Ok(())
     }
@@ -1076,14 +1132,14 @@ mod schema_tests {
         "##;
 
         let parsed = NP_Schema::parse(schema)?;
+        // assert_eq!(NP_Schema::from_bytes(&parsed.to_bytes()?)?, parsed);
 
         assert_eq!(parsed.schemas.len(), 3);
         assert_eq!(parsed.name_index.get("myType"), Some(&NP_Schema_Index { data: 0, methods: None }));
         assert_eq!(parsed.id_index.get(2), Some(&NP_Schema_Index { data: 0, methods: None }));
         assert_eq!(parsed.schemas[0].arguments.query("id", schema), Some(NP_Args::NUMBER("2")));
 
-        if let NP_Schema_Type::Tuple { size, children } = &parsed.schemas[0].data_type {
-            assert_eq!(*size, 8);
+        if let NP_Schema_Type::Tuple { children } = &parsed.schemas[0].data_type {
             assert_eq!(children.len(), 2);
             for (key, value) in children.iter().enumerate() {
                 match key {
@@ -1099,8 +1155,8 @@ mod schema_tests {
         assert_eq!(parsed.schemas[0].id, Some(2));
         assert_eq!(parsed.schemas[0].name.unwrap().read(schema), "myType");
 
-        assert_eq!(parsed.schemas[1].data_type, NP_Schema_Type::String { size: 4, default: Default::default(), casing: Default::default(), max_len: None });
-        assert_eq!(parsed.schemas[2].data_type, NP_Schema_Type::Uint32 { size: 4, default: Default::default(), max: None, min: None });
+        assert_eq!(parsed.schemas[1].data_type, NP_Schema_Type::String { default: Default::default(), casing: Default::default(), max_len: None });
+        assert_eq!(parsed.schemas[2].data_type, NP_Schema_Type::Uint32 { default: Default::default(), max: None, min: None });
 
         Ok(())
     }
@@ -1113,14 +1169,14 @@ mod schema_tests {
         "##;
 
         let parsed = NP_Schema::parse(schema)?;
+        // assert_eq!(NP_Schema::from_bytes(&parsed.to_bytes()?)?, parsed);
 
         assert_eq!(parsed.schemas.len(), 3);
         assert_eq!(parsed.name_index.get("myType"), Some(&NP_Schema_Index { data: 0, methods: None }));
         assert_eq!(parsed.id_index.get(2), Some(&NP_Schema_Index { data: 0, methods: None }));
         assert_eq!(parsed.schemas[0].arguments.query("id", schema), Some(NP_Args::NUMBER("2")));
 
-        if let NP_Schema_Type::Tuple { size, children } = &parsed.schemas[0].data_type {
-            assert_eq!(*size, 8);
+        if let NP_Schema_Type::Tuple { children } = &parsed.schemas[0].data_type {
             assert_eq!(children.len(), 2);
             for (key, value) in children.iter().enumerate() {
                 match key {
@@ -1136,8 +1192,8 @@ mod schema_tests {
         assert_eq!(parsed.schemas[0].id, Some(2));
         assert_eq!(parsed.schemas[0].name.unwrap().read(schema), "myType");
 
-        assert_eq!(parsed.schemas[1].data_type, NP_Schema_Type::String { size: 4, default: AST_STR { start: 32, end: 37 }, casing: Default::default(), max_len: None });
-        assert_eq!(parsed.schemas[2].data_type, NP_Schema_Type::Uint32 { size: 4, default: Default::default(), max: Some(2000), min: None });
+        assert_eq!(parsed.schemas[1].data_type, NP_Schema_Type::String { default: AST_STR { start: 32, end: 37 }, casing: Default::default(), max_len: None });
+        assert_eq!(parsed.schemas[2].data_type, NP_Schema_Type::Uint32 { default: Default::default(), max: Some(2000), min: None });
 
         Ok(())
     }
@@ -1162,14 +1218,14 @@ mod schema_tests {
         "##;
 
         let parsed = NP_Schema::parse(schema)?;
+        // assert_eq!(NP_Schema::from_bytes(&parsed.to_bytes()?)?, parsed);
 
         assert_eq!(parsed.schemas.len(), 16);
         assert_eq!(parsed.name_index.get("myType"), Some(&NP_Schema_Index { data: 0, methods: None }));
         assert_eq!(parsed.id_index.get(2), Some(&NP_Schema_Index { data: 0, methods: None }));
         assert_eq!(parsed.schemas[0].arguments.query("id", schema), Some(NP_Args::NUMBER("2")));
 
-        if let NP_Schema_Type::Struct { size, children } = &parsed.schemas[0].data_type {
-            assert_eq!(*size, 53);
+        if let NP_Schema_Type::Struct { children } = &parsed.schemas[0].data_type {
             assert_eq!(children.iter_keys().collect::<Vec<&String>>(), vec!["username", "email", "address", "primary_key"]);
             for (key, value) in children.iter() {
                 match key.as_str() {
@@ -1187,11 +1243,11 @@ mod schema_tests {
         assert_eq!(parsed.schemas[0].id, Some(2));
         assert_eq!(parsed.schemas[0].name.unwrap().read(schema), "myType");
 
-        assert_eq!(parsed.schemas[1].data_type, NP_Schema_Type::String { size: 4, default: Default::default(), casing: Default::default(), max_len: None });
-        assert_eq!(parsed.schemas[2].data_type, NP_Schema_Type::String { size: 4, default: Default::default(), casing: Default::default(), max_len: None });
+        assert_eq!(parsed.schemas[1].data_type, NP_Schema_Type::String { default: Default::default(), casing: Default::default(), max_len: None });
+        assert_eq!(parsed.schemas[2].data_type, NP_Schema_Type::String { default: Default::default(), casing: Default::default(), max_len: None });
 
-        if let NP_Schema_Type::Struct { size, children } = &parsed.schemas[3].data_type {
-            assert_eq!(*size, 12);
+        if let NP_Schema_Type::Struct { children } = &parsed.schemas[3].data_type {
+
             assert_eq!(children.iter_keys().collect::<Vec<&String>>(), vec!["street", "city", "zip"]);
             for (key, value) in children.iter() {
                 match key.as_str() {
@@ -1205,12 +1261,12 @@ mod schema_tests {
             assert!(false);
         }
 
-        assert_eq!(parsed.schemas[4].data_type, NP_Schema_Type::String { size: 4, default: Default::default(), casing: Default::default(), max_len: None });
-        assert_eq!(parsed.schemas[5].data_type, NP_Schema_Type::String { size: 4, default: Default::default(), casing: Default::default(), max_len: None });
-        assert_eq!(parsed.schemas[6].data_type, NP_Schema_Type::String { size: 4, default: Default::default(), casing: Default::default(), max_len: None });
+        assert_eq!(parsed.schemas[4].data_type, NP_Schema_Type::String { default: Default::default(), casing: Default::default(), max_len: None });
+        assert_eq!(parsed.schemas[5].data_type, NP_Schema_Type::String { default: Default::default(), casing: Default::default(), max_len: None });
+        assert_eq!(parsed.schemas[6].data_type, NP_Schema_Type::String { default: Default::default(), casing: Default::default(), max_len: None });
 
-        if let NP_Schema_Type::Tuple { size, children } = &parsed.schemas[7].data_type {
-            assert_eq!(*size, 33);
+        if let NP_Schema_Type::Tuple { children } = &parsed.schemas[7].data_type {
+
             assert_eq!(children.len(), 4);
             for (key, value) in children.iter().enumerate() {
                 match key {
@@ -1225,11 +1281,10 @@ mod schema_tests {
             assert!(false);
         }
 
-        assert_eq!(parsed.schemas[8].data_type, NP_Schema_Type::String { size: 4, default: Default::default(), casing: Default::default(), max_len: None });
-        assert_eq!(parsed.schemas[9].data_type, NP_Schema_Type::Uint32 { size: 4, default: Default::default(), min: None, max: None });
+        assert_eq!(parsed.schemas[8].data_type, NP_Schema_Type::String { default: Default::default(), casing: Default::default(), max_len: None });
+        assert_eq!(parsed.schemas[9].data_type, NP_Schema_Type::Uint32 { default: Default::default(), min: None, max: None });
 
-        if let NP_Schema_Type::Tuple { size, children } = &parsed.schemas[10].data_type {
-            assert_eq!(*size, 20);
+        if let NP_Schema_Type::Tuple { children } = &parsed.schemas[10].data_type {
             assert_eq!(children.len(), 2);
             for (key, value) in children.iter().enumerate() {
                 match key {
@@ -1242,11 +1297,11 @@ mod schema_tests {
             assert!(false);
         }
 
-        assert_eq!(parsed.schemas[11].data_type, NP_Schema_Type::Uuid { size: 16 });
-        assert_eq!(parsed.schemas[12].data_type, NP_Schema_Type::String { size: 4, default: Default::default(), casing: Default::default(), max_len: None });
+        assert_eq!(parsed.schemas[11].data_type, NP_Schema_Type::Uuid);
+        assert_eq!(parsed.schemas[12].data_type, NP_Schema_Type::String { default: Default::default(), casing: Default::default(), max_len: None });
 
-        if let NP_Schema_Type::Struct { size, children } = &parsed.schemas[13].data_type {
-            assert_eq!(*size, 5);
+        if let NP_Schema_Type::Struct { children } = &parsed.schemas[13].data_type {
+
             assert_eq!(children.iter_keys().collect::<Vec<&String>>(), vec!["key", "value"]);
             for (key, value) in children.iter() {
                 match key.as_str() {
@@ -1259,8 +1314,8 @@ mod schema_tests {
             assert!(false);
         }
 
-        assert_eq!(parsed.schemas[14].data_type, NP_Schema_Type::String { size: 4, default: Default::default(), casing: Default::default(), max_len: None });
-        assert_eq!(parsed.schemas[15].data_type, NP_Schema_Type::Boolean { size: 1, default: Default::default() });
+        assert_eq!(parsed.schemas[14].data_type, NP_Schema_Type::String { default: Default::default(), casing: Default::default(), max_len: None });
+        assert_eq!(parsed.schemas[15].data_type, NP_Schema_Type::Boolean { default: Default::default() });
 
         Ok(())
     }
@@ -1281,15 +1336,20 @@ mod schema_tests {
         "##;
 
         let parsed = NP_Schema::parse(schema)?;
+        // assert_eq!(NP_Schema::from_bytes(&parsed.to_bytes()?)?, parsed);
+
+        // unsafe { core::str::from_utf8_unchecked(&parsed.to_bytes()?) }
+        // &parsed.to_bytes()?
+        // println!("{:?} {} {}", &parsed.to_bytes()?, parsed.to_bytes()?.len(), schema.len());
 
         assert_eq!(parsed.schemas.len(), 11);
         assert_eq!(parsed.name_index.get("myType"), Some(&NP_Schema_Index { data: 0, methods: None }));
         assert_eq!(parsed.id_index.get(2), Some(&NP_Schema_Index { data: 0, methods: None }));
         assert_eq!(parsed.schemas[0].arguments.query("id", schema), Some(NP_Args::NUMBER("2")));
-        assert_eq!(parsed.schemas[0].self_generics, Some((0, vec![AST_STR { start: 27, end: 28 }, AST_STR { start: 30, end: 31 }])));
+        assert_eq!(parsed.schemas[0].generics, NP_Parsed_Generics::Arguments(0, vec![AST_STR { start: 27, end: 28 }, AST_STR { start: 30, end: 31 }]));
 
-        if let NP_Schema_Type::Struct { size, children } = &parsed.schemas[0].data_type {
-            assert_eq!(*size, 12);
+        if let NP_Schema_Type::Struct { children } = &parsed.schemas[0].data_type {
+
             assert_eq!(children.iter_keys().collect::<Vec<&String>>(), vec!["username", "email", "password"]);
             for (key, value) in children.iter() {
                 match key.as_str() {
@@ -1307,29 +1367,29 @@ mod schema_tests {
         assert_eq!(parsed.schemas[0].name.unwrap().read(schema), "myType");
 
 
-        assert_eq!(parsed.schemas[1].data_type, NP_Schema_Type::Generic { size: 4, parent_scham_addr: 0, generic_idx: 0 });
-        assert_eq!(parsed.schemas[2].data_type, NP_Schema_Type::Generic { size: 4, parent_scham_addr: 0, generic_idx: 1 });
-        assert_eq!(parsed.schemas[3].data_type, NP_Schema_Type::String { size: 4, default: Default::default(), casing: Default::default(), max_len: None });
+        assert_eq!(parsed.schemas[1].data_type, NP_Schema_Type::Generic { parent_scham_addr: 0, generic_idx: 0 });
+        assert_eq!(parsed.schemas[2].data_type, NP_Schema_Type::Generic { parent_scham_addr: 0, generic_idx: 1 });
+        assert_eq!(parsed.schemas[3].data_type, NP_Schema_Type::String { default: Default::default(), casing: Default::default(), max_len: None });
 
-        assert_eq!(parsed.schemas[4].data_type, NP_Schema_Type::Custom { size: 4, type_idx: 0 });
+        assert_eq!(parsed.schemas[4].data_type, NP_Schema_Type::Custom { type_idx: 0 });
         assert_eq!(parsed.schemas[4].id, Some(3));
-        assert_eq!(parsed.schemas[4].use_generics, Some(vec![5, 6]));
+        assert_eq!(parsed.schemas[4].generics, NP_Parsed_Generics::Types(vec![5, 6]));
         assert_eq!(parsed.name_index.get("anotherType"), Some(&NP_Schema_Index { data: 4, methods: None }));
         assert_eq!(parsed.id_index.get(3), Some(&NP_Schema_Index { data: 4, methods: None }));
 
-        assert_eq!(parsed.schemas[5].data_type, NP_Schema_Type::Uint32 { size: 4, default: Default::default(), max: None, min: None });
-        assert_eq!(parsed.schemas[6].data_type, NP_Schema_Type::Int64 { size: 8, default: Default::default(), max: None, min: None });
+        assert_eq!(parsed.schemas[5].data_type, NP_Schema_Type::Uint32 { default: Default::default(), max: None, min: None });
+        assert_eq!(parsed.schemas[6].data_type, NP_Schema_Type::Int64 { default: Default::default(), max: None, min: None });
 
-        assert_eq!(parsed.schemas[7].data_type, NP_Schema_Type::Custom { size: 4, type_idx: 0 });
-        assert_eq!(parsed.schemas[7].use_generics, Some(vec![8, 10]));
+        assert_eq!(parsed.schemas[7].data_type, NP_Schema_Type::Custom { type_idx: 0 });
+        assert_eq!(parsed.schemas[7].generics, NP_Parsed_Generics::Types(vec![8, 10]));
         assert_eq!(parsed.name_index.get("crazyType"), Some(&NP_Schema_Index { data: 7, methods: None }));
         assert_eq!(parsed.id_index.get(4), Some(&NP_Schema_Index { data: 7, methods: None }));
 
-        assert_eq!(parsed.schemas[8].data_type, NP_Schema_Type::Vec { size: 4, max_len: None });
-        assert_eq!(parsed.schemas[8].use_generics, Some(vec![9]));
+        assert_eq!(parsed.schemas[8].data_type, NP_Schema_Type::Vec { max_len: None });
+        assert_eq!(parsed.schemas[8].generics, NP_Parsed_Generics::Types(vec![9]));
 
-        assert_eq!(parsed.schemas[9].data_type, NP_Schema_Type::Uint32 { size: 4, default: Default::default(), max: None, min: None });
-        assert_eq!(parsed.schemas[10].data_type, NP_Schema_Type::Int64 { size: 8, default: Default::default(), max: None, min: None });
+        assert_eq!(parsed.schemas[9].data_type, NP_Schema_Type::Uint32 { default: Default::default(), max: None, min: None });
+        assert_eq!(parsed.schemas[10].data_type, NP_Schema_Type::Int64 { default: Default::default(), max: None, min: None });
 
         Ok(())
     }
@@ -1350,14 +1410,15 @@ mod schema_tests {
         "##;
 
         let parsed = NP_Schema::parse(schema)?;
+        // assert_eq!(NP_Schema::from_bytes(&parsed.to_bytes()?)?, parsed);
+
 
         assert_eq!(parsed.schemas.len(), 13);
         assert_eq!(parsed.name_index.get("myType"), Some(&NP_Schema_Index { data: 0, methods: Some(3) }));
         assert_eq!(parsed.id_index.get(2), Some(&NP_Schema_Index { data: 0, methods: Some(3) }));
         assert_eq!(parsed.schemas[0].arguments.query("id", schema), Some(NP_Args::NUMBER("2")));
 
-        if let NP_Schema_Type::Struct { size, children } = &parsed.schemas[0].data_type {
-            assert_eq!(*size, 8);
+        if let NP_Schema_Type::Struct { children } = &parsed.schemas[0].data_type {
             assert_eq!(children.iter_keys().collect::<Vec<&String>>(), vec!["username", "email"]);
             for (key, value) in children.iter() {
                 match key.as_str() {
@@ -1374,8 +1435,8 @@ mod schema_tests {
         assert_eq!(parsed.schemas[0].name.unwrap().read(schema), "myType");
 
 
-        assert_eq!(parsed.schemas[1].data_type, NP_Schema_Type::String { size: 4, default: Default::default(), casing: Default::default(), max_len: None });
-        assert_eq!(parsed.schemas[2].data_type, NP_Schema_Type::String { size: 4, default: Default::default(), casing: Default::default(), max_len: None });
+        assert_eq!(parsed.schemas[1].data_type, NP_Schema_Type::String { default: Default::default(), casing: Default::default(), max_len: None });
+        assert_eq!(parsed.schemas[2].data_type, NP_Schema_Type::String { default: Default::default(), casing: Default::default(), max_len: None });
 
         let mut impl_hash: NP_HashMap<usize> = NP_HashMap::new();
         impl_hash.set("get", 4)?;
@@ -1387,9 +1448,9 @@ mod schema_tests {
             assert_eq!(returns, &6);
         }
 
-        assert_eq!(parsed.schemas[5].data_type, NP_Schema_Type::Uuid { size: 16 });
-        assert_eq!(parsed.schemas[6].data_type, NP_Schema_Type::Option { size: 5 });
-        assert_eq!(parsed.schemas[6].use_generics, Some(vec![7]));
+        assert_eq!(parsed.schemas[5].data_type, NP_Schema_Type::Uuid);
+        assert_eq!(parsed.schemas[6].data_type, NP_Schema_Type::Option);
+        assert_eq!(parsed.schemas[6].generics, NP_Parsed_Generics::Types(vec![7]));
         assert_eq!(parsed.schemas[7].data_type, NP_Schema_Type::Fn_Self { idx: 3 });
 
         if let NP_Schema_Type::Method { args, returns } = &parsed.schemas[8].data_type {
@@ -1399,11 +1460,11 @@ mod schema_tests {
 
         assert_eq!(parsed.schemas[9].data_type, NP_Schema_Type::Fn_Self { idx: 3 });
 
-        assert_eq!(parsed.schemas[10].data_type, NP_Schema_Type::Result { size: 5 });
-        assert_eq!(parsed.schemas[10].use_generics, Some(vec![11, 12]));
+        assert_eq!(parsed.schemas[10].data_type, NP_Schema_Type::Result);
+        assert_eq!(parsed.schemas[10].generics, NP_Parsed_Generics::Types(vec![11, 12]));
 
-        assert_eq!(parsed.schemas[11].data_type, NP_Schema_Type::Tuple { size: 0, children: vec![] });
-        assert_eq!(parsed.schemas[12].data_type, NP_Schema_Type::String { size: 4, default: Default::default(), casing: Default::default(), max_len: None });
+        assert_eq!(parsed.schemas[11].data_type, NP_Schema_Type::Tuple { children: vec![] });
+        assert_eq!(parsed.schemas[12].data_type, NP_Schema_Type::String { default: Default::default(), casing: Default::default(), max_len: None });
 
         Ok(())
     }

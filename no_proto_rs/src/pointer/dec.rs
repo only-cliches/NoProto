@@ -85,7 +85,7 @@ pub struct NP_Dec {
     /// The number being stored, does not include decimal point data
     pub num: i64,
     /// The exponent of this number
-    pub exp: u8
+    pub exp: i8
 }
 
 impl<'value> super::NP_Scalar<'value> for NP_Dec {

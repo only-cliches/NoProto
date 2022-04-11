@@ -3,7 +3,7 @@
 use crate::{error::NP_Error};
 use core::cell::UnsafeCell;
 use alloc::vec::Vec;
-use crate::schema::{NP_Schema, NP_Parsed_Schema};
+use crate::schema::{NP_Schema};
 use alloc::sync::Arc;
 
 #[doc(hidden)]

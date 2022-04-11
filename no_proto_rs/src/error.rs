@@ -24,6 +24,7 @@ pub enum NP_Error {
     }
 }
 
+
 impl NP_Error {
     /// Generate a new error with a specific message
     pub fn new<S: AsRef<str>>(message: S) -> Self {

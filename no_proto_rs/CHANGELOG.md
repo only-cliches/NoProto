@@ -1,6 +1,8 @@
 # 0.10.0
+- All breaking changes, everywhere.  The API, schemas and buffers are all new and incompatible with previous versions.
 - Complete rewrite, ZERO compatibility with versions 0.9.6 and before.
 - Now supports rust like IDL with generics and impl blocks.
+- Endian specific compilation to increase performance.
 
 # 0.9.6 March 9th, 2021
 - Removed lifetimes from NP_Factory and NP_Buffer.

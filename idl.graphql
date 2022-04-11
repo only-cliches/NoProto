@@ -27,6 +27,10 @@ struct user {
     posts: list { post }
 }
 
+Vec<Vec<u32>> myType;
+
+
+
 struct post {
     title: string,
     content: string
