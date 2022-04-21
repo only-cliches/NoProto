@@ -28,7 +28,7 @@
 **Fast**<br/>
 - Zero copy deserialization
 - Most updates are append only
-- Deserialization is incrimental
+- Deserialization is incremental
 
 **Powerful**<br/>
 - Native byte-wise sorting
@@ -37,13 +37,13 @@
 - Supports collections (list, map, struct & tuple)
 - Supports arbitrary nesting of collection types
 - Schemas support default values and non destructive updates
-- Transport agnostic [RPC Framework](https://docs.rs/no_proto/latest/no_proto/rpc/index.html).
+- Transport agnostic [RPC Framework](https://docs.rs/no_proto/latest/no_proto/rpc/index.html)
 
 
 ### Why ANOTHER Serialization Format?
 1. NoProto combines the **performance** of compiled formats with the **flexibilty** of dynamic formats:
 
-**Compiled** formats like Flatbuffers, CapN Proto and bincode have amazing performance and extremely compact buffers, but you MUST compile the data types into your application.  This means if the schema of the data changes the application must be recompiled to accomodate the new schema.
+**Compiled** formats like Flatbuffers, Cap'n Proto and bincode have amazing performance and extremely compact buffers, but you MUST compile the data types into your application.  This means if the schema of the data changes the application must be recompiled to accomodate the new schema.
 
 **Dynamic** formats like JSON, MessagePack and BSON give flexibilty to store any data with any schema at runtime but the buffers are fat and performance is somewhere between horrible and hopefully acceptable.
 
@@ -124,7 +124,7 @@ NoProto takes the performance advantages of compiled formats and implements them
 | FlatBuffers      | ✓         | ~2GB       | ✗       | ✓        | ✗                 |
 | Bincode          | ✓         | ?          | ✓       | ✓        | ✗                 |
 | Protocol Buffers | ✗         | ~2GB       | ✗       | ✓        | ✗                 |
-| Cap'N Proto      | ✓         | 2^64 Bytes | ✗       | ✓        | ✗                 |
+| Cap'n Proto      | ✓         | 2^64 Bytes | ✗       | ✓        | ✗                 |
 | Veriform         | ✗         | ?          | ✗       | ✗        | ✗                 |
 
 
@@ -275,8 +275,8 @@ NoProto will never cause a panic in your application.  It has *zero* panics or u
 All numbers and pointers in NoProto buffers are always stored in big endian, so you can safely create buffers on any CPU architecture and know that they will work with any other CPU architecture.
 
 
-### When to use Flatbuffers / Bincode / CapN Proto
-If you can safely compile all your data types into your application, all the buffers/data is trusted, and you don't intend to mutate buffers after they're created, Bincode/Flatbuffers/CapNProto is a better choice for you.
+### When to use Flatbuffers / Bincode / Cap'n Proto
+If you can safely compile all your data types into your application, all the buffers/data is trusted, and you don't intend to mutate buffers after they're created, Bincode/Flatbuffers/Cap'n Proto is a better choice for you.
 
 ### When to use JSON / BSON / MessagePack
 If your data changes so often that schemas don't really make sense or the format you use must be self describing, JSON/BSON/MessagePack is a better choice.   Although I'd argue that if you *can* make schemas work you should.  Once you can use a format with schemas you save a ton of space in the resulting buffers and performance far better.
