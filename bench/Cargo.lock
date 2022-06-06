@@ -642,6 +642,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "da78e04bc0e40f36df43ecc6575e4f4b180e8156c4efd73f13d5619479b05696"
 
 [[package]]
+name = "ptr_meta"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0738ccf7ea06b608c10564b31debd4f5bc5e197fc8bfe088f68ae5ce81e7a4f1"
+dependencies = [
+ "ptr_meta_derive",
+]
+
+[[package]]
+name = "ptr_meta_derive"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "16b845dbfca988fa33db069c0e230574d15a3088f147a87b64c7589eb662c9ac"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "quick-error"
 version = "1.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -779,20 +799,21 @@ dependencies = [
 
 [[package]]
 name = "rkyv"
-version = "0.3.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bfe267025a252dd251a08f171bf6509fb91cb0b6906e6cc37ae4e284ac067ba6"
+checksum = "0d683f1540522e9ad21b786d534b274ff49b0e974bf3af31d7a930a6c3e3599d"
 dependencies = [
  "memoffset",
+ "ptr_meta",
  "rkyv_derive",
  "seahash",
 ]
 
 [[package]]
 name = "rkyv_derive"
-version = "0.3.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7d705971a9cf1f227318d25501e85e862dcf8700f94c98c6f03d152184646d3e"
+checksum = "c848da2aad0c8395f7986a717b8f28a8fc05dd94463d949673803f4955d9f73a"
 dependencies = [
  "proc-macro2",
  "quote",
