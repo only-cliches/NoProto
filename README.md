@@ -28,7 +28,7 @@
 **Fast**<br/>
 - Zero copy deserialization
 - Most updates are append only
-- Deserialization is incrimental
+- Deserialization is incremental
 
 **Powerful**<br/>
 - Native byte-wise sorting
