@@ -5,14 +5,14 @@ use crate::error::NP_Error;
 
 pub static SEED: u32 = 2181155409;
 
-#[derive(Debug, Clone)]
-pub struct NP_HashMap<V> {
-    data: Vec<Vec<(u32, V)>>
+#[derive(Debug)]
+pub struct NP_HashMap {
+    data: Vec<Vec<(String, usize)>>
 }
 
-const HASH_SIZE: usize = 4096;
+const HASH_SIZE: usize = 2048;
 
-impl<V> NP_HashMap<V> {
+impl NP_HashMap {
 
     pub fn empty() -> Self {
         Self { data: Vec::with_capacity(1) }
@@ -20,32 +20,32 @@ impl<V> NP_HashMap<V> {
 
     pub fn new() -> Self {
         let mut vector = Vec::with_capacity(HASH_SIZE);
-        vector.extend((0..HASH_SIZE).map(|_| Vec::with_capacity(4)));
+        vector.extend((0..HASH_SIZE).map(|_| Vec::new()));
         Self { data: vector }
     }
 
-    pub fn insert(&mut self, key: &str, value: V) -> Result<(), NP_Error> {
+    pub fn insert(&mut self, key: &str, value: usize) -> Result<(), NP_Error> {
 
         let hash = murmurhash3_x86_32(key.as_bytes(), SEED);
     
         let bucket = hash as usize % HASH_SIZE;
 
         if self.data[bucket].len() == 0 {
-            self.data[bucket].push((hash, value));
+            self.data[bucket].push((String::from(key), value));
         } else {
             for (k, v) in self.data[bucket].iter_mut() {
-                if *k == hash {
+                if k == key {
                     *v = value;
                     return Ok(())
                 }
             }
-            self.data[bucket].push((hash, value));
+            self.data[bucket].push((String::from(key), value));
         }
 
         Ok(())
     }
 
-    pub fn get(&self, key: &str) -> Option<&V> {
+    pub fn get(&self, key: &str) -> Option<&usize> {
         let hash = murmurhash3_x86_32(key.as_bytes(), SEED);
         let bucket = hash as usize % HASH_SIZE;
 
@@ -56,14 +56,10 @@ impl<V> NP_HashMap<V> {
                     return None;
                 }
                 if len == 1 {
-                    if x[0].0 == hash {
-                        return Some(&x[0].1);
-                    } else {
-                        return None;
-                    }
+                    return Some(&x[0].1);
                 }
                 for (k, v) in x.iter() {
-                    if *k == hash {
+                    if k == key {
                         return Some(v)
                     }
                 }
@@ -78,7 +74,7 @@ impl<V> NP_HashMap<V> {
         let bucket = hash as usize % HASH_SIZE;
         match self.data.get_mut(bucket) {
             Some(bucket) => {
-                bucket.retain(|(k, _v)| *k != hash);
+                bucket.retain(|(k, _v)| *k != key);
             },
             _ => { }
         }

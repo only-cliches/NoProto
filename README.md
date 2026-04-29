@@ -8,6 +8,20 @@
 [![crates.io](https://img.shields.io/crates/v/no_proto.svg)](https://crates.io/crates/no_proto)
 [![docs.rs](https://docs.rs/no_proto/badge.svg)](https://docs.rs/no_proto/latest/no_proto/)
 [![GitHub stars](https://img.shields.io/github/stars/only-cliches/NoProto.svg?style=social&label=Star&maxAge=2592000)](https://GitHub.com/only-cliches/NoProto/stargazers/)
+
+### Monorepo Status
+
+The stable Rust implementation is pinned to `no_proto` `0.9.60`. The experimental `0.10.0` refactor has been abandoned so future work can focus on a language-neutral NoProto specification and compatible implementations.
+
+Repository layout:
+
+- `no_proto_rs/` - stable Rust crate and current reference implementation.
+- `no_proto_js/` - existing Rust/WASM JavaScript package.
+- `packages/` - home for native language implementations such as JavaScript, PHP, and Go.
+- `spec/` - shared NoProto format and schema specification.
+- `conformance/` - cross-language compatibility test plan and fixtures.
+- `bench/` - Rust benchmark suite.
+
 ### Features  
 
 **Lightweight**<br/>
@@ -315,4 +329,4 @@ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE. 
+SOFTWARE.

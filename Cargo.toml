@@ -1,0 +1,7 @@
+[workspace]
+members = [
+    "bench",
+    "no_proto_js",
+    "no_proto_rs",
+]
+resolver = "1"
